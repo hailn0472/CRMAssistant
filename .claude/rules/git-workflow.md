@@ -336,11 +336,31 @@ git rebase -i HEAD~3
 
 ### Main Branch Rules
 
+**Production/Stable Projects:**
 - **No direct commits** - All changes via Pull Requests
 - **Require PR approval** - At least 1 reviewer
 - **Require status checks** - All CI tests must pass
 - **Require up-to-date branch** - Must be rebased on latest main
 - **No force push** - History is immutable
+
+**Greenfield/Setup Phase (Current):**
+- **Direct commits allowed** for:
+  - Initial project setup (configs, tooling, infrastructure)
+  - Documentation (README, project-context, rules)
+  - BMad configuration
+  - Development environment setup
+- **Transition to PR workflow** when:
+  - First feature implementation begins
+  - Multiple developers join the project
+  - CI/CD pipeline is established
+  - Production deployment is planned
+
+**When to switch to strict PR workflow:**
+- ✅ Project context and rules are established
+- ✅ Development environment is configured
+- ✅ First feature branch is created
+- ✅ CI/CD pipeline is running
+- ✅ Team has more than 1 active developer
 
 ### Development Branch (if used)
 
