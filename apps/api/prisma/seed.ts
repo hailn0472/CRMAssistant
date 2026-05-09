@@ -20,20 +20,20 @@ async function main(): Promise<void> {
 
   // ── Seed Tenant: Acme Corp ─────────────────────────────────────────────────
   const acmeTenant = await prisma.tenant.upsert({
-    where: { id: 'tenant-acme-00000000-0000-0000-0000-000000000001' },
+    where: { id: '00000000-0000-0000-0000-000000000001' },
     update: {},
     create: {
-      id: 'tenant-acme-00000000-0000-0000-0000-000000000001',
+      id: '00000000-0000-0000-0000-000000000001',
       name: 'Acme Corp',
     },
   })
 
   // ── Seed Tenant: Beta Inc ──────────────────────────────────────────────────
   const betaTenant = await prisma.tenant.upsert({
-    where: { id: 'tenant-beta-00000000-0000-0000-0000-000000000002' },
+    where: { id: '00000000-0000-0000-0000-000000000002' },
     update: {},
     create: {
-      id: 'tenant-beta-00000000-0000-0000-0000-000000000002',
+      id: '00000000-0000-0000-0000-000000000002',
       name: 'Beta Inc',
     },
   })

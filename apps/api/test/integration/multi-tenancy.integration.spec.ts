@@ -13,11 +13,14 @@
  * - AC #9: real PostgreSQL via Testcontainers (no mocks)
  */
 
-import { execSync } from 'child_process'
+import { execFileSync } from 'child_process'
 import * as path from 'path'
 
-import { PrismaClient, Tenant, User } from '@prisma/client'
-import { PostgreSqlContainer, StartedPostgreSqlContainer } from '@testcontainers/postgresql'
+import { PrismaClient } from '@prisma/client'
+import { PostgreSqlContainer } from '@testcontainers/postgresql'
+
+import type { StartedPostgreSqlContainer } from '@testcontainers/postgresql'
+import type { Tenant, User } from '@prisma/client'
 
 describe('Multi-Tenancy Database Patterns (integration)', () => {
   let prisma: PrismaClient
@@ -33,7 +36,7 @@ describe('Multi-Tenancy Database Patterns (integration)', () => {
     // Apply Prisma migrations to the ephemeral container
     // Uses prisma migrate deploy (non-interactive, CI-safe)
     const prismaBin = path.resolve(__dirname, '../../node_modules/.bin/prisma')
-    execSync(`${prismaBin} migrate deploy`, {
+    execFileSync(prismaBin, ['migrate', 'deploy'], {
       env: { ...process.env, DATABASE_URL: databaseUrl },
       cwd: path.resolve(__dirname, '../..'),
       stdio: 'pipe',
