@@ -260,6 +260,39 @@ const cacheKey = hash(
 - Text-to-SQL queries: Inject `WHERE tenant_id = ?` into generated SQL
 - Service role key only for admin operations
 
+### Prisma Multi-Tenancy Pattern (established in Story 1.6)
+
+Every new domain model (Contact, Deal, etc.) **MUST** follow this pattern:
+
+```prisma
+model MyDomainModel {
+  id        String    @id @default(uuid())
+  tenantId  String                          // MANDATORY: tenant isolation
+  // ... domain-specific fields ...
+  createdAt DateTime  @default(now())       // MANDATORY: audit field
+  updatedAt DateTime  @updatedAt            // MANDATORY: audit field
+  createdBy String    @default("system")   // MANDATORY: audit field
+  updatedBy String    @default("system")   // MANDATORY: audit field
+  deletedAt DateTime?                       // MANDATORY: soft delete (null = active)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  // MANDATORY: index for all tenant-scoped queries (performance + security)
+  @@index([tenantId])
+  // Add tenant-scoped unique constraints where relevant, e.g.:
+  // @@unique([tenantId, email])
+}
+```
+
+**Rules for all tenant-scoped services:**
+
+1. **Always filter by `tenantId`** — every query must include `where: { tenantId }`.
+2. **Tenant-scoped unique constraints** — use `@@unique([tenantId, fieldName])`, not global `@unique`.
+3. **Audit fields** — always include `createdAt`, `updatedAt`, `createdBy`, `updatedBy`.
+4. **Soft delete** — use `deletedAt DateTime?`; exclude soft-deleted records with `where: { deletedAt: null }`.
+5. **UUIDs for IDs** — use `@id @default(uuid())` for distributed-system friendliness.
+6. **Tenant model itself is NOT tenant-scoped** — only domain models are.
+
 ---
 
 ## Project Organization & Workflow Rules

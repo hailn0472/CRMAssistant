@@ -7,6 +7,46 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model PrismaClientGenerationPlaceholder {
-  id Int @id @default(autoincrement())
+// =============================================================================
+// MULTI-TENANCY FOUNDATION MODELS
+// =============================================================================
+// Architecture note: Tenant is NOT itself tenant-scoped.
+// All other domain models MUST include tenantId and follow the User pattern:
+//   - tenantId String
+//   - relation to Tenant
+//   - @@index([tenantId])
+//   - audit fields: createdAt, updatedAt, createdBy, updatedBy
+//   - optional deletedAt DateTime? (soft delete)
+//   - tenant-scoped unique constraints, e.g. @@unique([tenantId, email])
+// Services MUST always filter by tenantId in all tenant-scoped queries.
+// =============================================================================
+
+model Tenant {
+  id        String   @id @default(uuid())
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users User[]
+}
+
+/// Sample tenant-scoped domain model demonstrating the required multi-tenancy pattern.
+/// Every future domain model (Contact, Deal, etc.) must follow this pattern.
+model User {
+  id        String    @id @default(uuid())
+  tenantId  String
+  email     String
+  name      String
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  createdBy String    @default("system")
+  updatedBy String    @default("system")
+  deletedAt DateTime? // soft delete — null means active
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  // Email is unique per tenant, NOT globally unique
+  @@unique([tenantId, email])
+  // Index for all tenant-scoped queries
+  @@index([tenantId])
 }

@@ -9,9 +9,13 @@
     "lint": "eslint \"src/**/*.ts\"",
     "type-check": "tsc --noEmit",
     "prisma:generate": "prisma generate",
+    "prisma:seed": "ts-node prisma/seed.ts",
     "test": "jest --coverage",
     "test:watch": "jest --watch",
     "test:integration": "jest --config jest.integration.config.ts --coverage"
+  },
+  "prisma": {
+    "seed": "ts-node prisma/seed.ts"
   },
   "dependencies": {
     "@nestjs/common": "^10",
