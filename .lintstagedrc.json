@@ -1,0 +1,6 @@
+{
+  "*.{ts,tsx,js,jsx}": ["eslint --fix", "prettier --write --ignore-unknown"],
+  "*.{json,md}": ["prettier --write --ignore-unknown"],
+  "!**/{dist,.next,.turbo,coverage}/**": [],
+  "!**/*.tsbuildinfo": []
+}

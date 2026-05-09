@@ -13,9 +13,11 @@ node_modules/
 
 # Testing
 coverage/
+**/coverage/
 
 # Next.js
 .next/
+**/.next/
 out/
 
 # TypeScript
@@ -29,8 +31,13 @@ tsconfig.tsbuildinfo
 .env*.local
 .env.production.local
 
+# Build outputs
+dist/
+**/dist/
+
 # Turbo
 .turbo/
+**/.turbo/
 
 # pnpm
 .pnpm-store/
