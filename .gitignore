@@ -23,6 +23,9 @@ out/
 tsconfig.tsbuildinfo
 
 # Environment variables
+.env
+.env.*
+!.env.example
 .env*.local
 .env.production.local
 
