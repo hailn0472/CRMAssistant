@@ -9,11 +9,7 @@ export const metadata: Metadata = {
   description: 'AI-powered CRM platform for sales teams',
 }
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode
-}): React.JSX.Element {
+export default function RootLayout({ children }: { children: React.ReactNode }): React.JSX.Element {
   return (
     <html lang="vi">
       <body className={inter.className}>{children}</body>

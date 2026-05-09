@@ -3,6 +3,7 @@
 This file provides quick reference guidance for Claude Code when working with this repository.
 
 **For comprehensive project context, architecture decisions, and detailed rules, see:**
+
 - **[Project Context](docs/project-context.md)** - Complete project context with technology stack and architecture decisions
 - **[Naming Conventions](.claude/rules/naming-conventions.md)** - File, folder, variable naming standards
 - **[Git Workflow](.claude/rules/git-workflow.md)** - Conventional Commits, branch naming, PR guidelines
@@ -20,6 +21,7 @@ This file provides quick reference guidance for Claude Code when working with th
 ## Tech Stack
 
 ### Frontend
+
 - **Framework**: Next.js 14.2.x (App Router)
 - **Language**: TypeScript 5.0+ (strict mode)
 - **Styling**: Tailwind CSS 3.4+ + shadcn/ui
@@ -27,6 +29,7 @@ This file provides quick reference guidance for Claude Code when working with th
 - **Forms**: React Hook Form + Zod validation
 
 ### Backend
+
 - **Framework**: NestJS 10+
 - **Language**: TypeScript 5.0+ (strict mode)
 - **Runtime**: Node.js 20+ LTS
@@ -34,16 +37,19 @@ This file provides quick reference guidance for Claude Code when working with th
 - **ORM**: Prisma 5.0+
 
 ### Database & Caching
+
 - **Database**: PostgreSQL 15+ (Supabase)
 - **Caching**: Redis 7.0+ (ioredis)
 - **Real-time**: Socket.io 4.0+ + Supabase Realtime
 
 ### AI/LLM
+
 - **Provider**: Google Vertex AI
 - **Model**: gemini-2.5-flash-lite
 - **Use Case**: Text-to-SQL query generation
 
 ### Project Structure
+
 - **Architecture**: Monorepo (Turborepo)
 - **Package Manager**: pnpm 8.0+
 - **Workspaces**: `apps/web`, `apps/api`, `packages/*`
@@ -67,29 +73,31 @@ pnpm dev
 
 ## Commands
 
-| Task | Command |
-|------|---------|
-| Install dependencies | `pnpm install` |
-| Run all apps | `pnpm dev` |
-| Run frontend only | `pnpm dev --filter=web` |
-| Run backend only | `pnpm dev --filter=api` |
-| Build all | `pnpm build` |
-| Run tests | `pnpm test` |
-| Run single test | `pnpm test path/to/test.spec.ts` |
-| Lint | `pnpm lint` |
-| Type check | `pnpm type-check` |
-| Format | `pnpm format` |
-| Prisma Studio | `cd apps/api && pnpm prisma studio` |
+| Task                   | Command                               |
+| ---------------------- | ------------------------------------- |
+| Install dependencies   | `pnpm install`                        |
+| Run all apps           | `pnpm dev`                            |
+| Run frontend only      | `pnpm dev --filter=web`               |
+| Run backend only       | `pnpm dev --filter=api`               |
+| Build all              | `pnpm build`                          |
+| Run tests              | `pnpm test`                           |
+| Run single test        | `pnpm test path/to/test.spec.ts`      |
+| Lint                   | `pnpm lint`                           |
+| Type check             | `pnpm type-check`                     |
+| Format                 | `pnpm format`                         |
+| Prisma Studio          | `cd apps/api && pnpm prisma studio`   |
 | Generate Prisma Client | `cd apps/api && pnpm prisma generate` |
 
 ## Architecture Highlights
 
 ### Hybrid API Architecture
+
 - **GraphQL** (Pothos + NestJS) - CRUD operations (contacts, deals, pipeline)
 - **REST** - Text-to-SQL endpoint (`POST /api/query`)
 - **Rationale**: GraphQL for type-safe CRUD, REST for dynamic Text-to-SQL results
 
 ### Key Patterns
+
 - **Type Safety**: Prisma schema → GraphQL types (via Pothos) → Frontend types
 - **State Management**: TanStack Query for server state, Zustand for UI state
 - **Caching**: Redis semantic caching for Text-to-SQL (TTL: 5-15 min)
@@ -97,6 +105,7 @@ pnpm dev
 - **Testing**: 80% unit, 60% integration, 10% E2E coverage
 
 ### Security
+
 - **SQL Injection Prevention**: Query validator with AST parser
 - **Authentication**: Supabase Auth + JWT
 - **Authorization**: Row-Level Security (RLS) + tenant isolation
@@ -105,6 +114,7 @@ pnpm dev
 ## Critical Rules
 
 ### Git Workflow
+
 - **Commits**: Follow Conventional Commits format
   ```
   feat(contacts): add contact search functionality
@@ -114,12 +124,14 @@ pnpm dev
 - **PRs**: Require approval, all tests pass, no merge conflicts
 
 ### Code Quality
+
 - **TypeScript**: Strict mode, no `any`, explicit return types
 - **Testing**: All tests must pass before commit
 - **Linting**: Zero ESLint warnings
 - **Formatting**: Prettier with project config
 
 ### Multi-tenancy
+
 - **ALWAYS filter by tenantId** in all queries
 - **NEVER bypass RLS** without explicit reason
 - **Test tenant isolation** in all features

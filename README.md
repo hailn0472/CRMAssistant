@@ -159,14 +159,17 @@ CRMAssistant/
 ## Troubleshooting
 
 ### pnpm install fails
+
 - Ensure Node.js 20+ is installed
 - Clear pnpm cache: `pnpm store prune`
 
 ### Database connection fails
+
 - Check DATABASE_URL in .env.local
 - Ensure PostgreSQL is running
 
 ### Redis connection fails
+
 - Check REDIS_HOST and REDIS_PORT
 - Ensure Redis is running
 

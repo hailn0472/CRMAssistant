@@ -8,16 +8,15 @@ export default function Home(): React.JSX.Element {
       <div className="max-w-2xl mx-auto space-y-8">
         <div>
           <h1 className="text-4xl font-bold tracking-tight">CRMAssistant</h1>
-          <p className="text-muted-foreground mt-2">
-            AI-powered CRM platform cho sales teams
-          </p>
+          <p className="text-muted-foreground mt-2">AI-powered CRM platform cho sales teams</p>
         </div>
 
         <Card>
           <CardHeader>
             <CardTitle>shadcn/ui Components Demo</CardTitle>
             <CardDescription>
-              Frontend foundation đã được thiết lập thành công với Next.js 14, Tailwind CSS, và shadcn/ui
+              Frontend foundation đã được thiết lập thành công với Next.js 14, Tailwind CSS, và
+              shadcn/ui
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
