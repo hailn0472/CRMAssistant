@@ -1,0 +1,11 @@
+{
+  "name": "web",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "echo 'Next.js will be configured in Story 1.2'",
+    "build": "echo 'Build script pending'",
+    "lint": "echo 'Lint script pending'",
+    "type-check": "echo 'Type check pending'"
+  }
+}
