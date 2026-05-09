@@ -70,7 +70,7 @@ This is an **isolated subagent** running in parallel with other quality dimensio
 For each test file from Step 2:
 
 ```javascript
-const violations = [];
+const violations = []
 
 // Check for Math.random()
 if (testFileContent.includes('Math.random()')) {
@@ -81,7 +81,7 @@ if (testFileContent.includes('Math.random()')) {
     category: 'random-generation',
     description: 'Test uses Math.random() - non-deterministic',
     suggestion: 'Use faker.seed(12345) for deterministic random data',
-  });
+  })
 }
 
 // Check for Date.now()
@@ -93,7 +93,7 @@ if (testFileContent.includes('Date.now()') || testFileContent.includes('new Date
     category: 'time-dependency',
     description: 'Test uses Date.now() or new Date() without mocking',
     suggestion: 'Mock system time with test.useFakeTimers() or use fixed timestamps',
-  });
+  })
 }
 
 // Check for hard waits
@@ -104,8 +104,9 @@ if (testFileContent.includes('waitForTimeout')) {
     severity: 'MEDIUM',
     category: 'hard-wait',
     description: 'Test uses waitForTimeout - creates flakiness',
-    suggestion: 'Replace with expect(locator).toBeVisible() or interceptNetworkCall-based network waits',
-  });
+    suggestion:
+      'Replace with expect(locator).toBeVisible() or interceptNetworkCall-based network waits',
+  })
 }
 
 // ... check other patterns
@@ -119,25 +120,28 @@ Vitest configs vary widely — `defineConfig({ test: { ... } })`, `mergeConfig(b
 // Resolve the config file(s). For consumer: scripts.test:pact:consumer:run in package.json
 // usually points at `vitest run --config <path>`. For provider: `vitest run --config <path>`.
 // If neither script exists but `.pacttest.ts` files exist, default to 'vitest.config.pact.ts'.
-const configPath = resolveVitestConfigPath({ scriptName: 'test:pact:consumer:run', fallback: 'vitest.config.pact.ts' });
-const src = fs.readFileSync(configPath, 'utf8');
+const configPath = resolveVitestConfigPath({
+  scriptName: 'test:pact:consumer:run',
+  fallback: 'vitest.config.pact.ts',
+})
+const src = fs.readFileSync(configPath, 'utf8')
 
 // 1. Literal-match the two mandatory lines. Tolerate single or double quotes and whitespace.
-const hasFileParallelismFalse = /\bfileParallelism\s*:\s*false\b/.test(src);
-const hasPoolForks = /\bpool\s*:\s*['"]forks['"]/.test(src);
-const hasSingleForkTrue = /\bsingleFork\s*:\s*true\b/.test(src);
+const hasFileParallelismFalse = /\bfileParallelism\s*:\s*false\b/.test(src)
+const hasPoolForks = /\bpool\s*:\s*['"]forks['"]/.test(src)
+const hasSingleForkTrue = /\bsingleFork\s*:\s*true\b/.test(src)
 
 // 2. Flag settings that would defeat the rule if a human added them.
-const hasSequenceConcurrent = /\bsequence\s*:\s*\{[^}]*\bconcurrent\s*:\s*true/.test(src);
-const hasHighMaxConcurrency = /\bmaxConcurrency\s*:\s*([2-9]|\d{2,})/.test(src);
-const hasHighMaxWorkers = /\bmaxWorkers\s*:\s*([2-9]|\d{2,})/.test(src);
-const hasIsolateFalse = /\bisolate\s*:\s*false\b/.test(src);
+const hasSequenceConcurrent = /\bsequence\s*:\s*\{[^}]*\bconcurrent\s*:\s*true/.test(src)
+const hasHighMaxConcurrency = /\bmaxConcurrency\s*:\s*([2-9]|\d{2,})/.test(src)
+const hasHighMaxWorkers = /\bmaxWorkers\s*:\s*([2-9]|\d{2,})/.test(src)
+const hasIsolateFalse = /\bisolate\s*:\s*false\b/.test(src)
 
 // 3. mergeConfig / extends fallback — we cannot reliably follow imports. Emit LOW advisory.
-const usesMergeConfig = /\bmergeConfig\s*\(/.test(src) || /\bextends\s*:/.test(src);
+const usesMergeConfig = /\bmergeConfig\s*\(/.test(src) || /\bextends\s*:/.test(src)
 
 // 4. File-count gating for the pool-forks rule.
-const pactTestCount = glob.sync('tests/contract/**/*.pacttest.ts').length;
+const pactTestCount = glob.sync('tests/contract/**/*.pacttest.ts').length
 ```
 
 **Violation emission rules** (apply in order; exit on first match per check):
@@ -153,16 +157,16 @@ const pactTestCount = glob.sync('tests/contract/**/*.pacttest.ts').length;
 **Scoring Logic**:
 
 ```javascript
-const totalChecks = testFiles.length * checksPerFile;
-const failedChecks = violations.length;
-const passedChecks = totalChecks - failedChecks;
+const totalChecks = testFiles.length * checksPerFile
+const failedChecks = violations.length
+const passedChecks = totalChecks - failedChecks
 
 // Weight violations by severity
-const severityWeights = { HIGH: 10, MEDIUM: 5, LOW: 2 };
-const totalPenalty = violations.reduce((sum, v) => sum + severityWeights[v.severity], 0);
+const severityWeights = { HIGH: 10, MEDIUM: 5, LOW: 2 }
+const totalPenalty = violations.reduce((sum, v) => sum + severityWeights[v.severity], 0)
 
 // Score: 100 - (penalty points)
-const score = Math.max(0, 100 - totalPenalty);
+const score = Math.max(0, 100 - totalPenalty)
 ```
 
 ---

@@ -50,7 +50,7 @@ Coverage is intentionally excluded from this workflow and handled by `trace`.
 **Generate unique timestamp:**
 
 ```javascript
-const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
 ```
 
 **Prepare context for all subagents:**
@@ -83,55 +83,65 @@ const subagentContext = {
 
 ```javascript
 const normalizeUserExecutionMode = (mode) => {
-  if (typeof mode !== 'string') return null;
-  const normalized = mode.trim().toLowerCase().replace(/[-_]/g, ' ').replace(/\s+/g, ' ');
+  if (typeof mode !== 'string') return null
+  const normalized = mode.trim().toLowerCase().replace(/[-_]/g, ' ').replace(/\s+/g, ' ')
 
-  if (normalized === 'auto') return 'auto';
-  if (normalized === 'sequential') return 'sequential';
-  if (normalized === 'subagent' || normalized === 'sub agent' || normalized === 'subagents' || normalized === 'sub agents') {
-    return 'subagent';
+  if (normalized === 'auto') return 'auto'
+  if (normalized === 'sequential') return 'sequential'
+  if (
+    normalized === 'subagent' ||
+    normalized === 'sub agent' ||
+    normalized === 'subagents' ||
+    normalized === 'sub agents'
+  ) {
+    return 'subagent'
   }
   if (normalized === 'agent team' || normalized === 'agent teams' || normalized === 'agentteam') {
-    return 'agent-team';
+    return 'agent-team'
   }
 
-  return null;
-};
+  return null
+}
 
 const normalizeConfigExecutionMode = (mode) => {
-  if (mode === 'subagent') return 'subagent';
+  if (mode === 'subagent') return 'subagent'
   if (mode === 'auto' || mode === 'sequential' || mode === 'subagent' || mode === 'agent-team') {
-    return mode;
+    return mode
   }
-  return null;
-};
+  return null
+}
 
 // Explicit user instruction in the active run takes priority over config.
-const explicitModeFromUser = normalizeUserExecutionMode(runtime.getExplicitExecutionModeHint?.() || null);
+const explicitModeFromUser = normalizeUserExecutionMode(
+  runtime.getExplicitExecutionModeHint?.() || null,
+)
 
-const requestedMode = explicitModeFromUser || normalizeConfigExecutionMode(subagentContext.config.execution_mode) || 'auto';
-const probeEnabled = subagentContext.config.capability_probe;
+const requestedMode =
+  explicitModeFromUser ||
+  normalizeConfigExecutionMode(subagentContext.config.execution_mode) ||
+  'auto'
+const probeEnabled = subagentContext.config.capability_probe
 
 const supports = {
   subagent: false,
   agentTeam: false,
-};
-
-if (probeEnabled) {
-  supports.subagent = runtime.canLaunchSubagents?.() === true;
-  supports.agentTeam = runtime.canLaunchAgentTeams?.() === true;
 }
 
-let resolvedMode = requestedMode;
+if (probeEnabled) {
+  supports.subagent = runtime.canLaunchSubagents?.() === true
+  supports.agentTeam = runtime.canLaunchAgentTeams?.() === true
+}
+
+let resolvedMode = requestedMode
 
 if (requestedMode === 'auto') {
-  if (supports.agentTeam) resolvedMode = 'agent-team';
-  else if (supports.subagent) resolvedMode = 'subagent';
-  else resolvedMode = 'sequential';
+  if (supports.agentTeam) resolvedMode = 'agent-team'
+  else if (supports.subagent) resolvedMode = 'subagent'
+  else resolvedMode = 'sequential'
 } else if (probeEnabled && requestedMode === 'agent-team' && !supports.agentTeam) {
-  resolvedMode = supports.subagent ? 'subagent' : 'sequential';
+  resolvedMode = supports.subagent ? 'subagent' : 'sequential'
 } else if (probeEnabled && requestedMode === 'subagent' && !supports.subagent) {
-  resolvedMode = 'sequential';
+  resolvedMode = 'sequential'
 }
 
 subagentContext.execution = {
@@ -139,7 +149,7 @@ subagentContext.execution = {
   resolvedMode,
   probeEnabled,
   supports,
-};
+}
 ```
 
 Resolution precedence:
@@ -207,13 +217,13 @@ In `agent-team` and `subagent` modes, runtime decides worker scheduling and conc
 ```javascript
 const outputs = ['determinism', 'isolation', 'maintainability', 'performance'].map(
   (dim) => `/tmp/tea-test-review-${dim}-${timestamp}.json`,
-);
+)
 
 outputs.forEach((output) => {
   if (!fs.existsSync(output)) {
-    throw new Error(`Subagent output missing: ${output}`);
+    throw new Error(`Subagent output missing: ${output}`)
   }
-});
+})
 ```
 
 ---

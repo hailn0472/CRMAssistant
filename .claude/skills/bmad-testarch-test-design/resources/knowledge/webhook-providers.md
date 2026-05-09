@@ -11,17 +11,17 @@ Uses `GET /__admin/requests` to fetch the webhook log and `DELETE /__admin/reque
 **Works with any backend implementing the `/__admin/requests` format** — not just actual WireMock. The playwright-utils sample app's Express backend uses this exact format.
 
 ```typescript
-import { WireMockWebhookProvider } from '@seontechnologies/playwright-utils/webhook';
-import { API_URL } from '../config/local.config';
+import { WireMockWebhookProvider } from '@seontechnologies/playwright-utils/webhook'
+import { API_URL } from '../config/local.config'
 
 const webhookProviderFixture = base.extend<{
-  webhookProvider: WireMockWebhookProvider;
+  webhookProvider: WireMockWebhookProvider
 }>({
   webhookProvider: async ({ request }, use) => {
-    const provider = new WireMockWebhookProvider(API_URL, request);
-    await use(provider);
+    const provider = new WireMockWebhookProvider(API_URL, request)
+    await use(provider)
   },
-});
+})
 ```
 
 Supports both cleanup strategies. Use `matched-only` when running `fullyParallel: true`.
@@ -33,20 +33,20 @@ Uses `PUT /mockserver/retrieve` to fetch logs with client-side `since` filtering
 **Limitation**: `deleteById` is a no-op — MockServer does not support deleting individual log entries by ID. The `startedAt` timestamp filter handles per-test isolation. Use `full-reset` for explicit journal cleanup.
 
 ```typescript
-import { MockServerWebhookProvider } from '@seontechnologies/playwright-utils/webhook';
+import { MockServerWebhookProvider } from '@seontechnologies/playwright-utils/webhook'
 
 const webhookProviderFixture = base.extend<{
-  webhookProvider: MockServerWebhookProvider;
+  webhookProvider: MockServerWebhookProvider
 }>({
   webhookProvider: async ({ request }, use) => {
-    await use(new MockServerWebhookProvider(API_URL, request));
+    await use(new MockServerWebhookProvider(API_URL, request))
   },
-});
+})
 
-const test = mergeTests(base, /* ...other fixtures... */ webhookFixture, webhookProviderFixture);
+const test = mergeTests(base, /* ...other fixtures... */ webhookFixture, webhookProviderFixture)
 
 // MockServer has no delete-by-ID on log entries — use full-reset
-test.use({ webhookConfig: { cleanupStrategy: 'full-reset' } });
+test.use({ webhookConfig: { cleanupStrategy: 'full-reset' } })
 ```
 
 ## MockoonWebhookProvider
@@ -56,20 +56,20 @@ Uses `GET /mockoon-admin/logs` to fetch logs. The admin API is enabled by defaul
 **Limitation**: `deleteById` is a no-op for the same reason as MockServer. Use `full-reset`.
 
 ```typescript
-import { MockoonWebhookProvider } from '@seontechnologies/playwright-utils/webhook';
+import { MockoonWebhookProvider } from '@seontechnologies/playwright-utils/webhook'
 
 const webhookProviderFixture = base.extend<{
-  webhookProvider: MockoonWebhookProvider;
+  webhookProvider: MockoonWebhookProvider
 }>({
   webhookProvider: async ({ request }, use) => {
-    await use(new MockoonWebhookProvider(API_URL, request));
+    await use(new MockoonWebhookProvider(API_URL, request))
   },
-});
+})
 
-const test = mergeTests(base, /* ...other fixtures... */ webhookFixture, webhookProviderFixture);
+const test = mergeTests(base, /* ...other fixtures... */ webhookFixture, webhookProviderFixture)
 
 // Mockoon has no delete-by-ID on log entries — use full-reset
-test.use({ webhookConfig: { cleanupStrategy: 'full-reset' } });
+test.use({ webhookConfig: { cleanupStrategy: 'full-reset' } })
 ```
 
 Start Mockoon with an increased log limit if needed:
@@ -84,8 +84,12 @@ Implement `WebhookProvider` for any backend that exposes a queryable request log
 
 ```typescript
 // support/providers/custom-webhook-provider.ts
-import type { WebhookProvider, ReceivedWebhook, WebhookQueryFilter } from '@seontechnologies/playwright-utils/webhook';
-import type { APIRequestContext } from '@playwright/test';
+import type {
+  WebhookProvider,
+  ReceivedWebhook,
+  WebhookQueryFilter,
+} from '@seontechnologies/playwright-utils/webhook'
+import type { APIRequestContext } from '@playwright/test'
 
 export class CustomWebhookProvider implements WebhookProvider {
   constructor(
@@ -94,12 +98,12 @@ export class CustomWebhookProvider implements WebhookProvider {
   ) {}
 
   async getReceivedWebhooks(filter?: WebhookQueryFilter): Promise<ReceivedWebhook[]> {
-    const params = new URLSearchParams();
-    if (filter?.since) params.set('since', filter.since.toISOString());
-    if (filter?.method) params.set('method', filter.method);
+    const params = new URLSearchParams()
+    if (filter?.since) params.set('since', filter.since.toISOString())
+    if (filter?.method) params.set('method', filter.method)
 
-    const response = await this.request.get(`${this.baseUrl}/webhooks/received?${params}`);
-    const { webhooks } = await response.json();
+    const response = await this.request.get(`${this.baseUrl}/webhooks/received?${params}`)
+    const { webhooks } = await response.json()
     return webhooks.map((w: Record<string, unknown>) => ({
       id: String(w.id),
       url: String(w.url),
@@ -107,21 +111,21 @@ export class CustomWebhookProvider implements WebhookProvider {
       headers: (w.headers as Record<string, string>) ?? {},
       body: w.body,
       receivedAt: new Date(String(w.receivedAt)),
-    }));
+    }))
   }
 
   async resetJournal(): Promise<void> {
-    await this.request.delete(`${this.baseUrl}/webhooks/received`);
+    await this.request.delete(`${this.baseUrl}/webhooks/received`)
   }
 
   async deleteById(id: string): Promise<void> {
-    await this.request.delete(`${this.baseUrl}/webhooks/received/${id}`);
+    await this.request.delete(`${this.baseUrl}/webhooks/received/${id}`)
   }
 
   async getCount(): Promise<number> {
-    const response = await this.request.get(`${this.baseUrl}/webhooks/count`);
-    const { count } = await response.json();
-    return count as number;
+    const response = await this.request.get(`${this.baseUrl}/webhooks/count`)
+    const { count } = await response.json()
+    return count as number
   }
 }
 ```
@@ -130,13 +134,13 @@ export class CustomWebhookProvider implements WebhookProvider {
 
 ```typescript
 interface WebhookProvider {
-  getReceivedWebhooks(filter?: WebhookQueryFilter): Promise<ReceivedWebhook[]>;
-  resetJournal(): Promise<void>;
-  deleteById(id: string): Promise<void>;
-  getCount(criteria?: Record<string, unknown>): Promise<number>;
-  removeByCriteria?(criteria: Record<string, unknown>): Promise<void>;
-  setup?(): Promise<void>; // optional — called before test
-  teardown?(): Promise<void>; // optional — called after test
+  getReceivedWebhooks(filter?: WebhookQueryFilter): Promise<ReceivedWebhook[]>
+  resetJournal(): Promise<void>
+  deleteById(id: string): Promise<void>
+  getCount(criteria?: Record<string, unknown>): Promise<number>
+  removeByCriteria?(criteria: Record<string, unknown>): Promise<void>
+  setup?(): Promise<void> // optional — called before test
+  teardown?(): Promise<void> // optional — called after test
 }
 ```
 

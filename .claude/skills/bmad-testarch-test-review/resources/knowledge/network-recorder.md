@@ -27,36 +27,36 @@ HAR-based recording/playback provides:
 
 ```typescript
 // Set mode to 'record' to capture network traffic
-process.env.PW_NET_MODE = 'record';
+process.env.PW_NET_MODE = 'record'
 
 test('should add, edit and delete a movie', async ({ page, context, networkRecorder }) => {
   // Setup network recorder - it will record all network traffic
-  await networkRecorder.setup(context);
+  await networkRecorder.setup(context)
 
   // Your normal test code
-  await page.goto('/');
-  await page.fill('#movie-name', 'Inception');
-  await page.click('#add-movie');
+  await page.goto('/')
+  await page.fill('#movie-name', 'Inception')
+  await page.click('#add-movie')
 
   // Network traffic is automatically saved to HAR file
-});
+})
 ```
 
 ### 2. Playback Network Traffic
 
 ```typescript
 // Set mode to 'playback' to use recorded traffic
-process.env.PW_NET_MODE = 'playback';
+process.env.PW_NET_MODE = 'playback'
 
 test('should add, edit and delete a movie', async ({ page, context, networkRecorder }) => {
   // Setup network recorder - it will replay from HAR file
-  await networkRecorder.setup(context);
+  await networkRecorder.setup(context)
 
   // Same test code runs without hitting real backend!
-  await page.goto('/');
-  await page.fill('#movie-name', 'Inception');
-  await page.click('#add-movie');
-});
+  await page.goto('/')
+  await page.fill('#movie-name', 'Inception')
+  await page.click('#add-movie')
+})
 ```
 
 That's it! Your tests now run completely offline using recorded network traffic.
@@ -70,25 +70,25 @@ That's it! Your tests now run completely offline using recorded network traffic.
 **Implementation**:
 
 ```typescript
-import { test } from '@seontechnologies/playwright-utils/network-recorder/fixtures';
+import { test } from '@seontechnologies/playwright-utils/network-recorder/fixtures'
 
 // Set mode in test file (recommended)
-process.env.PW_NET_MODE = 'playback'; // or 'record'
+process.env.PW_NET_MODE = 'playback' // or 'record'
 
 test('CRUD operations work offline', async ({ page, context, networkRecorder }) => {
   // Setup recorder (records or plays back based on PW_NET_MODE)
-  await networkRecorder.setup(context);
+  await networkRecorder.setup(context)
 
-  await page.goto('/');
+  await page.goto('/')
 
   // First time (record mode): Records all network traffic to HAR
   // Subsequent runs (playback mode): Plays back from HAR (no backend!)
-  await page.fill('#movie-name', 'Inception');
-  await page.click('#add-movie');
+  await page.fill('#movie-name', 'Inception')
+  await page.click('#add-movie')
 
   // Intelligent CRUD detection makes this work offline!
-  await expect(page.getByText('Inception')).toBeVisible();
-});
+  await expect(page.getByText('Inception')).toBeVisible()
+})
 ```
 
 **Key Points**:
@@ -106,46 +106,46 @@ test('CRUD operations work offline', async ({ page, context, networkRecorder }) 
 **Implementation**:
 
 ```typescript
-process.env.PW_NET_MODE = 'playback';
+process.env.PW_NET_MODE = 'playback'
 
 test.describe('Movie CRUD - offline with network recorder', () => {
   test.beforeEach(async ({ page, networkRecorder, context }) => {
-    await networkRecorder.setup(context);
-    await page.goto('/');
-  });
+    await networkRecorder.setup(context)
+    await page.goto('/')
+  })
 
   test('should add, edit, delete movie browser-only', async ({ page, interceptNetworkCall }) => {
     // Create
-    await page.fill('#movie-name', 'Inception');
-    await page.fill('#year', '2010');
-    await page.click('#add-movie');
+    await page.fill('#movie-name', 'Inception')
+    await page.fill('#year', '2010')
+    await page.click('#add-movie')
 
     // Verify create (reads from stateful HAR)
-    await expect(page.getByText('Inception')).toBeVisible();
+    await expect(page.getByText('Inception')).toBeVisible()
 
     // Update
-    await page.getByText('Inception').click();
-    await page.fill('#movie-name', "Inception Director's Cut");
+    await page.getByText('Inception').click()
+    await page.fill('#movie-name', "Inception Director's Cut")
 
     const updateCall = interceptNetworkCall({
       method: 'PUT',
       url: '/movies/*',
-    });
+    })
 
-    await page.click('#save');
-    await updateCall; // Wait for update
+    await page.click('#save')
+    await updateCall // Wait for update
 
     // Verify update (HAR reflects state change!)
-    await page.click('#back');
-    await expect(page.getByText("Inception Director's Cut")).toBeVisible();
+    await page.click('#back')
+    await expect(page.getByText("Inception Director's Cut")).toBeVisible()
 
     // Delete
-    await page.click(`[data-testid="delete-Inception Director's Cut"]`);
+    await page.click(`[data-testid="delete-Inception Director's Cut"]`)
 
     // Verify delete (HAR reflects removal!)
-    await expect(page.getByText("Inception Director's Cut")).not.toBeVisible();
-  });
-});
+    await expect(page.getByText("Inception Director's Cut")).not.toBeVisible()
+  })
+})
 ```
 
 **Key Points**:
@@ -164,7 +164,7 @@ await networkRecorder.setup(context, {
   recording: {
     urlFilter: /\/api\//, // Only record API calls, ignore static assets
   },
-});
+})
 ```
 
 **Playback with Fallback**:
@@ -174,7 +174,7 @@ await networkRecorder.setup(context, {
   playback: {
     fallback: true, // Fall back to live requests if HAR entry missing
   },
-});
+})
 ```
 
 **Custom HAR File Location**:
@@ -186,7 +186,7 @@ await networkRecorder.setup(context, {
     baseName: 'user-journey',
     organizeByTestFile: false, // Optional: flatten directory structure
   },
-});
+})
 ```
 
 **Directory Organization:**
@@ -205,7 +205,7 @@ await networkRecorder.setup(context, {
   recording: {
     content: 'embed', // Store content inline (default)
   },
-});
+})
 ```
 
 **Pros:**
@@ -226,7 +226,7 @@ await networkRecorder.setup(context, {
   recording: {
     content: 'attach', // Store content separately
   },
-});
+})
 ```
 
 **Pros:**
@@ -267,7 +267,7 @@ await networkRecorder.setup(context, {
       },
     },
   },
-});
+})
 ```
 
 **Pattern-Based Mapping (Recommended):**
@@ -282,7 +282,7 @@ await networkRecorder.setup(context, {
       ],
     },
   },
-});
+})
 ```
 
 **Custom Function:**
@@ -294,7 +294,7 @@ await networkRecorder.setup(context, {
       mapUrl: (url) => url.replace('staging.example.com', 'dev.example.com'),
     },
   },
-});
+})
 ```
 
 **Complex Multi-Environment Example:**
@@ -314,7 +314,7 @@ await networkRecorder.setup(context, {
       ],
     },
   },
-});
+})
 ```
 
 **Benefits:**
@@ -389,25 +389,25 @@ The `cleanup()` method performs memory and resource cleanup - **it does NOT dele
 ```typescript
 type NetworkRecorderConfig = {
   harFile?: {
-    harDir?: string; // Directory for HAR files (default: 'har-files')
-    baseName?: string; // Base name for HAR files (default: 'network-traffic')
-    organizeByTestFile?: boolean; // Organize by test file (default: true)
-  };
+    harDir?: string // Directory for HAR files (default: 'har-files')
+    baseName?: string // Base name for HAR files (default: 'network-traffic')
+    organizeByTestFile?: boolean // Organize by test file (default: true)
+  }
 
   recording?: {
-    content?: 'embed' | 'attach'; // Response content handling (default: 'embed')
-    urlFilter?: string | RegExp; // URL filter for recording
-    update?: boolean; // Update existing HAR files (default: false)
-  };
+    content?: 'embed' | 'attach' // Response content handling (default: 'embed')
+    urlFilter?: string | RegExp // URL filter for recording
+    update?: boolean // Update existing HAR files (default: false)
+  }
 
   playback?: {
-    fallback?: boolean; // Fall back to live requests (default: false)
-    urlFilter?: string | RegExp; // URL filter for playback
-    updateMode?: boolean; // Update mode during playback (default: false)
-  };
+    fallback?: boolean // Fall back to live requests (default: false)
+    urlFilter?: string | RegExp // URL filter for playback
+    updateMode?: boolean // Update mode during playback (default: false)
+  }
 
-  forceMode?: 'record' | 'playback' | 'disabled';
-};
+  forceMode?: 'record' | 'playback' | 'disabled'
+}
 ```
 
 ## Environment Configuration
@@ -447,14 +447,14 @@ The network recorder works seamlessly with authentication:
 ```typescript
 test('Authenticated recording', async ({ page, context, authSession, networkRecorder }) => {
   // First authenticate
-  await authSession.login('testuser', 'password');
+  await authSession.login('testuser', 'password')
 
   // Then setup network recording with authenticated context
-  await networkRecorder.setup(context);
+  await networkRecorder.setup(context)
 
   // Test authenticated flows
-  await page.goto('/dashboard');
-});
+  await page.goto('/dashboard')
+})
 ```
 
 ### Concurrent Test Issues
@@ -467,18 +467,18 @@ The recorder includes built-in file locking for safe parallel execution. Each te
 
 ```typescript
 test('use both utilities', async ({ page, context, networkRecorder, interceptNetworkCall }) => {
-  await networkRecorder.setup(context);
+  await networkRecorder.setup(context)
 
   const createCall = interceptNetworkCall({
     method: 'POST',
     url: '/api/movies',
-  });
+  })
 
-  await page.click('#add-movie');
-  await createCall; // Wait for create (works with HAR!)
+  await page.click('#add-movie')
+  await createCall // Wait for create (works with HAR!)
 
   // Network recorder provides playback, intercept provides determinism
-});
+})
 ```
 
 ## Related Fragments
@@ -493,35 +493,35 @@ test('use both utilities', async ({ page, context, networkRecorder, interceptNet
 **DON'T mix record and playback in same test:**
 
 ```typescript
-process.env.PW_NET_MODE = 'record';
+process.env.PW_NET_MODE = 'record'
 // ... some test code ...
-process.env.PW_NET_MODE = 'playback'; // Don't switch mid-test
+process.env.PW_NET_MODE = 'playback' // Don't switch mid-test
 ```
 
 **DO use one mode per test:**
 
 ```typescript
-process.env.PW_NET_MODE = 'playback'; // Set once at top
+process.env.PW_NET_MODE = 'playback' // Set once at top
 
 test('my test', async ({ page, context, networkRecorder }) => {
-  await networkRecorder.setup(context);
+  await networkRecorder.setup(context)
   // Entire test uses playback mode
-});
+})
 ```
 
 **DON'T forget to call setup:**
 
 ```typescript
 test('broken', async ({ page, networkRecorder }) => {
-  await page.goto('/'); // HAR not active!
-});
+  await page.goto('/') // HAR not active!
+})
 ```
 
 **DO always call setup before navigation:**
 
 ```typescript
 test('correct', async ({ page, context, networkRecorder }) => {
-  await networkRecorder.setup(context); // Must setup first
-  await page.goto('/'); // Now HAR is active
-});
+  await networkRecorder.setup(context) // Must setup first
+  await page.goto('/') // Now HAR is active
+})
 ```

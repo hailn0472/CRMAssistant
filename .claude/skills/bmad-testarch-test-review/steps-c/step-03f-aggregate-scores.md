@@ -38,25 +38,25 @@ Read outputs from 4 quality subagents, calculate weighted overall score (0-100),
 
 ```javascript
 // Use the SAME timestamp generated in Step 3 (do not regenerate).
-const timestamp = subagentContext?.timestamp;
+const timestamp = subagentContext?.timestamp
 if (!timestamp) {
-  throw new Error('Missing timestamp from Step 3 context. Pass Step 3 timestamp into Step 3F.');
+  throw new Error('Missing timestamp from Step 3 context. Pass Step 3 timestamp into Step 3F.')
 }
-const dimensions = ['determinism', 'isolation', 'maintainability', 'performance'];
-const results = {};
+const dimensions = ['determinism', 'isolation', 'maintainability', 'performance']
+const results = {}
 
 dimensions.forEach((dim) => {
-  const outputPath = `/tmp/tea-test-review-${dim}-${timestamp}.json`;
-  results[dim] = JSON.parse(fs.readFileSync(outputPath, 'utf8'));
-});
+  const outputPath = `/tmp/tea-test-review-${dim}-${timestamp}.json`
+  results[dim] = JSON.parse(fs.readFileSync(outputPath, 'utf8'))
+})
 ```
 
 **Verify all succeeded:**
 
 ```javascript
-const allSucceeded = dimensions.every((dim) => results[dim].score !== undefined);
+const allSucceeded = dimensions.every((dim) => results[dim].score !== undefined)
 if (!allSucceeded) {
-  throw new Error('One or more quality subagents failed!');
+  throw new Error('One or more quality subagents failed!')
 }
 ```
 
@@ -72,31 +72,31 @@ const weights = {
   isolation: 0.3, // 30% - Parallel safety and independence
   maintainability: 0.25, // 25% - Readability and long-term health
   performance: 0.15, // 15% - Speed and execution efficiency
-};
+}
 ```
 
 **Calculate overall score:**
 
 ```javascript
 const overallScore = dimensions.reduce((sum, dim) => {
-  return sum + results[dim].score * weights[dim];
-}, 0);
+  return sum + results[dim].score * weights[dim]
+}, 0)
 
-const roundedScore = Math.round(overallScore);
+const roundedScore = Math.round(overallScore)
 ```
 
 **Determine grade:**
 
 ```javascript
 const getGrade = (score) => {
-  if (score >= 90) return 'A';
-  if (score >= 80) return 'B';
-  if (score >= 70) return 'C';
-  if (score >= 60) return 'D';
-  return 'F';
-};
+  if (score >= 90) return 'A'
+  if (score >= 80) return 'B'
+  if (score >= 70) return 'C'
+  if (score >= 60) return 'D'
+  return 'F'
+}
 
-const overallGrade = getGrade(roundedScore);
+const overallGrade = getGrade(roundedScore)
 ```
 
 ---
@@ -111,19 +111,19 @@ const allViolations = dimensions.flatMap((dim) =>
     ...v,
     dimension: dim,
   })),
-);
+)
 
 // Group by severity
-const highSeverity = allViolations.filter((v) => v.severity === 'HIGH');
-const mediumSeverity = allViolations.filter((v) => v.severity === 'MEDIUM');
-const lowSeverity = allViolations.filter((v) => v.severity === 'LOW');
+const highSeverity = allViolations.filter((v) => v.severity === 'HIGH')
+const mediumSeverity = allViolations.filter((v) => v.severity === 'MEDIUM')
+const lowSeverity = allViolations.filter((v) => v.severity === 'LOW')
 
 const violationSummary = {
   total: allViolations.length,
   HIGH: highSeverity.length,
   MEDIUM: mediumSeverity.length,
   LOW: lowSeverity.length,
-};
+}
 ```
 
 ---
@@ -139,10 +139,12 @@ const allRecommendations = dimensions.flatMap((dim) =>
     recommendation: rec,
     impact: results[dim].score < 70 ? 'HIGH' : 'MEDIUM',
   })),
-);
+)
 
 // Sort by impact (HIGH first)
-const prioritizedRecommendations = allRecommendations.sort((a, b) => (a.impact === 'HIGH' ? -1 : 1)).slice(0, 10); // Top 10 recommendations
+const prioritizedRecommendations = allRecommendations
+  .sort((a, b) => (a.impact === 'HIGH' ? -1 : 1))
+  .slice(0, 10) // Top 10 recommendations
 ```
 
 ---
@@ -181,10 +183,14 @@ const reviewSummary = {
 
   subagent_execution: 'PARALLEL (4 quality dimensions)',
   performance_gain: '~60% faster than sequential',
-};
+}
 
 // Save for Step 4 (report generation)
-fs.writeFileSync(`/tmp/tea-test-review-summary-${timestamp}.json`, JSON.stringify(reviewSummary, null, 2), 'utf8');
+fs.writeFileSync(
+  `/tmp/tea-test-review-summary-${timestamp}.json`,
+  JSON.stringify(reviewSummary, null, 2),
+  'utf8',
+)
 ```
 
 ---

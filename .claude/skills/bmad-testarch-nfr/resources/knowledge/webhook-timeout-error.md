@@ -8,14 +8,14 @@
 
 ```typescript
 class WebhookTimeoutError extends Error {
-  readonly name = 'WebhookTimeoutError';
-  readonly templateName: string; // from webhookTemplate('...')
-  readonly timeoutMs: number; // the timeout that was exceeded
-  readonly totalReceived: number; // total webhooks seen in polling window
-  readonly receivedWebhooks: ReceivedWebhook[]; // last ≤10 received webhooks
-  readonly matcherDetails: string[]; // human-readable matcher summary
+  readonly name = 'WebhookTimeoutError'
+  readonly templateName: string // from webhookTemplate('...')
+  readonly timeoutMs: number // the timeout that was exceeded
+  readonly totalReceived: number // total webhooks seen in polling window
+  readonly receivedWebhooks: ReceivedWebhook[] // last ≤10 received webhooks
+  readonly matcherDetails: string[] // human-readable matcher summary
 
-  toJSON(): Record<string, unknown>; // serialize all fields for CI logs
+  toJSON(): Record<string, unknown> // serialize all fields for CI logs
 }
 ```
 
@@ -36,32 +36,32 @@ Use `matcherDetails` to confirm the matchers were configured correctly. Use `rec
 ## Validating the Error Shape in Tests
 
 ```typescript
-import { WebhookTimeoutError, webhookTemplate } from '@seontechnologies/playwright-utils/webhook';
+import { WebhookTimeoutError, webhookTemplate } from '@seontechnologies/playwright-utils/webhook'
 
 const neverArrivingTemplate = webhookTemplate('never.arrives')
   .matchField('event', 'event.that.never.happens')
   .withTimeout(500)
   .withInterval(100)
-  .build();
+  .build()
 
-const [waitResult] = await Promise.allSettled([webhookRegistry.waitFor(neverArrivingTemplate)]);
+const [waitResult] = await Promise.allSettled([webhookRegistry.waitFor(neverArrivingTemplate)])
 
-expect(waitResult.status).toBe('rejected');
+expect(waitResult.status).toBe('rejected')
 if (waitResult.status !== 'rejected') {
-  throw new Error('Expected webhook wait to reject with WebhookTimeoutError');
+  throw new Error('Expected webhook wait to reject with WebhookTimeoutError')
 }
 
-const error = waitResult.reason as WebhookTimeoutError;
-expect(error).toBeInstanceOf(WebhookTimeoutError);
-expect(error.templateName).toBe('never.arrives');
-expect(error.timeoutMs).toBe(500);
+const error = waitResult.reason as WebhookTimeoutError
+expect(error).toBeInstanceOf(WebhookTimeoutError)
+expect(error.templateName).toBe('never.arrives')
+expect(error.timeoutMs).toBe(500)
 expect(error.toJSON()).toMatchObject({
   name: 'WebhookTimeoutError',
   templateName: 'never.arrives',
   timeoutMs: 500,
   totalReceived: expect.any(Number),
   matcherDetails: ['field(event="event.that.never.happens")'],
-});
+})
 ```
 
 ## Inspecting receivedWebhooks
@@ -70,34 +70,36 @@ When a webhook arrives but doesn't match, `receivedWebhooks` shows you what actu
 
 ```typescript
 // Wait for create webhook first — puts it in the journal
-await webhookRegistry.waitFor(movieCreated(movieId));
+await webhookRegistry.waitFor(movieCreated(movieId))
 
 // Wait for delete webhook that will never arrive — no delete was called
 const undeliveredDelete = webhookTemplate<{
-  event: string;
-  data: { id: number };
+  event: string
+  data: { id: number }
 }>('movie.deleted.not.delivered')
   .matchField('event', 'movie.deleted')
   .matchField('data.id', movieId)
   .withTimeout(2_000)
   .withInterval(200)
-  .build();
+  .build()
 
-const [waitResult] = await Promise.allSettled([webhookRegistry.waitFor(undeliveredDelete)]);
+const [waitResult] = await Promise.allSettled([webhookRegistry.waitFor(undeliveredDelete)])
 
-expect(waitResult.status).toBe('rejected');
+expect(waitResult.status).toBe('rejected')
 if (waitResult.status !== 'rejected') {
-  throw new Error('Expected webhook wait to reject with WebhookTimeoutError');
+  throw new Error('Expected webhook wait to reject with WebhookTimeoutError')
 }
 
-const error = waitResult.reason as WebhookTimeoutError;
-expect(error).toBeInstanceOf(WebhookTimeoutError);
-expect(error.totalReceived).toBeGreaterThanOrEqual(1);
+const error = waitResult.reason as WebhookTimeoutError
+expect(error).toBeInstanceOf(WebhookTimeoutError)
+expect(error.totalReceived).toBeGreaterThanOrEqual(1)
 
 // The movie.created webhook that did arrive is visible in the error
-const createdWebhook = error.receivedWebhooks.find((w) => (w.body as { data: { id: number } }).data.id === movieId);
-expect(createdWebhook).toBeDefined();
-expect((createdWebhook!.body as { event: string }).event).toBe('movie.created');
+const createdWebhook = error.receivedWebhooks.find(
+  (w) => (w.body as { data: { id: number } }).data.id === movieId,
+)
+expect(createdWebhook).toBeDefined()
+expect((createdWebhook!.body as { event: string }).event).toBe('movie.created')
 ```
 
 ## Common Failure Patterns
@@ -121,7 +123,7 @@ expect((createdWebhook!.body as { event: string }).event).toBe('movie.created');
 ## Import
 
 ```typescript
-import { WebhookTimeoutError } from '@seontechnologies/playwright-utils/webhook';
+import { WebhookTimeoutError } from '@seontechnologies/playwright-utils/webhook'
 ```
 
 ## Related Fragments

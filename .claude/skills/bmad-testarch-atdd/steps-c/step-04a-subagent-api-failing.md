@@ -66,7 +66,7 @@ For each API endpoint, create test file in `tests/api/[feature].spec.ts`:
 **Test Structure (ATDD - Red Phase):**
 
 ```typescript
-import { test, expect } from '@playwright/test';
+import { test, expect } from '@playwright/test'
 // If Playwright Utils enabled:
 // import { apiRequest } from '@playwright-utils/api';
 
@@ -78,17 +78,17 @@ test.describe('[Story Name] API Tests (ATDD)', () => {
         email: 'newuser@example.com',
         password: 'SecurePass123!',
       },
-    });
+    })
 
     // Expect 201 but will get 404 (endpoint doesn't exist)
-    expect(response.status()).toBe(201);
+    expect(response.status()).toBe(201)
 
-    const user = await response.json();
+    const user = await response.json()
     expect(user).toMatchObject({
       id: expect.any(Number),
       email: 'newuser@example.com',
-    });
-  });
+    })
+  })
 
   test.skip('[P1] should return 400 if email exists', async ({ request }) => {
     // THIS TEST WILL FAIL - Endpoint not implemented yet
@@ -97,13 +97,13 @@ test.describe('[Story Name] API Tests (ATDD)', () => {
         email: 'existing@example.com',
         password: 'SecurePass123!',
       },
-    });
+    })
 
-    expect(response.status()).toBe(400);
-    const error = await response.json();
-    expect(error.message).toContain('Email already exists');
-  });
-});
+    expect(response.status()).toBe(400)
+    const error = await response.json()
+    expect(error.message).toContain('Email already exists')
+  })
+})
 ```
 
 **CRITICAL ATDD Requirements:**
@@ -176,10 +176,13 @@ test.skip('[P0] should generate consumer contract for user registration', async 
       }),
     })
     .executeTest(async (mockServer) => {
-      const result = await registerUser({ email: 'newuser@example.com', password: 'SecurePass123!' }, { baseUrl: mockServer.url });
-      expect(result.id).toEqual(expect.any(Number));
-    });
-});
+      const result = await registerUser(
+        { email: 'newuser@example.com', password: 'SecurePass123!' },
+        { baseUrl: mockServer.url },
+      )
+      expect(result.id).toEqual(expect.any(Number))
+    })
+})
 ```
 
 **Why test.skip():**

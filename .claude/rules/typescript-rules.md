@@ -37,20 +37,20 @@
 
 ```typescript
 // 1. External dependencies (node_modules)
-import { Injectable } from "@nestjs/common";
-import { PrismaClient } from "@prisma/client";
+import { Injectable } from '@nestjs/common'
+import { PrismaClient } from '@prisma/client'
 
 // 2. Internal absolute imports (workspace packages)
-import { ContactService } from "@/contacts/contact.service";
-import { validateEmail } from "@/utils/validation";
+import { ContactService } from '@/contacts/contact.service'
+import { validateEmail } from '@/utils/validation'
 
 // 3. Relative imports (same module)
-import { CreateContactDto } from "./dto/create-contact.dto";
-import { ContactRepository } from "./contact.repository";
+import { CreateContactDto } from './dto/create-contact.dto'
+import { ContactRepository } from './contact.repository'
 
 // 4. Type-only imports (separate group)
-import type { Contact } from "@prisma/client";
-import type { User } from "@/types";
+import type { Contact } from '@prisma/client'
+import type { User } from '@/types'
 ```
 
 ### Export Patterns
@@ -64,10 +64,10 @@ import type { User } from "@/types";
 
 ```typescript
 // Use @ for workspace root
-import { ContactService } from "@/contacts/contact.service";
+import { ContactService } from '@/contacts/contact.service'
 
 // Use @packages for shared packages
-import { validateEmail } from "@packages/utils";
+import { validateEmail } from '@packages/utils'
 ```
 
 ## Type Safety Patterns
@@ -76,11 +76,11 @@ import { validateEmail } from "@packages/utils";
 
 ```typescript
 // ✅ Good - type inferred
-const count = 10;
-const name = "John";
+const count = 10
+const name = 'John'
 
 // ❌ Bad - unnecessary annotation
-const count: number = 10;
+const count: number = 10
 ```
 
 ### Explicit Types for Function Signatures
@@ -88,12 +88,12 @@ const count: number = 10;
 ```typescript
 // ✅ Good - explicit return type
 function getContact(id: string): Promise<Contact | null> {
-  return prisma.contact.findUnique({ where: { id } });
+  return prisma.contact.findUnique({ where: { id } })
 }
 
 // ❌ Bad - implicit return type
 function getContact(id: string) {
-  return prisma.contact.findUnique({ where: { id } });
+  return prisma.contact.findUnique({ where: { id } })
 }
 ```
 
@@ -101,14 +101,14 @@ function getContact(id: string) {
 
 ```typescript
 // ✅ Good
-type Result<T> = { success: true; data: T } | { success: false; error: string };
+type Result<T> = { success: true; data: T } | { success: false; error: string }
 
 // ❌ Bad
 type Result<T> = {
-  success: boolean;
-  data?: T;
-  error?: string;
-};
+  success: boolean
+  data?: T
+  error?: string
+}
 ```
 
 ### Use `unknown` Instead of `any`
@@ -116,15 +116,15 @@ type Result<T> = {
 ```typescript
 // ✅ Good
 function processData(data: unknown): string {
-  if (typeof data === "string") {
-    return data.toUpperCase();
+  if (typeof data === 'string') {
+    return data.toUpperCase()
   }
-  throw new Error("Invalid data type");
+  throw new Error('Invalid data type')
 }
 
 // ❌ Bad
 function processData(data: any): string {
-  return data.toUpperCase(); // No type safety
+  return data.toUpperCase() // No type safety
 }
 ```
 
@@ -140,8 +140,8 @@ export class ValidationError extends Error {
     public field: string,
     public value: unknown,
   ) {
-    super(message);
-    this.name = "ValidationError";
+    super(message)
+    this.name = 'ValidationError'
   }
 }
 
@@ -151,8 +151,8 @@ export class NotFoundError extends Error {
     public resource: string,
     public id: string,
   ) {
-    super(message);
-    this.name = "NotFoundError";
+    super(message)
+    this.name = 'NotFoundError'
   }
 }
 ```
@@ -162,12 +162,12 @@ export class NotFoundError extends Error {
 ```typescript
 // ✅ Good
 if (!contact) {
-  throw new NotFoundError("Contact not found", "Contact", id);
+  throw new NotFoundError('Contact not found', 'Contact', id)
 }
 
 // ❌ Bad
 if (!contact) {
-  throw new Error("Contact not found");
+  throw new Error('Contact not found')
 }
 ```
 
@@ -176,45 +176,43 @@ if (!contact) {
 ```typescript
 // ✅ Good
 try {
-  await createContact(data);
+  await createContact(data)
 } catch (error) {
   if (error instanceof ValidationError) {
-    return { error: error.message, field: error.field };
+    return { error: error.message, field: error.field }
   }
   if (error instanceof NotFoundError) {
-    return { error: error.message, resource: error.resource };
+    return { error: error.message, resource: error.resource }
   }
   // Unknown error
-  throw error;
+  throw error
 }
 
 // ❌ Bad
 try {
-  await createContact(data);
+  await createContact(data)
 } catch (error: any) {
-  return { error: error.message };
+  return { error: error.message }
 }
 ```
 
 ### Use Result Type for Expected Errors
 
 ```typescript
-type Result<T, E = Error> = { ok: true; value: T } | { ok: false; error: E };
+type Result<T, E = Error> = { ok: true; value: T } | { ok: false; error: E }
 
-async function createContact(
-  data: CreateContactDto,
-): Promise<Result<Contact, ValidationError>> {
+async function createContact(data: CreateContactDto): Promise<Result<Contact, ValidationError>> {
   // Validation
   if (!validateEmail(data.email)) {
     return {
       ok: false,
-      error: new ValidationError("Invalid email", "email", data.email),
-    };
+      error: new ValidationError('Invalid email', 'email', data.email),
+    }
   }
 
   // Success
-  const contact = await prisma.contact.create({ data });
-  return { ok: true, value: contact };
+  const contact = await prisma.contact.create({ data })
+  return { ok: true, value: contact }
 }
 ```
 
@@ -225,13 +223,13 @@ async function createContact(
 ```typescript
 // ✅ Good
 async function getContacts(): Promise<Contact[]> {
-  const contacts = await prisma.contact.findMany();
-  return contacts;
+  const contacts = await prisma.contact.findMany()
+  return contacts
 }
 
 // ❌ Bad
 function getContacts(): Promise<Contact[]> {
-  return prisma.contact.findMany().then((contacts) => contacts);
+  return prisma.contact.findMany().then((contacts) => contacts)
 }
 ```
 
@@ -241,14 +239,14 @@ function getContacts(): Promise<Contact[]> {
 // ✅ Good
 async function createContact(data: CreateContactDto): Promise<Contact> {
   try {
-    return await prisma.contact.create({ data });
+    return await prisma.contact.create({ data })
   } catch (error) {
     if (error instanceof PrismaClientKnownRequestError) {
-      if (error.code === "P2002") {
-        throw new ValidationError("Email already exists", "email", data.email);
+      if (error.code === 'P2002') {
+        throw new ValidationError('Email already exists', 'email', data.email)
       }
     }
-    throw error;
+    throw error
   }
 }
 ```
@@ -257,14 +255,11 @@ async function createContact(data: CreateContactDto): Promise<Contact> {
 
 ```typescript
 // ✅ Good - parallel
-const [contacts, deals] = await Promise.all([
-  prisma.contact.findMany(),
-  prisma.deal.findMany(),
-]);
+const [contacts, deals] = await Promise.all([prisma.contact.findMany(), prisma.deal.findMany()])
 
 // ❌ Bad - sequential
-const contacts = await prisma.contact.findMany();
-const deals = await prisma.deal.findMany();
+const contacts = await prisma.contact.findMany()
+const deals = await prisma.deal.findMany()
 ```
 
 ## Null Safety
@@ -273,20 +268,20 @@ const deals = await prisma.deal.findMany();
 
 ```typescript
 // ✅ Good
-const email = user?.contact?.email;
+const email = user?.contact?.email
 
 // ❌ Bad
-const email = user && user.contact && user.contact.email;
+const email = user && user.contact && user.contact.email
 ```
 
 ### Use Nullish Coalescing
 
 ```typescript
 // ✅ Good
-const pageSize = query.pageSize ?? 20;
+const pageSize = query.pageSize ?? 20
 
 // ❌ Bad
-const pageSize = query.pageSize || 20; // Fails for 0
+const pageSize = query.pageSize || 20 // Fails for 0
 ```
 
 ### Avoid null, Prefer undefined
@@ -294,12 +289,12 @@ const pageSize = query.pageSize || 20; // Fails for 0
 ```typescript
 // ✅ Good
 function getContact(id: string): Contact | undefined {
-  return contacts.find((c) => c.id === id);
+  return contacts.find((c) => c.id === id)
 }
 
 // ❌ Bad
 function getContact(id: string): Contact | null {
-  return contacts.find((c) => c.id === id) || null;
+  return contacts.find((c) => c.id === id) || null
 }
 ```
 
@@ -309,29 +304,29 @@ function getContact(id: string): Contact | null {
 
 ```typescript
 // Partial - make all properties optional
-type UpdateContactDto = Partial<CreateContactDto>;
+type UpdateContactDto = Partial<CreateContactDto>
 
 // Pick - select specific properties
-type ContactSummary = Pick<Contact, "id" | "name" | "email">;
+type ContactSummary = Pick<Contact, 'id' | 'name' | 'email'>
 
 // Omit - exclude specific properties
-type ContactWithoutDates = Omit<Contact, "createdAt" | "updatedAt">;
+type ContactWithoutDates = Omit<Contact, 'createdAt' | 'updatedAt'>
 
 // Required - make all properties required
-type RequiredContact = Required<Partial<Contact>>;
+type RequiredContact = Required<Partial<Contact>>
 
 // Record - create object type with specific keys
-type ContactMap = Record<string, Contact>;
+type ContactMap = Record<string, Contact>
 ```
 
 ### Create Custom Utility Types
 
 ```typescript
 // Make specific fields required
-type RequireFields<T, K extends keyof T> = T & Required<Pick<T, K>>;
+type RequireFields<T, K extends keyof T> = T & Required<Pick<T, K>>
 
 // Example usage
-type ContactWithEmail = RequireFields<Partial<Contact>, "email">;
+type ContactWithEmail = RequireFields<Partial<Contact>, 'email'>
 ```
 
 ## Enums vs Union Types
@@ -341,20 +336,20 @@ type ContactWithEmail = RequireFields<Partial<Contact>, "email">;
 ```typescript
 // ✅ Good - const object
 export const DealStatus = {
-  OPEN: "OPEN",
-  IN_PROGRESS: "IN_PROGRESS",
-  WON: "WON",
-  LOST: "LOST",
-} as const;
+  OPEN: 'OPEN',
+  IN_PROGRESS: 'IN_PROGRESS',
+  WON: 'WON',
+  LOST: 'LOST',
+} as const
 
-export type DealStatus = (typeof DealStatus)[keyof typeof DealStatus];
+export type DealStatus = (typeof DealStatus)[keyof typeof DealStatus]
 
 // ❌ Bad - enum (generates runtime code)
 export enum DealStatus {
-  OPEN = "OPEN",
-  IN_PROGRESS = "IN_PROGRESS",
-  WON = "WON",
-  LOST = "LOST",
+  OPEN = 'OPEN',
+  IN_PROGRESS = 'IN_PROGRESS',
+  WON = 'WON',
+  LOST = 'LOST',
 }
 ```
 
@@ -362,13 +357,13 @@ export enum DealStatus {
 
 ```typescript
 // ✅ Good
-type Status = "pending" | "approved" | "rejected";
+type Status = 'pending' | 'approved' | 'rejected'
 
 // ❌ Bad - unnecessary enum
 enum Status {
-  Pending = "pending",
-  Approved = "approved",
-  Rejected = "rejected",
+  Pending = 'pending',
+  Approved = 'approved',
+  Rejected = 'rejected',
 }
 ```
 
@@ -378,13 +373,13 @@ enum Status {
 
 ```typescript
 // ✅ Good - compute type once
-type ContactKeys = keyof Contact;
-const keys: ContactKeys[] = ["id", "name", "email"];
+type ContactKeys = keyof Contact
+const keys: ContactKeys[] = ['id', 'name', 'email']
 
 // ❌ Bad - recompute on every iteration
 contacts.forEach((contact) => {
-  const keys: (keyof Contact)[] = Object.keys(contact);
-});
+  const keys: (keyof Contact)[] = Object.keys(contact)
+})
 ```
 
 ### Use Type Assertions Sparingly
@@ -392,19 +387,17 @@ contacts.forEach((contact) => {
 ```typescript
 // ✅ Good - validate before asserting
 function isContact(obj: unknown): obj is Contact {
-  return (
-    typeof obj === "object" && obj !== null && "id" in obj && "email" in obj
-  );
+  return typeof obj === 'object' && obj !== null && 'id' in obj && 'email' in obj
 }
 
 if (isContact(data)) {
   // TypeScript knows data is Contact
-  console.log(data.email);
+  console.log(data.email)
 }
 
 // ❌ Bad - unsafe assertion
-const contact = data as Contact;
-console.log(contact.email); // Runtime error if data is not Contact
+const contact = data as Contact
+console.log(contact.email) // Runtime error if data is not Contact
 ```
 
 ## Critical Rules for AI Agents

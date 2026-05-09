@@ -25,7 +25,7 @@ Use `zodToPactMatchers` from `@seontechnologies/pactjs-utils` to derive Pact V3 
 
 ```typescript
 // pact/http/helpers/consumer-schemas.ts
-import { z } from 'zod';
+import { z } from 'zod'
 
 // Only the fields this consumer actually reads — NOT the shared full-response schema
 export const ConsumerMovieSchema = z.object({
@@ -34,7 +34,7 @@ export const ConsumerMovieSchema = z.object({
   year: z.number().int(),
   rating: z.number(),
   director: z.string(),
-});
+})
 ```
 
 ### Example 2: Replacing hand-written matcher helpers
@@ -46,7 +46,7 @@ const propMatcherNoId = (movie: Omit<Movie, 'id'>) => ({
   year: integer(movie.year),
   rating: decimal(movie.rating),
   director: string(movie.director),
-});
+})
 
 await pact
   .addInteraction()
@@ -61,13 +61,13 @@ await pact
         data: { id: integer(), ...propMatcherNoId(movieWithoutId) },
       },
     }),
-  );
+  )
 ```
 
 ```typescript
 // ✅ After — schema defines types, plain object provides examples
-import { zodToPactMatchers, setJsonContent } from '@seontechnologies/pactjs-utils';
-import { ConsumerMovieSchema } from '../helpers/consumer-schemas';
+import { zodToPactMatchers, setJsonContent } from '@seontechnologies/pactjs-utils'
+import { ConsumerMovieSchema } from '../helpers/consumer-schemas'
 
 await pact
   .addInteraction()
@@ -82,19 +82,19 @@ await pact
         data: zodToPactMatchers(ConsumerMovieSchema, { id: 1, ...movieWithoutId }),
       },
     }),
-  );
+  )
 ```
 
 ### Example 3: Array responses with `eachLike`
 
 ```typescript
-import { PactV4, MatchersV3 } from '@pact-foundation/pact';
-import { zodToPactMatchers, setJsonContent } from '@seontechnologies/pactjs-utils';
-import { ConsumerMovieSchema } from '../helpers/consumer-schemas';
+import { PactV4, MatchersV3 } from '@pact-foundation/pact'
+import { zodToPactMatchers, setJsonContent } from '@seontechnologies/pactjs-utils'
+import { ConsumerMovieSchema } from '../helpers/consumer-schemas'
 
-const { eachLike } = MatchersV3;
-const pact = new PactV4({ consumer: 'Movies Web', provider: 'Movies API' });
-const movie = { id: 1, name: 'My movie', year: 1999, rating: 8.5, director: 'John Doe' };
+const { eachLike } = MatchersV3
+const pact = new PactV4({ consumer: 'Movies Web', provider: 'Movies API' })
+const movie = { id: 1, name: 'My movie', year: 1999, rating: 8.5, director: 'John Doe' }
 
 await pact
   .addInteraction()
@@ -106,21 +106,23 @@ await pact
     setJsonContent({
       body: {
         status: 200,
-        data: eachLike(zodToPactMatchers(ConsumerMovieSchema, movie) as Parameters<typeof eachLike>[0]),
+        data: eachLike(
+          zodToPactMatchers(ConsumerMovieSchema, movie) as Parameters<typeof eachLike>[0],
+        ),
       },
     }),
-  );
+  )
 // data expands to: eachLike({ id: integer(1), name: string('My movie'), year: integer(1999), rating: decimal(8.5), director: string('John Doe') })
 ```
 
 ### Example 4: Message Pact tests (Kafka / async)
 
 ```typescript
-import { PactV4, MatchersV3 } from '@pact-foundation/pact';
-import { zodToPactMatchers } from '@seontechnologies/pactjs-utils';
-import { ConsumerMovieSchema } from '../../http/helpers/consumer-schemas';
+import { PactV4, MatchersV3 } from '@pact-foundation/pact'
+import { zodToPactMatchers } from '@seontechnologies/pactjs-utils'
+import { ConsumerMovieSchema } from '../../http/helpers/consumer-schemas'
 
-const { string } = MatchersV3;
+const { string } = MatchersV3
 
 // Schema-derived matchers — no manual matcher construction, no outer like() wrapper
 const movieValue = zodToPactMatchers(ConsumerMovieSchema, {
@@ -129,7 +131,7 @@ const movieValue = zodToPactMatchers(ConsumerMovieSchema, {
   year: 2010,
   rating: 8.8,
   director: 'Christopher Nolan',
-});
+})
 
 await messagePact
   .addAsynchronousInteraction()
@@ -138,8 +140,8 @@ await messagePact
     builder.withJSONContent({
       topic: string('movie-created'),
       messages: [{ key: string('1'), value: movieValue }],
-    });
-  });
+    })
+  })
 ```
 
 Note: `zodToPactMatchers` on an object schema already wraps each field in the right matcher, so the extra `like()` wrapper from hand-written versions is not needed — each field carries its own type constraint.
@@ -147,18 +149,18 @@ Note: `zodToPactMatchers` on an object schema already wraps each field in the ri
 ### Example 5: OpenAPI example metadata (optional peer)
 
 ```typescript
-import { z } from 'zod';
-import { extendZodWithOpenApi } from '@asteasolutions/zod-to-openapi';
+import { z } from 'zod'
+import { extendZodWithOpenApi } from '@asteasolutions/zod-to-openapi'
 
-extendZodWithOpenApi(z);
+extendZodWithOpenApi(z)
 
 const MovieSchema = z.object({
   name: z.string().openapi({ example: 'Inception' }),
   year: z.number().int().openapi({ example: 2010 }),
-});
+})
 
 // No second argument needed — examples come from the schema itself
-zodToPactMatchers(MovieSchema);
+zodToPactMatchers(MovieSchema)
 // → { name: string('Inception'), year: integer(2010) }
 ```
 
@@ -204,9 +206,9 @@ zodToPactMatchers(MovieSchema);
 
 ```typescript
 // ❌ Importing the shared server-side schema forces the provider to return every field
-import { FullMovieSchema } from '@shared/schemas/movie'; // 20 fields
+import { FullMovieSchema } from '@shared/schemas/movie' // 20 fields
 
-data: zodToPactMatchers(FullMovieSchema, movie);
+data: zodToPactMatchers(FullMovieSchema, movie)
 ```
 
 This creates a contract that requires the provider to return all 20 fields, even the ones this consumer never reads — breaking consumer-driven testing and blocking future field deprecation.
@@ -221,9 +223,9 @@ export const ConsumerMovieSchema = z.object({
   year: z.number().int(),
   rating: z.number(),
   director: z.string(),
-});
+})
 
-data: zodToPactMatchers(ConsumerMovieSchema, movie);
+data: zodToPactMatchers(ConsumerMovieSchema, movie)
 ```
 
 ### Wrong: Hand-written matcher helper duplicating the schema
@@ -235,28 +237,28 @@ const propMatcherNoId = (movie: Omit<Movie, 'id'>) => ({
   year: integer(movie.year),
   rating: decimal(movie.rating),
   director: string(movie.director),
-});
+})
 ```
 
 ### Right: `zodToPactMatchers` with a consumer-curated schema
 
 ```typescript
 // ✅ Schema is the single source of truth; plain object supplies examples
-data: zodToPactMatchers(ConsumerMovieSchema, { id: 1, ...movieWithoutId });
+data: zodToPactMatchers(ConsumerMovieSchema, { id: 1, ...movieWithoutId })
 ```
 
 ### Wrong: Wrapping the whole object result in `like()`
 
 ```typescript
 // ❌ Redundant — each field is already a matcher
-value: like(zodToPactMatchers(ConsumerMovieSchema, movie));
+value: like(zodToPactMatchers(ConsumerMovieSchema, movie))
 ```
 
 ### Right: Use the object directly
 
 ```typescript
 // ✅ Each field carries its own type constraint
-value: zodToPactMatchers(ConsumerMovieSchema, movie);
+value: zodToPactMatchers(ConsumerMovieSchema, movie)
 ```
 
 _Source: @seontechnologies/pactjs-utils library, pactjs-utils docs (`docs/zod-to-pact/`), pact-js consumer sample repos, Pact docs on consumer-driven contracts_

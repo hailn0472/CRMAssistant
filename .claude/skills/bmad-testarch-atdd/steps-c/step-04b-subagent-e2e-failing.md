@@ -96,35 +96,35 @@ For each user journey, create test file in `tests/e2e/[feature].spec.ts`:
 **Test Structure (ATDD - Red Phase):**
 
 ```typescript
-import { test, expect } from '@playwright/test';
+import { test, expect } from '@playwright/test'
 
 test.describe('[Story Name] E2E User Journey (ATDD)', () => {
   test.skip('[P0] should complete user registration successfully', async ({ page }) => {
     // THIS TEST WILL FAIL - UI not implemented yet
-    await page.goto('/register');
+    await page.goto('/register')
 
     // Expect registration form but will get 404 or missing elements
-    await page.fill('[name="email"]', 'newuser@example.com');
-    await page.fill('[name="password"]', 'SecurePass123!');
-    await page.click('button:has-text("Register")');
+    await page.fill('[name="email"]', 'newuser@example.com')
+    await page.fill('[name="password"]', 'SecurePass123!')
+    await page.click('button:has-text("Register")')
 
     // Expect success message and redirect
-    await expect(page.getByText('Registration successful!')).toBeVisible();
-    await page.waitForURL('/dashboard');
-  });
+    await expect(page.getByText('Registration successful!')).toBeVisible()
+    await page.waitForURL('/dashboard')
+  })
 
   test.skip('[P1] should show error if email exists', async ({ page }) => {
     // THIS TEST WILL FAIL - UI not implemented yet
-    await page.goto('/register');
+    await page.goto('/register')
 
-    await page.fill('[name="email"]', 'existing@example.com');
-    await page.fill('[name="password"]', 'SecurePass123!');
-    await page.click('button:has-text("Register")');
+    await page.fill('[name="email"]', 'existing@example.com')
+    await page.fill('[name="password"]', 'SecurePass123!')
+    await page.click('button:has-text("Register")')
 
     // Expect error message
-    await expect(page.getByText('Email already exists')).toBeVisible();
-  });
-});
+    await expect(page.getByText('Email already exists')).toBeVisible()
+  })
+})
 ```
 
 **CRITICAL ATDD Requirements:**

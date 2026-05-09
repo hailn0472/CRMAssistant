@@ -51,9 +51,9 @@ This is an **isolated subagent** running in parallel with other quality dimensio
 ### 2. Calculate Maintainability Score
 
 ```javascript
-const severityWeights = { HIGH: 10, MEDIUM: 5, LOW: 2 };
-const totalPenalty = violations.reduce((sum, v) => sum + severityWeights[v.severity], 0);
-const score = Math.max(0, 100 - totalPenalty);
+const severityWeights = { HIGH: 10, MEDIUM: 5, LOW: 2 }
+const totalPenalty = violations.reduce((sum, v) => sum + severityWeights[v.severity], 0)
+const score = Math.max(0, 100 - totalPenalty)
 ```
 
 ---

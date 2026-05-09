@@ -87,7 +87,8 @@ All commands tested and working:
 ✅ pnpm clean            # Turbo runs clean + rimraf
 ```
 
-**Warnings**: 
+**Warnings**:
+
 - Output file warnings for lint/type-check are expected (workspaces have placeholder scripts)
 - These will be resolved when actual implementation begins in Story 1.2+
 
@@ -96,6 +97,7 @@ All commands tested and working:
 ## Commits
 
 1. **4243898** - fix(config): resolve Phase 1 code review issues for Story 1.1
+
    - Fixed turbo.json, package.json, .gitignore, .gitattributes, README.md
    - 24 issues resolved across 5 files
 

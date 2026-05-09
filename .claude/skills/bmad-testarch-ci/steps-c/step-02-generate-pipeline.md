@@ -47,53 +47,63 @@ const orchestrationContext = {
     capability_probe: config.tea_capability_probe !== false, // true by default
   },
   timestamp: new Date().toISOString().replace(/[:.]/g, '-'),
-};
-
-const normalizeUserExecutionMode = (mode) => {
-  if (typeof mode !== 'string') return null;
-  const normalized = mode.trim().toLowerCase().replace(/[-_]/g, ' ').replace(/\s+/g, ' ');
-
-  if (normalized === 'auto') return 'auto';
-  if (normalized === 'sequential') return 'sequential';
-  if (normalized === 'subagent' || normalized === 'sub agent' || normalized === 'subagents' || normalized === 'sub agents') {
-    return 'subagent';
-  }
-  if (normalized === 'agent team' || normalized === 'agent teams' || normalized === 'agentteam') {
-    return 'agent-team';
-  }
-
-  return null;
-};
-
-const normalizeConfigExecutionMode = (mode) => {
-  if (mode === 'subagent') return 'subagent';
-  if (mode === 'auto' || mode === 'sequential' || mode === 'subagent' || mode === 'agent-team') {
-    return mode;
-  }
-  return null;
-};
-
-// Explicit user instruction in the active run takes priority over config.
-const explicitModeFromUser = normalizeUserExecutionMode(runtime.getExplicitExecutionModeHint?.() || null);
-
-const requestedMode = explicitModeFromUser || normalizeConfigExecutionMode(orchestrationContext.config.execution_mode) || 'auto';
-const probeEnabled = orchestrationContext.config.capability_probe;
-
-const supports = { subagent: false, agentTeam: false };
-if (probeEnabled) {
-  supports.subagent = runtime.canLaunchSubagents?.() === true;
-  supports.agentTeam = runtime.canLaunchAgentTeams?.() === true;
 }
 
-let resolvedMode = requestedMode;
+const normalizeUserExecutionMode = (mode) => {
+  if (typeof mode !== 'string') return null
+  const normalized = mode.trim().toLowerCase().replace(/[-_]/g, ' ').replace(/\s+/g, ' ')
+
+  if (normalized === 'auto') return 'auto'
+  if (normalized === 'sequential') return 'sequential'
+  if (
+    normalized === 'subagent' ||
+    normalized === 'sub agent' ||
+    normalized === 'subagents' ||
+    normalized === 'sub agents'
+  ) {
+    return 'subagent'
+  }
+  if (normalized === 'agent team' || normalized === 'agent teams' || normalized === 'agentteam') {
+    return 'agent-team'
+  }
+
+  return null
+}
+
+const normalizeConfigExecutionMode = (mode) => {
+  if (mode === 'subagent') return 'subagent'
+  if (mode === 'auto' || mode === 'sequential' || mode === 'subagent' || mode === 'agent-team') {
+    return mode
+  }
+  return null
+}
+
+// Explicit user instruction in the active run takes priority over config.
+const explicitModeFromUser = normalizeUserExecutionMode(
+  runtime.getExplicitExecutionModeHint?.() || null,
+)
+
+const requestedMode =
+  explicitModeFromUser ||
+  normalizeConfigExecutionMode(orchestrationContext.config.execution_mode) ||
+  'auto'
+const probeEnabled = orchestrationContext.config.capability_probe
+
+const supports = { subagent: false, agentTeam: false }
+if (probeEnabled) {
+  supports.subagent = runtime.canLaunchSubagents?.() === true
+  supports.agentTeam = runtime.canLaunchAgentTeams?.() === true
+}
+
+let resolvedMode = requestedMode
 if (requestedMode === 'auto') {
-  if (supports.agentTeam) resolvedMode = 'agent-team';
-  else if (supports.subagent) resolvedMode = 'subagent';
-  else resolvedMode = 'sequential';
+  if (supports.agentTeam) resolvedMode = 'agent-team'
+  else if (supports.subagent) resolvedMode = 'subagent'
+  else resolvedMode = 'sequential'
 } else if (probeEnabled && requestedMode === 'agent-team' && !supports.agentTeam) {
-  resolvedMode = supports.subagent ? 'subagent' : 'sequential';
+  resolvedMode = supports.subagent ? 'subagent' : 'sequential'
 } else if (probeEnabled && requestedMode === 'subagent' && !supports.subagent) {
-  resolvedMode = 'sequential';
+  resolvedMode = 'sequential'
 }
 ```
 
@@ -212,31 +222,37 @@ env:
 > **Note:** `GITHUB_SHA` is auto-set by GitHub Actions, but `GITHUB_BRANCH` is **not** — it must be derived from `github.head_ref` (for PRs) or `github.ref_name` (for pushes). The pactjs-utils library reads both from `process.env`.
 
 1. **Consumer test (determinism gate) + publish**: Run consumer contract tests as a determinism gate, then publish pacts to broker — each step calls the same `npm run` script a developer runs locally (1:1 parity)
+
    - `npm run test:pact:consumer` — **this is the determinism gate**: runs `scripts/check-pact-determinism.sh` which invokes the inner `test:pact:consumer:run` N times (default 3) and fails if generated pact JSON is not byte-stable across runs. Never fold this into the publish step — keep it as its own visible CI step so failures are attributable to generation vs publish.
    - `npm run publish:pact` — publishes to the broker; internally normalizes interactions via `jq -S '.interactions |= sort_by(...)'` as defense-in-depth against any ordering drift that slips past the gate.
    - Ensure `jq` is available on the runner. It is preinstalled on GitHub `ubuntu-latest`; for other runner images or self-hosted runners, add an explicit install step (e.g., `apt-get install -y jq` or `brew install jq`) before any contract-test or publish command.
    - Only publish on PR and main branch pushes.
 
 2. **Provider verification**: Run provider verification against published pacts
+
    - `npm run test:pact:provider:remote:contract`
    - `buildVerifierOptions` auto-reads `PACT_BROKER_BASE_URL`, `PACT_BROKER_TOKEN`, `GITHUB_SHA`, `GITHUB_BRANCH`
    - Provider Vitest config (`vitest.config.contract.ts`) **must** use `pool: 'forks'` + `poolOptions.forks.singleFork: true` (see `pactjs-utils-provider-verifier.md` Example 7) — required for message providers and any multi-file provider contract suite to keep Pact Rust FFI state coherent. The SAME config is required on the consumer side (`vitest.config.pact.ts`) alongside `fileParallelism: false` — see `pact-consumer-framework-setup.md` Example 2.
    - Verification results published to broker when `CI=true`
 
 3. **Can-I-Deploy gate**: Block deployment if contracts are incompatible
+
    - `npm run can:i:deploy:provider`
    - Ensure the script adds `--retry-while-unknown 6 --retry-interval 10` for async verification
 
 4. **Webhook job**: Add `repository_dispatch` trigger for `contract_requiring_verification_published` event
+
    - Provider verification runs when consumers publish new pacts
    - Ensures compatibility is checked on both consumer and provider changes
    - Webhook authentication uses a dedicated GitHub machine user + classic PAT (`repo` scope, no expiration) stored as a PactFlow secret. See `pact-broker-webhooks.md` for the full pattern, rotation runbook, and staleness monitoring. A silently-expired PAT is the most common non-code cause of `can-i-deploy` timeouts with `There is no verified pact between ...`.
 
 5. **Breaking change handling**: When `PACT_BREAKING_CHANGE=true` env var is set:
+
    - Provider test passes `includeMainAndDeployed: false` to `buildVerifierOptions` — verifies only matching branch
    - Coordinate with consumer team before removing the flag
 
 6. **Record deployment**: After successful deployment, record version in broker
+
    - `npm run record:provider:deployment --env=production`
 
 7. **Staleness monitoring (recommended)**: Scheduled CI job (e.g., daily) that asserts recent verification results exist for each critical consumer/provider pair — surfaces silent webhook failures before they block a release. See `pact-broker-webhooks.md` Example 4.

@@ -26,14 +26,14 @@ Use `createProviderState`, `toJsonMap`, `setJsonContent`, and `setJsonBody` from
 ### Example 1: Basic Provider State Creation
 
 ```typescript
-import { PactV3, MatchersV3 } from '@pact-foundation/pact';
-import { createProviderState } from '@seontechnologies/pactjs-utils';
+import { PactV3, MatchersV3 } from '@pact-foundation/pact'
+import { createProviderState } from '@seontechnologies/pactjs-utils'
 
 const provider = new PactV3({
   consumer: 'movie-web',
   provider: 'SampleMoviesAPI',
   dir: './pacts',
-});
+})
 
 describe('Movie API Contract', () => {
   it('should return movie by id', async () => {
@@ -41,7 +41,7 @@ describe('Movie API Contract', () => {
     const providerState = createProviderState({
       name: 'movie with id 1 exists',
       params: { id: 1, name: 'Inception', year: 2010 },
-    });
+    })
 
     await provider
       .given(...providerState) // Spread tuple into .given(name, params)
@@ -52,12 +52,12 @@ describe('Movie API Contract', () => {
         body: MatchersV3.like({ id: 1, name: 'Inception', year: 2010 }),
       })
       .executeTest(async (mockServer) => {
-        const res = await fetch(`${mockServer.url}/movies/1`);
-        const movie = await res.json();
-        expect(movie.name).toBe('Inception');
-      });
-  });
-});
+        const res = await fetch(`${mockServer.url}/movies/1`)
+        const movie = await res.json()
+        expect(movie.name).toBe('Inception')
+      })
+  })
+})
 ```
 
 **Key Points**:
@@ -71,7 +71,7 @@ describe('Movie API Contract', () => {
 ### Example 2: Complex Parameters with toJsonMap
 
 ```typescript
-import { toJsonMap } from '@seontechnologies/pactjs-utils';
+import { toJsonMap } from '@seontechnologies/pactjs-utils'
 
 // toJsonMap conversion rules:
 // - string, number, boolean → passed through
@@ -88,7 +88,7 @@ const params = toJsonMap({
   score: null,
   createdAt: new Date('2025-01-15T10:00:00Z'),
   metadata: { role: 'admin', permissions: ['read', 'write'] },
-});
+})
 
 // Result:
 // {
@@ -110,10 +110,10 @@ const params = toJsonMap({
 ### Example 3: Provider State Without Parameters
 
 ```typescript
-import { createProviderState } from '@seontechnologies/pactjs-utils';
+import { createProviderState } from '@seontechnologies/pactjs-utils'
 
 // State without params — second tuple element is empty object
-const emptyState = createProviderState({ name: 'no movies exist', params: {} });
+const emptyState = createProviderState({ name: 'no movies exist', params: {} })
 // Returns: ['no movies exist', {}]
 
 await provider
@@ -122,16 +122,16 @@ await provider
   .withRequest({ method: 'GET', path: '/movies' })
   .willRespondWith({ status: 200, body: [] })
   .executeTest(async (mockServer) => {
-    const res = await fetch(`${mockServer.url}/movies`);
-    const movies = await res.json();
-    expect(movies).toEqual([]);
-  });
+    const res = await fetch(`${mockServer.url}/movies`)
+    const movies = await res.json()
+    expect(movies).toEqual([])
+  })
 ```
 
 ### Example 4: Multiple Provider States
 
 ```typescript
-import { createProviderState } from '@seontechnologies/pactjs-utils';
+import { createProviderState } from '@seontechnologies/pactjs-utils'
 
 // Some interactions require multiple provider states
 // Call .given() multiple times with different states
@@ -147,16 +147,16 @@ await provider
   .willRespondWith({ status: 200, body: MatchersV3.like({ id: 5 }) })
   .executeTest(async (mockServer) => {
     // test implementation
-  });
+  })
 ```
 
 ### Example 5: When to Use setJsonBody vs setJsonContent
 
 ```typescript
-import { MatchersV3 } from '@pact-foundation/pact';
-import { setJsonBody, setJsonContent } from '@seontechnologies/pactjs-utils';
+import { MatchersV3 } from '@pact-foundation/pact'
+import { setJsonBody, setJsonContent } from '@seontechnologies/pactjs-utils'
 
-const { integer, string } = MatchersV3;
+const { integer, string } = MatchersV3
 
 await pact
   .addInteraction()
@@ -176,7 +176,7 @@ await pact
       status: 200,
       data: { id: integer(1), name: string('Inception') },
     }),
-  );
+  )
 ```
 
 **Key Points**:
@@ -202,7 +202,7 @@ it('handles movie lookup scenarios', async () => {
     .willRespondWith(200, setJsonBody({ id: integer(1), name: string('The Matrix') }))
     .executeTest(async (mockServer) => {
       /* ... */
-    });
+    })
 
   // Sometimes this second interaction never makes it to the pact JSON:
   await pact
@@ -213,8 +213,8 @@ it('handles movie lookup scenarios', async () => {
     .willRespondWith(200, setJsonBody([]))
     .executeTest(async (mockServer) => {
       /* ... */
-    });
-});
+    })
+})
 
 // ✅ RIGHT — one addInteraction() per it()
 it('gets a movie by id', async () => {
@@ -226,8 +226,8 @@ it('gets a movie by id', async () => {
     .willRespondWith(200, setJsonBody({ id: integer(1), name: string('The Matrix') }))
     .executeTest(async (mockServer) => {
       /* ... */
-    });
-});
+    })
+})
 
 it('returns empty list when no movies exist', async () => {
   await pact
@@ -238,8 +238,8 @@ it('returns empty list when no movies exist', async () => {
     .willRespondWith(200, setJsonBody([]))
     .executeTest(async (mockServer) => {
       /* ... */
-    });
-});
+    })
+})
 
 // ✅ RIGHT — parameterized via it.each for data-driven coverage
 it.each([
@@ -254,8 +254,8 @@ it.each([
     .willRespondWith(200, setJsonBody({ id: integer(id), name: string(name) }))
     .executeTest(async (mockServer) => {
       /* ... */
-    });
-});
+    })
+})
 ```
 
 **Key Points**:
@@ -297,7 +297,7 @@ provider.given('user exists', {
   id: 1 as unknown as string,
   createdAt: new Date().toISOString(),
   metadata: JSON.stringify({ role: 'admin' }),
-} as JsonMap);
+} as JsonMap)
 ```
 
 ### Right: Use createProviderState
@@ -309,14 +309,14 @@ provider.given(
     name: 'user exists',
     params: { id: 1, createdAt: new Date(), metadata: { role: 'admin' } },
   }),
-);
+)
 ```
 
 ### Wrong: Inline state names without helper
 
 ```typescript
 // ❌ Duplicated state names between consumer and provider — easy to mismatch
-provider.given('a user with id 1 exists', { id: '1' });
+provider.given('a user with id 1 exists', { id: '1' })
 // Later in provider: 'user with id 1 exists' — different string!
 ```
 
@@ -327,9 +327,9 @@ provider.given('a user with id 1 exists', { id: '1' });
 const STATES = {
   USER_EXISTS: 'user with id exists',
   NO_USERS: 'no users exist',
-} as const;
+} as const
 
-provider.given(...createProviderState({ name: STATES.USER_EXISTS, params: { id: 1 } }));
+provider.given(...createProviderState({ name: STATES.USER_EXISTS, params: { id: 1 } }))
 ```
 
 ### Wrong: Repeating inline builder lambdas everywhere
@@ -354,9 +354,17 @@ provider.given(...createProviderState({ name: STATES.USER_EXISTS, params: { id: 
 ```typescript
 // ❌ PactV4 FFI non-deterministically drops one of these interactions ~1/N runs
 it('handles both success and empty list', async () => {
-  await pact.addInteraction().uponReceiving('get movie').withRequest(/* ... */).executeTest(/* ... */);
-  await pact.addInteraction().uponReceiving('empty list').withRequest(/* ... */).executeTest(/* ... */);
-});
+  await pact
+    .addInteraction()
+    .uponReceiving('get movie')
+    .withRequest(/* ... */)
+    .executeTest(/* ... */)
+  await pact
+    .addInteraction()
+    .uponReceiving('empty list')
+    .withRequest(/* ... */)
+    .executeTest(/* ... */)
+})
 ```
 
 ### Right: One `addInteraction()` per `it()` (or use `it.each`)
@@ -366,13 +374,13 @@ it('handles both success and empty list', async () => {
 it('gets a movie', async () => {
   await pact
     .addInteraction() /* ... */
-    .executeTest(/* ... */);
-});
+    .executeTest(/* ... */)
+})
 it('returns empty list', async () => {
   await pact
     .addInteraction() /* ... */
-    .executeTest(/* ... */);
-});
+    .executeTest(/* ... */)
+})
 ```
 
 See Example 6 above for the full rationale and the determinism gate that enforces this rule.

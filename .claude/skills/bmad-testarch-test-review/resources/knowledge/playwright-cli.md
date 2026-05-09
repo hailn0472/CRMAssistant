@@ -91,16 +91,16 @@ playwright-cli -s=tea-discover close
 
 ```typescript
 // Agent generates API tests using what it discovered, with playwright-utils
-import { test } from '@seontechnologies/playwright-utils/api-request/fixtures';
+import { test } from '@seontechnologies/playwright-utils/api-request/fixtures'
 
 test('GET /api/users returns user list', async ({ apiRequest }) => {
   const { status, body } = await apiRequest<User[]>({
     method: 'GET',
     path: '/api/users',
-  });
-  expect(status).toBe(200);
-  expect(body.length).toBeGreaterThan(0);
-});
+  })
+  expect(status).toBe(200)
+  expect(body.length).toBeGreaterThan(0)
+})
 ```
 
 **For pure API testing** (no UI involved), `playwright-cli` browser commands (snapshot, screenshot, click) don't apply — there's no page. But **trace analysis is highly valuable**. Playwright captures full network traces for API tests (requests, responses, headers, timing), and the trace CLI lets the agent inspect them programmatically:
@@ -228,7 +228,7 @@ Playwright 1.59 added `browser.bind()` — a programmatic API that makes a runni
 // In a test or fixture: bind the browser so playwright-cli can attach
 const { endpoint } = await browser.bind('my-debug-session', {
   workspaceDir: process.cwd(),
-});
+})
 // Now: playwright-cli attach my-debug-session
 ```
 

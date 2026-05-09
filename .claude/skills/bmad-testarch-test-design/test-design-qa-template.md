@@ -62,6 +62,7 @@ inputDocuments: []
 **Source:** See Architecture doc "Quick Guide" for detailed mitigation plans
 
 1. **{Dependency 1}** - {Team} - {Timeline}
+
    - {What QA needs}
    - {Why it blocks testing}
 
@@ -72,6 +73,7 @@ inputDocuments: []
 ### QA Infrastructure Setup (Pre-Implementation)
 
 1. **Test Data Factories** - QA
+
    - {Entity} factory with faker-based randomization
    - Auto-cleanup fixtures for parallel safety
 
@@ -83,24 +85,24 @@ inputDocuments: []
 **Example factory pattern:**
 
 ```typescript
-import { test } from '@seontechnologies/playwright-utils/api-request/fixtures';
-import { expect } from '@playwright/test';
-import { faker } from '@faker-js/faker';
+import { test } from '@seontechnologies/playwright-utils/api-request/fixtures'
+import { expect } from '@playwright/test'
+import { faker } from '@faker-js/faker'
 
 test('example test @p0', async ({ apiRequest }) => {
   const testData = {
     id: `test-${faker.string.uuid()}`,
     email: faker.internet.email(),
-  };
+  }
 
   const { status } = await apiRequest({
     method: 'POST',
     path: '/api/resource',
     body: testData,
-  });
+  })
 
-  expect(status).toBe(201);
-});
+  expect(status).toBe(201)
+})
 ```
 
 ---
@@ -329,8 +331,8 @@ test('example test @p0', async ({ apiRequest }) => {
 **Playwright Tags for Selective Execution:**
 
 ```typescript
-import { test } from '@seontechnologies/playwright-utils/api-request/fixtures';
-import { expect } from '@playwright/test';
+import { test } from '@seontechnologies/playwright-utils/api-request/fixtures'
+import { expect } from '@playwright/test'
 
 // P0 critical test
 test('@P0 @API @Security unauthenticated request returns 401', async ({ apiRequest }) => {
@@ -339,11 +341,11 @@ test('@P0 @API @Security unauthenticated request returns 401', async ({ apiReque
     path: '/api/endpoint',
     body: { data: 'test' },
     skipAuth: true,
-  });
+  })
 
-  expect(status).toBe(401);
-  expect(body.error).toContain('unauthorized');
-});
+  expect(status).toBe(401)
+  expect(body.error).toContain('unauthorized')
+})
 
 // P1 integration test
 test('@P1 @Integration data syncs correctly', async ({ apiRequest }) => {
@@ -354,17 +356,17 @@ test('@P1 @Integration data syncs correctly', async ({ apiRequest }) => {
     body: {
       /* test data */
     },
-  });
+  })
 
   // Validate
   const { status, body } = await apiRequest({
     method: 'GET',
     path: '/api/resource',
-  });
+  })
 
-  expect(status).toBe(200);
-  expect(body).toHaveProperty('data');
-});
+  expect(status).toBe(200)
+  expect(body).toHaveProperty('data')
+})
 ```
 
 **Run specific tags:**

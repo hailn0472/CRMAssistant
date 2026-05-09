@@ -54,7 +54,7 @@ const movieCreated = (movieId: number) =>
     .matchField('data.id', movieId)
     .withTimeout(15_000)
     .withInterval(500)
-    .build();
+    .build()
 
 const movieDeleted = (movieId: number) =>
   webhookTemplate<{ event: string; data: { id: number } }>('movie.deleted')
@@ -62,24 +62,29 @@ const movieDeleted = (movieId: number) =>
     .matchField('data.id', movieId)
     .withTimeout(15_000)
     .withInterval(500)
-    .build();
+    .build()
 
-test('movie deletion triggers a webhook with correct payload', async ({ authToken, addMovie, deleteMovie, webhookRegistry }) => {
-  const movie = generateMovieWithoutId();
-  const { body: createResponse } = await addMovie(authToken, movie);
-  const movieId = createResponse.data.id;
+test('movie deletion triggers a webhook with correct payload', async ({
+  authToken,
+  addMovie,
+  deleteMovie,
+  webhookRegistry,
+}) => {
+  const movie = generateMovieWithoutId()
+  const { body: createResponse } = await addMovie(authToken, movie)
+  const movieId = createResponse.data.id
 
   // Drain: consume the create webhook before testing the delete path
-  await webhookRegistry.waitFor(movieCreated(movieId));
+  await webhookRegistry.waitFor(movieCreated(movieId))
 
-  await deleteMovie(authToken, movieId);
-  const webhook = await webhookRegistry.waitFor(movieDeleted(movieId));
+  await deleteMovie(authToken, movieId)
+  const webhook = await webhookRegistry.waitFor(movieDeleted(movieId))
 
   expect(webhook.body).toMatchObject({
     event: 'movie.deleted',
     data: { id: movieId, name: movie.name },
-  });
-});
+  })
+})
 ```
 
 ## Common Failure Patterns

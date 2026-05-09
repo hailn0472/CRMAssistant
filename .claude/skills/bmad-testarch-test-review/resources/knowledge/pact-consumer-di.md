@@ -35,20 +35,20 @@ Raw `fetch()` in `executeTest()` only proves that Pact returns what you told it 
 ```typescript
 // src/types.ts
 export type ApiContext = {
-  jwtToken: string;
-  customerId: number;
-  adminUserId?: number;
-  correlationId?: string;
-  baseUrl?: string; // Override for testing (Pact mock server)
-};
+  jwtToken: string
+  customerId: number
+  adminUserId?: number
+  correlationId?: string
+  baseUrl?: string // Override for testing (Pact mock server)
+}
 ```
 
 ```typescript
 // src/http-client.ts
-import axios from 'axios';
-import type { AxiosInstance } from 'axios';
-import type { ApiContext } from './types.js';
-import { API_BASE_URL, REQUEST_TIMEOUT } from './constants.js';
+import axios from 'axios'
+import type { AxiosInstance } from 'axios'
+import type { ApiContext } from './types.js'
+import { API_BASE_URL, REQUEST_TIMEOUT } from './constants.js'
 
 function createAxiosInstanceWithContext(context: ApiContext): AxiosInstance {
   return axios.create({
@@ -60,7 +60,7 @@ function createAxiosInstanceWithContext(context: ApiContext): AxiosInstance {
       Authorization: `Bearer ${context.jwtToken}`,
       ...(context.correlationId && { 'X-Request-Id': context.correlationId }),
     },
-  });
+  })
 }
 ```
 
@@ -79,14 +79,14 @@ function createAxiosInstanceWithContext(context: ApiContext): AxiosInstance {
 
 ```typescript
 // pact/support/test-context.ts
-import type { ApiContext } from '../../src/types.js';
+import type { ApiContext } from '../../src/types.js'
 
 export function createTestContext(mockServerUrl: string): ApiContext {
   return {
     jwtToken: 'test-jwt-token',
     customerId: 1,
     baseUrl: `${mockServerUrl}/api/v2`,
-  };
+  }
 }
 ```
 
@@ -198,17 +198,17 @@ This was wrong but passed because raw fetch let you hand-craft any body. When sw
 **Implementation**:
 
 ```typescript
-import { describe, it, expect } from 'vitest';
-import type { V3MockServer } from '@pact-foundation/pact';
-import { makeApiRequestWithContext } from '../../src/http-client.js';
-import type { CountStatistics } from '../../src/types.js';
-import { createTestContext } from '../support/test-context.js';
+import { describe, it, expect } from 'vitest'
+import type { V3MockServer } from '@pact-foundation/pact'
+import { makeApiRequestWithContext } from '../../src/http-client.js'
+import type { CountStatistics } from '../../src/types.js'
+import { createTestContext } from '../support/test-context.js'
 
 describe('Transaction Statistics - Count Endpoint', () => {
   // ... provider setup ...
 
   it('should return count statistics', async () => {
-    const statsRequest = { transactionId: 'txn-123', period: 'daily' };
+    const statsRequest = { transactionId: 'txn-123', period: 'daily' }
 
     await provider
       .given('transaction statistics exist')
@@ -223,12 +223,17 @@ describe('Transaction Statistics - Count Endpoint', () => {
         body: { count: 42, period: 'daily' },
       })
       .executeTest(async (mockServer: V3MockServer) => {
-        const context = createTestContext(mockServer.url);
-        const result = await makeApiRequestWithContext<CountStatistics>(context, '/transactions/statistics/count', 'POST', statsRequest);
-        expect(result.count).toBeDefined();
-      });
-  });
-});
+        const context = createTestContext(mockServer.url)
+        const result = await makeApiRequestWithContext<CountStatistics>(
+          context,
+          '/transactions/statistics/count',
+          'POST',
+          statsRequest,
+        )
+        expect(result.count).toBeDefined()
+      })
+  })
+})
 ```
 
 **Key Points**:
@@ -250,8 +255,8 @@ const response = await fetch(`${mockServer.url}/api/v2/transactions`, {
     Authorization: 'Bearer test-jwt-token',
     'Content-Type': 'application/json',
   },
-});
-expect(response.status).toBe(200);
+})
+expect(response.status).toBe(200)
 ```
 
 ### Wrong: vi.mock with getter — fragile ESM hoisting
@@ -261,25 +266,25 @@ expect(response.status).toBe(200);
 vi.mock('../../src/constants.js', async (importOriginal) => ({
   ...(await importOriginal()),
   get API_BASE_URL() {
-    return mockBaseUrl;
+    return mockBaseUrl
   },
-}));
+}))
 ```
 
 ### Wrong: Asserting HTTP status instead of return value
 
 ```typescript
 // BAD: Status 200 tells you nothing about the consumer's parsing logic
-expect(response.status).toBe(200);
+expect(response.status).toBe(200)
 ```
 
 ### Right: Call real consumer code, assert return values
 
 ```typescript
 // GOOD: Exercises real client, validates parsed return value
-const api = createApiClient(createTestContext(mockServer.url));
-const result = await api.searchTransactions(request);
-expect(result.transactions).toBeDefined();
+const api = createApiClient(createTestContext(mockServer.url))
+const result = await api.searchTransactions(request)
+expect(result.transactions).toBeDefined()
 ```
 
 ## Rules

@@ -84,24 +84,24 @@ For each user journey, create test file in `tests/e2e/[feature].spec.ts`:
 **Test Structure:**
 
 ```typescript
-import { test, expect } from '@playwright/test';
+import { test, expect } from '@playwright/test'
 
 test.describe('[Feature] E2E User Journey', () => {
   test('[P0] should complete [user journey]', async ({ page }) => {
     // Navigate to starting point
-    await page.goto('/feature');
+    await page.goto('/feature')
 
     // Interact with UI
-    await page.getByRole('button', { name: 'Submit' }).click();
+    await page.getByRole('button', { name: 'Submit' }).click()
 
     // Assert expected state
-    await expect(page.getByText('Success')).toBeVisible();
-  });
+    await expect(page.getByText('Success')).toBeVisible()
+  })
 
   test('[P1] should handle [edge case]', async ({ page }) => {
     // Test edge case scenario
-  });
-});
+  })
+})
 ```
 
 **Requirements:**
@@ -160,7 +160,12 @@ Write JSON to temp file: `/tmp/tea-automate-e2e-tests-{{timestamp}}.json`
     }
   ],
   "fixture_needs": ["authenticatedUserFixture", "paymentMockFixture", "checkoutDataFixture"],
-  "knowledge_fragments_used": ["fixture-architecture", "network-first", "selector-resilience", "playwright-cli"],
+  "knowledge_fragments_used": [
+    "fixture-architecture",
+    "network-first",
+    "selector-resilience",
+    "playwright-cli"
+  ],
   "test_count": 15,
   "summary": "Generated 15 E2E test cases covering 5 user journeys"
 }

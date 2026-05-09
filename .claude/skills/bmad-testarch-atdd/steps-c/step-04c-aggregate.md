@@ -50,15 +50,15 @@ Read outputs from parallel subagents (API + E2E red-phase test generation), aggr
 **Read API test subagent output:**
 
 ```javascript
-const apiTestsPath = '/tmp/tea-atdd-api-tests-{{timestamp}}.json';
-const apiTestsOutput = JSON.parse(fs.readFileSync(apiTestsPath, 'utf8'));
+const apiTestsPath = '/tmp/tea-atdd-api-tests-{{timestamp}}.json'
+const apiTestsOutput = JSON.parse(fs.readFileSync(apiTestsPath, 'utf8'))
 ```
 
 **Read E2E test subagent output:**
 
 ```javascript
-const e2eTestsPath = '/tmp/tea-atdd-e2e-tests-{{timestamp}}.json';
-const e2eTestsOutput = JSON.parse(fs.readFileSync(e2eTestsPath, 'utf8'));
+const e2eTestsPath = '/tmp/tea-atdd-e2e-tests-{{timestamp}}.json'
+const e2eTestsOutput = JSON.parse(fs.readFileSync(e2eTestsPath, 'utf8'))
 ```
 
 **Verify both subagents succeeded:**
@@ -79,19 +79,23 @@ const e2eTestsOutput = JSON.parse(fs.readFileSync(e2eTestsPath, 'utf8'));
 apiTestsOutput.tests.forEach((test) => {
   // Verify test.skip() is present
   if (!test.content.includes('test.skip(')) {
-    throw new Error(`ATDD ERROR: ${test.file} missing test.skip() - tests MUST be skipped in red phase!`);
+    throw new Error(
+      `ATDD ERROR: ${test.file} missing test.skip() - tests MUST be skipped in red phase!`,
+    )
   }
 
   // Verify not placeholder assertions
   if (test.content.includes('expect(true).toBe(true)')) {
-    throw new Error(`ATDD ERROR: ${test.file} has placeholder assertions - must assert EXPECTED behavior!`);
+    throw new Error(
+      `ATDD ERROR: ${test.file} has placeholder assertions - must assert EXPECTED behavior!`,
+    )
   }
 
   // Verify expected_to_fail flag
   if (!test.expected_to_fail) {
-    throw new Error(`ATDD ERROR: ${test.file} not marked as expected_to_fail!`);
+    throw new Error(`ATDD ERROR: ${test.file} not marked as expected_to_fail!`)
   }
-});
+})
 ```
 
 **Check E2E tests:**
@@ -100,17 +104,19 @@ apiTestsOutput.tests.forEach((test) => {
 e2eTestsOutput.tests.forEach((test) => {
   // Same validation as API tests
   if (!test.content.includes('test.skip(')) {
-    throw new Error(`ATDD ERROR: ${test.file} missing test.skip() - tests MUST be skipped in red phase!`);
+    throw new Error(
+      `ATDD ERROR: ${test.file} missing test.skip() - tests MUST be skipped in red phase!`,
+    )
   }
 
   if (test.content.includes('expect(true).toBe(true)')) {
-    throw new Error(`ATDD ERROR: ${test.file} has placeholder assertions!`);
+    throw new Error(`ATDD ERROR: ${test.file} has placeholder assertions!`)
   }
 
   if (!test.expected_to_fail) {
-    throw new Error(`ATDD ERROR: ${test.file} not marked as expected_to_fail!`);
+    throw new Error(`ATDD ERROR: ${test.file} not marked as expected_to_fail!`)
   }
-});
+})
 ```
 
 **If validation passes:**
@@ -130,18 +136,18 @@ e2eTestsOutput.tests.forEach((test) => {
 
 ```javascript
 apiTestsOutput.tests.forEach((test) => {
-  fs.writeFileSync(test.file, test.content, 'utf8');
-  console.log(`✅ Created (RED): ${test.file}`);
-});
+  fs.writeFileSync(test.file, test.content, 'utf8')
+  console.log(`✅ Created (RED): ${test.file}`)
+})
 ```
 
 **Write E2E test files:**
 
 ```javascript
 e2eTestsOutput.tests.forEach((test) => {
-  fs.writeFileSync(test.file, test.content, 'utf8');
-  console.log(`✅ Created (RED): ${test.file}`);
-});
+  fs.writeFileSync(test.file, test.content, 'utf8')
+  console.log(`✅ Created (RED): ${test.file}`)
+})
 ```
 
 ---
@@ -151,10 +157,10 @@ e2eTestsOutput.tests.forEach((test) => {
 **Collect all fixture needs from both subagents:**
 
 ```javascript
-const allFixtureNeeds = [...apiTestsOutput.fixture_needs, ...e2eTestsOutput.fixture_needs];
+const allFixtureNeeds = [...apiTestsOutput.fixture_needs, ...e2eTestsOutput.fixture_needs]
 
 // Remove duplicates
-const uniqueFixtures = [...new Set(allFixtureNeeds)];
+const uniqueFixtures = [...new Set(allFixtureNeeds)]
 ```
 
 ---
@@ -171,7 +177,7 @@ const uniqueFixtures = [...new Set(allFixtureNeeds)];
 export const testUserData = {
   email: 'test@example.com',
   password: 'SecurePass123!',
-};
+}
 ```
 
 Note: More complete fixtures will be needed when moving to green phase.
@@ -220,7 +226,7 @@ UI components to implement:
 **Save checklist:**
 
 ```javascript
-fs.writeFileSync(`{test_artifacts}/atdd-checklist-{story_key}.md`, checklistContent, 'utf8');
+fs.writeFileSync(`{test_artifacts}/atdd-checklist-{story_key}.md`, checklistContent, 'utf8')
 ```
 
 **If `{story_file}` exists and is writable, attempt to link artifacts back into the story:**
@@ -242,7 +248,7 @@ fs.writeFileSync(`{test_artifacts}/atdd-checklist-{story_key}.md`, checklistCont
 **Aggregate test counts:**
 
 ```javascript
-const resolvedMode = subagentContext?.execution?.resolvedMode; // Provided by Step 4's orchestration context
+const resolvedMode = subagentContext?.execution?.resolvedMode // Provided by Step 4's orchestration context
 const subagentExecutionLabel =
   resolvedMode === 'sequential'
     ? 'SEQUENTIAL (API → E2E)'
@@ -250,13 +256,13 @@ const subagentExecutionLabel =
       ? 'AGENT-TEAM (API + E2E)'
       : resolvedMode === 'subagent'
         ? 'SUBAGENT (API + E2E)'
-        : 'PARALLEL (API + E2E)';
+        : 'PARALLEL (API + E2E)'
 const performanceGainLabel =
   resolvedMode === 'sequential'
     ? 'baseline (no parallel speedup)'
     : resolvedMode === 'agent-team' || resolvedMode === 'subagent'
       ? '~50% faster than sequential'
-      : 'mode-dependent';
+      : 'mode-dependent'
 
 const summary = {
   tdd_phase: 'RED',
@@ -270,16 +276,23 @@ const summary = {
     ...apiTestsOutput.tests.flatMap((t) => t.acceptance_criteria_covered),
     ...e2eTestsOutput.tests.flatMap((t) => t.acceptance_criteria_covered),
   ],
-  knowledge_fragments_used: [...apiTestsOutput.knowledge_fragments_used, ...e2eTestsOutput.knowledge_fragments_used],
+  knowledge_fragments_used: [
+    ...apiTestsOutput.knowledge_fragments_used,
+    ...e2eTestsOutput.knowledge_fragments_used,
+  ],
   subagent_execution: subagentExecutionLabel,
   performance_gain: performanceGainLabel,
-};
+}
 ```
 
 **Store summary for Step 5:**
 
 ```javascript
-fs.writeFileSync('/tmp/tea-atdd-summary-{{timestamp}}.json', JSON.stringify(summary, null, 2), 'utf8');
+fs.writeFileSync(
+  '/tmp/tea-atdd-summary-{{timestamp}}.json',
+  JSON.stringify(summary, null, 2),
+  'utf8',
+)
 ```
 
 ---

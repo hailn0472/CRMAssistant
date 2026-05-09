@@ -17,14 +17,14 @@ Phase 1 fixes đã giải quyết **23/24 issues** (95.8% success rate). Tất c
 
 ## Comparison: Before vs After
 
-| Metric | Before (Original Review) | After (Phase 1 Fixes) | Change |
-|--------|--------------------------|----------------------|--------|
-| **Total Issues** | 70 | 4 | -66 (-94.3%) |
-| **Must Fix (High)** | 36 | 1 | -35 (-97.2%) |
-| **Should Fix (Medium)** | 19 | 0 | -19 (-100%) |
-| **Consider (Low)** | 15 | 0 | -15 (-100%) |
-| **New Issues** | 0 | 3 | +3 (expected) |
-| **Acceptance Criteria Pass** | 0/8 Full Pass | 8/8 Full Pass | +8 (+100%) |
+| Metric                       | Before (Original Review) | After (Phase 1 Fixes) | Change        |
+| ---------------------------- | ------------------------ | --------------------- | ------------- |
+| **Total Issues**             | 70                       | 4                     | -66 (-94.3%)  |
+| **Must Fix (High)**          | 36                       | 1                     | -35 (-97.2%)  |
+| **Should Fix (Medium)**      | 19                       | 0                     | -19 (-100%)   |
+| **Consider (Low)**           | 15                       | 0                     | -15 (-100%)   |
+| **New Issues**               | 0                        | 3                     | +3 (expected) |
+| **Acceptance Criteria Pass** | 0/8 Full Pass            | 8/8 Full Pass         | +8 (+100%)    |
 
 ---
 
@@ -37,7 +37,7 @@ Phase 1 fixes đã giải quyết **23/24 issues** (95.8% success rate). Tất c
 - ✅ **CF-003**: Test task no longer depends on build (enables TDD)
 - ✅ **CF-004**: Cache outputs added for lint (`.eslintcache`) and type-check (`*.tsbuildinfo`)
 - ⚠️ **CF-005**: globalDependencies pattern `**/.env.*local` - PARTIALLY CORRECT
-  - **Issue**: Pattern may not match `.env.local` (missing dot between env and *)
+  - **Issue**: Pattern may not match `.env.local` (missing dot between env and \*)
   - **Impact**: LOW - Turbo may not invalidate cache when `.env.local` changes
   - **Recommendation**: Change to `**/.env*.local` or add `**/.env.local` as separate pattern
   - **Status**: DEFER to Phase 2 (not blocking)
@@ -83,18 +83,21 @@ Phase 1 fixes đã giải quyết **23/24 issues** (95.8% success rate). Tất c
 ## New Issues Found: 3 (Expected Behavior)
 
 ### ⚠️ NEW-001: Workspace packages thiếu `clean` script
+
 - **File**: `apps/web/package.json`, `apps/api/package.json`, `packages/*/package.json`
 - **Impact**: `pnpm clean` không chạy clean tasks trong workspaces
 - **Status**: EXPECTED - Story 1.1 chỉ tạo placeholder scripts
 - **Fix**: Story 1.2 (Next.js) và Story 1.3 (NestJS) sẽ thêm clean scripts
 
 ### ⚠️ NEW-002: Workspace packages thiếu `test` script
+
 - **File**: `apps/web/package.json`, `apps/api/package.json`, `packages/*/package.json`
 - **Impact**: `pnpm test` không chạy test tasks trong workspaces
 - **Status**: EXPECTED - Story 1.1 chỉ tạo placeholder scripts
 - **Fix**: Story 1.2 và Story 1.3 sẽ thêm test scripts với Jest/Vitest
 
 ### ⚠️ NEW-003: Workspace packages thiếu `format` script
+
 - **File**: `apps/web/package.json`, `apps/api/package.json`, `packages/*/package.json`
 - **Impact**: `pnpm format` chỉ chạy ở root level, không format workspace code
 - **Status**: EXPECTED - Story 1.1 chỉ tạo placeholder scripts
@@ -107,15 +110,18 @@ Phase 1 fixes đã giải quyết **23/24 issues** (95.8% success rate). Tất c
 ## Acceptance Criteria Re-Validation: 8/8 PASS ✅
 
 ### ✅ AC1: Turborepo configured
+
 **Status**: ✅ FULL PASS
 
 **Evidence**:
+
 - turbo.json exists với 7 tasks: build, dev, test, lint, type-check, clean, format
 - Caching configured với proper outputs
 - globalDependencies configured
 - Turbo version pinned to `^2.0.0`
 
 **Verification**:
+
 ```bash
 $ pnpm build
  Tasks:    2 successful, 2 total
@@ -124,25 +130,30 @@ Cached:    2 cached, 2 total
 ```
 
 ### ✅ AC2: pnpm workspace configured
+
 **Status**: ✅ FULL PASS
 
 **Evidence**:
+
 - pnpm-workspace.yaml exists với `apps/*` và `packages/*`
 - pnpm version 8.15.0 installed
 - packageManager field set to `pnpm@8.15.0`
 - engines.pnpm set to `>=8.15.0`
 
 **Verification**:
+
 ```bash
 $ pnpm install
 Done in 657ms
 ```
 
 ### ✅ AC3: Root package.json scripts
+
 **Status**: ✅ FULL PASS
 
 **Evidence**:
 All 8 scripts defined và functional:
+
 - ✅ `dev`: turbo run dev
 - ✅ `build`: turbo run build
 - ✅ `test`: turbo run test
@@ -153,9 +164,11 @@ All 8 scripts defined và functional:
 - ✅ `verify`: pnpm audit && pnpm outdated
 
 ### ✅ AC4: Apps folder structure
+
 **Status**: ✅ FULL PASS
 
 **Evidence**:
+
 ```
 apps/
 ├── web/
@@ -165,9 +178,11 @@ apps/
 ```
 
 ### ✅ AC5: Packages folder structure
+
 **Status**: ✅ FULL PASS
 
 **Evidence**:
+
 ```
 packages/
 ├── types/
@@ -179,9 +194,11 @@ packages/
 ```
 
 ### ✅ AC6: README with setup
+
 **Status**: ✅ FULL PASS
 
 **Evidence**:
+
 - README.md: 185 lines (was ~100 lines)
 - ✅ Project overview
 - ✅ Tech stack summary
@@ -199,15 +216,17 @@ packages/
 - ✅ Links to documentation
 
 ### ✅ AC7: .gitignore configured
+
 **Status**: ✅ FULL PASS
 
 **Evidence**:
+
 - .gitignore: 57 lines (was 200+ lines with Python code)
 - ✅ Python entries removed
 - ✅ Node.js patterns (node_modules, .pnp)
 - ✅ Next.js patterns (.next/, out/)
-- ✅ TypeScript patterns (*.tsbuildinfo)
-- ✅ Environment variables (.env*.local, .env.production.local)
+- ✅ TypeScript patterns (\*.tsbuildinfo)
+- ✅ Environment variables (.env\*.local, .env.production.local)
 - ✅ Turbo (.turbo/)
 - ✅ pnpm (.pnpm-store/)
 - ✅ Prisma (prisma/dev.db, migrations/.migration_lock)
@@ -215,9 +234,11 @@ packages/
 - ✅ OS (.DS_Store, Thumbs.db)
 
 ### ✅ AC8: Scripts executable
+
 **Status**: ✅ FULL PASS
 
 **Evidence**:
+
 ```bash
 $ pnpm dev
  Tasks:    2 successful, 2 total
@@ -245,6 +266,7 @@ $ pnpm type-check
 ```
 
 **Turborepo Caching Verified**: ✅
+
 - First build: 358ms
 - Second build: 29ms (92% faster)
 - Cache hit: FULL TURBO
@@ -256,6 +278,7 @@ $ pnpm type-check
 ### Minor Issue (Not Blocking)
 
 **CF-005**: globalDependencies pattern may not match `.env.local`
+
 - **Current**: `**/.env.*local`
 - **Issue**: Pattern expects dot before asterisk (e.g., `.env.development.local`)
 - **Missing**: Plain `.env.local` file
@@ -266,35 +289,44 @@ $ pnpm type-check
 ### Deferred to Phase 2 (Before Story 1.3) - 16 issues
 
 **CI/CD Pipeline**:
+
 - CF-026: Create `.github/workflows/ci.yml`
 - SEC-002: Add audit to CI pipeline
 - SEC-003: Add cache validation to CI
 
 **Pre-commit Hooks**:
+
 - CF-024: Install and configure husky
 - CF-025: Add commitlint
 
 **Docker Setup**:
+
 - CF-027: Create `docker-compose.yml`
 
 **Workspace Validation**:
+
 - EDGE-001 to EDGE-007: Add validation scripts
 
 **Package Naming**:
+
 - CF-020: Rename packages for consistency
 
 **pnpm Catalog**:
+
 - CF-016, CF-017: Add catalog and exclusions
 
 ### Deferred to Phase 3 (Future) - 30 issues
 
 **Documentation** (5 issues):
+
 - DOC-009 to DOC-013: API docs, architecture diagrams, deployment guide, benchmarks, SECURITY.md
 
 **Developer Tooling** (15 issues):
+
 - CF-028 to CF-042: .nvmrc, .npmrc, .editorconfig, CHANGELOG.md, CODE_OF_CONDUCT.md, CONTRIBUTING.md, issue templates, PR template, dependabot, renovate, VS Code settings, debug configs, extensions, cspell, bundle size tracking
 
 **Optimization** (2 issues):
+
 - CF-018, CF-019: Optimize turbo dependency graph and pipeline
 
 ---
@@ -302,11 +334,13 @@ $ pnpm type-check
 ## Commits Review
 
 ### Commit 1: 4243898 - fix(config): resolve Phase 1 code review issues for Story 1.1
+
 **Files Changed**: 5 files (turbo.json, package.json, .gitignore, .gitattributes, README.md)
 **Lines**: +133, -175
 **Status**: ✅ EXCELLENT
 
 **Fixes Applied**: 24 issues
+
 - turbo.json: 5 fixes
 - package.json: 7 fixes
 - .gitignore: 3 fixes
@@ -316,17 +350,20 @@ $ pnpm type-check
 **Quality**: Comprehensive, well-structured commit. All fixes applied correctly.
 
 ### Commit 2: 8011304 - fix(config): adjust turbo globalDependencies and pnpm version constraint
+
 **Files Changed**: 2 files (package.json, turbo.json)
 **Lines**: +2, -2
 **Status**: ✅ GOOD
 
 **Fixes Applied**:
+
 - Simplified globalDependencies pattern for turbo compatibility
 - Changed engines.pnpm to `>=8.15.0` for flexibility
 
 **Quality**: Small, focused fix. Addresses compatibility concerns.
 
 ### Commit 3: 7033678 - docs(review): mark Phase 1 fixes as complete in checklist
+
 **Files Changed**: 1 file (story-1.1-phase1-complete.md)
 **Lines**: +136
 **Status**: ✅ GOOD
@@ -335,6 +372,7 @@ $ pnpm type-check
 **Quality**: Clear documentation of what was fixed.
 
 ### Commit 4: 41dac86 - chore(deps): update pnpm lockfile after Phase 1 fixes
+
 **Files Changed**: 1 file (pnpm-lock.yaml)
 **Lines**: +1087
 **Status**: ✅ GOOD
@@ -347,6 +385,7 @@ $ pnpm type-check
 ## Verification Results
 
 ### ✅ Installation
+
 ```bash
 $ pnpm install
 Packages: +151
@@ -354,6 +393,7 @@ Done in 657ms
 ```
 
 ### ✅ Development Mode
+
 ```bash
 $ pnpm dev
 Tasks:    2 successful, 2 total
@@ -361,6 +401,7 @@ Time:    364ms
 ```
 
 ### ✅ Build with Caching
+
 ```bash
 $ pnpm build (first run)
 Tasks:    2 successful, 2 total
@@ -372,6 +413,7 @@ Time:    29ms >>> FULL TURBO (92% faster)
 ```
 
 ### ✅ Linting
+
 ```bash
 $ pnpm lint
 Tasks:    2 successful, 2 total
@@ -379,6 +421,7 @@ Time:    27ms >>> FULL TURBO
 ```
 
 ### ✅ Type Checking
+
 ```bash
 $ pnpm type-check
 Tasks:    2 successful, 2 total
@@ -386,6 +429,7 @@ Time:    28ms >>> FULL TURBO
 ```
 
 ### ✅ Security Audit
+
 ```bash
 $ pnpm verify
 No known vulnerabilities found
@@ -398,6 +442,7 @@ No known vulnerabilities found
 ### ✅ APPROVE Story 1.1 - Ready for Story 1.2
 
 **Rationale**:
+
 1. **23/24 Phase 1 issues fixed** (95.8% success rate)
 2. **All 8 acceptance criteria PASS**
 3. **Turborepo caching verified** (92% faster on second build)
@@ -406,12 +451,15 @@ No known vulnerabilities found
 6. **Configuration production-ready** (pinned versions, security audit)
 
 **Remaining Issue**:
+
 - 1 minor issue (CF-005: globalDependencies pattern) - LOW impact, not blocking
 
 **New Issues**:
+
 - 3 expected issues (missing workspace scripts) - Will be fixed in Story 1.2 and 1.3
 
 **Deferred Issues**:
+
 - 46 issues deferred to Phase 2 and Phase 3 - Not blocking Story 1.2
 
 ### Next Steps
@@ -425,15 +473,15 @@ No known vulnerabilities found
 
 ## Quality Metrics
 
-| Metric | Score | Grade |
-|--------|-------|-------|
-| **Fix Completion Rate** | 95.8% (23/24) | A+ |
-| **Acceptance Criteria Pass Rate** | 100% (8/8) | A+ |
-| **Code Quality** | Excellent | A |
-| **Documentation Quality** | Comprehensive | A+ |
-| **Configuration Quality** | Production-ready | A |
-| **Security Posture** | Good (audit script added) | A- |
-| **Overall Grade** | **A+** | **EXCELLENT** |
+| Metric                            | Score                     | Grade         |
+| --------------------------------- | ------------------------- | ------------- |
+| **Fix Completion Rate**           | 95.8% (23/24)             | A+            |
+| **Acceptance Criteria Pass Rate** | 100% (8/8)                | A+            |
+| **Code Quality**                  | Excellent                 | A             |
+| **Documentation Quality**         | Comprehensive             | A+            |
+| **Configuration Quality**         | Production-ready          | A             |
+| **Security Posture**              | Good (audit script added) | A-            |
+| **Overall Grade**                 | **A+**                    | **EXCELLENT** |
 
 ---
 

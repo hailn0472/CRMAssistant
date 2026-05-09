@@ -28,13 +28,13 @@ Read outputs from 4 parallel NFR subagents, calculate overall risk level, aggreg
 ### 1. Read All Subagent Outputs
 
 ```javascript
-const domains = ['security', 'performance', 'reliability', 'scalability'];
-const assessments = {};
+const domains = ['security', 'performance', 'reliability', 'scalability']
+const assessments = {}
 
 domains.forEach((domain) => {
-  const outputPath = `/tmp/tea-nfr-${domain}-{{timestamp}}.json`;
-  assessments[domain] = JSON.parse(fs.readFileSync(outputPath, 'utf8'));
-});
+  const outputPath = `/tmp/tea-nfr-${domain}-{{timestamp}}.json`
+  assessments[domain] = JSON.parse(fs.readFileSync(outputPath, 'utf8'))
+})
 ```
 
 ---
@@ -44,10 +44,10 @@ domains.forEach((domain) => {
 **Risk hierarchy:** HIGH > MEDIUM > LOW > NONE
 
 ```javascript
-const riskLevels = { HIGH: 3, MEDIUM: 2, LOW: 1, NONE: 0 };
-const domainRisks = domains.map((d) => assessments[d].risk_level);
-const maxRiskValue = Math.max(...domainRisks.map((r) => riskLevels[r]));
-const overallRisk = Object.keys(riskLevels).find((k) => riskLevels[k] === maxRiskValue);
+const riskLevels = { HIGH: 3, MEDIUM: 2, LOW: 1, NONE: 0 }
+const domainRisks = domains.map((d) => assessments[d].risk_level)
+const maxRiskValue = Math.max(...domainRisks.map((r) => riskLevels[r]))
+const overallRisk = Object.keys(riskLevels).find((k) => riskLevels[k] === maxRiskValue)
 ```
 
 **Risk assessment:**
@@ -61,26 +61,26 @@ const overallRisk = Object.keys(riskLevels).find((k) => riskLevels[k] === maxRis
 ### 3. Aggregate Compliance Status
 
 ```javascript
-const allCompliance = {};
+const allCompliance = {}
 
 domains.forEach((domain) => {
-  const compliance = assessments[domain].compliance;
+  const compliance = assessments[domain].compliance
   Object.entries(compliance).forEach(([standard, status]) => {
     if (!allCompliance[standard]) {
-      allCompliance[standard] = [];
+      allCompliance[standard] = []
     }
-    allCompliance[standard].push({ domain, status });
-  });
-});
+    allCompliance[standard].push({ domain, status })
+  })
+})
 
 // Determine overall compliance per standard
-const complianceSummary = {};
+const complianceSummary = {}
 Object.entries(allCompliance).forEach(([standard, statuses]) => {
-  const hasFail = statuses.some((s) => s.status === 'FAIL');
-  const hasPartial = statuses.some((s) => s.status === 'PARTIAL' || s.status === 'CONCERN');
+  const hasFail = statuses.some((s) => s.status === 'FAIL')
+  const hasPartial = statuses.some((s) => s.status === 'PARTIAL' || s.status === 'CONCERN')
 
-  complianceSummary[standard] = hasFail ? 'FAIL' : hasPartial ? 'PARTIAL' : 'PASS';
-});
+  complianceSummary[standard] = hasFail ? 'FAIL' : hasPartial ? 'PARTIAL' : 'PASS'
+})
 ```
 
 ---
@@ -90,28 +90,28 @@ Object.entries(allCompliance).forEach(([standard, statuses]) => {
 **Look for risks that span multiple domains:**
 
 ```javascript
-const crossDomainRisks = [];
+const crossDomainRisks = []
 
 // Example: Performance + Scalability issue
-const perfConcerns = assessments.performance.findings.filter((f) => f.status !== 'PASS');
-const scaleConcerns = assessments.scalability.findings.filter((f) => f.status !== 'PASS');
+const perfConcerns = assessments.performance.findings.filter((f) => f.status !== 'PASS')
+const scaleConcerns = assessments.scalability.findings.filter((f) => f.status !== 'PASS')
 if (perfConcerns.length > 0 && scaleConcerns.length > 0) {
   crossDomainRisks.push({
     domains: ['performance', 'scalability'],
     description: 'Performance issues may worsen under scale',
     impact: 'HIGH',
-  });
+  })
 }
 
 // Example: Security + Reliability issue
-const securityFails = assessments.security.findings.filter((f) => f.status === 'FAIL');
-const reliabilityConcerns = assessments.reliability.findings.filter((f) => f.status !== 'PASS');
+const securityFails = assessments.security.findings.filter((f) => f.status === 'FAIL')
+const reliabilityConcerns = assessments.reliability.findings.filter((f) => f.status !== 'PASS')
 if (securityFails.length > 0 && reliabilityConcerns.length > 0) {
   crossDomainRisks.push({
     domains: ['security', 'reliability'],
     description: 'Security vulnerabilities may cause reliability incidents',
     impact: 'CRITICAL',
-  });
+  })
 }
 ```
 
@@ -126,10 +126,10 @@ const allPriorityActions = domains.flatMap((domain) =>
     action,
     urgency: assessments[domain].risk_level === 'HIGH' ? 'URGENT' : 'NORMAL',
   })),
-);
+)
 
 // Sort by urgency
-const prioritizedActions = allPriorityActions.sort((a, b) => (a.urgency === 'URGENT' ? -1 : 1));
+const prioritizedActions = allPriorityActions.sort((a, b) => (a.urgency === 'URGENT' ? -1 : 1))
 ```
 
 ---
@@ -137,7 +137,7 @@ const prioritizedActions = allPriorityActions.sort((a, b) => (a.urgency === 'URG
 ### 6. Generate Executive Summary
 
 ```javascript
-const resolvedMode = subagentContext?.execution?.resolvedMode ?? 'unknown';
+const resolvedMode = subagentContext?.execution?.resolvedMode ?? 'unknown'
 const subagentExecutionLabel =
   resolvedMode === 'sequential'
     ? 'SEQUENTIAL (4 NFR domains)'
@@ -145,14 +145,14 @@ const subagentExecutionLabel =
       ? 'AGENT-TEAM (4 NFR domains)'
       : resolvedMode === 'subagent'
         ? 'SUBAGENT (4 NFR domains)'
-        : 'MODE-DEPENDENT (4 NFR domains)';
+        : 'MODE-DEPENDENT (4 NFR domains)'
 
 const performanceGainLabel =
   resolvedMode === 'sequential'
     ? 'baseline (no parallel speedup)'
     : resolvedMode === 'agent-team' || resolvedMode === 'subagent'
       ? '~67% faster than sequential'
-      : 'mode-dependent';
+      : 'mode-dependent'
 
 const executiveSummary = {
   overall_risk: overallRisk,
@@ -175,10 +175,14 @@ const executiveSummary = {
 
   subagent_execution: subagentExecutionLabel,
   performance_gain: performanceGainLabel,
-};
+}
 
 // Save for Step 5 (report generation)
-fs.writeFileSync('/tmp/tea-nfr-summary-{{timestamp}}.json', JSON.stringify(executiveSummary, null, 2), 'utf8');
+fs.writeFileSync(
+  '/tmp/tea-nfr-summary-{{timestamp}}.json',
+  JSON.stringify(executiveSummary, null, 2),
+  'utf8',
+)
 ```
 
 ---

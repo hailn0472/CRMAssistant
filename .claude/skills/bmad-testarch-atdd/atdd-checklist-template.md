@@ -104,8 +104,8 @@ If this story came from BMM `create-story`, mirror these artifact paths into the
 **Example Usage:**
 
 ```typescript
-const user = createUser({ email: 'specific@example.com' });
-const users = createUsers(5); // Generate 5 random users
+const user = createUser({ email: 'specific@example.com' })
+const users = createUsers(5) // Generate 5 random users
 ```
 
 ---

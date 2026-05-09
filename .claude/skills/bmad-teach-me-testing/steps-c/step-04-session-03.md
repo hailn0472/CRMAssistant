@@ -94,19 +94,19 @@ const baseFixtures = {
   page: async ({}, use) => {
     /* ... */
   },
-};
+}
 
 // Composed fixtures
 const authFixtures = {
   authenticatedPage: async ({ page }, use) => {
-    await page.goto('/login');
-    await login(page);
-    await use(page);
+    await page.goto('/login')
+    await login(page)
+    await use(page)
   },
-};
+}
 
 // Merge and use
-test.use(mergeTests(baseFixtures, authFixtures));
+test.use(mergeTests(baseFixtures, authFixtures))
 ```
 
 **Benefits:**
@@ -134,11 +134,11 @@ test.use(mergeTests(baseFixtures, authFixtures));
 ```typescript
 // BEFORE the action, set up network interception
 await page.route('/api/users', (route) => {
-  route.fulfill({ json: mockUsers });
-});
+  route.fulfill({ json: mockUsers })
+})
 
 // THEN trigger the action
-await page.click('Load Users');
+await page.click('Load Users')
 
 // Network is already mocked - no race condition
 ```
@@ -172,12 +172,12 @@ function createUser(overrides = {}) {
     email: faker.email(),
     role: 'user',
     ...overrides,
-  };
+  }
 }
 
 // Use in tests
-const admin = createUser({ role: 'admin' });
-const user = createUser(); // defaults
+const admin = createUser({ role: 'admin' })
+const user = createUser() // defaults
 ```
 
 **Benefits:**

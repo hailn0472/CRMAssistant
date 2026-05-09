@@ -18,7 +18,7 @@ Running the entire test suite on every commit wastes time and resources. Smart t
 
 ```typescript
 // tests/e2e/checkout.spec.ts
-import { test, expect } from '@playwright/test';
+import { test, expect } from '@playwright/test'
 
 /**
  * Tag-based test organization
@@ -33,45 +33,45 @@ import { test, expect } from '@playwright/test';
 test.describe('Checkout Flow', () => {
   // P0 + Smoke: Must run on every commit
   test('@smoke @p0 should complete purchase with valid payment', async ({ page }) => {
-    await page.goto('/checkout');
-    await page.getByTestId('card-number').fill('4242424242424242');
-    await page.getByTestId('submit-payment').click();
+    await page.goto('/checkout')
+    await page.getByTestId('card-number').fill('4242424242424242')
+    await page.getByTestId('submit-payment').click()
 
-    await expect(page.getByTestId('order-confirmation')).toBeVisible();
-  });
+    await expect(page.getByTestId('order-confirmation')).toBeVisible()
+  })
 
   // P0 but not smoke: Run pre-merge
   test('@regression @p0 should handle payment decline gracefully', async ({ page }) => {
-    await page.goto('/checkout');
-    await page.getByTestId('card-number').fill('4000000000000002'); // Decline card
-    await page.getByTestId('submit-payment').click();
+    await page.goto('/checkout')
+    await page.getByTestId('card-number').fill('4000000000000002') // Decline card
+    await page.getByTestId('submit-payment').click()
 
-    await expect(page.getByTestId('payment-error')).toBeVisible();
-    await expect(page.getByTestId('payment-error')).toContainText('declined');
-  });
+    await expect(page.getByTestId('payment-error')).toBeVisible()
+    await expect(page.getByTestId('payment-error')).toContainText('declined')
+  })
 
   // P1 + Smoke: Important but not critical
   test('@smoke @p1 should apply discount code', async ({ page }) => {
-    await page.goto('/checkout');
-    await page.getByTestId('promo-code').fill('SAVE10');
-    await page.getByTestId('apply-promo').click();
+    await page.goto('/checkout')
+    await page.getByTestId('promo-code').fill('SAVE10')
+    await page.getByTestId('apply-promo').click()
 
-    await expect(page.getByTestId('discount-applied')).toBeVisible();
-  });
+    await expect(page.getByTestId('discount-applied')).toBeVisible()
+  })
 
   // P2: Run in full regression only
   test('@regression @p2 should remember saved payment methods', async ({ page }) => {
-    await page.goto('/checkout');
-    await expect(page.getByTestId('saved-cards')).toBeVisible();
-  });
+    await page.goto('/checkout')
+    await expect(page.getByTestId('saved-cards')).toBeVisible()
+  })
 
   // P3: Low priority, run nightly or weekly
   test('@nightly @p3 should display checkout page analytics', async ({ page }) => {
-    await page.goto('/checkout');
-    const analyticsEvents = await page.evaluate(() => (window as any).__ANALYTICS__);
-    expect(analyticsEvents).toBeDefined();
-  });
-});
+    await page.goto('/checkout')
+    const analyticsEvents = await page.evaluate(() => (window as any).__ANALYTICS__)
+    expect(analyticsEvents).toBeDefined()
+  })
+})
 ```
 
 **package.json scripts**:
@@ -97,19 +97,19 @@ test.describe('Checkout Flow', () => {
 // cypress/e2e/checkout.cy.ts
 describe('Checkout Flow', { tags: ['@checkout'] }, () => {
   it('should complete purchase', { tags: ['@smoke', '@p0'] }, () => {
-    cy.visit('/checkout');
-    cy.get('[data-cy="card-number"]').type('4242424242424242');
-    cy.get('[data-cy="submit-payment"]').click();
-    cy.get('[data-cy="order-confirmation"]').should('be.visible');
-  });
+    cy.visit('/checkout')
+    cy.get('[data-cy="card-number"]').type('4242424242424242')
+    cy.get('[data-cy="submit-payment"]').click()
+    cy.get('[data-cy="order-confirmation"]').should('be.visible')
+  })
 
   it('should handle decline', { tags: ['@regression', '@p0'] }, () => {
-    cy.visit('/checkout');
-    cy.get('[data-cy="card-number"]').type('4000000000000002');
-    cy.get('[data-cy="submit-payment"]').click();
-    cy.get('[data-cy="payment-error"]').should('be.visible');
-  });
-});
+    cy.visit('/checkout')
+    cy.get('[data-cy="card-number"]').type('4000000000000002')
+    cy.get('[data-cy="submit-payment"]').click()
+    cy.get('[data-cy="payment-error"]').should('be.visible')
+  })
+})
 
 // cypress.config.ts
 export default defineConfig({
@@ -119,11 +119,11 @@ export default defineConfig({
       grepFilterSpecs: true,
     },
     setupNodeEvents(on, config) {
-      require('@cypress/grep/src/plugin')(config);
-      return config;
+      require('@cypress/grep/src/plugin')(config)
+      return config
     },
   },
-});
+})
 ```
 
 **Usage**:
@@ -205,7 +205,7 @@ esac
 
 ```typescript
 // playwright.config.ts
-import { defineConfig, devices } from '@playwright/test';
+import { defineConfig, devices } from '@playwright/test'
 
 export default defineConfig({
   // ... other config
@@ -233,7 +233,7 @@ export default defineConfig({
       use: { ...devices['Desktop Chrome'] },
     },
   ],
-});
+})
 ```
 
 **Advanced pattern matching**:
@@ -245,29 +245,29 @@ export default defineConfig({
  * Usage: npm run test:component UserProfile,Settings
  */
 
-import { execSync } from 'child_process';
+import { execSync } from 'child_process'
 
-const components = process.argv[2]?.split(',') || [];
+const components = process.argv[2]?.split(',') || []
 
 if (components.length === 0) {
-  console.error('❌ No components specified');
-  console.log('Usage: npm run test:component UserProfile,Settings');
-  process.exit(1);
+  console.error('❌ No components specified')
+  console.log('Usage: npm run test:component UserProfile,Settings')
+  process.exit(1)
 }
 
 // Convert component names to glob patterns
-const patterns = components.map((comp) => `**/*${comp}*.spec.ts`).join(' ');
+const patterns = components.map((comp) => `**/*${comp}*.spec.ts`).join(' ')
 
-console.log(`🧩 Running tests for components: ${components.join(', ')}`);
-console.log(`Patterns: ${patterns}`);
+console.log(`🧩 Running tests for components: ${components.join(', ')}`)
+console.log(`Patterns: ${patterns}`)
 
 try {
   execSync(`npx playwright test ${patterns}`, {
     stdio: 'inherit',
     env: { ...process.env, CI: 'false' },
-  });
+  })
 } catch (error) {
-  process.exit(1);
+  process.exit(1)
 }
 ```
 
@@ -492,16 +492,16 @@ jobs:
  * Defines which tests run at each stage of the development lifecycle
  */
 
-export type TestStage = 'pre-commit' | 'ci-pr' | 'ci-merge' | 'staging' | 'production';
+export type TestStage = 'pre-commit' | 'ci-pr' | 'ci-merge' | 'staging' | 'production'
 
 export type TestPromotion = {
-  stage: TestStage;
-  description: string;
-  testCommand: string;
-  timebudget: string; // minutes
-  required: boolean;
-  failureAction: 'block' | 'warn' | 'alert';
-};
+  stage: TestStage
+  description: string
+  testCommand: string
+  timebudget: string // minutes
+  required: boolean
+  failureAction: 'block' | 'warn' | 'alert'
+}
 
 export const TEST_PROMOTION_RULES: Record<TestStage, TestPromotion> = {
   'pre-commit': {
@@ -544,26 +544,26 @@ export const TEST_PROMOTION_RULES: Record<TestStage, TestPromotion> = {
     required: false,
     failureAction: 'alert',
   },
-};
+}
 
 /**
  * Get tests to run for a specific stage
  */
 export function getTestsForStage(stage: TestStage): TestPromotion {
-  return TEST_PROMOTION_RULES[stage];
+  return TEST_PROMOTION_RULES[stage]
 }
 
 /**
  * Validate if tests can be promoted to next stage
  */
 export function canPromote(currentStage: TestStage, testsPassed: boolean): boolean {
-  const promotion = TEST_PROMOTION_RULES[currentStage];
+  const promotion = TEST_PROMOTION_RULES[currentStage]
 
   if (!promotion.required) {
-    return true; // Non-required tests don't block promotion
+    return true // Non-required tests don't block promotion
   }
 
-  return testsPassed;
+  return testsPassed
 }
 ```
 

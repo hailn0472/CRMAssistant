@@ -93,14 +93,14 @@ Is this a monorepo (consumer + provider in same repo)?
 ### Example 1: Minimal Consumer Test
 
 ```typescript
-import { PactV3 } from '@pact-foundation/pact';
-import { createProviderState } from '@seontechnologies/pactjs-utils';
+import { PactV3 } from '@pact-foundation/pact'
+import { createProviderState } from '@seontechnologies/pactjs-utils'
 
 const provider = new PactV3({
   consumer: 'my-frontend',
   provider: 'my-api',
   dir: './pacts',
-});
+})
 
 it('should get user by id', async () => {
   await provider
@@ -109,17 +109,17 @@ it('should get user by id', async () => {
     .withRequest({ method: 'GET', path: '/users/1' })
     .willRespondWith({ status: 200, body: { id: 1, name: 'John' } })
     .executeTest(async (mockServer) => {
-      const res = await fetch(`${mockServer.url}/users/1`);
-      expect(res.status).toBe(200);
-    });
-});
+      const res = await fetch(`${mockServer.url}/users/1`)
+      expect(res.status).toBe(200)
+    })
+})
 ```
 
 ### Example 2: Minimal Provider Verification
 
 ```typescript
-import { Verifier } from '@pact-foundation/pact';
-import { buildVerifierOptions, createRequestFilter } from '@seontechnologies/pactjs-utils';
+import { Verifier } from '@pact-foundation/pact'
+import { buildVerifierOptions, createRequestFilter } from '@seontechnologies/pactjs-utils'
 
 const opts = buildVerifierOptions({
   provider: 'my-api',
@@ -127,15 +127,15 @@ const opts = buildVerifierOptions({
   includeMainAndDeployed: true,
   stateHandlers: {
     'user exists': async (params) => {
-      await db.seed({ users: [{ id: params?.id }] });
+      await db.seed({ users: [{ id: params?.id }] })
     },
   },
   requestFilter: createRequestFilter({
     tokenGenerator: () => 'test-token-123',
   }),
-});
+})
 
-await new Verifier(opts).verifyProvider();
+await new Verifier(opts).verifyProvider()
 ```
 
 ## Key Points
@@ -177,7 +177,7 @@ const opts: VerifierOptions = {
     /* ... */
   },
   // ... 20 more lines
-};
+}
 ```
 
 ### Right: Use buildVerifierOptions
@@ -192,25 +192,25 @@ const opts = buildVerifierOptions({
     /* ... */
   },
   requestFilter: createRequestFilter({ tokenGenerator: () => 'token' }),
-});
+})
 ```
 
 ### Wrong: Importing raw Pact types for JsonMap conversion
 
 ```typescript
 // ❌ Manual JsonMap casting
-import type { JsonMap } from '@pact-foundation/pact';
+import type { JsonMap } from '@pact-foundation/pact'
 
-provider.given('user exists', { id: 1 as unknown as JsonMap['id'] });
+provider.given('user exists', { id: 1 as unknown as JsonMap['id'] })
 ```
 
 ### Right: Use createProviderState
 
 ```typescript
 // ✅ Automatic type conversion
-import { createProviderState } from '@seontechnologies/pactjs-utils';
+import { createProviderState } from '@seontechnologies/pactjs-utils'
 
-provider.given(...createProviderState({ name: 'user exists', params: { id: 1 } }));
+provider.given(...createProviderState({ name: 'user exists', params: { id: 1 } }))
 ```
 
 _Source: @seontechnologies/pactjs-utils library, pactjs-utils README, pact-js-example-provider workflows_

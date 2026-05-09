@@ -85,18 +85,20 @@
 
 - [x] **CF-013**: Remove Python entries (lines 1-160) from `/.gitignore`
 - [x] **CF-014**: Add missing entries to `/.gitignore`
+
   ```
   # TypeScript
   *.tsbuildinfo
   tsconfig.tsbuildinfo
-  
+
   # pnpm
   .pnpm-store/
-  
+
   # Prisma
   prisma/dev.db
   prisma/migrations/.migration_lock
   ```
+
 - [x] **CF-015**: Change `.env.production` to `.env.production.local` in `/.gitignore:184`
 
 ### ✅ Add .gitattributes (1 issue) - COMPLETE
@@ -122,11 +124,13 @@
 ### ✅ Fix Security Issues (1 issue) - COMPLETE
 
 - [x] **SEC-001**: Add lockfile validation script to `/package.json`
+
   ```json
   "verify": "pnpm audit && pnpm outdated"
   ```
 
 - [ ] **SEC-002**: Add audit to CI pipeline (create `.github/workflows/ci.yml`)
+
   ```yaml
   - name: Security Audit
     run: pnpm audit --audit-level=moderate
@@ -141,11 +145,12 @@
 ### ✅ Add CI/CD Pipeline
 
 - [ ] **CF-026**: Create `.github/workflows/ci.yml`
+
   ```yaml
   name: CI
-  
+
   on: [push, pull_request]
-  
+
   jobs:
     test:
       runs-on: ubuntu-latest
@@ -168,6 +173,7 @@
 ### ✅ Add Pre-commit Hooks
 
 - [ ] **CF-024**: Install and configure husky
+
   ```bash
   pnpm add -D husky lint-staged
   pnpm exec husky init
@@ -180,13 +186,14 @@
   Create `commitlint.config.js`:
   ```js
   module.exports = {
-    extends: ['@commitlint/config-conventional']
-  };
+    extends: ['@commitlint/config-conventional'],
+  }
   ```
 
 ### ✅ Add Docker Setup
 
 - [ ] **CF-027**: Create `docker-compose.yml`
+
   ```yaml
   version: '3.8'
   services:
@@ -197,12 +204,12 @@
         POSTGRES_USER: postgres
         POSTGRES_PASSWORD: postgres
       ports:
-        - "5432:5432"
-    
+        - '5432:5432'
+
     redis:
       image: redis:7-alpine
       ports:
-        - "6379:6379"
+        - '6379:6379'
   ```
 
 ### ✅ Add Workspace Validation
@@ -224,11 +231,12 @@
 ### ✅ Add pnpm Catalog
 
 - [ ] **CF-016**: Add catalog to `pnpm-workspace.yaml`
+
   ```yaml
   packages:
     - 'apps/*'
     - 'packages/*'
-  
+
   catalog:
     react: ^18.2.0
     typescript: ^5.4.0

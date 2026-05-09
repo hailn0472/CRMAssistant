@@ -53,11 +53,11 @@ This is an **isolated subagent** running in parallel with other quality dimensio
 ### 2. Calculate Isolation Score
 
 ```javascript
-const totalChecks = testFiles.length * checksPerFile;
-const failedChecks = violations.length;
-const severityWeights = { HIGH: 10, MEDIUM: 5, LOW: 2 };
-const totalPenalty = violations.reduce((sum, v) => sum + severityWeights[v.severity], 0);
-const score = Math.max(0, 100 - totalPenalty);
+const totalChecks = testFiles.length * checksPerFile
+const failedChecks = violations.length
+const severityWeights = { HIGH: 10, MEDIUM: 5, LOW: 2 }
+const totalPenalty = violations.reduce((sum, v) => sum + severityWeights[v.severity], 0)
+const score = Math.max(0, 100 - totalPenalty)
 ```
 
 ---

@@ -206,6 +206,7 @@ Create an ongoing learning companion that teaches testing progressively through 
 #### Phase 1: Initialization & Continuation
 
 1. **step-01-init.md** (Init Step - Continuable)
+
    - Goal: Welcome user, check for existing progress file, explain workflow, create initial progress if new
    - Type: Init (Continuable) - checks for `{user}-tea-progress.yaml`, routes to step-01b if exists
    - Menu: Auto-proceed (Pattern 3) - no user menu
@@ -220,6 +221,7 @@ Create an ongoing learning companion that teaches testing progressively through 
 #### Phase 2: Assessment & Path Selection
 
 3. **step-02-assess.md** (Middle Step - Standard)
+
    - Goal: Gather role (QA/Dev/Lead/VP), experience level, learning goals, optional pain points
    - Type: Middle (Standard) auto-proceed
    - Menu: Auto-proceed (Pattern 3) - no user menu
@@ -514,12 +516,14 @@ teach-me-testing/
 **Files Created:**
 
 1. **workflow.md**
+
    - Tri-modal routing logic (Create/Edit/Validate)
    - Configuration loading from TEA module
    - Step-file architecture principles
    - Initialization sequence
 
 2. **templates/progress-template.yaml**
+
    - Complete progress tracking schema
    - 7 sessions defined
    - Session status tracking (not-started/in-progress/completed)
@@ -527,6 +531,7 @@ teach-me-testing/
    - Progress metrics (completion_percentage, next_recommended)
 
 3. **templates/session-notes-template.md**
+
    - Session metadata
    - Key concepts, objectives, takeaways
    - TEA resources referenced
@@ -534,6 +539,7 @@ teach-me-testing/
    - Practical examples
 
 4. **templates/certificate-template.md**
+
    - Completion certificate structure
    - All 7 sessions with scores
    - Skills acquired checklist
@@ -541,6 +547,7 @@ teach-me-testing/
    - Next steps recommendations
 
 5. **instructions.md**
+
    - How to run the workflow
    - Session structure and flow
    - Progress tracking details

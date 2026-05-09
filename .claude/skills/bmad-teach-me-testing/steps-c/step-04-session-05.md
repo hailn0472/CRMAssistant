@@ -127,12 +127,12 @@ Save the updated progress file.
 ```typescript
 // RED: Test fails (function doesn't exist)
 test('calculates total price', () => {
-  expect(calculateTotal([10, 20])).toBe(30);
-});
+  expect(calculateTotal([10, 20])).toBe(30)
+})
 
 // GREEN: Minimal implementation
 function calculateTotal(prices) {
-  return prices.reduce((a, b) => a + b, 0);
+  return prices.reduce((a, b) => a + b, 0)
 }
 
 // REFACTOR: Add validation, tests still green
@@ -157,11 +157,11 @@ function calculateTotal(prices) {
 
 ```typescript
 test('GET /users returns user list', async ({ request }) => {
-  const response = await request.get('/api/users');
-  expect(response.ok()).toBeTruthy();
-  const users = await response.json();
-  expect(users).toHaveLength(10);
-});
+  const response = await request.get('/api/users')
+  expect(response.ok()).toBeTruthy()
+  const users = await response.json()
+  expect(users).toHaveLength(10)
+})
 ```
 
 {Role-adapted example}

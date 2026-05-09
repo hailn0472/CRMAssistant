@@ -7,13 +7,13 @@
 ```tsx
 // ✅ Good
 export function ContactCard({ contact }: ContactCardProps) {
-  return <div>{contact.name}</div>;
+  return <div>{contact.name}</div>
 }
 
 // ❌ Bad - no class components
 export class ContactCard extends React.Component {
   render() {
-    return <div>{this.props.contact.name}</div>;
+    return <div>{this.props.contact.name}</div>
   }
 }
 ```
@@ -22,27 +22,27 @@ export class ContactCard extends React.Component {
 
 ```tsx
 // 1. Imports
-import { useState } from "react";
-import type { Contact } from "@/types";
+import { useState } from 'react'
+import type { Contact } from '@/types'
 
 // 2. Types/Interfaces
 interface ContactCardProps {
-  contact: Contact;
-  onEdit?: (id: string) => void;
+  contact: Contact
+  onEdit?: (id: string) => void
 }
 
 // 3. Component
 export function ContactCard({ contact, onEdit }: ContactCardProps) {
   // 3a. Hooks
-  const [isExpanded, setIsExpanded] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(false)
 
   // 3b. Event handlers
   const handleEdit = () => {
-    onEdit?.(contact.id);
-  };
+    onEdit?.(contact.id)
+  }
 
   // 3c. Render
-  return <div>{/* JSX */}</div>;
+  return <div>{/* JSX */}</div>
 }
 ```
 
@@ -53,21 +53,21 @@ export function ContactCard({ contact, onEdit }: ContactCardProps) {
 ```tsx
 function ContactForm() {
   // 1. State hooks
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
+  const [name, setName] = useState('')
+  const [email, setEmail] = useState('')
 
   // 2. Context hooks
-  const { user } = useAuth();
+  const { user } = useAuth()
 
   // 3. Custom hooks
-  const { mutate, isLoading } = useCreateContact();
+  const { mutate, isLoading } = useCreateContact()
 
   // 4. useEffect hooks (last)
   useEffect(() => {
     // Side effects
-  }, []);
+  }, [])
 
-  return <form>...</form>;
+  return <form>...</form>
 }
 ```
 
@@ -82,21 +82,21 @@ function ContactForm() {
 ```tsx
 // ✅ Good - returns object
 export function useContactForm(initialData?: Contact) {
-  const [data, setData] = useState(initialData);
-  const [errors, setErrors] = useState({});
+  const [data, setData] = useState(initialData)
+  const [errors, setErrors] = useState({})
 
   const validate = () => {
     // Validation logic
-  };
+  }
 
-  return { data, setData, errors, validate };
+  return { data, setData, errors, validate }
 }
 
 // ✅ Good - returns array (like useState)
 export function useToggle(initial = false): [boolean, () => void] {
-  const [value, setValue] = useState(initial);
-  const toggle = () => setValue((v) => !v);
-  return [value, toggle];
+  const [value, setValue] = useState(initial)
+  const toggle = () => setValue((v) => !v)
+  return [value, toggle]
 }
 ```
 
@@ -121,29 +121,29 @@ export function ContactList() {
 
 ```tsx
 // ✅ Good - UI state with Zustand
-import { create } from "zustand";
+import { create } from 'zustand'
 
 interface UIStore {
-  sidebarOpen: boolean;
-  toggleSidebar: () => void;
+  sidebarOpen: boolean
+  toggleSidebar: () => void
 }
 
 export const useUIStore = create<UIStore>((set) => ({
   sidebarOpen: true,
   toggleSidebar: () => set((state) => ({ sidebarOpen: !state.sidebarOpen })),
-}));
+}))
 ```
 
 ### NEVER Mix Server and UI State
 
 ```tsx
 // ❌ Bad - mixing concerns
-const [contacts, setContacts] = useState([]); // Server state
-const [sidebarOpen, setSidebarOpen] = useState(true); // UI state
+const [contacts, setContacts] = useState([]) // Server state
+const [sidebarOpen, setSidebarOpen] = useState(true) // UI state
 
 // ✅ Good - separated
-const { data: contacts } = useQuery(["contacts"], fetchContacts); // Server
-const { sidebarOpen } = useUIStore(); // UI
+const { data: contacts } = useQuery(['contacts'], fetchContacts) // Server
+const { sidebarOpen } = useUIStore() // UI
 ```
 
 ## Next.js App Router Patterns
@@ -154,8 +154,8 @@ const { sidebarOpen } = useUIStore(); // UI
 // app/contacts/page.tsx
 // ✅ Good - Server Component (default)
 export default async function ContactsPage() {
-  const contacts = await prisma.contact.findMany();
-  return <ContactList contacts={contacts} />;
+  const contacts = await prisma.contact.findMany()
+  return <ContactList contacts={contacts} />
 }
 ```
 
@@ -163,12 +163,12 @@ export default async function ContactsPage() {
 
 ```tsx
 // components/ContactForm.tsx
-"use client"; // ✅ Explicit client component
+'use client' // ✅ Explicit client component
 
-import { useState } from "react";
+import { useState } from 'react'
 
 export function ContactForm() {
-  const [name, setName] = useState("");
+  const [name, setName] = useState('')
   // Interactive UI
 }
 ```
@@ -185,19 +185,19 @@ export function ContactForm() {
 
 ```tsx
 // app/contacts/actions.ts
-"use server";
+'use server'
 
 export async function createContact(formData: FormData) {
   const data = {
-    name: formData.get("name") as string,
-    email: formData.get("email") as string,
-  };
+    name: formData.get('name') as string,
+    email: formData.get('email') as string,
+  }
 
   // Validate data
-  const validated = contactSchema.parse(data);
+  const validated = contactSchema.parse(data)
 
   // Create contact
-  return await prisma.contact.create({ data: validated });
+  return await prisma.contact.create({ data: validated })
 }
 ```
 
@@ -218,18 +218,14 @@ export async function createContact(formData: FormData) {
 
 ```tsx
 // ✅ Good - fetch in Server Component
-export default async function ContactPage({
-  params,
-}: {
-  params: { id: string };
-}) {
+export default async function ContactPage({ params }: { params: { id: string } }) {
   const contact = await prisma.contact.findUnique({
     where: { id: params.id },
-  });
+  })
 
-  if (!contact) notFound();
+  if (!contact) notFound()
 
-  return <ContactDetail contact={contact} />;
+  return <ContactDetail contact={contact} />
 }
 ```
 
@@ -261,8 +257,8 @@ export function ContactList() {
 ```tsx
 // ✅ Good
 export const ContactCard = React.memo(function ContactCard({ contact }: Props) {
-  return <div>{contact.name}</div>;
-});
+  return <div>{contact.name}</div>
+})
 ```
 
 **When to use React.memo:**
@@ -284,10 +280,10 @@ export const ContactCard = React.memo(function ContactCard({ contact }: Props) {
 const sortedContacts = useMemo(
   () => contacts.sort((a, b) => a.name.localeCompare(b.name)),
   [contacts],
-);
+)
 
 // ❌ Bad - recalculates on every render
-const sortedContacts = contacts.sort((a, b) => a.name.localeCompare(b.name));
+const sortedContacts = contacts.sort((a, b) => a.name.localeCompare(b.name))
 ```
 
 ### Use useCallback for Event Handlers Passed to Children
@@ -296,9 +292,9 @@ const sortedContacts = contacts.sort((a, b) => a.name.localeCompare(b.name));
 // ✅ Good
 const handleEdit = useCallback((id: string) => {
   // Edit logic
-}, []);
+}, [])
 
-return <ContactCard onEdit={handleEdit} />;
+return <ContactCard onEdit={handleEdit} />
 
 // ❌ Bad - creates new function on every render
 return (
@@ -307,23 +303,23 @@ return (
       /* logic */
     }}
   />
-);
+)
 ```
 
 ### Lazy Load Heavy Components
 
 ```tsx
 // ✅ Good
-import { lazy, Suspense } from "react";
+import { lazy, Suspense } from 'react'
 
-const HeavyChart = lazy(() => import("./HeavyChart"));
+const HeavyChart = lazy(() => import('./HeavyChart'))
 
 export function Dashboard() {
   return (
     <Suspense fallback={<Spinner />}>
       <HeavyChart data={data} />
     </Suspense>
-  );
+  )
 }
 ```
 
@@ -350,17 +346,17 @@ import Image from 'next/image';
 ### Use React Hook Form + Zod
 
 ```tsx
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
+import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { z } from 'zod'
 
 const contactSchema = z.object({
-  name: z.string().min(1, "Name is required"),
-  email: z.string().email("Invalid email"),
+  name: z.string().min(1, 'Name is required'),
+  email: z.string().email('Invalid email'),
   phone: z.string().optional(),
-});
+})
 
-type ContactFormData = z.infer<typeof contactSchema>;
+type ContactFormData = z.infer<typeof contactSchema>
 
 export function ContactForm() {
   const {
@@ -369,29 +365,25 @@ export function ContactForm() {
     formState: { errors, isSubmitting },
   } = useForm<ContactFormData>({
     resolver: zodResolver(contactSchema),
-  });
+  })
 
   const onSubmit = async (data: ContactFormData) => {
-    await createContact(data);
-  };
+    await createContact(data)
+  }
 
   return (
     <form onSubmit={handleSubmit(onSubmit)}>
-      <input {...register("name")} />
-      {errors.name && (
-        <span className="text-red-500">{errors.name.message}</span>
-      )}
+      <input {...register('name')} />
+      {errors.name && <span className="text-red-500">{errors.name.message}</span>}
 
-      <input {...register("email")} />
-      {errors.email && (
-        <span className="text-red-500">{errors.email.message}</span>
-      )}
+      <input {...register('email')} />
+      {errors.email && <span className="text-red-500">{errors.email.message}</span>}
 
       <button type="submit" disabled={isSubmitting}>
-        {isSubmitting ? "Saving..." : "Save"}
+        {isSubmitting ? 'Saving...' : 'Save'}
       </button>
     </form>
-  );
+  )
 }
 ```
 
@@ -418,28 +410,26 @@ export function ContactForm() {
 ### Use cn() Helper for Conditional Classes
 
 ```tsx
-import { cn } from "@/lib/utils";
-
-<button
+import { cn } from '@/lib/utils'
+;<button
   className={cn(
-    "px-4 py-2 rounded font-medium transition-colors",
-    isActive && "bg-blue-500 text-white",
-    !isActive && "bg-gray-200 text-gray-700",
-    isDisabled && "opacity-50 cursor-not-allowed",
+    'px-4 py-2 rounded font-medium transition-colors',
+    isActive && 'bg-blue-500 text-white',
+    !isActive && 'bg-gray-200 text-gray-700',
+    isDisabled && 'opacity-50 cursor-not-allowed',
   )}
 >
   Click me
-</button>;
+</button>
 ```
 
 ### Use shadcn/ui Components
 
 ```tsx
-import { Button } from "@/components/ui/button";
-import { Card, CardHeader, CardContent } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-
-<Card>
+import { Button } from '@/components/ui/button'
+import { Card, CardHeader, CardContent } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+;<Card>
   <CardHeader>
     <h2>Contact Form</h2>
   </CardHeader>
@@ -447,7 +437,7 @@ import { Input } from "@/components/ui/input";
     <Input placeholder="Name" />
     <Button variant="outline">Submit</Button>
   </CardContent>
-</Card>;
+</Card>
 ```
 
 ### Responsive Design
@@ -467,27 +457,24 @@ import { Input } from "@/components/ui/input";
 
 ```tsx
 // app/error.tsx
-"use client";
+'use client'
 
 export default function Error({
   error,
   reset,
 }: {
-  error: Error & { digest?: string };
-  reset: () => void;
+  error: Error & { digest?: string }
+  reset: () => void
 }) {
   return (
     <div className="flex flex-col items-center justify-center min-h-screen">
       <h2 className="text-2xl font-bold mb-4">Something went wrong!</h2>
       <p className="text-gray-600 mb-4">{error.message}</p>
-      <button
-        onClick={reset}
-        className="px-4 py-2 bg-blue-500 text-white rounded"
-      >
+      <button onClick={reset} className="px-4 py-2 bg-blue-500 text-white rounded">
         Try again
       </button>
     </div>
-  );
+  )
 }
 ```
 
@@ -496,7 +483,7 @@ export default function Error({
 ```tsx
 // app/contacts/loading.tsx
 export default function Loading() {
-  return <Spinner />;
+  return <Spinner />
 }
 ```
 
@@ -510,7 +497,7 @@ export default function NotFound() {
       <h2>Contact Not Found</h2>
       <Link href="/contacts">Back to Contacts</Link>
     </div>
-  );
+  )
 }
 ```
 
@@ -553,8 +540,8 @@ export default function NotFound() {
   tabIndex={0}
   onClick={handleClick}
   onKeyDown={(e) => {
-    if (e.key === "Enter" || e.key === " ") {
-      handleClick();
+    if (e.key === 'Enter' || e.key === ' ') {
+      handleClick()
     }
   }}
 >
