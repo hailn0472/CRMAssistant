@@ -14,7 +14,9 @@ AI-powered CRM platform với Text-to-SQL query engine cho sales teams.
 ## Prerequisites
 
 - Node.js 20+ LTS
-- pnpm 8.0+
+- pnpm 8.15.0
+- PostgreSQL 15+
+- Redis 7.0+
 
 ## Getting Started
 
@@ -28,6 +30,60 @@ cd CRMAssistant
 # Install dependencies
 pnpm install
 ```
+
+### Environment Setup
+
+```bash
+# Copy environment template
+cp .env.example .env.local
+
+# Configure required variables:
+# - DATABASE_URL=postgresql://user:password@localhost:5432/crm
+# - REDIS_HOST=localhost
+# - REDIS_PORT=6379
+# - SUPABASE_URL=https://your-project.supabase.co
+# - SUPABASE_ANON_KEY=your-anon-key
+# - VERTEX_AI_PROJECT_ID=your-project-id
+# - VERTEX_AI_LOCATION=us-central1
+```
+
+### Database Setup
+
+```bash
+# Run Prisma migrations
+cd apps/api
+pnpm prisma migrate dev
+
+# Generate Prisma Client
+pnpm prisma generate
+
+# (Optional) Seed database
+pnpm prisma db seed
+```
+
+### Redis Setup
+
+```bash
+# Using Docker
+docker run -d -p 6379:6379 redis:7-alpine
+
+# Or install locally
+# macOS: brew install redis
+# Ubuntu: sudo apt-get install redis-server
+```
+
+### Supabase Setup
+
+1. Create project at https://supabase.com
+2. Copy project URL and anon key to `.env.local`
+3. Run database migrations (see Database Setup)
+
+### Vertex AI Setup
+
+1. Create GCP project
+2. Enable Vertex AI API
+3. Create service account and download credentials
+4. Set environment variables in `.env.local`
 
 ### Development
 
@@ -64,6 +120,12 @@ pnpm type-check
 
 # Format code
 pnpm format
+
+# Clean build artifacts
+pnpm clean
+
+# Security audit
+pnpm verify
 ```
 
 ## Project Structure
@@ -84,7 +146,6 @@ CRMAssistant/
 ## Documentation
 
 - [Project Context](docs/project-context.md) - Complete project context và development rules
-- [Architecture](docs/architecture.md) - Architecture decisions và patterns
 - [Implementation Rules](.claude/rules/) - Framework-specific implementation rules
 
 ## Development Workflow
@@ -94,6 +155,30 @@ CRMAssistant/
 3. Run tests: `pnpm test`
 4. Commit using Conventional Commits: `feat(scope): description`
 5. Create Pull Request
+
+## Troubleshooting
+
+### pnpm install fails
+- Ensure Node.js 20+ is installed
+- Clear pnpm cache: `pnpm store prune`
+
+### Database connection fails
+- Check DATABASE_URL in .env.local
+- Ensure PostgreSQL is running
+
+### Redis connection fails
+- Check REDIS_HOST and REDIS_PORT
+- Ensure Redis is running
+
+## Contributing
+
+1. Create feature branch: `feature/<scope>/<description>`
+2. Follow naming conventions in `.claude/rules/`
+3. Run tests: `pnpm test`
+4. Commit using Conventional Commits
+5. Create Pull Request
+
+See [Git Workflow](.claude/rules/git-workflow.md) for details.
 
 ## License
 
