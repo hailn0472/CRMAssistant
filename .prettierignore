@@ -4,5 +4,8 @@ node_modules/
 .next/
 dist/
 coverage/
+coverage-integration/
+playwright-report/
+test-results/
 *.tsbuildinfo
 pnpm-lock.yaml

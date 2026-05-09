@@ -13,6 +13,14 @@
     "test": {
       "outputs": ["coverage/**"]
     },
+    "test:integration": {
+      "cache": false,
+      "outputs": ["coverage-integration/**"]
+    },
+    "test:e2e": {
+      "cache": false,
+      "outputs": ["playwright-report/**", "test-results/**"]
+    },
     "lint": {
       "dependsOn": ["^lint"],
       "outputs": [".eslintcache"]
