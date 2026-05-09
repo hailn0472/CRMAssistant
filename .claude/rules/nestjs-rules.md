@@ -6,16 +6,16 @@
 
 ```typescript
 // contact.module.ts
-import { Module } from '@nestjs/common';
-import { ContactController } from './contact.controller';
-import { ContactService } from './contact.service';
-import { PrismaModule } from '@/prisma/prisma.module';
+import { Module } from "@nestjs/common";
+import { ContactController } from "./contact.controller";
+import { ContactService } from "./contact.service";
+import { PrismaModule } from "@/prisma/prisma.module";
 
 @Module({
   imports: [PrismaModule],
   controllers: [ContactController],
   providers: [ContactService],
-  exports: [ContactService] // Export if used by other modules
+  exports: [ContactService], // Export if used by other modules
 })
 export class ContactModule {}
 ```
@@ -46,7 +46,7 @@ src/
 export class ContactService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly logger: LoggerService
+    private readonly logger: LoggerService,
   ) {}
 }
 
@@ -71,8 +71,8 @@ export interface IContactRepository {
 @Injectable()
 export class ContactService {
   constructor(
-    @Inject('IContactRepository')
-    private readonly repository: IContactRepository
+    @Inject("IContactRepository")
+    private readonly repository: IContactRepository,
   ) {}
 }
 ```
@@ -82,7 +82,7 @@ export class ContactService {
 ### RESTful Controller Pattern
 
 ```typescript
-@Controller('contacts')
+@Controller("contacts")
 @UseGuards(JwtAuthGuard)
 export class ContactController {
   constructor(private readonly contactService: ContactService) {}
@@ -92,8 +92,8 @@ export class ContactController {
     return this.contactService.findAll(query);
   }
 
-  @Get(':id')
-  async findOne(@Param('id') id: string): Promise<Contact> {
+  @Get(":id")
+  async findOne(@Param("id") id: string): Promise<Contact> {
     const contact = await this.contactService.findOne(id);
     if (!contact) {
       throw new NotFoundException(`Contact with ID ${id} not found`);
@@ -106,17 +106,17 @@ export class ContactController {
     return this.contactService.create(dto);
   }
 
-  @Patch(':id')
+  @Patch(":id")
   async update(
-    @Param('id') id: string,
-    @Body() dto: UpdateContactDto
+    @Param("id") id: string,
+    @Body() dto: UpdateContactDto,
   ): Promise<Contact> {
     return this.contactService.update(id, dto);
   }
 
-  @Delete(':id')
+  @Delete(":id")
   @HttpCode(HttpStatus.NO_CONTENT)
-  async remove(@Param('id') id: string): Promise<void> {
+  async remove(@Param("id") id: string): Promise<void> {
     await this.contactService.remove(id);
   }
 }
@@ -140,34 +140,34 @@ export class ContactController {
 export class ContactService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly logger: LoggerService
+    private readonly logger: LoggerService,
   ) {}
 
   async findAll(query: PaginationDto): Promise<Contact[]> {
     const { page = 1, limit = 20 } = query;
-    
+
     return this.prisma.contact.findMany({
       skip: (page - 1) * limit,
       take: limit,
-      orderBy: { createdAt: 'desc' }
+      orderBy: { createdAt: "desc" },
     });
   }
 
   async findOne(id: string): Promise<Contact | null> {
     return this.prisma.contact.findUnique({
-      where: { id }
+      where: { id },
     });
   }
 
   async create(dto: CreateContactDto): Promise<Contact> {
     try {
       return await this.prisma.contact.create({
-        data: dto
+        data: dto,
       });
     } catch (error) {
       if (error instanceof PrismaClientKnownRequestError) {
-        if (error.code === 'P2002') {
-          throw new ConflictException('Email already exists');
+        if (error.code === "P2002") {
+          throw new ConflictException("Email already exists");
         }
       }
       throw error;
@@ -178,11 +178,11 @@ export class ContactService {
     try {
       return await this.prisma.contact.update({
         where: { id },
-        data: dto
+        data: dto,
       });
     } catch (error) {
       if (error instanceof PrismaClientKnownRequestError) {
-        if (error.code === 'P2025') {
+        if (error.code === "P2025") {
           throw new NotFoundException(`Contact with ID ${id} not found`);
         }
       }
@@ -193,11 +193,11 @@ export class ContactService {
   async remove(id: string): Promise<void> {
     try {
       await this.prisma.contact.delete({
-        where: { id }
+        where: { id },
       });
     } catch (error) {
       if (error instanceof PrismaClientKnownRequestError) {
-        if (error.code === 'P2025') {
+        if (error.code === "P2025") {
           throw new NotFoundException(`Contact with ID ${id} not found`);
         }
       }
@@ -221,7 +221,13 @@ export class ContactService {
 
 ```typescript
 // create-contact.dto.ts
-import { IsEmail, IsNotEmpty, IsOptional, IsString, MinLength } from 'class-validator';
+import {
+  IsEmail,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  MinLength,
+} from "class-validator";
 
 export class CreateContactDto {
   @IsString()
@@ -252,8 +258,8 @@ export class CreateContactDto {
 
 ```typescript
 // update-contact.dto.ts
-import { PartialType } from '@nestjs/mapped-types';
-import { CreateContactDto } from './create-contact.dto';
+import { PartialType } from "@nestjs/mapped-types";
+import { CreateContactDto } from "./create-contact.dto";
 
 // ✅ Good - reuse CreateContactDto with all fields optional
 export class UpdateContactDto extends PartialType(CreateContactDto) {}
@@ -278,8 +284,8 @@ import {
   ConflictException,
   UnauthorizedException,
   ForbiddenException,
-  InternalServerErrorException
-} from '@nestjs/common';
+  InternalServerErrorException,
+} from "@nestjs/common";
 
 // ✅ Good
 if (!contact) {
@@ -287,7 +293,7 @@ if (!contact) {
 }
 
 if (existingEmail) {
-  throw new ConflictException('Email already exists');
+  throw new ConflictException("Email already exists");
 }
 ```
 
@@ -295,8 +301,13 @@ if (existingEmail) {
 
 ```typescript
 // http-exception.filter.ts
-import { ExceptionFilter, Catch, ArgumentsHost, HttpException } from '@nestjs/common';
-import { Response } from 'express';
+import {
+  ExceptionFilter,
+  Catch,
+  ArgumentsHost,
+  HttpException,
+} from "@nestjs/common";
+import { Response } from "express";
 
 @Catch(HttpException)
 export class HttpExceptionFilter implements ExceptionFilter {
@@ -309,9 +320,10 @@ export class HttpExceptionFilter implements ExceptionFilter {
     response.status(status).json({
       statusCode: status,
       timestamp: new Date().toISOString(),
-      message: typeof exceptionResponse === 'string' 
-        ? exceptionResponse 
-        : (exceptionResponse as any).message
+      message:
+        typeof exceptionResponse === "string"
+          ? exceptionResponse
+          : (exceptionResponse as any).message,
     });
   }
 }
@@ -323,11 +335,11 @@ export class HttpExceptionFilter implements ExceptionFilter {
 
 ```typescript
 // jwt-auth.guard.ts
-import { Injectable, ExecutionContext } from '@nestjs/common';
-import { AuthGuard } from '@nestjs/passport';
+import { Injectable, ExecutionContext } from "@nestjs/common";
+import { AuthGuard } from "@nestjs/passport";
 
 @Injectable()
-export class JwtAuthGuard extends AuthGuard('jwt') {
+export class JwtAuthGuard extends AuthGuard("jwt") {
   canActivate(context: ExecutionContext) {
     return super.canActivate(context);
   }
@@ -338,15 +350,18 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
 
 ```typescript
 // roles.guard.ts
-import { Injectable, CanActivate, ExecutionContext } from '@nestjs/common';
-import { Reflector } from '@nestjs/core';
+import { Injectable, CanActivate, ExecutionContext } from "@nestjs/common";
+import { Reflector } from "@nestjs/core";
 
 @Injectable()
 export class RolesGuard implements CanActivate {
   constructor(private reflector: Reflector) {}
 
   canActivate(context: ExecutionContext): boolean {
-    const requiredRoles = this.reflector.get<string[]>('roles', context.getHandler());
+    const requiredRoles = this.reflector.get<string[]>(
+      "roles",
+      context.getHandler(),
+    );
     if (!requiredRoles) {
       return true;
     }
@@ -354,7 +369,7 @@ export class RolesGuard implements CanActivate {
     const request = context.switchToHttp().getRequest();
     const user = request.user;
 
-    return requiredRoles.some(role => user.roles?.includes(role));
+    return requiredRoles.some((role) => user.roles?.includes(role));
   }
 }
 ```
@@ -380,9 +395,14 @@ async remove(@Param('id') id: string) {}
 
 ```typescript
 // logging.interceptor.ts
-import { Injectable, NestInterceptor, ExecutionContext, CallHandler } from '@nestjs/common';
-import { Observable } from 'rxjs';
-import { tap } from 'rxjs/operators';
+import {
+  Injectable,
+  NestInterceptor,
+  ExecutionContext,
+  CallHandler,
+} from "@nestjs/common";
+import { Observable } from "rxjs";
+import { tap } from "rxjs/operators";
 
 @Injectable()
 export class LoggingInterceptor implements NestInterceptor {
@@ -396,7 +416,7 @@ export class LoggingInterceptor implements NestInterceptor {
       tap(() => {
         const responseTime = Date.now() - now;
         console.log(`${method} ${url} - ${responseTime}ms`);
-      })
+      }),
     );
   }
 }
@@ -406,9 +426,14 @@ export class LoggingInterceptor implements NestInterceptor {
 
 ```typescript
 // transform.interceptor.ts
-import { Injectable, NestInterceptor, ExecutionContext, CallHandler } from '@nestjs/common';
-import { Observable } from 'rxjs';
-import { map } from 'rxjs/operators';
+import {
+  Injectable,
+  NestInterceptor,
+  ExecutionContext,
+  CallHandler,
+} from "@nestjs/common";
+import { Observable } from "rxjs";
+import { map } from "rxjs/operators";
 
 export interface Response<T> {
   data: T;
@@ -416,13 +441,18 @@ export interface Response<T> {
 }
 
 @Injectable()
-export class TransformInterceptor<T> implements NestInterceptor<T, Response<T>> {
-  intercept(context: ExecutionContext, next: CallHandler): Observable<Response<T>> {
+export class TransformInterceptor<T>
+  implements NestInterceptor<T, Response<T>>
+{
+  intercept(
+    context: ExecutionContext,
+    next: CallHandler,
+  ): Observable<Response<T>> {
     return next.handle().pipe(
-      map(data => ({
+      map((data) => ({
         data,
-        timestamp: new Date().toISOString()
-      }))
+        timestamp: new Date().toISOString(),
+      })),
     );
   }
 }
@@ -434,22 +464,22 @@ export class TransformInterceptor<T> implements NestInterceptor<T, Response<T>> 
 
 ```typescript
 // main.ts
-import { ValidationPipe } from '@nestjs/common';
+import { ValidationPipe } from "@nestjs/common";
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
-  
+
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true, // Strip properties not in DTO
       forbidNonWhitelisted: true, // Throw error for extra properties
       transform: true, // Auto-transform payloads to DTO instances
       transformOptions: {
-        enableImplicitConversion: true // Auto-convert types
-      }
-    })
+        enableImplicitConversion: true, // Auto-convert types
+      },
+    }),
   );
-  
+
   await app.listen(3000);
 }
 ```
@@ -482,8 +512,8 @@ async findOne(@Param('id', ParseUUIDPipe) id: string) {}
 
 ```typescript
 // logger.middleware.ts
-import { Injectable, NestMiddleware } from '@nestjs/common';
-import { Request, Response, NextFunction } from 'express';
+import { Injectable, NestMiddleware } from "@nestjs/common";
+import { Request, Response, NextFunction } from "express";
 
 @Injectable()
 export class LoggerMiddleware implements NestMiddleware {
@@ -496,9 +526,7 @@ export class LoggerMiddleware implements NestMiddleware {
 // Apply in module
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
-    consumer
-      .apply(LoggerMiddleware)
-      .forRoutes('*');
+    consumer.apply(LoggerMiddleware).forRoutes("*");
   }
 }
 ```
@@ -512,16 +540,16 @@ export class AppModule implements NestModule {
 export default () => ({
   port: parseInt(process.env.PORT, 10) || 3000,
   database: {
-    url: process.env.DATABASE_URL
+    url: process.env.DATABASE_URL,
   },
   redis: {
-    host: process.env.REDIS_HOST || 'localhost',
-    port: parseInt(process.env.REDIS_PORT, 10) || 6379
+    host: process.env.REDIS_HOST || "localhost",
+    port: parseInt(process.env.REDIS_PORT, 10) || 6379,
   },
   vertexAi: {
     projectId: process.env.VERTEX_AI_PROJECT_ID,
-    location: process.env.VERTEX_AI_LOCATION
-  }
+    location: process.env.VERTEX_AI_LOCATION,
+  },
 });
 ```
 
@@ -529,17 +557,17 @@ export default () => ({
 
 ```typescript
 // app.module.ts
-import { ConfigModule } from '@nestjs/config';
-import configuration from './config/configuration';
+import { ConfigModule } from "@nestjs/config";
+import configuration from "./config/configuration";
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       load: [configuration],
       isGlobal: true,
-      envFilePath: '.env'
-    })
-  ]
+      envFilePath: ".env",
+    }),
+  ],
 })
 export class AppModule {}
 ```
@@ -552,7 +580,7 @@ export class SomeService {
   constructor(private configService: ConfigService) {}
 
   getPort(): number {
-    return this.configService.get<number>('port');
+    return this.configService.get<number>("port");
   }
 }
 ```
@@ -563,11 +591,11 @@ export class SomeService {
 
 ```typescript
 // contact.service.spec.ts
-import { Test, TestingModule } from '@nestjs/testing';
-import { ContactService } from './contact.service';
-import { PrismaService } from '@/prisma/prisma.service';
+import { Test, TestingModule } from "@nestjs/testing";
+import { ContactService } from "./contact.service";
+import { PrismaService } from "@/prisma/prisma.service";
 
-describe('ContactService', () => {
+describe("ContactService", () => {
   let service: ContactService;
   let prisma: PrismaService;
 
@@ -583,21 +611,21 @@ describe('ContactService', () => {
               findUnique: jest.fn(),
               create: jest.fn(),
               update: jest.fn(),
-              delete: jest.fn()
-            }
-          }
-        }
-      ]
+              delete: jest.fn(),
+            },
+          },
+        },
+      ],
     }).compile();
 
     service = module.get<ContactService>(ContactService);
     prisma = module.get<PrismaService>(PrismaService);
   });
 
-  describe('findAll', () => {
-    it('should return an array of contacts', async () => {
-      const mockContacts = [{ id: '1', name: 'John' }];
-      jest.spyOn(prisma.contact, 'findMany').mockResolvedValue(mockContacts);
+  describe("findAll", () => {
+    it("should return an array of contacts", async () => {
+      const mockContacts = [{ id: "1", name: "John" }];
+      jest.spyOn(prisma.contact, "findMany").mockResolvedValue(mockContacts);
 
       const result = await service.findAll({ page: 1, limit: 20 });
 
@@ -605,7 +633,7 @@ describe('ContactService', () => {
       expect(prisma.contact.findMany).toHaveBeenCalledWith({
         skip: 0,
         take: 20,
-        orderBy: { createdAt: 'desc' }
+        orderBy: { createdAt: "desc" },
       });
     });
   });
@@ -616,17 +644,17 @@ describe('ContactService', () => {
 
 ```typescript
 // contact.controller.integration.spec.ts
-import { Test, TestingModule } from '@nestjs/testing';
-import { INestApplication } from '@nestjs/common';
-import * as request from 'supertest';
-import { AppModule } from '@/app.module';
+import { Test, TestingModule } from "@nestjs/testing";
+import { INestApplication } from "@nestjs/common";
+import * as request from "supertest";
+import { AppModule } from "@/app.module";
 
-describe('ContactController (integration)', () => {
+describe("ContactController (integration)", () => {
   let app: INestApplication;
 
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
-      imports: [AppModule]
+      imports: [AppModule],
     }).compile();
 
     app = moduleFixture.createNestApplication();
@@ -637,10 +665,10 @@ describe('ContactController (integration)', () => {
     await app.close();
   });
 
-  describe('GET /contacts', () => {
-    it('should return 200 and array of contacts', () => {
+  describe("GET /contacts", () => {
+    it("should return 200 and array of contacts", () => {
       return request(app.getHttpServer())
-        .get('/contacts')
+        .get("/contacts")
         .expect(200)
         .expect((res) => {
           expect(Array.isArray(res.body)).toBe(true);

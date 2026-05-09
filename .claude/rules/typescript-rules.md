@@ -37,20 +37,20 @@
 
 ```typescript
 // 1. External dependencies (node_modules)
-import { Injectable } from '@nestjs/common';
-import { PrismaClient } from '@prisma/client';
+import { Injectable } from "@nestjs/common";
+import { PrismaClient } from "@prisma/client";
 
 // 2. Internal absolute imports (workspace packages)
-import { ContactService } from '@/contacts/contact.service';
-import { validateEmail } from '@/utils/validation';
+import { ContactService } from "@/contacts/contact.service";
+import { validateEmail } from "@/utils/validation";
 
 // 3. Relative imports (same module)
-import { CreateContactDto } from './dto/create-contact.dto';
-import { ContactRepository } from './contact.repository';
+import { CreateContactDto } from "./dto/create-contact.dto";
+import { ContactRepository } from "./contact.repository";
 
 // 4. Type-only imports (separate group)
-import type { Contact } from '@prisma/client';
-import type { User } from '@/types';
+import type { Contact } from "@prisma/client";
+import type { User } from "@/types";
 ```
 
 ### Export Patterns
@@ -64,10 +64,10 @@ import type { User } from '@/types';
 
 ```typescript
 // Use @ for workspace root
-import { ContactService } from '@/contacts/contact.service';
+import { ContactService } from "@/contacts/contact.service";
 
 // Use @packages for shared packages
-import { validateEmail } from '@packages/utils';
+import { validateEmail } from "@packages/utils";
 ```
 
 ## Type Safety Patterns
@@ -77,7 +77,7 @@ import { validateEmail } from '@packages/utils';
 ```typescript
 // ✅ Good - type inferred
 const count = 10;
-const name = 'John';
+const name = "John";
 
 // ❌ Bad - unnecessary annotation
 const count: number = 10;
@@ -101,9 +101,7 @@ function getContact(id: string) {
 
 ```typescript
 // ✅ Good
-type Result<T> =
-  | { success: true; data: T }
-  | { success: false; error: string };
+type Result<T> = { success: true; data: T } | { success: false; error: string };
 
 // ❌ Bad
 type Result<T> = {
@@ -118,10 +116,10 @@ type Result<T> = {
 ```typescript
 // ✅ Good
 function processData(data: unknown): string {
-  if (typeof data === 'string') {
+  if (typeof data === "string") {
     return data.toUpperCase();
   }
-  throw new Error('Invalid data type');
+  throw new Error("Invalid data type");
 }
 
 // ❌ Bad
@@ -140,10 +138,10 @@ export class ValidationError extends Error {
   constructor(
     message: string,
     public field: string,
-    public value: unknown
+    public value: unknown,
   ) {
     super(message);
-    this.name = 'ValidationError';
+    this.name = "ValidationError";
   }
 }
 
@@ -151,10 +149,10 @@ export class NotFoundError extends Error {
   constructor(
     message: string,
     public resource: string,
-    public id: string
+    public id: string,
   ) {
     super(message);
-    this.name = 'NotFoundError';
+    this.name = "NotFoundError";
   }
 }
 ```
@@ -164,12 +162,12 @@ export class NotFoundError extends Error {
 ```typescript
 // ✅ Good
 if (!contact) {
-  throw new NotFoundError('Contact not found', 'Contact', id);
+  throw new NotFoundError("Contact not found", "Contact", id);
 }
 
 // ❌ Bad
 if (!contact) {
-  throw new Error('Contact not found');
+  throw new Error("Contact not found");
 }
 ```
 
@@ -201,18 +199,16 @@ try {
 ### Use Result Type for Expected Errors
 
 ```typescript
-type Result<T, E = Error> =
-  | { ok: true; value: T }
-  | { ok: false; error: E };
+type Result<T, E = Error> = { ok: true; value: T } | { ok: false; error: E };
 
 async function createContact(
-  data: CreateContactDto
+  data: CreateContactDto,
 ): Promise<Result<Contact, ValidationError>> {
   // Validation
   if (!validateEmail(data.email)) {
     return {
       ok: false,
-      error: new ValidationError('Invalid email', 'email', data.email)
+      error: new ValidationError("Invalid email", "email", data.email),
     };
   }
 
@@ -235,7 +231,7 @@ async function getContacts(): Promise<Contact[]> {
 
 // ❌ Bad
 function getContacts(): Promise<Contact[]> {
-  return prisma.contact.findMany().then(contacts => contacts);
+  return prisma.contact.findMany().then((contacts) => contacts);
 }
 ```
 
@@ -248,8 +244,8 @@ async function createContact(data: CreateContactDto): Promise<Contact> {
     return await prisma.contact.create({ data });
   } catch (error) {
     if (error instanceof PrismaClientKnownRequestError) {
-      if (error.code === 'P2002') {
-        throw new ValidationError('Email already exists', 'email', data.email);
+      if (error.code === "P2002") {
+        throw new ValidationError("Email already exists", "email", data.email);
       }
     }
     throw error;
@@ -263,7 +259,7 @@ async function createContact(data: CreateContactDto): Promise<Contact> {
 // ✅ Good - parallel
 const [contacts, deals] = await Promise.all([
   prisma.contact.findMany(),
-  prisma.deal.findMany()
+  prisma.deal.findMany(),
 ]);
 
 // ❌ Bad - sequential
@@ -298,12 +294,12 @@ const pageSize = query.pageSize || 20; // Fails for 0
 ```typescript
 // ✅ Good
 function getContact(id: string): Contact | undefined {
-  return contacts.find(c => c.id === id);
+  return contacts.find((c) => c.id === id);
 }
 
 // ❌ Bad
 function getContact(id: string): Contact | null {
-  return contacts.find(c => c.id === id) || null;
+  return contacts.find((c) => c.id === id) || null;
 }
 ```
 
@@ -316,10 +312,10 @@ function getContact(id: string): Contact | null {
 type UpdateContactDto = Partial<CreateContactDto>;
 
 // Pick - select specific properties
-type ContactSummary = Pick<Contact, 'id' | 'name' | 'email'>;
+type ContactSummary = Pick<Contact, "id" | "name" | "email">;
 
 // Omit - exclude specific properties
-type ContactWithoutDates = Omit<Contact, 'createdAt' | 'updatedAt'>;
+type ContactWithoutDates = Omit<Contact, "createdAt" | "updatedAt">;
 
 // Required - make all properties required
 type RequiredContact = Required<Partial<Contact>>;
@@ -335,7 +331,7 @@ type ContactMap = Record<string, Contact>;
 type RequireFields<T, K extends keyof T> = T & Required<Pick<T, K>>;
 
 // Example usage
-type ContactWithEmail = RequireFields<Partial<Contact>, 'email'>;
+type ContactWithEmail = RequireFields<Partial<Contact>, "email">;
 ```
 
 ## Enums vs Union Types
@@ -345,20 +341,20 @@ type ContactWithEmail = RequireFields<Partial<Contact>, 'email'>;
 ```typescript
 // ✅ Good - const object
 export const DealStatus = {
-  OPEN: 'OPEN',
-  IN_PROGRESS: 'IN_PROGRESS',
-  WON: 'WON',
-  LOST: 'LOST'
+  OPEN: "OPEN",
+  IN_PROGRESS: "IN_PROGRESS",
+  WON: "WON",
+  LOST: "LOST",
 } as const;
 
-export type DealStatus = typeof DealStatus[keyof typeof DealStatus];
+export type DealStatus = (typeof DealStatus)[keyof typeof DealStatus];
 
 // ❌ Bad - enum (generates runtime code)
 export enum DealStatus {
-  OPEN = 'OPEN',
-  IN_PROGRESS = 'IN_PROGRESS',
-  WON = 'WON',
-  LOST = 'LOST'
+  OPEN = "OPEN",
+  IN_PROGRESS = "IN_PROGRESS",
+  WON = "WON",
+  LOST = "LOST",
 }
 ```
 
@@ -366,13 +362,13 @@ export enum DealStatus {
 
 ```typescript
 // ✅ Good
-type Status = 'pending' | 'approved' | 'rejected';
+type Status = "pending" | "approved" | "rejected";
 
 // ❌ Bad - unnecessary enum
 enum Status {
-  Pending = 'pending',
-  Approved = 'approved',
-  Rejected = 'rejected'
+  Pending = "pending",
+  Approved = "approved",
+  Rejected = "rejected",
 }
 ```
 
@@ -383,10 +379,10 @@ enum Status {
 ```typescript
 // ✅ Good - compute type once
 type ContactKeys = keyof Contact;
-const keys: ContactKeys[] = ['id', 'name', 'email'];
+const keys: ContactKeys[] = ["id", "name", "email"];
 
 // ❌ Bad - recompute on every iteration
-contacts.forEach(contact => {
+contacts.forEach((contact) => {
   const keys: (keyof Contact)[] = Object.keys(contact);
 });
 ```
@@ -397,10 +393,7 @@ contacts.forEach(contact => {
 // ✅ Good - validate before asserting
 function isContact(obj: unknown): obj is Contact {
   return (
-    typeof obj === 'object' &&
-    obj !== null &&
-    'id' in obj &&
-    'email' in obj
+    typeof obj === "object" && obj !== null && "id" in obj && "email" in obj
   );
 }
 

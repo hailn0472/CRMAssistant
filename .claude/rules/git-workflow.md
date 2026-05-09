@@ -34,6 +34,7 @@ Must be one of the following:
 The scope should be the name of the workspace or feature affected:
 
 **Workspace scopes:**
+
 - `web` - Frontend (Next.js app)
 - `api` - Backend (NestJS app)
 - `types` - Shared types package
@@ -41,6 +42,7 @@ The scope should be the name of the workspace or feature affected:
 - `config` - Shared config package
 
 **Feature scopes:**
+
 - `contacts` - Contact management
 - `deals` - Deal management
 - `text-to-sql` - Text-to-SQL engine
@@ -51,6 +53,7 @@ The scope should be the name of the workspace or feature affected:
 - `ui` - UI components
 
 **Infrastructure scopes:**
+
 - `deps` - Dependencies
 - `docker` - Docker configuration
 - `ci` - CI/CD pipelines
@@ -84,46 +87,54 @@ The footer should contain:
 ### Examples
 
 **Simple feature:**
+
 ```
 feat(contacts): add contact search functionality
 ```
 
 **Bug fix with scope:**
+
 ```
 fix(text-to-sql): prevent SQL injection in query validator
 ```
 
 **Breaking change:**
+
 ```
 feat(api): change authentication to use JWT
 
-BREAKING CHANGE: Session-based auth is no longer supported. 
+BREAKING CHANGE: Session-based auth is no longer supported.
 All clients must now use JWT tokens for authentication.
 
 Closes #234
 ```
 
 **Multiple scopes:**
+
 ```
 refactor(web,api): standardize error response format
 ```
 
 **Dependency update:**
+
 ```
 chore(deps): upgrade prisma to 5.1.0
 ```
 
 **Documentation:**
+
 ```
 docs: update architecture decision records
 ```
 
 **Performance improvement:**
+
 ```
 perf(text-to-sql): add Redis caching for query results
 ```
 
 **With body:**
+
 ```
 fix(api): resolve race condition in contact creation
 
@@ -167,6 +178,7 @@ hotfix/auth/token-expiry
 ### Branch Lifecycle
 
 1. **Create branch from main:**
+
    ```bash
    git checkout main
    git pull origin main
@@ -176,6 +188,7 @@ hotfix/auth/token-expiry
 2. **Work on feature with regular commits**
 
 3. **Keep branch updated:**
+
    ```bash
    git checkout main
    git pull origin main
@@ -184,6 +197,7 @@ hotfix/auth/token-expiry
    ```
 
 4. **Push to remote:**
+
    ```bash
    git push origin feature/contacts/add-search
    ```
@@ -201,6 +215,7 @@ hotfix/auth/token-expiry
 ### PR Title
 
 Follow the same format as commit messages:
+
 ```
 <type>(<scope>): <description>
 ```
@@ -209,14 +224,17 @@ Follow the same format as commit messages:
 
 ```markdown
 ## Summary
+
 Brief description of what this PR does.
 
 ## Changes
+
 - List of key changes
 - Another change
 - One more change
 
 ## Type of Change
+
 - [ ] New feature
 - [ ] Bug fix
 - [ ] Breaking change
@@ -225,12 +243,14 @@ Brief description of what this PR does.
 - [ ] Performance improvement
 
 ## Testing
+
 - [ ] Unit tests added/updated
 - [ ] Integration tests added/updated
 - [ ] E2E tests added/updated
 - [ ] Manual testing completed
 
 ## Checklist
+
 - [ ] Code follows project naming conventions
 - [ ] TypeScript strict mode passes with no errors
 - [ ] All tests pass locally
@@ -241,25 +261,30 @@ Brief description of what this PR does.
 - [ ] Environment variables documented (if added)
 
 ## Related Issues
+
 Closes #123
 Refs #456
 
 ## Screenshots (if applicable)
+
 [Add screenshots for UI changes]
 
 ## Breaking Changes
+
 [Describe any breaking changes and migration steps]
 ```
 
 ### PR Review Requirements
 
 **Before requesting review:**
+
 - [ ] All CI checks pass
 - [ ] No merge conflicts
 - [ ] Branch is up to date with main
 - [ ] Self-review completed
 
 **Reviewer checklist:**
+
 - [ ] Code follows naming conventions
 - [ ] Logic is clear and maintainable
 - [ ] Tests cover new functionality
@@ -274,6 +299,7 @@ Refs #456
 - **Large PR**: > 500 lines changed (should be split if possible)
 
 **Tips for keeping PRs small:**
+
 - Break features into smaller, logical chunks
 - Separate refactoring from feature work
 - Use feature flags for incomplete features
@@ -283,6 +309,7 @@ Refs #456
 ### When to Commit
 
 **DO commit when:**
+
 - A logical unit of work is complete
 - All tests pass
 - Code is formatted and linted
@@ -290,6 +317,7 @@ Refs #456
 - End of work session
 
 **DON'T commit when:**
+
 - Tests are failing
 - Code doesn't compile
 - Debugging code is still present
@@ -304,6 +332,7 @@ Refs #456
 ### Amending Commits
 
 **Only amend commits that haven't been pushed:**
+
 ```bash
 # Fix something in the last commit
 git add .
@@ -337,6 +366,7 @@ git rebase -i HEAD~3
 ### Main Branch Rules
 
 **Production/Stable Projects:**
+
 - **No direct commits** - All changes via Pull Requests
 - **Require PR approval** - At least 1 reviewer
 - **Require status checks** - All CI tests must pass
@@ -344,6 +374,7 @@ git rebase -i HEAD~3
 - **No force push** - History is immutable
 
 **Greenfield/Setup Phase (Current):**
+
 - **Direct commits allowed** for:
   - Initial project setup (configs, tooling, infrastructure)
   - Documentation (README, project-context, rules)
@@ -356,6 +387,7 @@ git rebase -i HEAD~3
   - Production deployment is planned
 
 **When to switch to strict PR workflow:**
+
 - ✅ Project context and rules are established
 - ✅ Development environment is configured
 - ✅ First feature branch is created
@@ -394,6 +426,7 @@ git rebase -i HEAD~3
 For urgent production fixes:
 
 1. Create hotfix branch from main:
+
    ```bash
    git checkout main
    git pull origin main
@@ -401,11 +434,13 @@ For urgent production fixes:
    ```
 
 2. Make the fix and commit:
+
    ```bash
    git commit -m "fix(scope): critical bug description"
    ```
 
 3. Create PR with `[HOTFIX]` prefix:
+
    ```
    [HOTFIX] fix(auth): resolve token expiry issue
    ```
@@ -419,12 +454,14 @@ For urgent production fixes:
 ### Pre-commit Hook
 
 Automatically runs before each commit:
+
 - ESLint check on staged files
 - Prettier formatting on staged files
 - TypeScript type check
 - Unit tests for changed files
 
 **Skip hook (use sparingly):**
+
 ```bash
 git commit --no-verify -m "message"
 ```
@@ -432,6 +469,7 @@ git commit --no-verify -m "message"
 ### Pre-push Hook
 
 Automatically runs before push:
+
 - Full test suite
 - Prisma migration check
 - Build verification
@@ -439,6 +477,7 @@ Automatically runs before push:
 ### Commit-msg Hook
 
 Validates commit message format:
+
 - Checks Conventional Commits format
 - Enforces type and scope rules
 - Validates subject length

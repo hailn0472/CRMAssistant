@@ -70,7 +70,7 @@ model Deal {
   title     String
   contactId String
   contact   Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
-  
+
   @@index([contactId])
 }
 ```
@@ -96,7 +96,7 @@ model ContactTag {
   tagId     String
   contact   Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
   tag       Tag     @relation(fields: [tagId], references: [id], onDelete: Cascade)
-  
+
   @@id([contactId, tagId])
   @@index([contactId])
   @@index([tagId])
@@ -127,7 +127,7 @@ model Contact {
   email     String
   name      String
   createdAt DateTime @default(now())
-  
+
   @@unique([tenantId, email]) // Email unique per tenant
   @@index([tenantId])         // Index for tenant queries
 }
@@ -137,7 +137,7 @@ model Deal {
   tenantId  String
   contactId String
   title     String
-  
+
   @@index([tenantId])
   @@index([contactId])
 }
@@ -171,7 +171,7 @@ model Contact {
   firstName String
   lastName  String
   createdAt DateTime @default(now())
-  
+
   @@index([tenantId])              // Tenant queries
   @@index([email])                 // Email lookups
   @@index([tenantId, createdAt])   // Tenant + date range queries
@@ -187,7 +187,7 @@ model Deal {
   tenantId  String
   status    DealStatus
   createdAt DateTime   @default(now())
-  
+
   @@index([tenantId, status])           // Filter by tenant and status
   @@index([tenantId, createdAt(sort: Desc)]) // Recent deals per tenant
 }
@@ -232,8 +232,8 @@ const contacts = await prisma.contact.findMany({
   select: {
     id: true,
     name: true,
-    email: true
-  }
+    email: true,
+  },
 });
 
 // ❌ Bad - fetches all fields
@@ -249,10 +249,10 @@ const contact = await prisma.contact.findUnique({
   include: {
     deals: true,
     activities: {
-      orderBy: { createdAt: 'desc' },
-      take: 10
-    }
-  }
+      orderBy: { createdAt: "desc" },
+      take: 10,
+    },
+  },
 });
 ```
 
@@ -447,19 +447,22 @@ model Contact {
 
 ```typescript
 // prisma.service.ts
-import { Injectable, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
-import { PrismaClient } from '@prisma/client';
+import { Injectable, OnModuleInit, OnModuleDestroy } from "@nestjs/common";
+import { PrismaClient } from "@prisma/client";
 
 @Injectable()
-export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
+export class PrismaService
+  extends PrismaClient
+  implements OnModuleInit, OnModuleDestroy
+{
   constructor() {
     super({
       datasources: {
         db: {
-          url: process.env.DATABASE_URL
-        }
+          url: process.env.DATABASE_URL,
+        },
       },
-      log: ['query', 'error', 'warn']
+      log: ["query", "error", "warn"],
     });
   }
 
@@ -480,15 +483,15 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
 const contacts = await prisma.contact.findMany();
 for (const contact of contacts) {
   const deals = await prisma.deal.findMany({
-    where: { contactId: contact.id }
+    where: { contactId: contact.id },
   });
 }
 
 // ✅ Good - single query with include
 const contacts = await prisma.contact.findMany({
   include: {
-    deals: true
-  }
+    deals: true,
+  },
 });
 ```
 
@@ -498,16 +501,16 @@ const contacts = await prisma.contact.findMany({
 // ✅ Good - batch create
 await prisma.contact.createMany({
   data: [
-    { name: 'John', email: 'john@example.com', tenantId },
-    { name: 'Jane', email: 'jane@example.com', tenantId }
+    { name: "John", email: "john@example.com", tenantId },
+    { name: "Jane", email: "jane@example.com", tenantId },
   ],
-  skipDuplicates: true
+  skipDuplicates: true,
 });
 
 // ✅ Good - batch update
 await prisma.contact.updateMany({
   where: { tenantId, isActive: false },
-  data: { status: 'ARCHIVED' }
+  data: { status: "ARCHIVED" },
 });
 ```
 
@@ -533,7 +536,7 @@ const contacts = await this.prisma.$queryRaw<Contact[]>`
 
 // ❌ Bad - SQL injection risk!
 const contacts = await this.prisma.$queryRawUnsafe(
-  `SELECT * FROM Contact WHERE email = '${email}'`
+  `SELECT * FROM Contact WHERE email = '${email}'`,
 );
 ```
 
@@ -543,14 +546,14 @@ const contacts = await this.prisma.$queryRawUnsafe(
 
 ```typescript
 // test/setup.ts
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient({
   datasources: {
     db: {
-      url: process.env.DATABASE_URL_TEST
-    }
-  }
+      url: process.env.DATABASE_URL_TEST,
+    },
+  },
 });
 
 beforeAll(async () => {
@@ -571,21 +574,21 @@ beforeEach(async () => {
 ### Use @testcontainers for Integration Tests
 
 ```typescript
-import { PostgreSqlContainer } from '@testcontainers/postgresql';
+import { PostgreSqlContainer } from "@testcontainers/postgresql";
 
 let container: PostgreSqlContainer;
 let prisma: PrismaClient;
 
 beforeAll(async () => {
   container = await new PostgreSqlContainer().start();
-  
+
   process.env.DATABASE_URL = container.getConnectionUri();
-  
+
   prisma = new PrismaClient();
   await prisma.$connect();
-  
+
   // Run migrations
-  execSync('npx prisma migrate deploy');
+  execSync("npx prisma migrate deploy");
 });
 
 afterAll(async () => {
