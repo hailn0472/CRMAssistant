@@ -1,5 +1,8 @@
 # CRMAssistant
 
+[![CI](https://github.com/hailn0472/CRMAssistant/actions/workflows/ci.yml/badge.svg)](https://github.com/hailn0472/CRMAssistant/actions/workflows/ci.yml)
+[![Deploy](https://github.com/hailn0472/CRMAssistant/actions/workflows/deploy.yml/badge.svg)](https://github.com/hailn0472/CRMAssistant/actions/workflows/deploy.yml)
+
 AI-powered CRM platform với Text-to-SQL query engine cho sales teams.
 
 ## Tech Stack

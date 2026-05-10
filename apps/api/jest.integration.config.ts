@@ -19,10 +19,9 @@ const config: Config = {
   testEnvironment: 'node',
   // Integration tests may take longer due to container startup
   testTimeout: 60000,
-  // Coverage thresholds - integration tests focus on E2E flows (branches covered by unit tests)
   coverageThreshold: {
     global: {
-      branches: 55,
+      branches: 60,
       functions: 60,
       lines: 60,
       statements: 60,
