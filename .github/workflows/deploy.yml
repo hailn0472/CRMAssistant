@@ -11,8 +11,6 @@ jobs:
   deploy-backend:
     name: Deploy Backend (Render)
     runs-on: ubuntu-latest
-    # Skip this job if required secrets are not configured yet
-    if: ${{ secrets.DATABASE_URL != '' && secrets.RENDER_DEPLOY_HOOK_URL != '' }}
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
       RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
@@ -36,22 +34,31 @@ jobs:
         run: pnpm --filter=api exec prisma generate
 
       - name: Run Prisma migrations
+        if: ${{ env.DATABASE_URL != '' }}
         run: pnpm --filter=api exec prisma migrate deploy
 
       - name: Deploy to Render
+        if: ${{ env.RENDER_DEPLOY_HOOK_URL != '' }}
         run: |
           curl --fail --silent --show-error --request POST "$RENDER_DEPLOY_HOOK_URL"
+
+      - name: Skip deploy (secrets not configured)
+        if: ${{ env.DATABASE_URL == '' || env.RENDER_DEPLOY_HOOK_URL == '' }}
+        run: echo "⚠️ Skipping backend deploy — DATABASE_URL or RENDER_DEPLOY_HOOK_URL secret not configured yet."
 
   deploy-frontend:
     name: Deploy Frontend (Vercel)
     runs-on: ubuntu-latest
-    # Skip this job if required secrets are not configured yet
-    if: ${{ secrets.VERCEL_TOKEN != '' && secrets.VERCEL_ORG_ID != '' && secrets.VERCEL_PROJECT_ID != '' }}
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
 
     steps:
       - uses: actions/checkout@v4
 
       - name: Deploy to Vercel
+        if: ${{ env.VERCEL_TOKEN != '' && env.VERCEL_ORG_ID != '' && env.VERCEL_PROJECT_ID != '' }}
         uses: amondnet/vercel-action@v25
         with:
           vercel-token: ${{ secrets.VERCEL_TOKEN }}
@@ -59,3 +66,7 @@ jobs:
           vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
           vercel-args: '--prod'
           github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Skip deploy (secrets not configured)
+        if: ${{ env.VERCEL_TOKEN == '' || env.VERCEL_ORG_ID == '' || env.VERCEL_PROJECT_ID == '' }}
+        run: echo "⚠️ Skipping frontend deploy — VERCEL_TOKEN, VERCEL_ORG_ID, or VERCEL_PROJECT_ID secret not configured yet."
