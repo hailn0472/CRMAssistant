@@ -1,5 +1,6 @@
 'use client'
 
+import { Suspense } from 'react'
 import Link from 'next/link'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -17,7 +18,7 @@ const loginSchema = z.object({
 
 type LoginFormData = z.infer<typeof loginSchema>
 
-export default function LoginPage(): React.JSX.Element {
+function LoginForm(): React.JSX.Element {
   const { login } = useAuth()
 
   const {
@@ -110,5 +111,13 @@ export default function LoginPage(): React.JSX.Element {
         </CardContent>
       </Card>
     </div>
+  )
+}
+
+export default function LoginPage(): React.JSX.Element {
+  return (
+    <Suspense>
+      <LoginForm />
+    </Suspense>
   )
 }

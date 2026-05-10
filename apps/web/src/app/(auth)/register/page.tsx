@@ -1,5 +1,6 @@
 'use client'
 
+import { Suspense } from 'react'
 import Link from 'next/link'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -19,7 +20,7 @@ const registerSchema = z.object({
 
 type RegisterFormData = z.infer<typeof registerSchema>
 
-export default function RegisterPage(): React.JSX.Element {
+function RegisterForm(): React.JSX.Element {
   const { register: registerUser } = useAuth()
 
   const {
@@ -149,5 +150,13 @@ export default function RegisterPage(): React.JSX.Element {
         </CardContent>
       </Card>
     </div>
+  )
+}
+
+export default function RegisterPage(): React.JSX.Element {
+  return (
+    <Suspense>
+      <RegisterForm />
+    </Suspense>
   )
 }
