@@ -1,0 +1,233 @@
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  InternalServerErrorException,
+  UnauthorizedException,
+} from '@nestjs/common'
+import { ConfigService } from '@nestjs/config'
+import { JwtService } from '@nestjs/jwt'
+import { createClient, SupabaseClient } from '@supabase/supabase-js'
+import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library'
+
+import { PrismaService } from '../prisma/prisma.service'
+import { TokenRevocationService } from './token-revocation.service'
+import type { LoginDto } from './dto/login.dto'
+import type { RegisterDto } from './dto/register.dto'
+import type { JwtPayload } from './strategies/jwt.strategy'
+
+export type AuthTokenResponse = {
+  accessToken: string
+  userId: string
+  tenantId: string
+  role: string
+  email: string
+  name: string
+}
+
+@Injectable()
+export class AuthService {
+  private readonly supabase: SupabaseClient
+  private readonly supabaseAdmin?: SupabaseClient
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly jwtService: JwtService,
+    private readonly configService: ConfigService,
+    private readonly tokenRevocationService: TokenRevocationService,
+  ) {
+    const supabaseUrl = this.configService.get<string>('SUPABASE_URL') ?? ''
+    const supabaseAnonKey = this.configService.get<string>('SUPABASE_ANON_KEY') ?? ''
+    const supabaseServiceRoleKey = this.configService.get<string>('SUPABASE_SERVICE_ROLE_KEY')
+
+    this.supabase = createClient(supabaseUrl, supabaseAnonKey, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,
+      },
+    })
+
+    if (supabaseServiceRoleKey) {
+      this.supabaseAdmin = createClient(supabaseUrl, supabaseServiceRoleKey, {
+        auth: {
+          autoRefreshToken: false,
+          persistSession: false,
+        },
+      })
+    }
+  }
+
+  async register(dto: RegisterDto): Promise<AuthTokenResponse> {
+    const tenantName = dto.tenantName.trim()
+    if (!tenantName) {
+      throw new BadRequestException('tenantName is required for registration')
+    }
+
+    // 1. Create Supabase Auth user
+    const { data: supabaseData, error: supabaseError } = await this.supabase.auth.signUp({
+      email: dto.email,
+      password: dto.password,
+    })
+
+    if (supabaseError || !supabaseData.user) {
+      if (supabaseError?.message?.toLowerCase().includes('already registered')) {
+        throw new ConflictException('Email already registered')
+      }
+      throw new BadRequestException(supabaseError?.message ?? 'Registration failed')
+    }
+
+    // 2. Create Tenant + User in a transaction
+    try {
+      const user = await this.prisma.$transaction(async (tx) => {
+        const tenant = await tx.tenant.create({
+          data: { name: tenantName },
+        })
+
+        return tx.user.create({
+          data: {
+            tenantId: tenant.id,
+            email: dto.email,
+            name: dto.name.trim(),
+            role: 'SALES_REP',
+            supabaseUserId: supabaseData.user!.id,
+            createdBy: 'system',
+            updatedBy: 'system',
+          },
+        })
+      })
+
+      const accessToken = this.signAuthToken({
+        userId: user.id,
+        tenantId: user.tenantId,
+        role: user.role,
+        email: user.email,
+      })
+
+      return {
+        accessToken,
+        userId: user.id,
+        tenantId: user.tenantId,
+        role: user.role,
+        email: user.email,
+        name: user.name,
+      }
+    } catch (error) {
+      await this.cleanupSupabaseUser(supabaseData.user.id)
+
+      if (error instanceof PrismaClientKnownRequestError && error.code === 'P2002') {
+        throw new ConflictException('Email already exists in this tenant')
+      }
+      throw new InternalServerErrorException('Registration failed — please try again')
+    }
+  }
+
+  async login(dto: LoginDto): Promise<AuthTokenResponse> {
+    const { data: supabaseData, error: supabaseError } =
+      await this.supabase.auth.signInWithPassword({
+        email: dto.email,
+        password: dto.password,
+      })
+
+    if (supabaseError || !supabaseData.user) {
+      throw new UnauthorizedException('Invalid credentials')
+    }
+
+    const user = await this.prisma.user.findFirst({
+      where: {
+        supabaseUserId: supabaseData.user.id,
+        deletedAt: null,
+      },
+    })
+
+    if (!user) {
+      const usersByEmail = await this.prisma.user.findMany({
+        where: {
+          email: dto.email,
+          deletedAt: null,
+        },
+      })
+
+      if (usersByEmail.length !== 1) {
+        throw new UnauthorizedException('User account not found or ambiguous')
+      }
+
+      const userByEmail = usersByEmail[0]
+      const linkedUser = await this.prisma.user.update({
+        where: { id: userByEmail.id },
+        data: { supabaseUserId: supabaseData.user.id, updatedBy: 'system' },
+      })
+
+      const accessToken = this.signAuthToken({
+        userId: linkedUser.id,
+        tenantId: linkedUser.tenantId,
+        role: linkedUser.role,
+        email: linkedUser.email,
+      })
+
+      return {
+        accessToken,
+        userId: linkedUser.id,
+        tenantId: linkedUser.tenantId,
+        role: linkedUser.role,
+        email: linkedUser.email,
+        name: linkedUser.name,
+      }
+    }
+
+    const accessToken = this.signAuthToken({
+      userId: user.id,
+      tenantId: user.tenantId,
+      role: user.role,
+      email: user.email,
+    })
+
+    return {
+      accessToken,
+      userId: user.id,
+      tenantId: user.tenantId,
+      role: user.role,
+      email: user.email,
+      name: user.name,
+    }
+  }
+
+  async logout(accessToken: string): Promise<void> {
+    await this.supabase.auth.signOut()
+
+    try {
+      this.jwtService.verify<JwtPayload>(accessToken)
+      this.tokenRevocationService.revoke(accessToken)
+    } catch {
+      // Token already invalid — logout remains idempotent
+    }
+  }
+
+  private signAuthToken(input: {
+    userId: string
+    tenantId: string
+    role: string
+    email: string
+  }): string {
+    const payload: JwtPayload = {
+      sub: input.userId,
+      userId: input.userId,
+      tenantId: input.tenantId,
+      role: input.role,
+      email: input.email,
+    }
+    return this.jwtService.sign(payload)
+  }
+
+  private async cleanupSupabaseUser(supabaseUserId: string): Promise<void> {
+    if (!this.supabaseAdmin) {
+      throw new InternalServerErrorException(
+        'Registration failed and Supabase cleanup is unavailable',
+      )
+    }
+
+    const { error } = await this.supabaseAdmin.auth.admin.deleteUser(supabaseUserId)
+    if (error) {
+      throw new InternalServerErrorException('Registration failed and Supabase cleanup failed')
+    }
+  }
+}

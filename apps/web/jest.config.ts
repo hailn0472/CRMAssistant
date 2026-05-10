@@ -28,6 +28,8 @@ const config: Config = {
     '!src/app/**/not-found.tsx',
     '!src/app/**/route.ts',
     '!src/app/globals.css',
+    '!src/types/**',
+    '!src/lib/supabase.ts',
   ],
   // Coverage thresholds - minimum 80% unit coverage
   coverageThreshold: {

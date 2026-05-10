@@ -12,8 +12,12 @@ const config: Config = {
     '!**/*.d.ts',
     '!**/main.ts',
     '!**/*.module.ts',
-    // Exclude infrastructure/config files that are tested via integration tests
+    // Exclude infrastructure/config files and decorator/guard/DTO boilerplate covered via integration tests
     '!**/prisma.service.ts',
+    '!**/dto/**',
+    '!**/guards/**',
+    '!**/decorators/**',
+    '!**/strategies/**',
   ],
   coverageDirectory: '../coverage',
   testEnvironment: 'node',

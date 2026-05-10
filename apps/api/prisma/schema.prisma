@@ -30,18 +30,28 @@ model Tenant {
   users User[]
 }
 
-/// Sample tenant-scoped domain model demonstrating the required multi-tenancy pattern.
-/// Every future domain model (Contact, Deal, etc.) must follow this pattern.
+// User roles for RBAC
+enum UserRole {
+  ADMIN
+  MANAGER
+  SALES_REP
+}
+
+/// Tenant-scoped user model with authentication support.
+/// Follows multi-tenancy pattern from Story 1.6.
+/// Extended in Story 1.7 to support Supabase Auth integration.
 model User {
-  id        String    @id @default(uuid())
-  tenantId  String
-  email     String
-  name      String
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  createdBy String    @default("system")
-  updatedBy String    @default("system")
-  deletedAt DateTime? // soft delete — null means active
+  id             String    @id @default(uuid())
+  tenantId       String
+  email          String
+  name           String
+  role           UserRole  @default(SALES_REP)
+  supabaseUserId String?   @unique // Link to Supabase Auth user — null until first login
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  createdBy      String    @default("system")
+  updatedBy      String    @default("system")
+  deletedAt      DateTime? // soft delete — null means active
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
@@ -49,4 +59,6 @@ model User {
   @@unique([tenantId, email])
   // Index for all tenant-scoped queries
   @@index([tenantId])
+  // Index for fast Supabase user lookups
+  @@index([supabaseUserId])
 }

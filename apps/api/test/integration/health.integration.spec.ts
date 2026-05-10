@@ -14,6 +14,18 @@ import { Test, TestingModule } from '@nestjs/testing'
 import { PostgreSqlContainer, StartedPostgreSqlContainer } from '@testcontainers/postgresql'
 import request from 'supertest'
 
+// Mock Supabase so health tests don't require real Supabase credentials
+jest.mock('@supabase/supabase-js', () => ({
+  createClient: jest.fn(() => ({
+    auth: {
+      signUp: jest.fn(),
+      signInWithPassword: jest.fn(),
+      signOut: jest.fn(),
+      admin: { deleteUser: jest.fn() },
+    },
+  })),
+}))
+
 import { AppModule } from '../../src/app.module'
 import { PrismaService } from '../../src/prisma/prisma.service'
 
@@ -25,8 +37,11 @@ describe('Health (integration)', () => {
     // Start a real PostgreSQL container
     container = await new PostgreSqlContainer('postgres:15-alpine').start()
 
-    // Set DATABASE_URL to point to the test container
+    // Set required environment variables
     process.env['DATABASE_URL'] = container.getConnectionUri()
+    process.env['SUPABASE_URL'] = 'https://test.supabase.co'
+    process.env['SUPABASE_ANON_KEY'] = 'test-anon-key'
+    process.env['JWT_SECRET'] = 'health-test-secret-minimum-32-chars!!'
 
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
