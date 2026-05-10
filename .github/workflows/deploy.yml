@@ -11,6 +11,8 @@ jobs:
   deploy-backend:
     name: Deploy Backend (Render)
     runs-on: ubuntu-latest
+    # Skip this job if required secrets are not configured yet
+    if: ${{ secrets.DATABASE_URL != '' && secrets.RENDER_DEPLOY_HOOK_URL != '' }}
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
       RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
@@ -30,6 +32,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Generate Prisma Client
+        run: pnpm --filter=api exec prisma generate
+
       - name: Run Prisma migrations
         run: pnpm --filter=api exec prisma migrate deploy
 
@@ -40,6 +45,8 @@ jobs:
   deploy-frontend:
     name: Deploy Frontend (Vercel)
     runs-on: ubuntu-latest
+    # Skip this job if required secrets are not configured yet
+    if: ${{ secrets.VERCEL_TOKEN != '' && secrets.VERCEL_ORG_ID != '' && secrets.VERCEL_PROJECT_ID != '' }}
 
     steps:
       - uses: actions/checkout@v4
