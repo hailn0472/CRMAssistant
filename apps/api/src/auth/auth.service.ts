@@ -9,6 +9,8 @@ import { ConfigService } from '@nestjs/config'
 import { JwtService } from '@nestjs/jwt'
 import { createClient, SupabaseClient } from '@supabase/supabase-js'
 import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library'
+import WebSocket from 'ws'
+import type { WebSocketLikeConstructor } from '@supabase/realtime-js'
 
 import { PrismaService } from '../prisma/prisma.service'
 import { TokenRevocationService } from './token-revocation.service'
@@ -39,11 +41,15 @@ export class AuthService {
     const supabaseUrl = this.configService.get<string>('SUPABASE_URL') ?? ''
     const supabaseAnonKey = this.configService.get<string>('SUPABASE_ANON_KEY') ?? ''
     const supabaseServiceRoleKey = this.configService.get<string>('SUPABASE_SERVICE_ROLE_KEY')
+    const webSocketTransport = WebSocket as unknown as WebSocketLikeConstructor
 
     this.supabase = createClient(supabaseUrl, supabaseAnonKey, {
       auth: {
         autoRefreshToken: false,
         persistSession: false,
+      },
+      realtime: {
+        transport: webSocketTransport,
       },
     })
 
@@ -52,6 +58,9 @@ export class AuthService {
         auth: {
           autoRefreshToken: false,
           persistSession: false,
+        },
+        realtime: {
+          transport: webSocketTransport,
         },
       })
     }
