@@ -58,7 +58,7 @@ describe('useAuth', () => {
       email: 'user@example.com',
       name: 'Test User',
     })
-    expect(mockPush).toHaveBeenCalledWith('/dashboard')
+    expect(mockPush).toHaveBeenCalledWith('/contacts')
     expect(result.current.isLoading).toBe(false)
   })
 
@@ -83,7 +83,7 @@ describe('useAuth', () => {
       await result.current.login('user@example.com', 'Password123')
     })
 
-    expect(mockPush).toHaveBeenCalledWith('/dashboard')
+    expect(mockPush).toHaveBeenCalledWith('/contacts')
   })
 
   it('should register and populate auth state', async () => {

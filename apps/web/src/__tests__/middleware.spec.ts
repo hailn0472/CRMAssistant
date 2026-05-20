@@ -80,7 +80,7 @@ describe('middleware', () => {
     const response = await middleware(makeRequest('/login', token) as never)
 
     expect(response.status).toBe(307)
-    expect(response.headers.get('location')).toContain('/dashboard')
+    expect(response.headers.get('location')).toContain('/contacts')
   })
 
   it('should allow authenticated users to visit protected routes', async () => {
