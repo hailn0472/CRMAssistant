@@ -88,7 +88,6 @@ jobs:
     environment: production
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
-      MIGRATE_DATABASE_URL: ${{ secrets.MIGRATE_DATABASE_URL }}
       RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
 
     steps:
@@ -110,13 +109,9 @@ jobs:
         run: pnpm --filter=api exec prisma generate
 
       - name: Run production Prisma migrations
-        if: ${{ env.MIGRATE_DATABASE_URL != '' || env.DATABASE_URL != '' }}
-        timeout-minutes: 5
-        run: |
-          if [ -n "$MIGRATE_DATABASE_URL" ]; then
-            export DATABASE_URL="$MIGRATE_DATABASE_URL"
-          fi
-          pnpm --filter=api exec prisma migrate deploy
+        if: ${{ env.DATABASE_URL != '' }}
+        timeout-minutes: 10
+        run: pnpm --filter=api exec prisma migrate deploy
 
       - name: Deploy production backend to Render
         if: ${{ env.RENDER_DEPLOY_HOOK_URL != '' }}
@@ -124,7 +119,7 @@ jobs:
           curl --fail --silent --show-error --request POST "$RENDER_DEPLOY_HOOK_URL"
 
       - name: Skip production backend deploy (secrets not configured)
-        if: ${{ (env.DATABASE_URL == '' && env.MIGRATE_DATABASE_URL == '') || env.RENDER_DEPLOY_HOOK_URL == '' }}
+        if: ${{ env.DATABASE_URL == '' || env.RENDER_DEPLOY_HOOK_URL == '' }}
         run: echo "Skipping production backend deploy — DATABASE_URL or RENDER_DEPLOY_HOOK_URL secret not configured."
 
   deploy-backend-staging:
@@ -134,8 +129,7 @@ jobs:
     if: github.ref == 'refs/heads/staging'
     environment: staging
     env:
-      DATABASE_URL_STAGING: ${{ secrets.DATABASE_URL_STAGING }}
-      MIGRATE_DATABASE_URL_STAGING: ${{ secrets.MIGRATE_DATABASE_URL_STAGING }}
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
       RENDER_DEPLOY_HOOK_URL_STAGING: ${{ secrets.RENDER_DEPLOY_HOOK_URL_STAGING }}
 
     steps:
@@ -157,15 +151,9 @@ jobs:
         run: pnpm --filter=api exec prisma generate
 
       - name: Run staging Prisma migrations
-        if: ${{ env.MIGRATE_DATABASE_URL_STAGING != '' || env.DATABASE_URL_STAGING != '' }}
-        timeout-minutes: 5
-        run: |
-          if [ -n "$MIGRATE_DATABASE_URL_STAGING" ]; then
-            export DATABASE_URL="$MIGRATE_DATABASE_URL_STAGING"
-          else
-            export DATABASE_URL="$DATABASE_URL_STAGING"
-          fi
-          pnpm --filter=api exec prisma migrate deploy
+        if: ${{ env.DATABASE_URL != '' }}
+        timeout-minutes: 10
+        run: pnpm --filter=api exec prisma migrate deploy
 
       - name: Deploy staging backend to Render
         if: ${{ env.RENDER_DEPLOY_HOOK_URL_STAGING != '' }}
@@ -173,8 +161,8 @@ jobs:
           curl --fail --silent --show-error --request POST "$RENDER_DEPLOY_HOOK_URL_STAGING"
 
       - name: Skip staging backend deploy (secrets not configured)
-        if: ${{ (env.DATABASE_URL_STAGING == '' && env.MIGRATE_DATABASE_URL_STAGING == '') || env.RENDER_DEPLOY_HOOK_URL_STAGING == '' }}
-        run: echo "Skipping staging backend deploy — DATABASE_URL_STAGING or RENDER_DEPLOY_HOOK_URL_STAGING secret not configured."
+        if: ${{ env.DATABASE_URL == '' || env.RENDER_DEPLOY_HOOK_URL_STAGING == '' }}
+        run: echo "Skipping staging backend deploy — DATABASE_URL or RENDER_DEPLOY_HOOK_URL_STAGING secret not configured."
 
   deploy-frontend-production:
     name: Deploy Frontend Production (Vercel)
