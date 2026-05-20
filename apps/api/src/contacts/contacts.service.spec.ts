@@ -131,7 +131,7 @@ describe('ContactsService', () => {
           email: 'ada@example.com',
           firstName: 'Ada',
           lastName: 'Lovelace',
-          phone: null,
+          phone: undefined,
           company: 'Analytical Engines',
           jobTitle: 'Mathematician',
         }) as Record<string, unknown>,
