@@ -27,7 +27,8 @@ model Tenant {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  users User[]
+  users    User[]
+  contacts Contact[]
 }
 
 // User roles for RBAC
@@ -61,4 +62,26 @@ model User {
   @@index([tenantId])
   // Index for fast Supabase user lookups
   @@index([supabaseUserId])
+}
+
+/// Tenant-scoped contact model for CRM contact management.
+model Contact {
+  id        String    @id @default(uuid())
+  tenantId  String
+  email     String
+  firstName String
+  lastName  String
+  phone     String?
+  company   String?
+  jobTitle  String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  createdBy String    @default("system")
+  updatedBy String    @default("system")
+  deletedAt DateTime?
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([tenantId, createdAt])
 }
