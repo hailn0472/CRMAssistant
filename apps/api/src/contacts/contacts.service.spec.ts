@@ -1,4 +1,4 @@
-import { ConflictException, NotFoundException } from '@nestjs/common'
+import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common'
 import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library'
 
 import { ContactsService } from './contacts.service'
@@ -106,6 +106,77 @@ describe('ContactsService', () => {
           lastName: 'Lovelace',
         }),
       ).rejects.toThrow(ConflictException)
+    })
+
+    it('normalizes optional empty strings and trims contact fields', async () => {
+      const contact = makeContact({
+        email: 'ada@example.com',
+        firstName: 'Ada',
+        lastName: 'Lovelace',
+        phone: null,
+      })
+      prisma.contact.create.mockResolvedValue(contact)
+
+      await service.create(TENANT_ID, USER_ID, {
+        email: ' Ada@Example.COM ',
+        firstName: ' Ada ',
+        lastName: ' Lovelace ',
+        phone: '   ',
+        company: ' Analytical Engines ',
+        jobTitle: ' Mathematician ',
+      })
+
+      expect(prisma.contact.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          email: 'ada@example.com',
+          firstName: 'Ada',
+          lastName: 'Lovelace',
+          phone: null,
+          company: 'Analytical Engines',
+          jobTitle: 'Mathematician',
+        }) as Record<string, unknown>,
+      })
+    })
+
+    it('rejects blank required fields', async () => {
+      await expect(
+        service.create(TENANT_ID, USER_ID, {
+          email: 'ada@example.com',
+          firstName: '   ',
+          lastName: 'Lovelace',
+        }),
+      ).rejects.toThrow(BadRequestException)
+    })
+
+    it('rejects overly long required fields', async () => {
+      await expect(
+        service.create(TENANT_ID, USER_ID, {
+          email: 'ada@example.com',
+          firstName: 'A'.repeat(101),
+          lastName: 'Lovelace',
+        }),
+      ).rejects.toThrow(BadRequestException)
+    })
+
+    it('rejects invalid emails', async () => {
+      await expect(
+        service.create(TENANT_ID, USER_ID, {
+          email: 'not-an-email',
+          firstName: 'Ada',
+          lastName: 'Lovelace',
+        }),
+      ).rejects.toThrow(BadRequestException)
+    })
+
+    it('rejects overly long optional fields', async () => {
+      await expect(
+        service.create(TENANT_ID, USER_ID, {
+          email: 'ada@example.com',
+          firstName: 'Ada',
+          lastName: 'Lovelace',
+          company: 'A'.repeat(201),
+        }),
+      ).rejects.toThrow(BadRequestException)
     })
   })
 
