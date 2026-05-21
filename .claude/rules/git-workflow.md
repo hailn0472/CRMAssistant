@@ -225,13 +225,21 @@ Follow the same format as commit messages:
 ```markdown
 ## Summary
 
-Brief description of what this PR does.
+- Brief description of what this PR does
+- List key backend/frontend/database changes when applicable
+- Mention tests added or updated for the change
 
-## Changes
+## Story task checklist
 
-- List of key changes
-- Another change
-- One more change
+- [ ] Task 1 from the story
+- [ ] Task 2 from the story
+- [ ] Task 3 from the story
+
+## Test plan
+
+- [ ] `pnpm type-check`
+- [ ] `pnpm lint`
+- [ ] `pnpm test`
 
 ## Type of Change
 
@@ -241,13 +249,6 @@ Brief description of what this PR does.
 - [ ] Documentation update
 - [ ] Refactoring
 - [ ] Performance improvement
-
-## Testing
-
-- [ ] Unit tests added/updated
-- [ ] Integration tests added/updated
-- [ ] E2E tests added/updated
-- [ ] Manual testing completed
 
 ## Checklist
 
@@ -273,6 +274,41 @@ Refs #456
 
 [Describe any breaking changes and migration steps]
 ```
+
+### PR Story Task Checklist Requirements
+
+Always include a `## Story task checklist` section in PR descriptions when the
+work implements a story or task list. Copy the story's implementation tasks into
+markdown task checkboxes and mark completed items with `[x]`, for example:
+
+```markdown
+## Story task checklist
+
+- [x] Add Contact Prisma model and migration
+- [x] Add GraphQL CRUD schema and resolver
+- [x] Add contacts UI pages and form components
+- [x] Add unit and integration coverage
+```
+
+If a story task is intentionally not completed, leave it unchecked and add a
+short reason after the item.
+
+### PR Test Plan Requirements
+
+Always include a `## Test plan` section in PR descriptions. Use markdown task
+checkboxes for each command so GitHub renders completed tasks clearly, for
+example:
+
+```markdown
+## Test plan
+
+- [x] `pnpm type-check`
+- [x] `pnpm lint`
+- [x] `pnpm test`
+```
+
+If a command is not run, leave it unchecked and add a short reason after the
+command.
 
 ### PR Review Requirements
 
