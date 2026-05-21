@@ -77,7 +77,7 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
   }
 
   if (isAuthenticated && isPublicPath) {
-    return NextResponse.redirect(new URL('/dashboard', request.url))
+    return NextResponse.redirect(new URL('/contacts', request.url))
   }
 
   return NextResponse.next()

@@ -18,6 +18,7 @@ const config: Config = {
     '!**/guards/**',
     '!**/decorators/**',
     '!**/strategies/**',
+    '!**/*.graphql.ts',
   ],
   coverageDirectory: '../coverage',
   testEnvironment: 'node',

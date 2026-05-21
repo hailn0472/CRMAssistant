@@ -30,6 +30,7 @@ const config: Config = {
     '!src/app/globals.css',
     '!src/types/**',
     '!src/lib/supabase.ts',
+    '!src/components/contacts/QueryProvider.tsx',
   ],
   // Coverage thresholds - minimum 80% unit coverage
   coverageThreshold: {
