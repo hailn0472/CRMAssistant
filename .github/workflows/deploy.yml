@@ -37,6 +37,9 @@ jobs:
       - name: Run type check
         run: pnpm type-check
 
+      - name: Run tests
+        run: pnpm test
+
       - name: Build all workspaces
         env:
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co' }}
@@ -72,6 +75,9 @@ jobs:
 
       - name: Run type check
         run: pnpm type-check
+
+      - name: Run tests
+        run: pnpm test
 
       - name: Build all workspaces
         env:
@@ -109,9 +115,13 @@ jobs:
         run: pnpm --filter=api exec prisma generate
 
       - name: Run production Prisma migrations
-        if: ${{ env.DATABASE_URL != '' }}
+        if: ${{ (env.MIGRATE_DATABASE_URL != '' || env.DATABASE_URL != '') && env.RENDER_DEPLOY_HOOK_URL != '' }}
         timeout-minutes: 10
-        run: pnpm --filter=api exec prisma migrate deploy
+        run: |
+          if [ -n "$MIGRATE_DATABASE_URL" ]; then
+            export DATABASE_URL="$MIGRATE_DATABASE_URL"
+          fi
+          pnpm --filter=api exec prisma migrate deploy
 
       - name: Deploy production backend to Render
         if: ${{ env.RENDER_DEPLOY_HOOK_URL != '' }}
@@ -151,7 +161,7 @@ jobs:
         run: pnpm --filter=api exec prisma generate
 
       - name: Run staging Prisma migrations
-        if: ${{ env.DATABASE_URL != '' }}
+        if: ${{ env.DATABASE_URL != '' && env.RENDER_DEPLOY_HOOK_URL_STAGING != '' }}
         timeout-minutes: 10
         run: pnpm --filter=api exec prisma migrate deploy
 
@@ -211,18 +221,18 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install Vercel CLI
-        if: ${{ env.VERCEL_TOKEN != '' && env.VERCEL_ORG_ID != '' && env.VERCEL_PROJECT_ID_STAGING != '' }}
+        if: ${{ env.VERCEL_TOKEN != '' && env.VERCEL_ORG_ID != '' && env.VERCEL_PROJECT_ID_STAGING != '' && env.NEXT_PUBLIC_SUPABASE_URL_STAGING != '' && env.NEXT_PUBLIC_SUPABASE_ANON_KEY_STAGING != '' && env.NEXT_PUBLIC_API_URL_STAGING != '' }}
         run: npm install -g vercel@latest
 
       - name: Pull Vercel preview environment
-        if: ${{ env.VERCEL_TOKEN != '' && env.VERCEL_ORG_ID != '' && env.VERCEL_PROJECT_ID_STAGING != '' }}
+        if: ${{ env.VERCEL_TOKEN != '' && env.VERCEL_ORG_ID != '' && env.VERCEL_PROJECT_ID_STAGING != '' && env.NEXT_PUBLIC_SUPABASE_URL_STAGING != '' && env.NEXT_PUBLIC_SUPABASE_ANON_KEY_STAGING != '' && env.NEXT_PUBLIC_API_URL_STAGING != '' }}
         run: vercel pull --yes --environment=preview --token="$VERCEL_TOKEN"
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_STAGING }}
 
       - name: Deploy staging frontend to Vercel preview
-        if: ${{ env.VERCEL_TOKEN != '' && env.VERCEL_ORG_ID != '' && env.VERCEL_PROJECT_ID_STAGING != '' }}
+        if: ${{ env.VERCEL_TOKEN != '' && env.VERCEL_ORG_ID != '' && env.VERCEL_PROJECT_ID_STAGING != '' && env.NEXT_PUBLIC_SUPABASE_URL_STAGING != '' && env.NEXT_PUBLIC_SUPABASE_ANON_KEY_STAGING != '' && env.NEXT_PUBLIC_API_URL_STAGING != '' }}
         run: |
           preview_url=$(vercel deploy --yes --token="$VERCEL_TOKEN")
           echo "Vercel preview URL: $preview_url"
@@ -230,10 +240,10 @@ jobs:
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_STAGING }}
-          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL_STAGING || 'https://placeholder.supabase.co' }}
-          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY_STAGING || 'placeholder-anon-key' }}
-          NEXT_PUBLIC_API_URL: ${{ secrets.NEXT_PUBLIC_API_URL_STAGING || 'http://localhost:4000' }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL_STAGING }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY_STAGING }}
+          NEXT_PUBLIC_API_URL: ${{ secrets.NEXT_PUBLIC_API_URL_STAGING }}
 
       - name: Skip staging frontend deploy (secrets not configured)
-        if: ${{ env.VERCEL_TOKEN == '' || env.VERCEL_ORG_ID == '' || env.VERCEL_PROJECT_ID_STAGING == '' }}
-        run: echo "Skipping staging frontend deploy — VERCEL_TOKEN, VERCEL_ORG_ID, or VERCEL_PROJECT_ID_STAGING secret not configured."
+        if: ${{ env.VERCEL_TOKEN == '' || env.VERCEL_ORG_ID == '' || env.VERCEL_PROJECT_ID_STAGING == '' || env.NEXT_PUBLIC_SUPABASE_URL_STAGING == '' || env.NEXT_PUBLIC_SUPABASE_ANON_KEY_STAGING == '' || env.NEXT_PUBLIC_API_URL_STAGING == '' }}
+        run: echo "Skipping staging frontend deploy — VERCEL_TOKEN, VERCEL_ORG_ID, VERCEL_PROJECT_ID_STAGING, NEXT_PUBLIC_SUPABASE_URL_STAGING, NEXT_PUBLIC_SUPABASE_ANON_KEY_STAGING, or NEXT_PUBLIC_API_URL_STAGING secret not configured."
