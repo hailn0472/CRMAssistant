@@ -94,7 +94,6 @@ jobs:
     environment: production
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
-      MIGRATE_DATABASE_URL: ${{ secrets.MIGRATE_DATABASE_URL }}
       RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
 
     steps:
