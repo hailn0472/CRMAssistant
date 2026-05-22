@@ -154,11 +154,15 @@ jobs:
 
       - name: Export production backend secrets
         if: ${{ env.INFISICAL_TOKEN != '' }}
-        run: infisical export --token="$INFISICAL_TOKEN" --projectId="$INFISICAL_PROJECT_ID" --silent --env=prod --path=/apps/api --format=dotenv >> "$GITHUB_ENV"
+        run: |
+          infisical export --token="$INFISICAL_TOKEN" --projectId="$INFISICAL_PROJECT_ID" --silent --env=prod --path=/apps/api --format=dotenv --output-file="$RUNNER_TEMP/infisical-api.env"
+          grep -E '^[A-Za-z_][A-Za-z0-9_]*=' "$RUNNER_TEMP/infisical-api.env" >> "$GITHUB_ENV"
 
       - name: Export production CI secrets
         if: ${{ env.INFISICAL_TOKEN != '' }}
-        run: infisical export --token="$INFISICAL_TOKEN" --projectId="$INFISICAL_PROJECT_ID" --silent --env=prod --path=/ci --format=dotenv >> "$GITHUB_ENV"
+        run: |
+          infisical export --token="$INFISICAL_TOKEN" --projectId="$INFISICAL_PROJECT_ID" --silent --env=prod --path=/ci --format=dotenv --output-file="$RUNNER_TEMP/infisical-ci.env"
+          grep -E '^[A-Za-z_][A-Za-z0-9_]*=' "$RUNNER_TEMP/infisical-ci.env" >> "$GITHUB_ENV"
 
       - name: Run production Prisma migrations
         if: ${{ env.INFISICAL_TOKEN != '' }}
@@ -218,11 +222,15 @@ jobs:
 
       - name: Export staging backend secrets
         if: ${{ env.INFISICAL_TOKEN != '' }}
-        run: infisical export --token="$INFISICAL_TOKEN" --projectId="$INFISICAL_PROJECT_ID" --silent --env=staging --path=/apps/api --format=dotenv >> "$GITHUB_ENV"
+        run: |
+          infisical export --token="$INFISICAL_TOKEN" --projectId="$INFISICAL_PROJECT_ID" --silent --env=staging --path=/apps/api --format=dotenv --output-file="$RUNNER_TEMP/infisical-api.env"
+          grep -E '^[A-Za-z_][A-Za-z0-9_]*=' "$RUNNER_TEMP/infisical-api.env" >> "$GITHUB_ENV"
 
       - name: Export staging CI secrets
         if: ${{ env.INFISICAL_TOKEN != '' }}
-        run: infisical export --token="$INFISICAL_TOKEN" --projectId="$INFISICAL_PROJECT_ID" --silent --env=staging --path=/ci --format=dotenv >> "$GITHUB_ENV"
+        run: |
+          infisical export --token="$INFISICAL_TOKEN" --projectId="$INFISICAL_PROJECT_ID" --silent --env=staging --path=/ci --format=dotenv --output-file="$RUNNER_TEMP/infisical-ci.env"
+          grep -E '^[A-Za-z_][A-Za-z0-9_]*=' "$RUNNER_TEMP/infisical-ci.env" >> "$GITHUB_ENV"
 
       - name: Run staging Prisma migrations
         if: ${{ env.INFISICAL_TOKEN != '' }}
@@ -267,11 +275,15 @@ jobs:
 
       - name: Export production web secrets
         if: ${{ env.INFISICAL_TOKEN != '' }}
-        run: infisical export --token="$INFISICAL_TOKEN" --projectId="$INFISICAL_PROJECT_ID" --silent --env=prod --path=/apps/web --format=dotenv >> "$GITHUB_ENV"
+        run: |
+          infisical export --token="$INFISICAL_TOKEN" --projectId="$INFISICAL_PROJECT_ID" --silent --env=prod --path=/apps/web --format=dotenv --output-file="$RUNNER_TEMP/infisical-web.env"
+          grep -E '^[A-Za-z_][A-Za-z0-9_]*=' "$RUNNER_TEMP/infisical-web.env" >> "$GITHUB_ENV"
 
       - name: Export production CI secrets
         if: ${{ env.INFISICAL_TOKEN != '' }}
-        run: infisical export --token="$INFISICAL_TOKEN" --projectId="$INFISICAL_PROJECT_ID" --silent --env=prod --path=/ci --format=dotenv >> "$GITHUB_ENV"
+        run: |
+          infisical export --token="$INFISICAL_TOKEN" --projectId="$INFISICAL_PROJECT_ID" --silent --env=prod --path=/ci --format=dotenv --output-file="$RUNNER_TEMP/infisical-ci.env"
+          grep -E '^[A-Za-z_][A-Za-z0-9_]*=' "$RUNNER_TEMP/infisical-ci.env" >> "$GITHUB_ENV"
 
       - name: Install Vercel CLI
         if: ${{ env.INFISICAL_TOKEN != '' && env.VERCEL_TOKEN != '' && env.VERCEL_ORG_ID != '' && env.VERCEL_PROJECT_ID != '' }}
@@ -315,11 +327,15 @@ jobs:
 
       - name: Export staging web secrets
         if: ${{ env.INFISICAL_TOKEN != '' }}
-        run: infisical export --token="$INFISICAL_TOKEN" --projectId="$INFISICAL_PROJECT_ID" --silent --env=staging --path=/apps/web --format=dotenv >> "$GITHUB_ENV"
+        run: |
+          infisical export --token="$INFISICAL_TOKEN" --projectId="$INFISICAL_PROJECT_ID" --silent --env=staging --path=/apps/web --format=dotenv --output-file="$RUNNER_TEMP/infisical-web.env"
+          grep -E '^[A-Za-z_][A-Za-z0-9_]*=' "$RUNNER_TEMP/infisical-web.env" >> "$GITHUB_ENV"
 
       - name: Export staging CI secrets
         if: ${{ env.INFISICAL_TOKEN != '' }}
-        run: infisical export --token="$INFISICAL_TOKEN" --projectId="$INFISICAL_PROJECT_ID" --silent --env=staging --path=/ci --format=dotenv >> "$GITHUB_ENV"
+        run: |
+          infisical export --token="$INFISICAL_TOKEN" --projectId="$INFISICAL_PROJECT_ID" --silent --env=staging --path=/ci --format=dotenv --output-file="$RUNNER_TEMP/infisical-ci.env"
+          grep -E '^[A-Za-z_][A-Za-z0-9_]*=' "$RUNNER_TEMP/infisical-ci.env" >> "$GITHUB_ENV"
 
       - name: Install Vercel CLI
         if: ${{ env.INFISICAL_TOKEN != '' && env.VERCEL_TOKEN != '' && env.VERCEL_ORG_ID != '' && env.VERCEL_PROJECT_ID_STAGING != '' }}
