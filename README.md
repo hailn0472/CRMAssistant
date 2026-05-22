@@ -115,6 +115,10 @@ pnpm build --filter=web
 # Run tests
 pnpm test
 
+# Run Docker-backed API smoke tests (requires Docker/Testcontainers)
+# Uses isolated test env vars and does not require production services
+pnpm test:api --filter=api
+
 # Run linting
 pnpm lint
 

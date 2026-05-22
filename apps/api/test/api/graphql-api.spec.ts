@@ -17,6 +17,49 @@ describe('GraphQL API harness', () => {
     await harness.cleanupDatabase()
   })
 
+  it('rejects contact queries without a signed JWT', async () => {
+    const payload: GraphqlRequestPayload = {
+      query: `query Contacts($pagination: ContactPaginationInput) {
+        contacts(pagination: $pagination) { total items { id email firstName lastName } }
+      }`,
+      variables: { pagination: { page: 1, pageSize: 10 } },
+    }
+
+    const response = await harness.graphql(payload)
+
+    expect(response.status).toBe(200)
+    expect(response.body.data?.contacts).toBeNull()
+    expect(response.body.errors).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          message: expect.stringMatching(/authentication|required|unauthorized/i),
+        }),
+      ]),
+    )
+  })
+
+  it('documents current GraphQL authorization behavior for signed user roles', async () => {
+    const tenant = await harness.createTenant('GraphQL Role Smoke Tenant')
+    const token = harness.signToken({
+      userId: 'graphql-role-smoke-user',
+      tenantId: tenant.id,
+      role: UserRole.SALES_REP,
+      email: 'graphql-role-smoke-user@example.com',
+    })
+    const payload: GraphqlRequestPayload = {
+      query: `query Contacts($pagination: ContactPaginationInput) {
+        contacts(pagination: $pagination) { total items { id email firstName lastName } }
+      }`,
+      variables: { pagination: { page: 1, pageSize: 10 } },
+    }
+
+    const response = await harness.graphql(payload, token)
+
+    expect(response.status).toBe(200)
+    expect(response.body.errors).toBeUndefined()
+    expect(response.body.data.contacts.items).toEqual([])
+  })
+
   it('posts a typed GraphQL payload through the real /graphql endpoint', async () => {
     const tenant = await harness.createTenant('GraphQL API Tenant')
     const token = harness.signToken({
@@ -60,5 +103,80 @@ describe('GraphQL API harness', () => {
     expect(listResponse.body.errors).toBeUndefined()
     expect(listResponse.body.data.contacts.total).toBe(1)
     expect(listResponse.body.data.contacts.items).toHaveLength(1)
+  })
+
+  it('keeps tenant-scoped contact data isolated between GraphQL users', async () => {
+    const [tenantA, tenantB] = await Promise.all([
+      harness.createTenant('Tenant Isolation A'),
+      harness.createTenant('Tenant Isolation B'),
+    ])
+    const tenantAToken = harness.signToken({
+      userId: 'tenant-a-user',
+      tenantId: tenantA.id,
+      role: UserRole.SALES_REP,
+      email: 'tenant-a-user@example.com',
+    })
+    const tenantBToken = harness.signToken({
+      userId: 'tenant-b-user',
+      tenantId: tenantB.id,
+      role: UserRole.SALES_REP,
+      email: 'tenant-b-user@example.com',
+    })
+    const createTenantAContactMutation: GraphqlRequestPayload = {
+      query: `mutation CreateContact($input: CreateContactInput!) {
+        createContact(input: $input) { id email firstName lastName }
+      }`,
+      variables: {
+        input: {
+          email: 'tenant-a-contact@example.com',
+          firstName: 'Tenant',
+          lastName: 'A',
+        },
+      },
+    }
+    const createTenantBContactMutation: GraphqlRequestPayload = {
+      query: `mutation CreateContact($input: CreateContactInput!) {
+        createContact(input: $input) { id email firstName lastName }
+      }`,
+      variables: {
+        input: {
+          email: 'tenant-b-contact@example.com',
+          firstName: 'Tenant',
+          lastName: 'B',
+        },
+      },
+    }
+    const listContactsQuery: GraphqlRequestPayload = {
+      query: `query Contacts($pagination: ContactPaginationInput) {
+        contacts(pagination: $pagination) { total items { id email firstName lastName } }
+      }`,
+      variables: { pagination: { page: 1, pageSize: 10 } },
+    }
+
+    const tenantACreateResponse = await harness.graphql(createTenantAContactMutation, tenantAToken)
+    const tenantBCreateResponse = await harness.graphql(createTenantBContactMutation, tenantBToken)
+    const tenantAListResponse = await harness.graphql(listContactsQuery, tenantAToken)
+    const tenantBListResponse = await harness.graphql(listContactsQuery, tenantBToken)
+
+    expect(tenantACreateResponse.status).toBe(200)
+    expect(tenantACreateResponse.body.errors).toBeUndefined()
+    expect(tenantBCreateResponse.status).toBe(200)
+    expect(tenantBCreateResponse.body.errors).toBeUndefined()
+    expect(tenantAListResponse.status).toBe(200)
+    expect(tenantAListResponse.body.errors).toBeUndefined()
+    expect(tenantAListResponse.body.data.contacts.items).toEqual([
+      expect.objectContaining({ email: 'tenant-a-contact@example.com' }),
+    ])
+    expect(tenantAListResponse.body.data.contacts.items).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ email: 'tenant-b-contact@example.com' })]),
+    )
+    expect(tenantBListResponse.status).toBe(200)
+    expect(tenantBListResponse.body.errors).toBeUndefined()
+    expect(tenantBListResponse.body.data.contacts.items).toEqual([
+      expect.objectContaining({ email: 'tenant-b-contact@example.com' }),
+    ])
+    expect(tenantBListResponse.body.data.contacts.items).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ email: 'tenant-a-contact@example.com' })]),
+    )
   })
 })
