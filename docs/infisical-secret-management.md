@@ -147,13 +147,13 @@ Keep `apps/api/.env.example` and `apps/web/.env.example` as schema-only fallback
 
 ## GitHub Actions and platform sync pattern
 
-GitHub Actions should not export application secrets from Infisical. CI/deploy workflows remain validation-only and use dummy values for tests and builds where possible.
+GitHub Actions should not export application secrets from Infisical. CI remains the repository quality gate, while Render and Vercel deploy automatically from their Git integrations after branch updates.
 
 Use Infisical App Connections and Secret Syncs as the source of truth for platform runtime secrets:
 
 - Sync `/apps/api` to the matching Render backend service environment variables.
 - Sync `/apps/web` to the matching Vercel frontend project environment variables.
-- Keep `/ci` for deploy orchestration values only if a workflow explicitly needs them.
+- Keep `/ci` reserved for future deploy orchestration values only if a workflow explicitly needs them; current staging/production deploys should not require GitHub-held platform tokens or deploy hooks.
 
 API smoke tests must remain isolated with dummy env vars and Testcontainers. Do not make `pnpm test:api --filter=api` depend on Infisical, staging secrets, production secrets, Vercel, Render, or Supabase production resources.
 
@@ -190,21 +190,17 @@ Supabase remains the source for project URL, anon key, service-role key, and dat
 
 ### CI/deploy orchestration
 
-Map deploy orchestration values to `/ci`:
+Current staging and production deploys use Render and Vercel Git integrations, so GitHub Actions does not need deploy hooks, Vercel tokens, or app runtime secrets.
 
-- Vercel token/org/project IDs
-- Render deploy hooks or Render API key used for app connections
-- Other deploy-only credentials
-
-Verify Vercel and Render secret sync behavior in the Infisical dashboard before deleting existing service-level variables from Vercel, Render, or GitHub.
+Reserve `/ci` for future deploy orchestration values only if a workflow explicitly needs them. Verify Vercel and Render secret sync behavior in the Infisical dashboard before deleting existing service-level variables from Vercel, Render, or GitHub.
 
 ## Phased migration and rollback plan
 
 1. **Inventory** — keep this document current and confirm `.env.example` files are schema-only.
 2. **Infisical mirror** — create the `CRMAssistant` project, `dev`/`staging`/`production` environments, and `/apps/api`/`/apps/web`/`/ci` paths; copy current values without changing deployments.
 3. **Local dev** — validate API and web development through `infisical run` in `dev`.
-4. **Staging** — configure Infisical Render/Vercel syncs first, then validate staging deploys.
-5. **Production** — configure production syncs only after staging proves the path and approval gates are correct.
+4. **Staging** — configure Infisical Render/Vercel syncs and platform Git auto-deploys first, then validate staging deploys.
+5. **Production** — configure production syncs and Git auto-deploys only after staging proves the path and approval gates are correct.
 6. **Platform cleanup** — remove old Vercel/Render/GitHub service-level env vars only after each environment deploy succeeds using Infisical-managed values.
 7. **Rotation** — rotate high-risk secrets after migration, including database URLs/passwords, Supabase service-role keys, JWT secrets, Vercel tokens, Render API keys/deploy hooks, and machine identity secrets.
 
