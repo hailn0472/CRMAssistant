@@ -25,9 +25,9 @@ function base64UrlToBytes(value: string): Uint8Array {
   return Uint8Array.from(binary, (char) => char.charCodeAt(0))
 }
 
-function bytesToArrayBuffer(bytes: Uint8Array): ArrayBuffer {
-  const buffer = new ArrayBuffer(bytes.byteLength)
-  new Uint8Array(buffer).set(bytes)
+function bytesToBufferSource(bytes: Uint8Array): Uint8Array<ArrayBuffer> {
+  const buffer = new Uint8Array(bytes.byteLength)
+  buffer.set(bytes)
   return buffer
 }
 
@@ -86,7 +86,7 @@ export async function verifyWebSessionCookieValue(value: string): Promise<boolea
   const isSignatureValid = await crypto.subtle.verify(
     'HMAC',
     key,
-    bytesToArrayBuffer(base64UrlToBytes(encodedSignature)),
+    bytesToBufferSource(base64UrlToBytes(encodedSignature)),
     new TextEncoder().encode(encodedPayload),
   )
 
