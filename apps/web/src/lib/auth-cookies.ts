@@ -25,6 +25,12 @@ function base64UrlToBytes(value: string): Uint8Array {
   return Uint8Array.from(binary, (char) => char.charCodeAt(0))
 }
 
+function bytesToArrayBuffer(bytes: Uint8Array): ArrayBuffer {
+  const buffer = new ArrayBuffer(bytes.byteLength)
+  new Uint8Array(buffer).set(bytes)
+  return buffer
+}
+
 function getWebSessionSecret(): string | undefined {
   const secret = process.env['WEB_SESSION_SECRET']
   if (!secret || secret.length < MIN_SECRET_LENGTH) {
@@ -55,11 +61,7 @@ export async function createWebSessionCookieValue(expiresAtSeconds: number): Pro
   }
   const encodedPayload = base64UrlEncode(JSON.stringify(payload))
   const key = await importSigningKey(secret)
-  const signature = await crypto.subtle.sign(
-    'HMAC',
-    key,
-    new TextEncoder().encode(encodedPayload).buffer as ArrayBuffer,
-  )
+  const signature = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(encodedPayload))
   let binarySignature = ''
   new Uint8Array(signature).forEach((byte) => {
     binarySignature += String.fromCharCode(byte)
@@ -84,8 +86,8 @@ export async function verifyWebSessionCookieValue(value: string): Promise<boolea
   const isSignatureValid = await crypto.subtle.verify(
     'HMAC',
     key,
-    base64UrlToBytes(encodedSignature).buffer as ArrayBuffer,
-    new TextEncoder().encode(encodedPayload).buffer as ArrayBuffer,
+    bytesToArrayBuffer(base64UrlToBytes(encodedSignature)),
+    new TextEncoder().encode(encodedPayload),
   )
 
   if (!isSignatureValid) return false
