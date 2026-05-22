@@ -147,13 +147,15 @@ Keep `apps/api/.env.example` and `apps/web/.env.example` as schema-only fallback
 
 ## GitHub Actions and platform sync pattern
 
-GitHub Actions should not export application secrets from Infisical. CI/deploy workflows remain validation-only and use dummy values for tests and builds where possible.
+GitHub Actions should not export application runtime secrets from Infisical. CI/deploy workflows use dummy values for tests and builds where possible, then trigger platform deployments after validation.
 
 Use Infisical App Connections and Secret Syncs as the source of truth for platform runtime secrets:
 
 - Sync `/apps/api` to the matching Render backend service environment variables.
 - Sync `/apps/web` to the matching Vercel frontend project environment variables.
-- Keep `/ci` for deploy orchestration values only if a workflow explicitly needs them.
+- Keep `/ci` for deploy orchestration values only if a workflow explicitly needs them; do not mirror app runtime secrets through GitHub Actions.
+
+Deploy triggers may still use GitHub Environment secrets for Render deploy hooks and Vercel deployment tokens. These are orchestration credentials only; app runtime values must be synced directly from Infisical to Render/Vercel.
 
 API smoke tests must remain isolated with dummy env vars and Testcontainers. Do not make `pnpm test:api --filter=api` depend on Infisical, staging secrets, production secrets, Vercel, Render, or Supabase production resources.
 

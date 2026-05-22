@@ -109,3 +109,91 @@ jobs:
           WEB_SESSION_SECRET: ${{ secrets.WEB_SESSION_SECRET_STAGING || 'ci-web-session-secret-minimum-32-chars' }}
         run: pnpm build
 
+  deploy-backend-production:
+    name: Deploy Backend Production (Render)
+    runs-on: ubuntu-latest
+    needs: validate-deploy-production
+    if: github.ref == 'refs/heads/main'
+    environment: production
+    env:
+      RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+    steps:
+      - name: Trigger Render production deploy
+        if: ${{ env.RENDER_DEPLOY_HOOK_URL != '' }}
+        run: curl --fail --silent --show-error --request POST "$RENDER_DEPLOY_HOOK_URL"
+
+      - name: Skip production backend deploy
+        if: ${{ env.RENDER_DEPLOY_HOOK_URL == '' }}
+        run: echo "Skipping production backend deploy — RENDER_DEPLOY_HOOK_URL is not configured."
+
+  deploy-backend-staging:
+    name: Deploy Backend Staging (Render)
+    runs-on: ubuntu-latest
+    needs: validate-deploy-staging
+    if: github.ref == 'refs/heads/staging'
+    environment: staging
+    env:
+      RENDER_DEPLOY_HOOK_URL_STAGING: ${{ secrets.RENDER_DEPLOY_HOOK_URL_STAGING }}
+    steps:
+      - name: Trigger Render staging deploy
+        if: ${{ env.RENDER_DEPLOY_HOOK_URL_STAGING != '' }}
+        run: curl --fail --silent --show-error --request POST "$RENDER_DEPLOY_HOOK_URL_STAGING"
+
+      - name: Skip staging backend deploy
+        if: ${{ env.RENDER_DEPLOY_HOOK_URL_STAGING == '' }}
+        run: echo "Skipping staging backend deploy — RENDER_DEPLOY_HOOK_URL_STAGING is not configured."
+
+  deploy-frontend-production:
+    name: Deploy Frontend Production (Vercel)
+    runs-on: ubuntu-latest
+    needs: deploy-backend-production
+    if: github.ref == 'refs/heads/main'
+    environment: production
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Vercel CLI
+        if: ${{ env.VERCEL_TOKEN != '' && env.VERCEL_ORG_ID != '' && env.VERCEL_PROJECT_ID != '' }}
+        run: npm install -g vercel@latest
+
+      - name: Deploy production frontend to Vercel
+        if: ${{ env.VERCEL_TOKEN != '' && env.VERCEL_ORG_ID != '' && env.VERCEL_PROJECT_ID != '' }}
+        run: vercel deploy --prod --yes --token="$VERCEL_TOKEN"
+
+      - name: Skip production frontend deploy
+        if: ${{ env.VERCEL_TOKEN == '' || env.VERCEL_ORG_ID == '' || env.VERCEL_PROJECT_ID == '' }}
+        run: echo "Skipping production frontend deploy — Vercel deployment secrets are not configured."
+
+  deploy-frontend-staging:
+    name: Deploy Frontend Staging (Vercel Preview)
+    runs-on: ubuntu-latest
+    needs: deploy-backend-staging
+    if: github.ref == 'refs/heads/staging'
+    environment: staging
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_STAGING || secrets.VERCEL_PROJECT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Vercel CLI
+        if: ${{ env.VERCEL_TOKEN != '' && env.VERCEL_ORG_ID != '' && env.VERCEL_PROJECT_ID != '' }}
+        run: npm install -g vercel@latest
+
+      - name: Pull Vercel preview environment
+        if: ${{ env.VERCEL_TOKEN != '' && env.VERCEL_ORG_ID != '' && env.VERCEL_PROJECT_ID != '' }}
+        run: vercel pull --yes --environment=preview --token="$VERCEL_TOKEN"
+
+      - name: Deploy staging frontend to Vercel preview
+        if: ${{ env.VERCEL_TOKEN != '' && env.VERCEL_ORG_ID != '' && env.VERCEL_PROJECT_ID != '' }}
+        run: vercel deploy --yes --token="$VERCEL_TOKEN"
+
+      - name: Skip staging frontend deploy
+        if: ${{ env.VERCEL_TOKEN == '' || env.VERCEL_ORG_ID == '' || env.VERCEL_PROJECT_ID == '' }}
+        run: echo "Skipping staging frontend deploy — Vercel deployment secrets are not configured."
+
