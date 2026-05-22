@@ -13,6 +13,10 @@
     "test": {
       "outputs": ["coverage/**"]
     },
+    "test:api": {
+      "cache": false,
+      "outputs": ["coverage-api/**"]
+    },
     "test:integration": {
       "cache": false,
       "outputs": ["coverage-integration/**"]

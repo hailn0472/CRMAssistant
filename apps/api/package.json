@@ -12,6 +12,7 @@
     "prisma:seed": "ts-node prisma/seed.ts",
     "test": "jest --coverage",
     "test:watch": "jest --watch",
+    "test:api": "jest --config jest.api.config.ts --coverage",
     "test:integration": "jest --config jest.integration.config.ts --coverage"
   },
   "prisma": {
