@@ -17,6 +17,8 @@ coverage/
 **/coverage/
 coverage-integration/
 **/coverage-integration/
+coverage-api/
+**/coverage-api/
 playwright-report/
 test-results/
 

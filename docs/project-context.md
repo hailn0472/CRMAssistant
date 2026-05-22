@@ -369,11 +369,24 @@ fix/text-to-sql/sql-injection
 refactor/api/graphql-schema
 ```
 
+**Branch Promotion Flow:**
+
+```text
+feature/* → dev → staging → main
+```
+
+- Create feature/story branches from `dev`.
+- Feature/story branches PR into `dev`.
+- `dev` PRs into `staging` for release-candidate validation.
+- `staging` PRs into `main` for production/stable promotion.
+- Hotfixes may branch from `main`, PR to `main`, then be back-merged or cherry-picked into `staging` and `dev`.
+
 **Critical for AI Agents:**
 
 - NEVER commit without tests passing
 - NEVER force push to main branch
 - ALWAYS use Conventional Commits format
+- Target feature/story PRs to `dev`, not `staging` or `main`
 - Keep commits atomic (one logical change per commit)
 - Reference issues in commits (e.g., `Closes #123`)
 - Clean up branches after merge
@@ -386,7 +399,8 @@ refactor/api/graphql-schema
 - [ ] ESLint shows no warnings
 - [ ] Prettier formatting applied
 - [ ] TypeScript strict mode passes
-- [ ] Branch is up to date with main
+- [ ] Feature/story branch is up to date with `dev`
+- [ ] PR targets the correct branch (`dev` for feature/story work, `staging` for dev promotion, `main` for staging promotion)
 - [ ] No console.log or debugging code
 
 **PR must include:**
@@ -423,11 +437,26 @@ refactor/api/graphql-schema
    - No ESLint warnings
    - TypeScript strict mode passes
 
-3. **Review → Deployment**
-   - Code review approved
+3. **Review → Integration (`dev`)**
+
+   - Feature/story PR approved
    - All CI checks pass
-   - Manual testing completed
+   - Manual testing completed where relevant
    - Documentation updated
+   - Merged into `dev`
+
+4. **Integration → Staging**
+
+   - `dev` branch is stable for release-candidate validation
+   - `dev` PR to `staging` approved
+   - All staging quality gates pass
+   - Staging deployment completed and smoke-tested
+
+5. **Staging → Production (`main`)**
+   - `staging` PR to `main` approved
+   - All production quality gates pass
+   - Production deployment completed
+   - Rollback path known before release
 
 **Definition of Done:**
 
