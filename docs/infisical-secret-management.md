@@ -145,32 +145,15 @@ infisical run --env=dev --path=/apps/web -- pnpm --filter=web dev
 
 Keep `apps/api/.env.example` and `apps/web/.env.example` as schema-only fallback/reference files. They should list required variable names and placeholder guidance only.
 
-## GitHub Actions bootstrap pattern
+## GitHub Actions and platform sync pattern
 
-GitHub Actions should not store all application secrets directly. Use Infisical machine identities with Universal Auth and keep only bootstrap credentials in GitHub Environments:
+GitHub Actions should not store or export application secrets from Infisical. CI remains the repository quality gate, while Render and Vercel deploy automatically from their Git integrations after branch updates.
 
-- `INFISICAL_CLIENT_ID`
-- `INFISICAL_CLIENT_SECRET`
-- `INFISICAL_API_URL` when using EU Cloud or self-hosted Infisical
+Use Infisical App Connections and Secret Syncs as the source of truth for platform runtime secrets:
 
-Example authentication pattern:
-
-```bash
-export INFISICAL_TOKEN=$(infisical login \
-  --method=universal-auth \
-  --client-id="$INFISICAL_CLIENT_ID" \
-  --client-secret="$INFISICAL_CLIENT_SECRET" \
-  --silent \
-  --plain)
-```
-
-For EU Cloud or self-hosted Infisical, set the API URL before authentication:
-
-```bash
-export INFISICAL_API_URL="https://eu.infisical.com"
-```
-
-Use separate machine identities for staging and production. Scope each identity to the minimal environment and path it needs. Enable delete protection for production machine identities where available.
+- Sync `/apps/api` to the matching Render backend service environment variables.
+- Sync `/apps/web` to the matching Vercel frontend project environment variables.
+- Keep `/ci` reserved for future deploy orchestration values only if a workflow explicitly needs them; current staging/production deploys should not require GitHub-held platform tokens or deploy hooks.
 
 API smoke tests must remain isolated with dummy env vars and Testcontainers. Do not make `pnpm test:api --filter=api` depend on Infisical, staging secrets, production secrets, Vercel, Render, or Supabase production resources.
 
@@ -178,7 +161,7 @@ API smoke tests must remain isolated with dummy env vars and Testcontainers. Do 
 
 ### Vercel frontend
 
-Map frontend build/runtime variables to `/apps/web`:
+Use an Infisical Vercel sync from `/apps/web` to the Vercel project environment. Map frontend build/runtime variables to `/apps/web`:
 
 - `WEB_SESSION_SECRET`
 - `NEXT_PUBLIC_API_URL`
@@ -189,7 +172,7 @@ Only `NEXT_PUBLIC_*` values should reach browser-exposed frontend environments. 
 
 ### Render backend
 
-Map backend runtime variables to `/apps/api`:
+Use an Infisical Render sync from `/apps/api` to the Render backend service environment. Map backend runtime variables to `/apps/api`:
 
 - `PORT`
 - `DATABASE_URL`
@@ -207,21 +190,17 @@ Supabase remains the source for project URL, anon key, service-role key, and dat
 
 ### CI/deploy orchestration
 
-Map deploy orchestration values to `/ci`:
+Current staging and production deploys use Render and Vercel Git integrations, so GitHub Actions does not need deploy hooks, Vercel tokens, or app runtime secrets.
 
-- Vercel token/org/project IDs
-- Render deploy hooks or Render API key used for app connections
-- Other deploy-only credentials
-
-Verify Vercel and Render app connection or secret sync behavior in the Infisical dashboard before deleting existing service-level variables from Vercel, Render, or GitHub.
+Reserve `/ci` for future deploy orchestration values only if a workflow explicitly needs them. Verify Vercel and Render secret sync behavior in the Infisical dashboard before deleting existing service-level variables from Vercel, Render, or GitHub.
 
 ## Phased migration and rollback plan
 
 1. **Inventory** — keep this document current and confirm `.env.example` files are schema-only.
 2. **Infisical mirror** — create the `CRMAssistant` project, `dev`/`staging`/`production` environments, and `/apps/api`/`/apps/web`/`/ci` paths; copy current values without changing deployments.
 3. **Local dev** — validate API and web development through `infisical run` in `dev`.
-4. **Staging** — switch staging CI/deploy/platform consumers first and validate staging deploys.
-5. **Production** — switch production only after staging proves the path and approval gates are correct.
+4. **Staging** — configure Infisical Render/Vercel syncs and platform Git auto-deploys first, then validate staging deploys.
+5. **Production** — configure production syncs and Git auto-deploys only after staging proves the path and approval gates are correct.
 6. **Platform cleanup** — remove old Vercel/Render/GitHub service-level env vars only after each environment deploy succeeds using Infisical-managed values.
 7. **Rotation** — rotate high-risk secrets after migration, including database URLs/passwords, Supabase service-role keys, JWT secrets, Vercel tokens, Render API keys/deploy hooks, and machine identity secrets.
 

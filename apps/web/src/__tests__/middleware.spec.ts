@@ -92,7 +92,8 @@ describe('middleware', () => {
 
   it('should reject tampered web sessions and delete auth cookies', async () => {
     const session = await makeSession(Math.floor(Date.now() / 1000) + 60)
-    const tamperedSession = `${session.slice(0, -1)}x`
+    const replacementChar = session.endsWith('x') ? 'y' : 'x'
+    const tamperedSession = `${session.slice(0, -1)}${replacementChar}`
 
     const response = await middleware(makeRequest('/dashboard', tamperedSession) as never)
 
