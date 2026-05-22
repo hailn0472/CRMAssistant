@@ -177,11 +177,11 @@ hotfix/auth/token-expiry
 
 ### Branch Lifecycle
 
-1. **Create branch from main:**
+1. **Create feature branch from `dev`:**
 
    ```bash
-   git checkout main
-   git pull origin main
+   git checkout dev
+   git pull origin dev
    git checkout -b feature/contacts/add-search
    ```
 
@@ -190,10 +190,9 @@ hotfix/auth/token-expiry
 3. **Keep branch updated:**
 
    ```bash
-   git checkout main
-   git pull origin main
+   git fetch origin
    git checkout feature/contacts/add-search
-   git rebase main
+   git rebase origin/dev
    ```
 
 4. **Push to remote:**
@@ -202,9 +201,9 @@ hotfix/auth/token-expiry
    git push origin feature/contacts/add-search
    ```
 
-5. **Create Pull Request**
+5. **Create Pull Request to `dev`**
 
-6. **After merge, delete branch:**
+6. **After merge, delete feature branch:**
    ```bash
    git branch -d feature/contacts/add-search
    git push origin --delete feature/contacts/add-search
@@ -316,7 +315,9 @@ command.
 
 - [ ] All CI checks pass
 - [ ] No merge conflicts
-- [ ] Branch is up to date with main
+- [ ] Branch targets the correct integration branch
+- [ ] Feature branches are up to date with `dev`
+- [ ] Promotion branches (`dev` → `staging`, `staging` → `main`) are up to date with their target
 - [ ] Self-review completed
 
 **Reviewer checklist:**
@@ -430,10 +431,45 @@ git rebase -i HEAD~3
 - ✅ CI/CD pipeline is running
 - ✅ Team has more than 1 active developer
 
-### Development Branch (if used)
+### Branch Promotion Flow
 
-- Same rules as main
-- Integration branch for features before main
+Use `dev` as the integration branch between feature work and staging:
+
+```text
+feature/* → dev → staging → main
+```
+
+**Branch responsibilities:**
+
+- `feature/*`, `fix/*`, `test/*`, `docs/*`, `chore/*`: Short-lived work branches created from `dev`.
+- `dev`: Integration branch for completed feature/story work. Feature branches PR into `dev`.
+- `staging`: Pre-production validation branch. Only `dev` PRs into `staging`.
+- `main`: Production/stable branch. Only `staging` PRs into `main`.
+
+**PR target rules:**
+
+- Feature/story branches must target `dev`, not `staging` or `main`.
+- `dev` must target `staging` for release/integration promotion.
+- `staging` must target `main` for production promotion.
+- Hotfixes may branch from `main`, PR to `main`, then be back-merged or cherry-picked into `staging` and `dev`.
+
+### Development Branch
+
+- Same review and CI rules as main.
+- Integration branch for all feature/story work before staging.
+- Must stay deployable enough for integration testing, but may contain work not yet approved for staging.
+
+### Staging Branch
+
+- Same protection standards as main where possible.
+- Represents release-candidate state for end-to-end validation.
+- Should only receive PRs from `dev` except approved hotfix backports.
+- Triggers staging deployment pipeline when configured.
+
+### Main Branch
+
+- Production/stable branch.
+- Should only receive PRs from `staging` except emergency hotfixes.
 
 ## Merge Strategies
 
@@ -524,25 +560,35 @@ Validates commit message format:
 
 ```bash
 # Start new feature
-git checkout main
-git pull origin main
+git checkout dev
+git pull origin dev
 git checkout -b feature/my-feature
 
 # Regular commits
 git add .
 git commit -m "feat(scope): description"
 
-# Update with main
+# Update with dev
 git fetch origin
-git rebase origin/main
+git rebase origin/dev
 
-# Push changes
+# Push changes and open PR to dev
 git push origin feature/my-feature
 
 # After PR merge
-git checkout main
-git pull origin main
+git checkout dev
+git pull origin dev
 git branch -d feature/my-feature
+```
+
+### Promotion Workflow
+
+```bash
+# Promote integrated work to staging via PR
+# Base: staging, compare: dev
+
+# Promote validated staging work to production via PR
+# Base: main, compare: staging
 ```
 
 ### Fixing Mistakes
@@ -570,13 +616,15 @@ git revert <commit-hash>
 1. **Always follow Conventional Commits format** - No exceptions
 2. **Never commit without tests passing** - Run tests before commit
 3. **Never force push to main** - Protected branch
-4. **Keep commits atomic** - One logical change per commit
-5. **Write descriptive commit messages** - Future you will thank you
-6. **Use appropriate scope** - Helps with changelog generation
-7. **Reference issues in commits** - Maintains traceability
-8. **Clean up branches after merge** - Keeps repository tidy
-9. **Never commit secrets or credentials** - Use environment variables
-10. **Rebase before creating PR** - Keep history clean
+4. **Target feature/story PRs to `dev`** - Do not PR feature branches directly to `staging` or `main`
+5. **Promote in order** - `dev` → `staging` → `main`
+6. **Keep commits atomic** - One logical change per commit
+7. **Write descriptive commit messages** - Future you will thank you
+8. **Use appropriate scope** - Helps with changelog generation
+9. **Reference issues in commits** - Maintains traceability
+10. **Clean up branches after merge** - Keeps repository tidy
+11. **Never commit secrets or credentials** - Use environment variables
+12. **Rebase before creating PR** - Keep history clean
 
 ## Changelog Generation
 

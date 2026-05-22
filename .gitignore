@@ -17,6 +17,8 @@ coverage/
 **/coverage/
 coverage-integration/
 **/coverage-integration/
+coverage-api/
+**/coverage-api/
 playwright-report/
 test-results/
 
@@ -70,3 +72,5 @@ pnpm-debug.log*
 
 # Misc
 *.pem
+.vercel
+supabase/.temp/

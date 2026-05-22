@@ -62,4 +62,23 @@ describe('REST API harness', () => {
 
     expect(response.status).toBe(401)
   })
+
+  it('returns 400 for invalid /auth/login DTO input before auth execution', async () => {
+    const response = await request(harness.app.getHttpServer()).post('/auth/login').send({
+      email: 'not-an-email',
+      password: '',
+      unexpected: 'field',
+    })
+
+    expect(response.status).toBe(400)
+    expect(response.body.message).toEqual(
+      expect.arrayContaining([expect.stringContaining('email')]),
+    )
+    expect(response.body.message).toEqual(
+      expect.arrayContaining([expect.stringContaining('password')]),
+    )
+    expect(response.body.message).toEqual(
+      expect.arrayContaining([expect.stringContaining('unexpected')]),
+    )
+  })
 })
