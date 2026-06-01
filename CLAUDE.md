@@ -2,15 +2,17 @@
 
 This file provides quick reference guidance for Claude Code when working with this repository.
 
-**For comprehensive project context, architecture decisions, and detailed rules, see:**
+**Rule loading policy:** keep this file lightweight. Do not eagerly load detailed rule files every session. Read the relevant file below only when the task touches that area.
 
-- **[Project Context](docs/project-context.md)** - Complete project context with technology stack and architecture decisions
-- **[Naming Conventions](.claude/rules/naming-conventions.md)** - File, folder, variable naming standards
-- **[Git Workflow](.claude/rules/git-workflow.md)** - Conventional Commits, branch naming, PR guidelines
-- **[TypeScript Rules](.claude/rules/typescript-rules.md)** - TypeScript strict mode, type safety patterns
-- **[React & Next.js Rules](.claude/rules/react-nextjs-rules.md)** - React/Next.js patterns, hooks, state management
-- **[NestJS Rules](.claude/rules/nestjs-rules.md)** - NestJS controllers, services, DTOs, guards
-- **[Prisma Rules](.claude/rules/prisma-rules.md)** - Prisma schema design, queries, multi-tenancy
+## Rule Index
+
+- Project context: `docs/project-context.md` - read for architecture/product context questions.
+- Naming conventions: `.local/rules/naming-conventions.md` - read before creating or renaming files, folders, variables, modules, routes, DTOs, or tests.
+- Git workflow: `.local/rules/git-workflow.md` - read before committing, branching, pushing, or creating PRs.
+- TypeScript rules: `.local/rules/typescript-rules.md` - read before editing TypeScript code.
+- React & Next.js rules: `.local/rules/react-nextjs-rules.md` - read before editing frontend React/Next.js code.
+- NestJS rules: `.local/rules/nestjs-rules.md` - read before editing backend NestJS code.
+- Prisma rules: `.local/rules/prisma-rules.md` - read before editing Prisma schema, migrations, database queries, or multi-tenancy logic.
 
 ---
 
@@ -139,8 +141,8 @@ pnpm dev
 ## Quick Links
 
 - **Repository**: https://github.com/hailn0472/CRMAssistant
-- **Project Context**: [docs/project-context.md](docs/project-context.md)
-- **Rules Directory**: [.claude/rules/](.claude/rules/)
+- **Project Context**: `docs/project-context.md`
+- **Rules Directory**: `.local/rules/`
 
 ---
 
