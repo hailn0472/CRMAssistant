@@ -113,6 +113,26 @@ describe('authService', () => {
     ).rejects.toThrow('Login failed')
   })
 
+  it('should request password recovery', async () => {
+    mockFetch.mockResolvedValue({ ok: true })
+
+    await expect(authService.forgotPassword('user@example.com')).resolves.toBeUndefined()
+
+    expect(mockFetch).toHaveBeenCalledWith('/api/auth/forgot-password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: 'user@example.com' }),
+    })
+  })
+
+  it('should throw when password recovery fails', async () => {
+    mockFetch.mockResolvedValue(jsonResponse({ message: 'Unable to send reset email' }, false))
+
+    await expect(authService.forgotPassword('user@example.com')).rejects.toThrow(
+      'Unable to send reset email',
+    )
+  })
+
   it('should logout a user', async () => {
     mockFetch.mockResolvedValue({ ok: true })
 

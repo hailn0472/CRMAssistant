@@ -7,7 +7,7 @@ import {
   verifyWebSessionCookieValue,
 } from '@/lib/auth-cookies'
 
-const PUBLIC_PATHS = ['/login', '/register']
+const PUBLIC_PATHS = ['/login', '/register', '/forgot-password']
 
 export async function middleware(request: NextRequest): Promise<NextResponse> {
   const session = request.cookies.get(WEB_SESSION_COOKIE)?.value

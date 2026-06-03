@@ -22,6 +22,10 @@ export type LoginCredentials = {
   password: string
 }
 
+export type ForgotPasswordData = {
+  email: string
+}
+
 export type RegisterData = {
   email: string
   password: string
