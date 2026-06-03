@@ -73,6 +73,8 @@ export function useAuth(): {
     setLoading(true)
     try {
       await authService.logout()
+    } catch {
+      // Local session cleanup must still complete if the server logout request fails.
     } finally {
       clearAuth()
       setLoading(false)

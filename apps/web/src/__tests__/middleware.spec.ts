@@ -4,7 +4,11 @@ Object.assign(globalThis, { TextDecoder, TextEncoder })
 
 jest.mock('next/server', () => ({
   NextResponse: {
-    next: jest.fn(() => ({ status: 200, headers: new Map<string, string>() })),
+    next: jest.fn(() => ({
+      status: 200,
+      headers: new Map<string, string>(),
+      cookies: { delete: jest.fn() },
+    })),
     redirect: jest.fn((url: URL) => ({
       status: 307,
       headers: new Map<string, string>([['location', url.toString()]]),
@@ -63,10 +67,38 @@ describe('middleware', () => {
     expect(response.headers.get('location')).toContain('redirect=%2Fdashboard%3Ftab%3Ddeals')
   })
 
-  it('should allow unauthenticated users to visit login page', async () => {
-    const response = await middleware(makeRequest('/login') as never)
+  it('should allow unauthenticated users to visit public auth pages', async () => {
+    await expect(middleware(makeRequest('/login') as never)).resolves.toMatchObject({ status: 200 })
+    await expect(middleware(makeRequest('/register') as never)).resolves.toMatchObject({
+      status: 200,
+    })
+    await expect(middleware(makeRequest('/forgot-password') as never)).resolves.toMatchObject({
+      status: 200,
+    })
+  })
 
-    expect(response.status).toBe(200)
+  it('should not treat sibling routes as public auth pages', async () => {
+    const response = await middleware(makeRequest('/login-help') as never)
+
+    expect(response.status).toBe(307)
+    expect(response.headers.get('location')).toContain('/login')
+    expect(response.headers.get('location')).toContain('redirect=%2Flogin-help')
+  })
+
+  it('should not treat nested auth routes as public pages', async () => {
+    const response = await middleware(makeRequest('/login/help') as never)
+
+    expect(response.status).toBe(307)
+    expect(response.headers.get('location')).toContain('/login')
+    expect(response.headers.get('location')).toContain('redirect=%2Flogin%2Fhelp')
+  })
+
+  it('should protect routes containing dots', async () => {
+    const response = await middleware(makeRequest('/contacts/john.doe') as never)
+
+    expect(response.status).toBe(307)
+    expect(response.headers.get('location')).toContain('/login')
+    expect(response.headers.get('location')).toContain('redirect=%2Fcontacts%2Fjohn.doe')
   })
 
   it('should redirect authenticated users away from login page', async () => {
@@ -110,7 +142,7 @@ describe('middleware', () => {
     expect(response.headers.get('location')).toContain('/login')
   })
 
-  it('should reject invalid signatures', async () => {
+  it('should reject invalid signatures and delete the stale auth cookie', async () => {
     ;(crypto.subtle.verify as jest.Mock).mockResolvedValue(false)
     const token = makeToken({
       userId: 'user-1',
@@ -122,5 +154,21 @@ describe('middleware', () => {
     const response = await middleware(makeRequest('/dashboard', token) as never)
 
     expect(response.status).toBe(307)
+    expect(response.cookies.delete).toHaveBeenCalledWith('auth-token')
+  })
+
+  it('should reject malformed tokens without throwing', async () => {
+    const response = await middleware(makeRequest('/contacts', 'malformed-token') as never)
+
+    expect(response.status).toBe(307)
+    expect(response.headers.get('location')).toContain('/login')
+    expect(response.cookies.delete).toHaveBeenCalledWith('auth-token')
+  })
+
+  it('should delete stale auth cookies on public auth pages', async () => {
+    const response = await middleware(makeRequest('/login', 'malformed-token') as never)
+
+    expect(response.status).toBe(200)
+    expect(response.cookies.delete).toHaveBeenCalledWith('auth-token')
   })
 })
