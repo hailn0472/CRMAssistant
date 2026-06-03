@@ -1,4 +1,9 @@
-import type { AuthTokenResponse, LoginCredentials, RegisterData } from '../types/auth.types'
+import type {
+  AuthTokenResponse,
+  ForgotPasswordData,
+  LoginCredentials,
+  RegisterData,
+} from '../types/auth.types'
 
 async function parseErrorMessage(response: Response, fallback: string): Promise<string> {
   const contentType = response.headers.get('content-type') ?? ''
@@ -41,6 +46,19 @@ export const authService = {
     }
 
     return response.json() as Promise<AuthTokenResponse>
+  },
+
+  async forgotPassword(email: string): Promise<void> {
+    const data: ForgotPasswordData = { email }
+    const response = await fetch('/api/auth/forgot-password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    })
+
+    if (!response.ok) {
+      throw new Error(await parseErrorMessage(response, 'Password recovery failed'))
+    }
   },
 
   async logout(): Promise<void> {
