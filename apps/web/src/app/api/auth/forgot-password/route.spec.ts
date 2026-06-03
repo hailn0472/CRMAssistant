@@ -25,7 +25,8 @@ describe('forgot password route', () => {
 
     await expect(response.json()).resolves.toEqual({ ok: true })
     expect(response.status).toBe(200)
-    expect(mockFetch).toHaveBeenCalledWith('http://localhost:4000/auth/forgot-password', {
+    const apiUrl = process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:4000'
+    expect(mockFetch).toHaveBeenCalledWith(`${apiUrl}/auth/forgot-password`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email: 'user@example.com' }),

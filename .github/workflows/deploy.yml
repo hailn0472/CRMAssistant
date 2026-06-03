@@ -1,0 +1,269 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main, staging]
+
+env:
+  CI: true
+
+jobs:
+  validate-deploy-production:
+    name: Validate Production Deployment Build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 8.15.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma Client
+        run: pnpm --filter=api exec prisma generate
+
+      - name: Run lint
+        run: pnpm lint
+
+      - name: Run type check
+        run: pnpm type-check
+
+      - name: Run tests
+        run: pnpm test
+
+      - name: Run API tests
+        env:
+          JWT_SECRET: ci-test-secret-minimum-32-characters-long
+          SUPABASE_URL: https://placeholder.supabase.co
+          SUPABASE_ANON_KEY: placeholder-anon-key
+          SUPABASE_SERVICE_ROLE_KEY: placeholder-service-role-key
+          FRONTEND_URL: http://localhost:3000
+          TESTCONTAINERS_RYUK_DISABLED: true
+        run: pnpm test:api --filter=api
+
+      - name: Build all workspaces
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co' }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder-anon-key' }}
+          NEXT_PUBLIC_API_URL: ${{ secrets.NEXT_PUBLIC_API_URL || 'http://localhost:4000' }}
+        run: pnpm build
+
+  validate-deploy-staging:
+    name: Validate Staging Deployment Build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/staging'
+    environment: staging
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 8.15.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma Client
+        run: pnpm --filter=api exec prisma generate
+
+      - name: Run lint
+        run: pnpm lint
+
+      - name: Run type check
+        run: pnpm type-check
+
+      - name: Run tests
+        run: pnpm test
+
+      - name: Run API tests
+        env:
+          JWT_SECRET: ci-test-secret-minimum-32-characters-long
+          SUPABASE_URL: https://placeholder.supabase.co
+          SUPABASE_ANON_KEY: placeholder-anon-key
+          SUPABASE_SERVICE_ROLE_KEY: placeholder-service-role-key
+          FRONTEND_URL: http://localhost:3000
+          TESTCONTAINERS_RYUK_DISABLED: true
+        run: pnpm test:api --filter=api
+
+      - name: Build all workspaces
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL_STAGING || 'https://placeholder.supabase.co' }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY_STAGING || 'placeholder-anon-key' }}
+          NEXT_PUBLIC_API_URL: ${{ secrets.NEXT_PUBLIC_API_URL_STAGING || 'http://localhost:4000' }}
+        run: pnpm build
+
+  deploy-backend-production:
+    name: Deploy Backend Production (Render)
+    runs-on: ubuntu-latest
+    needs: validate-deploy-production
+    if: github.ref == 'refs/heads/main'
+    environment: production
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 8.15.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma Client
+        run: pnpm --filter=api exec prisma generate
+
+      - name: Run production Prisma migrations
+        if: ${{ (env.MIGRATE_DATABASE_URL != '' || env.DATABASE_URL != '') && env.RENDER_DEPLOY_HOOK_URL != '' }}
+        timeout-minutes: 10
+        run: |
+          if [ -n "$MIGRATE_DATABASE_URL" ]; then
+            export DATABASE_URL="$MIGRATE_DATABASE_URL"
+          fi
+          pnpm --filter=api exec prisma migrate deploy
+
+      - name: Deploy production backend to Render
+        if: ${{ env.RENDER_DEPLOY_HOOK_URL != '' }}
+        run: |
+          curl --fail --silent --show-error --request POST "$RENDER_DEPLOY_HOOK_URL"
+
+      - name: Skip production backend deploy (secrets not configured)
+        if: ${{ env.DATABASE_URL == '' || env.RENDER_DEPLOY_HOOK_URL == '' }}
+        run: echo "Skipping production backend deploy — DATABASE_URL or RENDER_DEPLOY_HOOK_URL secret not configured."
+
+  deploy-backend-staging:
+    name: Deploy Backend Staging (Render)
+    runs-on: ubuntu-latest
+    needs: validate-deploy-staging
+    if: github.ref == 'refs/heads/staging'
+    environment: staging
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      RENDER_DEPLOY_HOOK_URL_STAGING: ${{ secrets.RENDER_DEPLOY_HOOK_URL_STAGING }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 8.15.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma Client
+        run: pnpm --filter=api exec prisma generate
+
+      - name: Run staging Prisma migrations
+        if: ${{ env.DATABASE_URL != '' && env.RENDER_DEPLOY_HOOK_URL_STAGING != '' }}
+        timeout-minutes: 10
+        run: pnpm --filter=api exec prisma migrate deploy
+
+      - name: Deploy staging backend to Render
+        if: ${{ env.RENDER_DEPLOY_HOOK_URL_STAGING != '' }}
+        run: |
+          curl --fail --silent --show-error --request POST "$RENDER_DEPLOY_HOOK_URL_STAGING"
+
+      - name: Skip staging backend deploy (secrets not configured)
+        if: ${{ env.DATABASE_URL == '' || env.RENDER_DEPLOY_HOOK_URL_STAGING == '' }}
+        run: echo "Skipping staging backend deploy — DATABASE_URL or RENDER_DEPLOY_HOOK_URL_STAGING secret not configured."
+
+  deploy-frontend-production:
+    name: Deploy Frontend Production (Vercel)
+    runs-on: ubuntu-latest
+    needs: deploy-backend-production
+    if: github.ref == 'refs/heads/main'
+    environment: production
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Vercel CLI
+        if: ${{ env.VERCEL_TOKEN != '' && env.VERCEL_ORG_ID != '' && env.VERCEL_PROJECT_ID != '' }}
+        run: npm install -g vercel@latest
+
+      - name: Deploy production frontend to Vercel
+        if: ${{ env.VERCEL_TOKEN != '' && env.VERCEL_ORG_ID != '' && env.VERCEL_PROJECT_ID != '' }}
+        run: vercel deploy --prod --yes --token="$VERCEL_TOKEN"
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+      - name: Skip production frontend deploy (secrets not configured)
+        if: ${{ env.VERCEL_TOKEN == '' || env.VERCEL_ORG_ID == '' || env.VERCEL_PROJECT_ID == '' }}
+        run: echo "Skipping production frontend deploy — VERCEL_TOKEN, VERCEL_ORG_ID, or VERCEL_PROJECT_ID secret not configured."
+
+  deploy-frontend-staging:
+    name: Deploy Frontend Staging (Vercel Preview)
+    runs-on: ubuntu-latest
+    needs: deploy-backend-staging
+    if: github.ref == 'refs/heads/staging'
+    environment: staging
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID_STAGING: ${{ secrets.VERCEL_PROJECT_ID_STAGING }}
+      NEXT_PUBLIC_SUPABASE_URL_STAGING: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL_STAGING }}
+      NEXT_PUBLIC_SUPABASE_ANON_KEY_STAGING: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY_STAGING }}
+      NEXT_PUBLIC_API_URL_STAGING: ${{ secrets.NEXT_PUBLIC_API_URL_STAGING }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Vercel CLI
+        if: ${{ env.VERCEL_TOKEN != '' && env.VERCEL_ORG_ID != '' && env.VERCEL_PROJECT_ID_STAGING != '' && env.NEXT_PUBLIC_SUPABASE_URL_STAGING != '' && env.NEXT_PUBLIC_SUPABASE_ANON_KEY_STAGING != '' && env.NEXT_PUBLIC_API_URL_STAGING != '' }}
+        run: npm install -g vercel@latest
+
+      - name: Pull Vercel preview environment
+        if: ${{ env.VERCEL_TOKEN != '' && env.VERCEL_ORG_ID != '' && env.VERCEL_PROJECT_ID_STAGING != '' && env.NEXT_PUBLIC_SUPABASE_URL_STAGING != '' && env.NEXT_PUBLIC_SUPABASE_ANON_KEY_STAGING != '' && env.NEXT_PUBLIC_API_URL_STAGING != '' }}
+        run: vercel pull --yes --environment=preview --token="$VERCEL_TOKEN"
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_STAGING }}
+
+      - name: Deploy staging frontend to Vercel preview
+        if: ${{ env.VERCEL_TOKEN != '' && env.VERCEL_ORG_ID != '' && env.VERCEL_PROJECT_ID_STAGING != '' && env.NEXT_PUBLIC_SUPABASE_URL_STAGING != '' && env.NEXT_PUBLIC_SUPABASE_ANON_KEY_STAGING != '' && env.NEXT_PUBLIC_API_URL_STAGING != '' }}
+        run: |
+          preview_url=$(vercel deploy --yes --token="$VERCEL_TOKEN")
+          echo "Vercel preview URL: $preview_url"
+          echo "preview_url=$preview_url" >> "$GITHUB_OUTPUT"
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_STAGING }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL_STAGING }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY_STAGING }}
+          NEXT_PUBLIC_API_URL: ${{ secrets.NEXT_PUBLIC_API_URL_STAGING }}
+
+      - name: Skip staging frontend deploy (secrets not configured)
+        if: ${{ env.VERCEL_TOKEN == '' || env.VERCEL_ORG_ID == '' || env.VERCEL_PROJECT_ID_STAGING == '' || env.NEXT_PUBLIC_SUPABASE_URL_STAGING == '' || env.NEXT_PUBLIC_SUPABASE_ANON_KEY_STAGING == '' || env.NEXT_PUBLIC_API_URL_STAGING == '' }}
+        run: echo "Skipping staging frontend deploy — VERCEL_TOKEN, VERCEL_ORG_ID, VERCEL_PROJECT_ID_STAGING, NEXT_PUBLIC_SUPABASE_URL_STAGING, NEXT_PUBLIC_SUPABASE_ANON_KEY_STAGING, or NEXT_PUBLIC_API_URL_STAGING secret not configured."
