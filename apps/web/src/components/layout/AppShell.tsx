@@ -61,38 +61,54 @@ export function AppShell({ children }: AppShellProps): React.JSX.Element {
       </aside>
 
       <div className="lg:pl-60">
-        <header className="sticky top-0 z-20 border-b border-slate-200 bg-white" role="banner">
-          <div className="flex h-16 items-center gap-3 px-4 sm:px-6">
-            <MobileNavigation />
+        <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/95" role="banner">
+          <div className="grid h-16 grid-cols-[1fr_auto_1fr] items-center gap-3 px-4 sm:px-6 lg:px-8">
+            <div className="flex items-center">
+              <MobileNavigation />
+            </div>
 
             <Button
               type="button"
               variant="outline"
               aria-label="Search or run command"
-              className="h-11 flex-1 justify-start border-slate-200 bg-slate-50 text-slate-500 hover:bg-slate-100 sm:max-w-md"
+              className="h-10 w-[min(38rem,calc(100vw-9rem))] justify-start rounded-lg border-slate-200 bg-white text-slate-500 shadow-none hover:bg-slate-50"
             >
-              <span aria-hidden="true" className="text-sm">
+              <span aria-hidden="true" className="text-slate-400">
                 /
               </span>
-              <span>Search or run command</span>
-              <kbd className="ml-auto hidden rounded border border-slate-200 bg-white px-1.5 py-0.5 text-xs text-slate-400 sm:inline-flex">
+              <span className="truncate">Search or run command</span>
+              <kbd className="ml-auto hidden rounded-md border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[11px] font-medium text-slate-500 sm:inline-flex">
                 Ctrl K
               </kbd>
             </Button>
 
-            <Button type="button" variant="ghost" size="icon" aria-label="View notifications">
-              <span aria-hidden="true" className="text-sm font-semibold">
-                N
-              </span>
-            </Button>
+            <div className="flex items-center justify-end gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                aria-label="View notifications"
+                className="h-10 w-10 rounded-lg border-slate-200 bg-white text-slate-600 shadow-none hover:bg-slate-50 hover:text-slate-950"
+              >
+                <span aria-hidden="true" className="text-sm font-medium">
+                  !
+                </span>
+              </Button>
 
-            <div
-              aria-label="Current tenant and user"
-              className="hidden min-h-11 items-center rounded-md border border-slate-200 bg-white px-3 text-sm sm:flex"
-            >
-              <div className="text-right">
-                <p className="font-medium text-slate-950">Workspace</p>
-                <p className="text-xs text-slate-500">Signed in</p>
+              <div
+                aria-label="Current tenant and user"
+                className="hidden h-10 items-center gap-2 rounded-lg border border-slate-200 bg-white px-2.5 text-sm sm:flex"
+              >
+                <span
+                  aria-hidden="true"
+                  className="flex h-6 w-6 items-center justify-center rounded-md bg-slate-950 text-[10px] font-semibold text-white"
+                >
+                  W
+                </span>
+                <div className="leading-tight">
+                  <p className="text-sm font-medium text-slate-950">Workspace</p>
+                  <p className="text-[11px] text-slate-500">Signed in</p>
+                </div>
               </div>
             </div>
           </div>
