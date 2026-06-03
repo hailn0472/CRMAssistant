@@ -5,7 +5,10 @@ _bmad/custom/config.user.toml
 
 # Claude Code
 .codex
-.claude/worktrees/
+.claude/
+.agents/
+.local/
+skills-lock.json
 
 # Dependencies
 node_modules/

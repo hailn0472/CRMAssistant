@@ -1,15 +1,14 @@
-import { webcrypto } from 'crypto'
 import { TextDecoder, TextEncoder } from 'util'
 
 Object.assign(globalThis, { TextDecoder, TextEncoder })
-Object.defineProperty(globalThis, 'crypto', {
-  configurable: true,
-  value: webcrypto,
-})
 
 jest.mock('next/server', () => ({
   NextResponse: {
-    next: jest.fn(() => ({ status: 200, headers: new Map<string, string>() })),
+    next: jest.fn(() => ({
+      status: 200,
+      headers: new Map<string, string>(),
+      cookies: { delete: jest.fn() },
+    })),
     redirect: jest.fn((url: URL) => ({
       status: 307,
       headers: new Map<string, string>([['location', url.toString()]]),
@@ -19,7 +18,6 @@ jest.mock('next/server', () => ({
 }))
 
 import { middleware } from '../middleware'
-import { createWebSessionCookieValue, WEB_SESSION_COOKIE } from '../lib/auth-cookies'
 
 type MockRequest = {
   url: string
@@ -27,27 +25,38 @@ type MockRequest = {
   cookies: { get: (name: string) => { value: string } | undefined }
 }
 
-function makeRequest(path: string, session?: string): MockRequest {
+function encodeBase64Url(value: unknown): string {
+  return btoa(JSON.stringify(value)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+}
+
+function makeToken(payload: Record<string, unknown>): string {
+  return `${encodeBase64Url({ alg: 'HS256', typ: 'JWT' })}.${encodeBase64Url(payload)}.c2ln`
+}
+
+function makeRequest(path: string, token?: string): MockRequest {
   const url = new URL(`http://localhost:3000${path}`)
   return {
     url: url.toString(),
     nextUrl: { pathname: url.pathname, search: url.search },
     cookies: {
-      get: (name: string) =>
-        name === WEB_SESSION_COOKIE && session ? { value: session } : undefined,
+      get: (name: string) => (name === 'auth-token' && token ? { value: token } : undefined),
     },
   }
-}
-
-async function makeSession(expiresAtSeconds: number): Promise<string> {
-  return createWebSessionCookieValue(expiresAtSeconds)
 }
 
 describe('middleware', () => {
   beforeEach(() => {
     jest.clearAllMocks()
-    delete process.env['JWT_SECRET']
-    process.env['WEB_SESSION_SECRET'] = 'middleware-web-session-secret-32-chars'
+    process.env['JWT_SECRET'] = 'middleware-test-secret-min-32-chars!!'
+    Object.defineProperty(globalThis, 'crypto', {
+      configurable: true,
+      value: {
+        subtle: {
+          importKey: jest.fn().mockResolvedValue('key'),
+          verify: jest.fn().mockResolvedValue(true),
+        },
+      },
+    })
   })
 
   it('should redirect unauthenticated users to login for protected routes preserving query string', async () => {
@@ -58,47 +67,108 @@ describe('middleware', () => {
     expect(response.headers.get('location')).toContain('redirect=%2Fdashboard%3Ftab%3Ddeals')
   })
 
-  it('should allow unauthenticated users to visit login page', async () => {
-    const response = await middleware(makeRequest('/login') as never)
-
-    expect(response.status).toBe(200)
+  it('should allow unauthenticated users to visit public auth pages', async () => {
+    await expect(middleware(makeRequest('/login') as never)).resolves.toMatchObject({ status: 200 })
+    await expect(middleware(makeRequest('/register') as never)).resolves.toMatchObject({
+      status: 200,
+    })
+    await expect(middleware(makeRequest('/forgot-password') as never)).resolves.toMatchObject({
+      status: 200,
+    })
   })
 
-  it('should redirect authenticated users away from login page without JWT_SECRET', async () => {
-    const session = await makeSession(Math.floor(Date.now() / 1000) + 60)
+  it('should not treat sibling routes as public auth pages', async () => {
+    const response = await middleware(makeRequest('/login-help') as never)
 
-    const response = await middleware(makeRequest('/login', session) as never)
+    expect(response.status).toBe(307)
+    expect(response.headers.get('location')).toContain('/login')
+    expect(response.headers.get('location')).toContain('redirect=%2Flogin-help')
+  })
+
+  it('should not treat nested auth routes as public pages', async () => {
+    const response = await middleware(makeRequest('/login/help') as never)
+
+    expect(response.status).toBe(307)
+    expect(response.headers.get('location')).toContain('/login')
+    expect(response.headers.get('location')).toContain('redirect=%2Flogin%2Fhelp')
+  })
+
+  it('should protect routes containing dots', async () => {
+    const response = await middleware(makeRequest('/contacts/john.doe') as never)
+
+    expect(response.status).toBe(307)
+    expect(response.headers.get('location')).toContain('/login')
+    expect(response.headers.get('location')).toContain('redirect=%2Fcontacts%2Fjohn.doe')
+  })
+
+  it('should redirect authenticated users away from login page', async () => {
+    const token = makeToken({
+      userId: 'user-1',
+      tenantId: 'tenant-1',
+      role: 'SALES_REP',
+      exp: Math.floor(Date.now() / 1000) + 60,
+    })
+
+    const response = await middleware(makeRequest('/login', token) as never)
 
     expect(response.status).toBe(307)
     expect(response.headers.get('location')).toContain('/contacts')
   })
 
-  it('should allow authenticated users to visit protected routes without JWT_SECRET', async () => {
-    const session = await makeSession(Math.floor(Date.now() / 1000) + 60)
+  it('should allow authenticated users to visit protected routes', async () => {
+    const token = makeToken({
+      userId: 'user-1',
+      tenantId: 'tenant-1',
+      role: 'SALES_REP',
+      exp: Math.floor(Date.now() / 1000) + 60,
+    })
 
-    const response = await middleware(makeRequest('/dashboard', session) as never)
+    const response = await middleware(makeRequest('/dashboard', token) as never)
 
     expect(response.status).toBe(200)
   })
 
-  it('should reject expired web sessions', async () => {
-    const session = await makeSession(Math.floor(Date.now() / 1000) - 60)
+  it('should reject expired tokens', async () => {
+    const token = makeToken({
+      userId: 'user-1',
+      tenantId: 'tenant-1',
+      role: 'SALES_REP',
+      exp: Math.floor(Date.now() / 1000) - 60,
+    })
 
-    const response = await middleware(makeRequest('/dashboard', session) as never)
+    const response = await middleware(makeRequest('/dashboard', token) as never)
 
     expect(response.status).toBe(307)
     expect(response.headers.get('location')).toContain('/login')
   })
 
-  it('should reject tampered web sessions and delete auth cookies', async () => {
-    const session = await makeSession(Math.floor(Date.now() / 1000) + 60)
-    const replacementChar = session.endsWith('x') ? 'y' : 'x'
-    const tamperedSession = `${session.slice(0, -1)}${replacementChar}`
+  it('should reject invalid signatures and delete the stale auth cookie', async () => {
+    ;(crypto.subtle.verify as jest.Mock).mockResolvedValue(false)
+    const token = makeToken({
+      userId: 'user-1',
+      tenantId: 'tenant-1',
+      role: 'SALES_REP',
+      exp: Math.floor(Date.now() / 1000) + 60,
+    })
 
-    const response = await middleware(makeRequest('/dashboard', tamperedSession) as never)
+    const response = await middleware(makeRequest('/dashboard', token) as never)
 
     expect(response.status).toBe(307)
-    expect(response.cookies.delete).toHaveBeenCalledWith('web-auth-session')
-    expect(response.cookies.delete).toHaveBeenCalledWith('backend-auth-token')
+    expect(response.cookies.delete).toHaveBeenCalledWith('auth-token')
+  })
+
+  it('should reject malformed tokens without throwing', async () => {
+    const response = await middleware(makeRequest('/contacts', 'malformed-token') as never)
+
+    expect(response.status).toBe(307)
+    expect(response.headers.get('location')).toContain('/login')
+    expect(response.cookies.delete).toHaveBeenCalledWith('auth-token')
+  })
+
+  it('should delete stale auth cookies on public auth pages', async () => {
+    const response = await middleware(makeRequest('/login', 'malformed-token') as never)
+
+    expect(response.status).toBe(200)
+    expect(response.cookies.delete).toHaveBeenCalledWith('auth-token')
   })
 })
