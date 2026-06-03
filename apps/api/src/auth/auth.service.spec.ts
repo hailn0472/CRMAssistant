@@ -158,6 +158,17 @@ describe('AuthService', () => {
       await expect(service.register(dto)).rejects.toThrow(BadRequestException)
     })
 
+    it('should fail fast when Supabase registration does not respond', async () => {
+      jest.useFakeTimers()
+      mockSignUp.mockReturnValue(new Promise(() => undefined))
+
+      const registration = expect(service.register(dto)).rejects.toThrow(BadRequestException)
+      await jest.advanceTimersByTimeAsync(10_000)
+
+      await registration
+      jest.useRealTimers()
+    })
+
     it('should clean up Supabase user and throw when DB transaction fails', async () => {
       mockSignUp.mockResolvedValue({ data: { user: { id: FAKE_SUPABASE_UID } }, error: null })
       mockDeleteUser.mockResolvedValue({ error: null })
