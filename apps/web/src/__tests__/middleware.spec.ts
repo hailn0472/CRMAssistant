@@ -115,6 +115,20 @@ describe('middleware', () => {
     expect(response.headers.get('location')).toContain('/contacts')
   })
 
+  it('should redirect authenticated users from the root page to contacts', async () => {
+    const token = makeToken({
+      userId: 'user-1',
+      tenantId: 'tenant-1',
+      role: 'SALES_REP',
+      exp: Math.floor(Date.now() / 1000) + 60,
+    })
+
+    const response = await middleware(makeRequest('/', token) as never)
+
+    expect(response.status).toBe(307)
+    expect(response.headers.get('location')).toContain('/contacts')
+  })
+
   it('should allow authenticated users to visit protected routes', async () => {
     const token = makeToken({
       userId: 'user-1',
