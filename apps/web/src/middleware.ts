@@ -80,7 +80,7 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
     return response
   }
 
-  if (isAuthenticated && isPublicRoute) {
+  if (isAuthenticated && (isPublicRoute || pathname === '/')) {
     return NextResponse.redirect(new URL('/contacts', request.url))
   }
 
