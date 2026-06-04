@@ -79,12 +79,12 @@ export function ContactForm({ contact }: ContactFormProps): React.JSX.Element {
   }
 
   return (
-    <Card className="border-white/10 bg-white/[0.07] text-white">
-      <CardHeader>
-        <CardTitle>{contact ? 'Edit contact' : 'Create contact'}</CardTitle>
+    <Card className="border-slate-200 bg-white text-slate-950 shadow-sm">
+      <CardHeader className="border-b border-slate-100">
+        <CardTitle className="text-lg">{contact ? 'Edit contact' : 'Contact details'}</CardTitle>
       </CardHeader>
-      <CardContent>
-        <form className="grid gap-4 md:grid-cols-2" onSubmit={handleSubmit(onSubmit)}>
+      <CardContent className="pt-6">
+        <form className="grid gap-5 md:grid-cols-2" onSubmit={handleSubmit(onSubmit)}>
           <Field label="Email" error={errors.email?.message}>
             <Input type="email" {...register('email')} aria-invalid={Boolean(errors.email)} />
           </Field>
@@ -105,13 +105,20 @@ export function ContactForm({ contact }: ContactFormProps): React.JSX.Element {
           </Field>
 
           {errors.root?.message ? (
-            <p className="md:col-span-2 text-sm text-red-300" role="alert">
+            <p
+              className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 md:col-span-2"
+              role="alert"
+            >
               {errors.root.message}
             </p>
           ) : null}
 
-          <div className="md:col-span-2">
-            <Button disabled={isSubmitting} type="submit">
+          <div className="flex items-center justify-end border-t border-slate-100 pt-5 md:col-span-2">
+            <Button
+              disabled={isSubmitting}
+              type="submit"
+              className="bg-slate-950 text-white hover:bg-slate-800"
+            >
               {isSubmitting ? 'Saving...' : 'Save contact'}
             </Button>
           </div>
@@ -129,11 +136,11 @@ type FieldProps = {
 
 function Field({ label, error, children }: FieldProps): React.JSX.Element {
   return (
-    <label className="grid gap-2 text-sm font-medium text-slate-200">
+    <label className="grid gap-2 text-sm font-medium text-slate-700">
       {label}
       {children}
       {error ? (
-        <span className="text-xs text-red-300" role="alert">
+        <span className="text-xs font-medium text-red-700" role="alert">
           {error}
         </span>
       ) : null}

@@ -27,6 +27,8 @@ export type AuthTokenResponse = {
   name: string
 }
 
+const SUPABASE_AUTH_TIMEOUT_MS = 10_000
+
 @Injectable()
 export class AuthService {
   private readonly supabase: SupabaseClient
@@ -73,10 +75,13 @@ export class AuthService {
     }
 
     // 1. Create Supabase Auth user
-    const { data: supabaseData, error: supabaseError } = await this.supabase.auth.signUp({
-      email: dto.email,
-      password: dto.password,
-    })
+    const { data: supabaseData, error: supabaseError } = await this.withSupabaseAuthTimeout(
+      this.supabase.auth.signUp({
+        email: dto.email,
+        password: dto.password,
+      }),
+      'Registration timed out while contacting Supabase Auth',
+    )
 
     if (supabaseError || !supabaseData.user) {
       if (supabaseError?.message?.toLowerCase().includes('already registered')) {
@@ -131,11 +136,13 @@ export class AuthService {
   }
 
   async login(dto: LoginDto): Promise<AuthTokenResponse> {
-    const { data: supabaseData, error: supabaseError } =
-      await this.supabase.auth.signInWithPassword({
+    const { data: supabaseData, error: supabaseError } = await this.withSupabaseAuthTimeout(
+      this.supabase.auth.signInWithPassword({
         email: dto.email,
         password: dto.password,
-      })
+      }),
+      'Login timed out while contacting Supabase Auth',
+    )
 
     if (supabaseError || !supabaseData.user) {
       throw new UnauthorizedException('Invalid credentials')
@@ -209,6 +216,24 @@ export class AuthService {
     } catch {
       // Token already invalid — logout remains idempotent
     }
+  }
+
+  private withSupabaseAuthTimeout<T>(operation: Promise<T>, message: string): Promise<T> {
+    return new Promise<T>((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        reject(new BadRequestException(message))
+      }, SUPABASE_AUTH_TIMEOUT_MS)
+
+      operation
+        .then((value) => {
+          clearTimeout(timeout)
+          resolve(value)
+        })
+        .catch((error: unknown) => {
+          clearTimeout(timeout)
+          reject(error)
+        })
+    })
   }
 
   private signAuthToken(input: {

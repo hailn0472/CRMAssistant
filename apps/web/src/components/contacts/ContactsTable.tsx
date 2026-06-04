@@ -18,22 +18,22 @@ export function ContactsTable(): React.JSX.Element {
   })
 
   if (isLoading) {
-    return <p className="text-sm text-slate-300">Loading contacts...</p>
+    return <p className="text-sm text-slate-600">Loading contacts...</p>
   }
 
   if (error) {
-    return <p className="text-sm text-red-300">Unable to load contacts: {error.message}</p>
+    return <p className="text-sm text-red-700">Unable to load contacts: {error.message}</p>
   }
 
   if (!data || data.items.length === 0) {
     return (
-      <Card className="border-white/10 bg-white/[0.07] text-white">
-        <CardContent className="p-8 text-center">
-          <h2 className="text-xl font-semibold">No contacts yet</h2>
-          <p className="mt-2 text-sm text-slate-300">
+      <Card className="border-slate-200 bg-white text-slate-950 shadow-sm">
+        <CardContent className="p-10 text-center">
+          <h2 className="text-xl font-semibold tracking-tight text-slate-950">No contacts yet</h2>
+          <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-600">
             Create your first contact to build the customer source of truth.
           </p>
-          <Button asChild className="mt-5">
+          <Button asChild className="mt-5 bg-slate-950 text-white hover:bg-slate-800">
             <Link href="/contacts/new">Create contact</Link>
           </Button>
         </CardContent>
@@ -44,44 +44,44 @@ export function ContactsTable(): React.JSX.Element {
   const totalPages = Math.max(Math.ceil(data.total / data.pageSize), 1)
 
   return (
-    <Card className="border-white/10 bg-white/[0.07] text-white">
+    <Card className="border-slate-200 bg-white text-slate-950 shadow-sm">
       <CardHeader className="flex-row items-center justify-between space-y-0">
-        <CardTitle>Contacts</CardTitle>
-        <Button asChild>
+        <CardTitle className="text-lg">Contacts</CardTitle>
+        <Button asChild className="bg-slate-950 text-white hover:bg-slate-800">
           <Link href="/contacts/new">Create contact</Link>
         </Button>
       </CardHeader>
       <CardContent>
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto rounded-lg border border-slate-200">
           <table className="w-full text-left text-sm">
-            <thead className="border-b border-white/10 text-slate-300">
+            <thead className="border-b border-slate-200 bg-slate-50 text-slate-600">
               <tr>
-                <th className="py-3 pr-4 font-medium">Name</th>
+                <th className="py-3 pr-4 pl-4 font-medium">Name</th>
                 <th className="py-3 pr-4 font-medium">Email</th>
                 <th className="py-3 pr-4 font-medium">Company</th>
                 <th className="py-3 pr-4 font-medium">Job title</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-white/10">
+            <tbody className="divide-y divide-slate-100">
               {data.items.map((contact) => (
-                <tr className="hover:bg-white/[0.04]" key={contact.id}>
-                  <td className="py-3 pr-4">
+                <tr className="hover:bg-slate-50" key={contact.id}>
+                  <td className="py-3 pr-4 pl-4">
                     <Link
-                      className="font-medium text-cyan-100 hover:text-cyan-200"
+                      className="font-medium text-blue-700 hover:text-blue-800 hover:underline"
                       href={`/contacts/${contact.id}`}
                     >
                       {contact.firstName} {contact.lastName}
                     </Link>
                   </td>
-                  <td className="py-3 pr-4 text-slate-300">{contact.email}</td>
-                  <td className="py-3 pr-4 text-slate-300">{contact.company ?? '—'}</td>
-                  <td className="py-3 pr-4 text-slate-300">{contact.jobTitle ?? '—'}</td>
+                  <td className="py-3 pr-4 text-slate-600">{contact.email}</td>
+                  <td className="py-3 pr-4 text-slate-600">{contact.company ?? '-'}</td>
+                  <td className="py-3 pr-4 text-slate-600">{contact.jobTitle ?? '-'}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
-        <div className="mt-5 flex items-center justify-between text-sm text-slate-300">
+        <div className="mt-5 flex items-center justify-between text-sm text-slate-600">
           <span>
             Page {data.page} of {totalPages} · {data.total} contacts
           </span>

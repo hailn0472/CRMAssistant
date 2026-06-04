@@ -4,6 +4,8 @@ import userEvent from '@testing-library/user-event'
 import ForgotPasswordPage from '../forgot-password/page'
 import LoginPage from '../login/page'
 import RegisterPage from '../register/page'
+import toast from 'react-hot-toast'
+
 import { authService } from '@/services/auth.service'
 import { useAuth } from '@/hooks/useAuth'
 
@@ -17,8 +19,17 @@ jest.mock('@/services/auth.service', () => ({
   },
 }))
 
+jest.mock('react-hot-toast', () => ({
+  __esModule: true,
+  default: {
+    success: jest.fn(),
+    error: jest.fn(),
+  },
+}))
+
 const mockUseAuth = useAuth as jest.MockedFunction<typeof useAuth>
 const mockAuthService = authService as jest.Mocked<typeof authService>
+const mockToast = toast as jest.Mocked<typeof toast>
 
 describe('Auth pages', () => {
   beforeEach(() => {
@@ -55,12 +66,102 @@ describe('Auth pages', () => {
     expect(email).toHaveAttribute('aria-describedby', 'login-email-error')
   })
 
+  it('shows login success feedback while navigation is pending', async () => {
+    const user = userEvent.setup()
+    const login = jest.fn().mockResolvedValue(undefined)
+    mockUseAuth.mockReturnValue({
+      user: null,
+      isLoading: false,
+      login,
+      register: jest.fn(),
+      logout: jest.fn(),
+    })
+    render(<LoginPage />)
+
+    await user.type(screen.getByLabelText('Email'), 'user@example.com')
+    await user.type(screen.getByLabelText('Mật khẩu'), 'Password123')
+    await user.click(screen.getByRole('button', { name: 'Đăng nhập' }))
+
+    await waitFor(() => {
+      expect(mockToast.success).toHaveBeenCalledWith(
+        'Đăng nhập thành công. Đang mở workspace CRM...',
+      )
+    })
+  })
+
+  it('shows login failure feedback when authentication fails', async () => {
+    const user = userEvent.setup()
+    const login = jest.fn().mockRejectedValue(new Error('Invalid credentials'))
+    mockUseAuth.mockReturnValue({
+      user: null,
+      isLoading: false,
+      login,
+      register: jest.fn(),
+      logout: jest.fn(),
+    })
+    render(<LoginPage />)
+
+    await user.type(screen.getByLabelText('Email'), 'user@example.com')
+    await user.type(screen.getByLabelText('Mật khẩu'), 'wrong-password')
+    await user.click(screen.getByRole('button', { name: 'Đăng nhập' }))
+
+    await waitFor(() => {
+      expect(mockToast.error).toHaveBeenCalledWith('Invalid credentials')
+    })
+  })
+
   it('renders register with password helper text', () => {
     render(<RegisterPage />)
 
     expect(screen.getByRole('heading', { name: 'Đăng ký' })).toBeInTheDocument()
     expect(screen.getByText('Mật khẩu cần có ít nhất 8 ký tự.')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Đăng nhập' })).toHaveAttribute('href', '/login')
+  })
+
+  it('shows register success feedback while navigation is pending', async () => {
+    const user = userEvent.setup()
+    const register = jest.fn().mockResolvedValue(undefined)
+    mockUseAuth.mockReturnValue({
+      user: null,
+      isLoading: false,
+      login: jest.fn(),
+      register,
+      logout: jest.fn(),
+    })
+    render(<RegisterPage />)
+
+    await user.type(screen.getByLabelText('Họ và tên'), 'Nguyen Van A')
+    await user.type(screen.getByLabelText('Tên công ty'), 'ACME')
+    await user.type(screen.getByLabelText('Email'), 'user@example.com')
+    await user.type(screen.getByLabelText('Mật khẩu'), 'Password123')
+    await user.click(screen.getByRole('button', { name: 'Đăng ký' }))
+
+    await waitFor(() => {
+      expect(mockToast.success).toHaveBeenCalledWith('Đăng ký thành công. Đang mở workspace CRM...')
+    })
+  })
+
+  it('shows register failure feedback when registration fails', async () => {
+    const user = userEvent.setup()
+    const register = jest.fn().mockRejectedValue(new Error('Registration timed out'))
+    mockUseAuth.mockReturnValue({
+      user: null,
+      isLoading: false,
+      login: jest.fn(),
+      register,
+      logout: jest.fn(),
+    })
+    render(<RegisterPage />)
+
+    await user.type(screen.getByLabelText('Họ và tên'), 'Nguyen Van A')
+    await user.type(screen.getByLabelText('Tên công ty'), 'ACME')
+    await user.type(screen.getByLabelText('Email'), 'user@example.com')
+    await user.type(screen.getByLabelText('Mật khẩu'), 'Password123')
+    await user.click(screen.getByRole('button', { name: 'Đăng ký' }))
+
+    await waitFor(() => {
+      expect(mockToast.error).toHaveBeenCalledWith('Registration timed out')
+    })
   })
 
   it('submits forgot password and shows enumeration-safe success copy', async () => {

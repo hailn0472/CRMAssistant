@@ -2,6 +2,7 @@
 
 import { Suspense } from 'react'
 import Link from 'next/link'
+import toast from 'react-hot-toast'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -28,16 +29,20 @@ function RegisterForm(): React.JSX.Element {
     handleSubmit,
     formState: { errors, isSubmitting },
     setError,
+    clearErrors,
   } = useForm<RegisterFormData>({
     resolver: zodResolver(registerSchema),
   })
 
   const onSubmit = async (data: RegisterFormData): Promise<void> => {
+    clearErrors('root')
     try {
       await registerUser(data)
+      toast.success('Đăng ký thành công. Đang mở workspace CRM...')
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Đăng ký thất bại'
       setError('root', { message })
+      toast.error(message)
     }
   }
 
@@ -146,15 +151,6 @@ function RegisterForm(): React.JSX.Element {
                 </p>
               )}
             </div>
-
-            {errors.root && (
-              <div
-                className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
-                role="alert"
-              >
-                {errors.root.message}
-              </div>
-            )}
 
             <Button
               type="submit"
