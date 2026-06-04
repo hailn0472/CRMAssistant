@@ -1,37 +1,29 @@
-import { expect, test } from '@playwright/test'
+import { expect, test } from '../support/fixtures'
+import { LoginPage } from '../support/page-objects/login-page'
 
-/**
- * E2E Smoke Test: Homepage renders correctly
- *
- * Validates that the CRMAssistant homepage loads and renders
- * key UI elements from Story 1.2 (shadcn/ui components).
- */
-test.describe('Homepage smoke test', () => {
-  test.beforeEach(async ({ page }) => {
-    await page.goto('/')
-  })
+test.describe('Login page smoke test', () => {
+  test('should render the public login shell', async ({ page, userFactory }) => {
+    const user = userFactory.create()
+    const loginPage = new LoginPage(page)
 
-  test('should display the CRMAssistant title', async ({ page }) => {
-    await expect(page.getByRole('heading', { name: /CRMAssistant/i })).toBeVisible()
-  })
+    await test.step('Given a visitor opens the app root', async () => {
+      await loginPage.goto()
+    })
 
-  test('should render the page without errors', async ({ page }) => {
-    // Verify no error overlay is visible
-    await expect(page.locator('body')).toBeVisible()
-    // The main content area should be present
-    await expect(page.locator('main')).toBeVisible()
-  })
+    await test.step('Then the login form and navigation links are visible', async () => {
+      await expect(loginPage.title).toBeVisible()
+      await expect(loginPage.emailInput).toBeVisible()
+      await expect(loginPage.passwordInput).toBeVisible()
+      await expect(loginPage.submitButton).toBeVisible()
+      await expect(loginPage.forgotPasswordLink).toBeVisible()
+      await expect(loginPage.registerLink).toBeVisible()
+    })
 
-  test('should display shadcn/ui components demo', async ({ page }) => {
-    // Verify the demo card is rendered
-    await expect(page.getByText('shadcn/ui Components Demo')).toBeVisible()
-  })
-
-  test('should render primary button', async ({ page }) => {
-    await expect(page.getByRole('button', { name: 'Primary Button' })).toBeVisible()
-  })
-
-  test('should render email input field', async ({ page }) => {
-    await expect(page.getByPlaceholder('Nhập email...')).toBeVisible()
+    await test.step('And the form accepts realistic factory data', async () => {
+      await loginPage.emailInput.fill(user.email)
+      await loginPage.passwordInput.fill(user.password)
+      await expect(loginPage.emailInput).toHaveValue(user.email)
+      await expect(loginPage.passwordInput).toHaveValue(user.password)
+    })
   })
 })
