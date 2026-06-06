@@ -9,7 +9,7 @@ import type { AuthUser, RegisterData } from '../types/auth.types'
 
 function safeRedirectTarget(value: string | null): string {
   if (!value || !value.startsWith('/') || value.startsWith('//')) {
-    return '/contacts'
+    return '/dashboard'
   }
   return value
 }
@@ -61,7 +61,7 @@ export function useAuth(): {
         }
         setUser(authUser)
         setAccessToken(response.accessToken)
-        router.push('/contacts')
+        router.push('/dashboard')
       } finally {
         setLoading(false)
       }
