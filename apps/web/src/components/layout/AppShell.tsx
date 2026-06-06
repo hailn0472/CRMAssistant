@@ -97,7 +97,7 @@ export function AppShell({ children }: AppShellProps): React.JSX.Element {
 
               <div
                 aria-label="Current tenant and user"
-                className="hidden h-10 items-center gap-2 rounded-lg border border-slate-200 bg-white px-2.5 text-sm sm:flex"
+                className="hidden h-10 items-center gap-2 rounded-lg border border-slate-200 bg-white px-2.5 text-sm lg:flex"
               >
                 <span
                   aria-hidden="true"
