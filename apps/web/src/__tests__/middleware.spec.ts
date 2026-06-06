@@ -101,7 +101,7 @@ describe('middleware', () => {
     expect(response.headers.get('location')).toContain('redirect=%2Fcontacts%2Fjohn.doe')
   })
 
-  it('should redirect authenticated users away from login page', async () => {
+  it('should redirect authenticated users away from login page to Command Center', async () => {
     const token = makeToken({
       userId: 'user-1',
       tenantId: 'tenant-1',
@@ -112,10 +112,10 @@ describe('middleware', () => {
     const response = await middleware(makeRequest('/login', token) as never)
 
     expect(response.status).toBe(307)
-    expect(response.headers.get('location')).toContain('/contacts')
+    expect(response.headers.get('location')).toContain('/dashboard')
   })
 
-  it('should redirect authenticated users from the root page to contacts', async () => {
+  it('should redirect authenticated users from the root page to Command Center', async () => {
     const token = makeToken({
       userId: 'user-1',
       tenantId: 'tenant-1',
@@ -126,7 +126,7 @@ describe('middleware', () => {
     const response = await middleware(makeRequest('/', token) as never)
 
     expect(response.status).toBe(307)
-    expect(response.headers.get('location')).toContain('/contacts')
+    expect(response.headers.get('location')).toContain('/dashboard')
   })
 
   it('should allow authenticated users to visit protected routes', async () => {

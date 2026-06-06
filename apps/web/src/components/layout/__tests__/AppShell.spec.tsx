@@ -81,4 +81,46 @@ describe('AppShell', () => {
       screen.queryByRole('complementary', { name: 'Mobile CRM navigation' }),
     ).not.toBeInTheDocument()
   })
+
+  it('renders Command Center as a navigable sidebar link', () => {
+    render(<AppShell>Content</AppShell>)
+
+    const navigation = screen.getByRole('navigation', { name: 'CRM navigation' })
+
+    expect(within(navigation).getByRole('link', { name: 'Command Center' })).toHaveAttribute(
+      'href',
+      '/dashboard',
+    )
+    expect(within(navigation).getByRole('link', { name: 'Contacts' })).toHaveAttribute(
+      'href',
+      '/contacts',
+    )
+  })
+
+  it('marks Command Center active on the dashboard route', () => {
+    mockUsePathname.mockReturnValue('/dashboard')
+
+    render(<AppShell>Content</AppShell>)
+
+    expect(screen.getByRole('link', { name: 'Command Center' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    )
+    expect(screen.getByRole('link', { name: 'Contacts' })).not.toHaveAttribute('aria-current')
+  })
+
+  it('exposes Command Center in mobile navigation', () => {
+    mockUsePathname.mockReturnValue('/dashboard')
+
+    render(<AppShell>Content</AppShell>)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open navigation menu' }))
+
+    const mobileNavigation = screen.getByRole('complementary', { name: 'Mobile CRM navigation' })
+
+    expect(within(mobileNavigation).getByRole('link', { name: 'Command Center' })).toHaveAttribute(
+      'href',
+      '/dashboard',
+    )
+  })
 })

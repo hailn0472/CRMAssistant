@@ -15,7 +15,7 @@ interface NavigationItem {
 }
 
 const navigationItems: NavigationItem[] = [
-  { label: 'Command Center', marker: 'CC' },
+  { label: 'Command Center', href: '/dashboard', marker: 'CC' },
   { label: 'Contacts', href: '/contacts', marker: 'CO' },
   { label: 'Deals', marker: 'DE' },
   { label: 'Activities', marker: 'AC' },
