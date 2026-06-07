@@ -43,8 +43,7 @@ export async function applyAuthCookie(context: BrowserContext): Promise<void> {
     {
       name: 'auth-token',
       value: createTestJwt(),
-      domain: new URL(process.env['BASE_URL'] ?? 'http://localhost:3000').hostname,
-      path: '/',
+      url: process.env['BASE_URL'] ?? 'http://localhost:3000',
       httpOnly: true,
       sameSite: 'Lax',
     },
