@@ -14,7 +14,7 @@ function encodeBase64Url(value: string): string {
 }
 
 function createTestJwt(): string {
-  const secret = process.env['JWT_SECRET'] ?? 'playwright-test-secret-min-32-chars!!'
+  const secret = process.env['JWT_SECRET'] || 'playwright-test-secret-min-32-chars!!'
   const header = encodeBase64Url(JSON.stringify({ alg: 'HS256', typ: 'JWT' }))
   const payload = encodeBase64Url(
     JSON.stringify({
