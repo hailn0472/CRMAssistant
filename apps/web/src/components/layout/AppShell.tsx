@@ -14,9 +14,8 @@ interface WorkspaceHeaderProps {
   actions?: React.ReactNode
 }
 
-interface WorkspacePanelProps {
+interface WorkspacePanelProps extends React.HTMLAttributes<HTMLElement> {
   children: React.ReactNode
-  className?: string
 }
 
 export function WorkspaceHeader({
@@ -39,9 +38,13 @@ export function WorkspaceHeader({
   )
 }
 
-export function WorkspacePanel({ children, className }: WorkspacePanelProps): React.JSX.Element {
+export function WorkspacePanel({
+  children,
+  className,
+  ...props
+}: WorkspacePanelProps): React.JSX.Element {
   return (
-    <section className={cn('rounded-xl border border-slate-200 bg-white', className)}>
+    <section className={cn('rounded-xl border border-slate-200 bg-white', className)} {...props}>
       {children}
     </section>
   )
