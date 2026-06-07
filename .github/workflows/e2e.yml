@@ -12,7 +12,7 @@ jobs:
     name: Playwright E2E Tests
     runs-on: ubuntu-latest
     env:
-      JWT_SECRET: playwright-test-secret-min-32-chars!!
+      JWT_SECRET: ${{ github.base_ref == 'dev' && 'playwright-test-secret-min-32-chars!!' || secrets.JWT_SECRET }}
       BASE_URL: http://localhost:3000
       NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co' }}
       NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder-anon-key' }}
