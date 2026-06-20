@@ -3,7 +3,7 @@ import { defineConfig, devices } from '@playwright/test'
 const baseURL = process.env['BASE_URL'] ?? 'http://localhost:3000'
 const webServerCommand =
   process.env['PLAYWRIGHT_WEB_SERVER_COMMAND'] ??
-  'JWT_SECRET=${JWT_SECRET:-playwright-test-secret-min-32-chars!!} pnpm dev --filter=web'
+  'JWT_SECRET=${JWT_SECRET:-playwright-test-secret-min-32-chars!!} pnpm --filter=web dev'
 
 export default defineConfig({
   testDir: './tests/e2e',
