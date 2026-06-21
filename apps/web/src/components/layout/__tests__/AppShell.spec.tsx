@@ -2,9 +2,13 @@ import { fireEvent, render, screen, within } from '@testing-library/react'
 
 import { AppShell } from '../AppShell'
 
+const mockPush = jest.fn()
 const mockUsePathname = jest.fn(() => '/contacts')
 
 jest.mock('next/navigation', () => ({
+  useRouter: (): { push: jest.Mock } => ({
+    push: mockPush,
+  }),
   usePathname: (): string => mockUsePathname(),
 }))
 
@@ -56,6 +60,16 @@ describe('AppShell', () => {
     expect(screen.getByRole('button', { name: 'Search or run command' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'View notifications' })).toBeInTheDocument()
     expect(screen.getByLabelText('Current tenant and user')).toBeInTheDocument()
+  })
+
+  it('opens command dialog when topbar search trigger is clicked', () => {
+    render(<AppShell>Content</AppShell>)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Search or run command' }))
+
+    // The cmdk dialog has role="dialog" and includes the command input
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
+    expect(screen.getByPlaceholderText('Search or run command...')).toBeInTheDocument()
   })
 
   it('opens mobile navigation and exposes tenant/user context in the collapsed state', () => {

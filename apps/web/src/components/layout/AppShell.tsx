@@ -1,6 +1,11 @@
+'use client'
+
+import { useState } from 'react'
+
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
+import { CommandDialog } from './CommandDialog'
 import { DesktopNavigation, MobileNavigation } from './AppShellNavigation'
 
 interface AppShellProps {
@@ -51,8 +56,12 @@ export function WorkspacePanel({
 }
 
 export function AppShell({ children }: AppShellProps): React.JSX.Element {
+  const [commandOpen, setCommandOpen] = useState(false)
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-950">
+      <CommandDialog open={commandOpen} onOpenChange={setCommandOpen} />
+
       <aside className="fixed inset-y-0 left-0 hidden w-60 border-r border-slate-200 bg-white lg:flex lg:flex-col">
         <div className="flex h-16 items-center border-b border-slate-200 px-5">
           <div>
@@ -74,6 +83,7 @@ export function AppShell({ children }: AppShellProps): React.JSX.Element {
               type="button"
               variant="outline"
               aria-label="Search or run command"
+              onClick={() => setCommandOpen(true)}
               className="h-10 w-[min(38rem,calc(100vw-9rem))] justify-start rounded-lg border-slate-200 bg-white text-slate-500 shadow-none hover:bg-slate-50"
             >
               <span aria-hidden="true" className="text-slate-400">
