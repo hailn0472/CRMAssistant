@@ -15,13 +15,6 @@ function isPublicPath(pathname: string): boolean {
   return PUBLIC_PATHS.includes(pathname)
 }
 
-function base64UrlToBytes(value: string): Uint8Array {
-  const base64 = value.replace(/-/g, '+').replace(/_/g, '/')
-  const padded = base64.padEnd(Math.ceil(base64.length / 4) * 4, '=')
-  const binary = atob(padded)
-  return Uint8Array.from(binary, (char) => char.charCodeAt(0))
-}
-
 async function verifyJwt(token: string): Promise<boolean> {
   try {
     const secret = process.env['JWT_SECRET']
@@ -31,25 +24,19 @@ async function verifyJwt(token: string): Promise<boolean> {
     if (parts.length !== 3) return false
 
     const [encodedHeader, encodedPayload, encodedSignature] = parts
-    const key = await crypto.subtle.importKey(
-      'raw',
-      new TextEncoder().encode(secret),
-      { name: 'HMAC', hash: 'SHA-256' },
-      false,
-      ['verify'],
-    )
 
-    const isSignatureValid = await crypto.subtle.verify(
-      'HMAC',
-      key,
-      base64UrlToBytes(encodedSignature).buffer as ArrayBuffer,
-      new TextEncoder().encode(`${encodedHeader}.${encodedPayload}`).buffer as ArrayBuffer,
-    )
+    // Use Node's crypto.createHmac (dynamic import so Next.js doesn't
+    // tree-shake it in middleware builds). Web Crypto crypto.subtle with
+    // HMAC is rejected by some Node runtimes (e.g. GitHub Actions).
+    const { createHmac } = await import('crypto')
+    const expectedSignature = createHmac('sha256', secret)
+      .update(`${encodedHeader}.${encodedPayload}`)
+      .digest('base64url')
 
-    if (!isSignatureValid) return false
+    if (encodedSignature !== expectedSignature) return false
 
     const claims = JSON.parse(
-      new TextDecoder().decode(base64UrlToBytes(encodedPayload)),
+      Buffer.from(encodedPayload, 'base64url').toString('utf-8'),
     ) as JwtClaims
     const nowSeconds = Math.floor(Date.now() / 1000)
     return (
