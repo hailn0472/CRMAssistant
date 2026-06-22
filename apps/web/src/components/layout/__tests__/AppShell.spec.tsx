@@ -57,7 +57,7 @@ describe('AppShell', () => {
   it('renders accessible topbar placeholders', () => {
     render(<AppShell>Content</AppShell>)
 
-    expect(screen.getByRole('button', { name: 'Search or run command' })).toBeInTheDocument()
+    expect(screen.getByRole('searchbox', { name: 'Search or run command' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'View notifications' })).toBeInTheDocument()
     expect(screen.getByLabelText('Current tenant and user')).toBeInTheDocument()
   })
@@ -65,11 +65,17 @@ describe('AppShell', () => {
   it('opens command dialog when topbar search trigger is clicked', () => {
     render(<AppShell>Content</AppShell>)
 
-    fireEvent.click(screen.getByRole('button', { name: 'Search or run command' }))
+    const searchbox = screen.getByRole('searchbox', { name: 'Search or run command' })
+    fireEvent.click(searchbox)
+    // jsdom click does not trigger focus; fire explicitly so onFocus fires
+    fireEvent.focus(searchbox)
 
-    // The cmdk dialog has role="dialog" and includes the command input
-    expect(screen.getByRole('dialog')).toBeInTheDocument()
-    expect(screen.getByPlaceholderText('Search or run command...')).toBeInTheDocument()
+    const dialog = screen.getByRole('dialog')
+    expect(dialog).toBeInTheDocument()
+    expect(within(dialog).queryByText('Command Center')).not.toBeInTheDocument()
+    expect(
+      within(dialog).queryByPlaceholderText('Search contacts, deals, or actions...'),
+    ).not.toBeInTheDocument()
   })
 
   it('opens mobile navigation and exposes tenant/user context in the collapsed state', () => {

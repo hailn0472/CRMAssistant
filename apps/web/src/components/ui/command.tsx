@@ -13,10 +13,7 @@ function Command({
 }: React.ComponentProps<typeof CommandPrimitive>): React.ReactElement {
   return (
     <CommandPrimitive
-      className={cn(
-        'flex h-full w-full flex-col overflow-hidden rounded-md bg-white text-slate-950',
-        className,
-      )}
+      className={cn('flex h-full w-full flex-col bg-white text-slate-950', className)}
       {...props}
     />
   )
@@ -27,18 +24,21 @@ function CommandInput({
   ...props
 }: React.ComponentProps<typeof CommandPrimitive.Input>): React.ReactElement {
   return (
-    <div className="flex items-center border-b border-slate-200 px-3" cmdk-input-wrapper="">
+    <div
+      className="mx-4 mb-3 flex h-14 items-center rounded-full border border-slate-200 bg-white px-4 shadow-sm ring-offset-white focus-within:border-blue-200 focus-within:ring-2 focus-within:ring-blue-100"
+      cmdk-input-wrapper=""
+    >
       <svg
         xmlns="http://www.w3.org/2000/svg"
-        width="16"
-        height="16"
+        width="18"
+        height="18"
         viewBox="0 0 24 24"
         fill="none"
         stroke="currentColor"
         strokeWidth="2"
         strokeLinecap="round"
         strokeLinejoin="round"
-        className="mr-2 h-4 w-4 shrink-0 text-slate-400"
+        className="mr-3 h-[18px] w-[18px] shrink-0 text-slate-400"
         aria-hidden="true"
       >
         <circle cx="11" cy="11" r="8" />
@@ -46,7 +46,7 @@ function CommandInput({
       </svg>
       <CommandPrimitive.Input
         className={cn(
-          'flex h-11 w-full rounded-md bg-transparent py-3 text-sm outline-none placeholder:text-slate-400 disabled:cursor-not-allowed disabled:opacity-50',
+          'flex h-full w-full bg-transparent text-base outline-none placeholder:text-slate-400 disabled:cursor-not-allowed disabled:opacity-50',
           className,
         )}
         {...props}
@@ -61,7 +61,10 @@ function CommandList({
 }: React.ComponentProps<typeof CommandPrimitive.List>): React.ReactElement {
   return (
     <CommandPrimitive.List
-      className={cn('max-h-[300px] overflow-y-auto overflow-x-hidden', className)}
+      className={cn(
+        'max-h-[min(58vh,32rem)] overflow-y-auto overflow-x-hidden px-3 pb-4',
+        className,
+      )}
       {...props}
     />
   )
@@ -80,7 +83,7 @@ function CommandGroup({
   return (
     <CommandPrimitive.Group
       className={cn(
-        'overflow-hidden p-1 text-slate-950 [&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1.5 [&_[cmdk-group-heading]]:text-xs [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:text-slate-500',
+        'overflow-hidden py-2 text-slate-950 [&_[cmdk-group-heading]]:px-3 [&_[cmdk-group-heading]]:pb-2 [&_[cmdk-group-heading]]:pt-1 [&_[cmdk-group-heading]]:text-xs [&_[cmdk-group-heading]]:font-semibold [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-[0.18em] [&_[cmdk-group-heading]]:text-slate-500',
         className,
       )}
       {...props}
@@ -95,7 +98,7 @@ function CommandItem({
   return (
     <CommandPrimitive.Item
       className={cn(
-        'relative flex cursor-default select-none items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-none data-[disabled=true]:pointer-events-none data-[selected=true]:bg-blue-50 data-[selected=true]:text-blue-700 data-[disabled=true]:opacity-50',
+        'relative flex cursor-default select-none items-center gap-3 rounded-xl px-3 py-3 text-sm outline-none transition-colors data-[disabled=true]:pointer-events-none data-[selected=true]:bg-blue-50 data-[selected=true]:text-blue-700 data-[disabled=true]:opacity-55',
         className,
       )}
       {...props}

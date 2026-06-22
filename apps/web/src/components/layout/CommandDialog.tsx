@@ -3,36 +3,29 @@
 import { useRouter } from 'next/navigation'
 import { useCallback, useEffect, useRef } from 'react'
 
-import {
-  CommandDialog as CmdkDialog,
-  CommandInput,
-  CommandList,
-  CommandEmpty,
-  CommandGroup,
-  CommandItem,
-} from '@/components/ui/command'
+import { Command, CommandList, CommandGroup, CommandItem } from '@/components/ui/command'
 
 interface CrmCommandDialogProps {
   open: boolean
+  query: string
   onOpenChange: (open: boolean) => void
 }
 
-export function CommandDialog({ open, onOpenChange }: CrmCommandDialogProps): React.ReactElement {
+export function CommandDialog({
+  open,
+  query,
+  onOpenChange,
+}: CrmCommandDialogProps): React.ReactElement {
   const router = useRouter()
   const hasOpenedRef = useRef(false)
+  const panelRef = useRef<HTMLDivElement>(null)
+  const onOpenChangeRef = useRef(onOpenChange)
+  onOpenChangeRef.current = onOpenChange
 
   useEffect(() => {
-    if (!open) {
-      return
+    if (open) {
+      hasOpenedRef.current = true
     }
-
-    hasOpenedRef.current = true
-
-    requestAnimationFrame(() => {
-      const dialog = document.querySelector<HTMLElement>('[cmdk-dialog]')
-      dialog?.setAttribute('aria-labelledby', 'crm-command-dialog-title')
-      dialog?.setAttribute('aria-describedby', 'crm-command-dialog-description')
-    })
   }, [open])
 
   // Keyboard shortcut: Ctrl+K (or Cmd+K on Mac)
@@ -48,18 +41,89 @@ export function CommandDialog({ open, onOpenChange }: CrmCommandDialogProps): Re
     return () => document.removeEventListener('keydown', handleKeyDown)
   }, [onOpenChange])
 
-  // Focus return: after the dialog closes, return focus to the trigger button.
   useEffect(() => {
-    if (open || !hasOpenedRef.current) {
+    function handlePointerDown(event: PointerEvent): void {
+      if (!panelRef.current) {
+        return
+      }
+
+      const target = event.target as Node
+      const trigger = document.querySelector<HTMLElement>('[aria-label="Search or run command"]')
+
+      if (trigger?.contains(target) || panelRef.current.contains(target)) {
+        return
+      }
+
+      onOpenChangeRef.current(false)
+    }
+
+    document.addEventListener('pointerdown', handlePointerDown, true)
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown, true)
+    }
+  }, [])
+
+  // Focus return: after the command dropdown is closed via Escape, return focus to
+  // the trigger button. This must NOT fire for navigation closes or click-outside
+  // closes — otherwise the trigger's onFocus handler reopens the dialog.
+  const closedByEscapeRef = useRef(false)
+
+  useEffect(() => {
+    function handleEscapeKey(event: KeyboardEvent): void {
+      if (event.key === 'Escape') {
+        closedByEscapeRef.current = true
+        onOpenChangeRef.current(false)
+      }
+    }
+
+    document.addEventListener('keydown', handleEscapeKey)
+    return () => document.removeEventListener('keydown', handleEscapeKey)
+  }, [])
+
+  useEffect(() => {
+    if (open || !hasOpenedRef.current || !closedByEscapeRef.current) {
       return
     }
 
+    // Reset immediately so the ref is clean for the next open-close cycle.
+    closedByEscapeRef.current = false
+
     const trigger = document.querySelector<HTMLElement>('[aria-label="Search or run command"]')
-    // Defer to next tick so the Radix Dialog has finished its close animation / cleanup.
     requestAnimationFrame(() => {
-      trigger?.focus()
+      if (trigger) {
+        trigger.dataset.returningFocus = ''
+        trigger.focus()
+      }
     })
   }, [open])
+
+  const normalizedQuery = query.trim().toLowerCase()
+  const matches = useCallback(
+    (...values: string[]): boolean => {
+      if (!normalizedQuery) {
+        return true
+      }
+
+      return values.some((value) => value.toLowerCase().includes(normalizedQuery))
+    },
+    [normalizedQuery],
+  )
+
+  const showDashboard = matches('open dashboard', 'command center', 'overview')
+  const showContacts = matches('open contacts', 'crm contacts', 'customer records')
+  const showDeals = matches('open deals', 'pipeline opportunities')
+  const showCreateContact = matches('create contact', 'quick-create workflow')
+  const showCreateDeal = matches('create deal', 'pipeline creation flow')
+  const showAskAi = matches('ask ai', 'ai query', 'natural-language crm query')
+  const showSettings = matches('open settings', 'workspace preferences')
+  const hasResults =
+    showDashboard ||
+    showContacts ||
+    showDeals ||
+    showCreateContact ||
+    showCreateDeal ||
+    showAskAi ||
+    showSettings
 
   const handleNavigate = useCallback(
     (href: string) => {
@@ -69,14 +133,18 @@ export function CommandDialog({ open, onOpenChange }: CrmCommandDialogProps): Re
     [router, onOpenChange],
   )
 
+  if (!open) {
+    return <></>
+  }
+
   return (
-    <CmdkDialog
-      open={open}
-      onOpenChange={onOpenChange}
-      label="Search or run command"
+    <div
+      ref={panelRef}
+      role="dialog"
+      aria-modal="false"
+      aria-labelledby="crm-command-dialog-title"
       aria-describedby="crm-command-dialog-description"
-      contentClassName="overflow-hidden rounded-xl border border-slate-200 bg-white p-0 shadow-sm"
-      overlayClassName="bg-slate-950/20"
+      className="absolute left-0 right-0 top-full z-30 mt-2 rounded-2xl border border-slate-200 bg-white shadow-xl shadow-slate-950/10"
     >
       <h2 id="crm-command-dialog-title" className="sr-only">
         Search or run command
@@ -84,46 +152,131 @@ export function CommandDialog({ open, onOpenChange }: CrmCommandDialogProps): Re
       <p id="crm-command-dialog-description" className="sr-only">
         Search CRM navigation actions and planned command shortcuts.
       </p>
-      <CommandInput placeholder="Search or run command..." />
 
-      <CommandList>
-        <CommandEmpty>No results found.</CommandEmpty>
+      <Command label="Search or run command">
+        <CommandList>
+          {!hasResults ? (
+            <div className="px-4 py-6 text-center text-sm text-slate-500">
+              No matching command found.
+            </div>
+          ) : null}
 
-        <CommandGroup heading="Navigate">
-          <CommandItem onSelect={() => handleNavigate('/dashboard')}>Open Dashboard</CommandItem>
-          <CommandItem onSelect={() => handleNavigate('/contacts')}>Open Contacts</CommandItem>
-          <CommandItem onSelect={() => handleNavigate('/deals')}>Open Deals</CommandItem>
-        </CommandGroup>
+          {showDashboard || showContacts || showDeals ? (
+            <CommandGroup heading="Navigate">
+              {showDashboard ? (
+                <CommandItem onSelect={() => handleNavigate('/dashboard')}>
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue-50 text-sm font-semibold text-blue-600">
+                    D
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block font-medium text-slate-950">Open Dashboard</span>
+                    <span className="block text-xs leading-5 text-slate-500">
+                      Go to the dashboard overview
+                    </span>
+                  </span>
+                </CommandItem>
+              ) : null}
+              {showContacts ? (
+                <CommandItem onSelect={() => handleNavigate('/contacts')}>
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue-50 text-sm font-semibold text-blue-600">
+                    C
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block font-medium text-slate-950">Open Contacts</span>
+                    <span className="block text-xs leading-5 text-slate-500">
+                      View CRM contacts and customer records
+                    </span>
+                  </span>
+                </CommandItem>
+              ) : null}
+              {showDeals ? (
+                <CommandItem onSelect={() => handleNavigate('/deals')}>
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue-50 text-sm font-semibold text-blue-600">
+                    D
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block font-medium text-slate-950">Open Deals</span>
+                    <span className="block text-xs leading-5 text-slate-500">
+                      Review pipeline opportunities
+                    </span>
+                  </span>
+                </CommandItem>
+              ) : null}
+            </CommandGroup>
+          ) : null}
 
-        <CommandGroup heading="Create">
-          <CommandItem disabled value="create-contact">
-            Create Contact
-            <span className="ml-auto text-xs text-slate-400">(planned)</span>
-          </CommandItem>
-          <CommandItem disabled value="create-deal">
-            Create Deal
-            <span className="ml-auto text-xs text-slate-400">(planned)</span>
-          </CommandItem>
-        </CommandGroup>
+          {showCreateContact || showCreateDeal ? (
+            <CommandGroup heading="Create">
+              {showCreateContact ? (
+                <CommandItem disabled value="create-contact">
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-100 text-sm font-semibold text-slate-400">
+                    +
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block font-medium text-slate-700">Create Contact</span>
+                    <span className="block text-xs leading-5 text-slate-400">
+                      Planned quick-create workflow
+                    </span>
+                  </span>
+                  <span className="text-xs text-slate-400">(planned)</span>
+                </CommandItem>
+              ) : null}
+              {showCreateDeal ? (
+                <CommandItem disabled value="create-deal">
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-100 text-sm font-semibold text-slate-400">
+                    +
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block font-medium text-slate-700">Create Deal</span>
+                    <span className="block text-xs leading-5 text-slate-400">
+                      Planned pipeline creation flow
+                    </span>
+                  </span>
+                  <span className="text-xs text-slate-400">(planned)</span>
+                </CommandItem>
+              ) : null}
+            </CommandGroup>
+          ) : null}
 
-        <CommandGroup heading="AI">
-          <CommandItem
-            disabled
-            value="ask-ai"
-            className="text-violet-600 data-[selected=true]:bg-violet-50 data-[selected=true]:text-violet-700"
-          >
-            Ask AI
-            <span className="ml-auto text-xs text-violet-400">Planned — AI Query</span>
-          </CommandItem>
-        </CommandGroup>
+          {showAskAi ? (
+            <CommandGroup heading="AI">
+              <CommandItem
+                disabled
+                value="ask-ai"
+                className="text-violet-600 data-[selected=true]:bg-violet-50 data-[selected=true]:text-violet-700"
+              >
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-violet-50 text-sm font-semibold text-violet-600">
+                  AI
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block font-medium text-violet-600">Ask AI</span>
+                  <span className="block text-xs leading-5 text-violet-400">
+                    Planned natural-language CRM query
+                  </span>
+                </span>
+                <span className="text-xs text-violet-400">Planned — AI Query</span>
+              </CommandItem>
+            </CommandGroup>
+          ) : null}
 
-        <CommandGroup heading="System">
-          <CommandItem disabled value="settings">
-            Open Settings
-            <span className="ml-auto text-xs text-slate-400">(planned)</span>
-          </CommandItem>
-        </CommandGroup>
-      </CommandList>
-    </CmdkDialog>
+          {showSettings ? (
+            <CommandGroup heading="System">
+              <CommandItem disabled value="settings">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-100 text-sm font-semibold text-slate-400">
+                  ⚙
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block font-medium text-slate-700">Open Settings</span>
+                  <span className="block text-xs leading-5 text-slate-400">
+                    Planned workspace preferences area
+                  </span>
+                </span>
+                <span className="text-xs text-slate-400">(planned)</span>
+              </CommandItem>
+            </CommandGroup>
+          ) : null}
+        </CommandList>
+      </Command>
+    </div>
   )
 }

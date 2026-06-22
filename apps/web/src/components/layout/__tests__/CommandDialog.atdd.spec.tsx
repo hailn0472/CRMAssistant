@@ -26,7 +26,7 @@ describe('CommandDialog component ATDD', () => {
   })
 
   it('[P1] renders accessible dialog with title and description', async () => {
-    render(<CommandDialog open={true} onOpenChange={jest.fn()} />)
+    render(<CommandDialog query="" open={true} onOpenChange={jest.fn()} />)
 
     const dialog = screen.getByRole('dialog')
     expect(dialog).toBeVisible()
@@ -37,13 +37,19 @@ describe('CommandDialog component ATDD', () => {
         'Search CRM navigation actions and planned command shortcuts.',
       )
     })
+    expect(screen.queryByText('Command Center')).not.toBeInTheDocument()
+    expect(
+      screen.queryByPlaceholderText('Search contacts, deals, or actions...'),
+    ).not.toBeInTheDocument()
   })
 
   it('[P1] renders Navigate group with enabled actions', () => {
-    render(<CommandDialog open={true} onOpenChange={jest.fn()} />)
+    render(<CommandDialog query="" open={true} onOpenChange={jest.fn()} />)
 
     expect(screen.getByRole('option', { name: /open contacts/i })).toBeInTheDocument()
+    expect(screen.getByText('View CRM contacts and customer records')).toBeInTheDocument()
     expect(screen.getByRole('option', { name: /open deals/i })).toBeInTheDocument()
+    expect(screen.getByText('Review pipeline opportunities')).toBeInTheDocument()
     expect(screen.getByRole('option', { name: /open dashboard/i })).toBeInTheDocument()
   })
 
@@ -51,7 +57,7 @@ describe('CommandDialog component ATDD', () => {
     const user = userEvent.setup()
     const onOpenChange = jest.fn()
 
-    render(<CommandDialog open={true} onOpenChange={onOpenChange} />)
+    render(<CommandDialog query="" open={true} onOpenChange={onOpenChange} />)
 
     await user.click(screen.getByRole('option', { name: /open contacts/i }))
 
@@ -60,7 +66,7 @@ describe('CommandDialog component ATDD', () => {
   })
 
   it('[P2] renders Create group items as disabled with planned indicator', () => {
-    render(<CommandDialog open={true} onOpenChange={jest.fn()} />)
+    render(<CommandDialog query="" open={true} onOpenChange={jest.fn()} />)
 
     const createContact = screen.getByText(/create contact/i)
     expect(createContact).toBeInTheDocument()
@@ -76,7 +82,7 @@ describe('CommandDialog component ATDD', () => {
     const user = userEvent.setup()
     const onOpenChange = jest.fn()
 
-    render(<CommandDialog open={true} onOpenChange={onOpenChange} />)
+    render(<CommandDialog query="" open={true} onOpenChange={onOpenChange} />)
 
     // Create Contact is a disabled CommandItem — clicking it should trigger nothing
     const createContactItem = screen.getByRole('option', { name: /create contact/i })
@@ -86,7 +92,7 @@ describe('CommandDialog component ATDD', () => {
   })
 
   it('[P2] renders Ask AI as disabled with violet accent and planned label', () => {
-    render(<CommandDialog open={true} onOpenChange={jest.fn()} />)
+    render(<CommandDialog query="" open={true} onOpenChange={jest.fn()} />)
 
     const askAi = screen.getByText(/ask ai/i)
     expect(askAi).toBeInTheDocument()
@@ -95,7 +101,7 @@ describe('CommandDialog component ATDD', () => {
   })
 
   it('[P2] renders Settings as disabled placeholder', () => {
-    render(<CommandDialog open={true} onOpenChange={jest.fn()} />)
+    render(<CommandDialog query="" open={true} onOpenChange={jest.fn()} />)
 
     const settings = screen.getByText(/open settings/i)
     expect(settings).toBeInTheDocument()
@@ -110,7 +116,7 @@ describe('CommandDialog keyboard shortcut', () => {
   it('[P1] Ctrl+K opens the dialog', () => {
     const onOpenChange = jest.fn()
 
-    render(<CommandDialog open={false} onOpenChange={onOpenChange} />)
+    render(<CommandDialog query="" open={false} onOpenChange={onOpenChange} />)
 
     fireEvent.keyDown(document, { key: 'k', ctrlKey: true })
 
@@ -120,7 +126,7 @@ describe('CommandDialog keyboard shortcut', () => {
   it('[P1] Cmd+K opens the dialog on Mac', () => {
     const onOpenChange = jest.fn()
 
-    render(<CommandDialog open={false} onOpenChange={onOpenChange} />)
+    render(<CommandDialog query="" open={false} onOpenChange={onOpenChange} />)
 
     fireEvent.keyDown(document, { key: 'k', metaKey: true })
 
@@ -134,7 +140,7 @@ describe('CommandDialog focus management', () => {
     trigger.setAttribute('aria-label', 'Search or run command')
     document.body.appendChild(trigger)
 
-    render(<CommandDialog open={false} onOpenChange={jest.fn()} />)
+    render(<CommandDialog query="" open={false} onOpenChange={jest.fn()} />)
 
     await new Promise((resolve) => requestAnimationFrame(resolve))
 
@@ -147,7 +153,7 @@ describe('CommandDialog focus management', () => {
     const user = userEvent.setup()
     const onOpenChange = jest.fn()
 
-    render(<CommandDialog open={true} onOpenChange={onOpenChange} />)
+    render(<CommandDialog query="" open={true} onOpenChange={onOpenChange} />)
 
     await user.keyboard('{Escape}')
 
@@ -164,12 +170,12 @@ describe('CommandDialog focus management', () => {
 
     const onOpenChange = jest.fn()
 
-    const { rerender } = render(<CommandDialog open={true} onOpenChange={onOpenChange} />)
+    const { rerender } = render(<CommandDialog query="" open={true} onOpenChange={onOpenChange} />)
 
     await user.keyboard('{Escape}')
 
     // After closing, re-render with open=false to trigger the focus return effect
-    rerender(<CommandDialog open={false} onOpenChange={onOpenChange} />)
+    rerender(<CommandDialog query="" open={false} onOpenChange={onOpenChange} />)
 
     // Wait for requestAnimationFrame in the focus-return effect
     await new Promise((resolve) => requestAnimationFrame(resolve))

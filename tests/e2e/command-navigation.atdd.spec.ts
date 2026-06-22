@@ -27,16 +27,18 @@ test.describe('Command Navigation & Search ATDD', () => {
 
     await expect(page.getByRole('dialog', { name: /command|search/i })).not.toBeVisible()
 
-    await page.getByRole('button', { name: 'Search or run command' }).click()
+    await page.getByRole('searchbox', { name: 'Search or run command' }).click()
 
     await expect(page.getByRole('dialog', { name: /command|search/i })).toBeVisible()
+    await expect(page.getByText('Command Center')).not.toBeVisible()
+    await expect(page.getByPlaceholder('Search contacts, deals, or actions...')).not.toBeVisible()
   })
 
   test('[P1] command dialog shows navigation action groups with enabled and disabled items', async ({
     page,
   }) => {
     await page.goto('/dashboard')
-    await page.getByRole('button', { name: 'Search or run command' }).click()
+    await page.getByRole('searchbox', { name: 'Search or run command' }).click()
 
     const dialog = page.getByRole('dialog', { name: /command|search/i })
 
@@ -58,7 +60,7 @@ test.describe('Command Navigation & Search ATDD', () => {
     page,
   }) => {
     await page.goto('/dashboard')
-    await page.getByRole('button', { name: 'Search or run command' }).click()
+    await page.getByRole('searchbox', { name: 'Search or run command' }).click()
 
     const dialog = page.getByRole('dialog', { name: /command|search/i })
     await dialog.getByRole('option', { name: /open contacts/i }).click()
@@ -69,7 +71,7 @@ test.describe('Command Navigation & Search ATDD', () => {
 
   test('[P1] Escape key closes the command dialog', async ({ page }) => {
     await page.goto('/dashboard')
-    await page.getByRole('button', { name: 'Search or run command' }).click()
+    await page.getByRole('searchbox', { name: 'Search or run command' }).click()
 
     await expect(page.getByRole('dialog', { name: /command|search/i })).toBeVisible()
 
@@ -82,16 +84,16 @@ test.describe('Command Navigation & Search ATDD', () => {
     page,
   }) => {
     await page.goto('/dashboard')
-    await page.getByRole('button', { name: 'Search or run command' }).click()
+    await page.getByRole('searchbox', { name: 'Search or run command' }).click()
 
     await page.keyboard.press('Escape')
 
-    await expect(page.getByRole('button', { name: 'Search or run command' })).toBeFocused()
+    await expect(page.getByRole('searchbox', { name: 'Search or run command' })).toBeFocused()
   })
 
   test('[P2] disabled command items do not navigate on click', async ({ page }) => {
     await page.goto('/dashboard')
-    await page.getByRole('button', { name: 'Search or run command' }).click()
+    await page.getByRole('searchbox', { name: 'Search or run command' }).click()
 
     // Verify dialog is open and the Settings item is disabled
     await expect(page.getByRole('dialog', { name: /command|search/i })).toBeVisible()

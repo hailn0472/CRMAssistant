@@ -57,11 +57,10 @@ export function WorkspacePanel({
 
 export function AppShell({ children }: AppShellProps): React.JSX.Element {
   const [commandOpen, setCommandOpen] = useState(false)
+  const [commandQuery, setCommandQuery] = useState('')
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-950">
-      <CommandDialog open={commandOpen} onOpenChange={setCommandOpen} />
-
       <aside className="fixed inset-y-0 left-0 hidden w-60 border-r border-slate-200 bg-white lg:flex lg:flex-col">
         <div className="flex h-16 items-center border-b border-slate-200 px-5">
           <div>
@@ -79,21 +78,43 @@ export function AppShell({ children }: AppShellProps): React.JSX.Element {
               <MobileNavigation />
             </div>
 
-            <Button
-              type="button"
-              variant="outline"
-              aria-label="Search or run command"
-              onClick={() => setCommandOpen(true)}
-              className="h-10 w-[min(38rem,calc(100vw-9rem))] justify-start rounded-lg border-slate-200 bg-white text-slate-500 shadow-none hover:bg-slate-50"
-            >
-              <span aria-hidden="true" className="text-slate-400">
-                /
-              </span>
-              <span className="truncate">Search or run command</span>
-              <kbd className="ml-auto hidden rounded-md border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[11px] font-medium text-slate-500 sm:inline-flex">
-                Ctrl K
-              </kbd>
-            </Button>
+            <div className="relative w-[min(38rem,calc(100vw-9rem))]">
+              <div className="flex h-10 items-center rounded-lg border border-slate-200 bg-white px-3 text-slate-500 shadow-none focus-within:border-blue-200 focus-within:ring-2 focus-within:ring-blue-100">
+                <span aria-hidden="true" className="mr-2 text-slate-400">
+                  /
+                </span>
+                <input
+                  type="search"
+                  aria-label="Search or run command"
+                  aria-haspopup="dialog"
+                  value={commandQuery}
+                  onChange={(event) => {
+                    setCommandQuery(event.target.value)
+                    setCommandOpen(true)
+                  }}
+                  onFocus={(event) => {
+                    if ('dataset' in event.target) {
+                      const input = event.target as HTMLInputElement
+                      if (input.dataset.returningFocus !== undefined) {
+                        delete input.dataset.returningFocus
+                        return
+                      }
+                    }
+                    setCommandOpen(true)
+                  }}
+                  placeholder="Search or run command"
+                  className="h-full min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-slate-500"
+                />
+                <kbd className="ml-2 hidden rounded-md border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[11px] font-medium text-slate-500 sm:inline-flex">
+                  Ctrl K
+                </kbd>
+              </div>
+              <CommandDialog
+                open={commandOpen}
+                query={commandQuery}
+                onOpenChange={setCommandOpen}
+              />
+            </div>
 
             <div className="flex items-center justify-end gap-2">
               <Button
