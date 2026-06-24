@@ -6,38 +6,41 @@ import { useQuery } from '@tanstack/react-query'
 
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { EmptyState } from '@/components/shared/EmptyState'
+import { ErrorState } from '@/components/shared/ErrorState'
+import { TableSkeleton } from '@/components/shared/LoadingSkeleton'
 import { getContacts } from '@/services/contact.service'
 
 const PAGE_SIZE = 10
 
 export function ContactsTable(): React.JSX.Element {
   const [page, setPage] = useState(1)
-  const { data, error, isLoading } = useQuery({
+  const { data, error, isLoading, refetch } = useQuery({
     queryKey: ['contacts', page],
     queryFn: () => getContacts(page, PAGE_SIZE),
   })
 
   if (isLoading) {
-    return <p className="text-sm text-slate-600">Loading contacts...</p>
+    return <TableSkeleton rows={5} columns={4} />
   }
 
   if (error) {
-    return <p className="text-sm text-red-700">Unable to load contacts: {error.message}</p>
+    const errorMessage = error instanceof Error ? error.message : 'Unable to load contacts.'
+
+    return <ErrorState message={errorMessage} onRetry={() => refetch()} />
   }
 
   if (!data || data.items.length === 0) {
     return (
-      <Card className="border-slate-200 bg-white text-slate-950 shadow-sm">
-        <CardContent className="p-10 text-center">
-          <h2 className="text-xl font-semibold tracking-tight text-slate-950">No contacts yet</h2>
-          <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-600">
-            Create your first contact to build the customer source of truth.
-          </p>
-          <Button asChild className="mt-5 bg-slate-950 text-white hover:bg-slate-800">
+      <EmptyState
+        title="No contacts yet"
+        description="Create your first contact to build the customer source of truth."
+        action={
+          <Button asChild className="bg-slate-950 text-white hover:bg-slate-800">
             <Link href="/contacts/new">Create contact</Link>
           </Button>
-        </CardContent>
-      </Card>
+        }
+      />
     )
   }
 
