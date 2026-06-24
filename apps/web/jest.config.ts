@@ -14,6 +14,8 @@ const config: Config = {
   // Handle module name mapping (path aliases)
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1',
+    '^lucide-react$':
+      '<rootDir>/../../node_modules/.pnpm/lucide-react@0.474.0_react@18.3.1/node_modules/lucide-react/dist/cjs/lucide-react.js',
   },
   // Collect coverage from component and lib files; exclude page/layout/route files
   // Next.js App Router pages are server components — test them via E2E (Playwright), not unit tests

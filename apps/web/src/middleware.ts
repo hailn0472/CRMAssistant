@@ -15,6 +15,16 @@ function isPublicPath(pathname: string): boolean {
   return PUBLIC_PATHS.includes(pathname)
 }
 
+function base64UrlToBytes(str: string): Uint8Array {
+  const base64 = str.replace(/-/g, '+').replace(/_/g, '/')
+  const binary = atob(base64)
+  const bytes = new Uint8Array(binary.length)
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i)
+  }
+  return bytes
+}
+
 async function verifyJwt(token: string): Promise<boolean> {
   try {
     const secret = process.env['JWT_SECRET']
@@ -25,19 +35,27 @@ async function verifyJwt(token: string): Promise<boolean> {
 
     const [encodedHeader, encodedPayload, encodedSignature] = parts
 
-    // Use Node's crypto.createHmac (dynamic import so Next.js doesn't
-    // tree-shake it in middleware builds). Web Crypto crypto.subtle with
-    // HMAC is rejected by some Node runtimes (e.g. GitHub Actions).
-    const { createHmac } = await import('crypto')
-    const expectedSignature = createHmac('sha256', secret)
-      .update(`${encodedHeader}.${encodedPayload}`)
-      .digest('base64url')
+    const encoder = new TextEncoder()
+    const key = await crypto.subtle.importKey(
+      'raw',
+      encoder.encode(secret),
+      { name: 'HMAC', hash: 'SHA-256' },
+      false,
+      ['verify'],
+    )
 
-    if (encodedSignature !== expectedSignature) return false
+    const signatureBytes = base64UrlToBytes(encodedSignature)
+    const isValid = await crypto.subtle.verify(
+      'HMAC',
+      key,
+      new Uint8Array(signatureBytes),
+      encoder.encode(`${encodedHeader}.${encodedPayload}`),
+    )
 
-    const claims = JSON.parse(
-      Buffer.from(encodedPayload, 'base64url').toString('utf-8'),
-    ) as JwtClaims
+    if (!isValid) return false
+
+    const json = atob(encodedPayload.replace(/-/g, '+').replace(/_/g, '/'))
+    const claims = JSON.parse(json) as JwtClaims
     const nowSeconds = Math.floor(Date.now() / 1000)
     return (
       typeof claims.userId === 'string' &&
@@ -46,7 +64,8 @@ async function verifyJwt(token: string): Promise<boolean> {
       typeof claims.exp === 'number' &&
       claims.exp > nowSeconds
     )
-  } catch {
+  } catch (err) {
+    console.error('[middleware] verifyJwt error:', err)
     return false
   }
 }
