@@ -64,42 +64,41 @@ Use environments for lifecycle separation and paths for app/consumer boundaries.
 
 ## Environment inventory
 
-| Variable                         | Owner        | Environments             | Infisical path                              | Sensitivity        | Source                     | Consumers                                        | Rotation guidance                                                               |
-| -------------------------------- | ------------ | ------------------------ | ------------------------------------------- | ------------------ | -------------------------- | ------------------------------------------------ | ------------------------------------------------------------------------------- |
-| `PORT`                           | API          | dev, staging, production | `/apps/api`                                 | internal           | App config                 | Local API dev, Render backend                    | Change only with service port change                                            |
-| `DATABASE_URL`                   | API/platform | dev, staging, production | `/apps/api`                                 | critical           | Supabase/PostgreSQL        | Render backend, migration jobs, local API dev    | Rotate after migration and on incident; never expose to frontend                |
-| `SUPABASE_URL`                   | API/platform | dev, staging, production | `/apps/api`                                 | internal           | Supabase                   | Render backend, local API dev                    | Rotate/update when Supabase project changes                                     |
-| `SUPABASE_ANON_KEY`              | API/platform | dev, staging, production | `/apps/api`                                 | internal           | Supabase                   | Render backend if needed, local API dev          | Rotate when Supabase anon key changes                                           |
-| `SUPABASE_SERVICE_ROLE_KEY`      | API/platform | dev, staging, production | `/apps/api`                                 | critical           | Supabase                   | Render backend only                              | Rotate after migration and on incident; backend-only                            |
-| `JWT_SECRET`                     | API/security | dev, staging, production | `/apps/api`                                 | critical           | Generated secret           | Render backend, local API dev                    | Rotate after migration and on auth incident; dummy value only in tests          |
-| `FRONTEND_URL`                   | API/platform | dev, staging, production | `/apps/api`                                 | internal           | Deployment config          | Render backend                                   | Update when frontend URL changes                                                |
-| `WEB_SESSION_SECRET`             | Web/security | dev, staging, production | `/apps/web`                                 | critical           | Generated secret           | Next.js middleware and auth route handlers       | Rotate after migration and on auth incident; distinct from backend `JWT_SECRET` |
-| `NEXT_PUBLIC_API_URL`            | Web/platform | dev, staging, production | `/apps/web`                                 | public             | Deployment config          | Vercel frontend, local web dev                   | Update when API URL changes                                                     |
-| `NEXT_PUBLIC_SUPABASE_URL`       | Web/platform | dev, staging, production | `/apps/web`                                 | public             | Supabase                   | Vercel frontend, local web dev                   | Update when Supabase project changes                                            |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY`  | Web/platform | dev, staging, production | `/apps/web`                                 | public             | Supabase                   | Vercel frontend, local web dev                   | Rotate when Supabase anon key changes                                           |
-| `VERCEL_TOKEN`                   | CI/platform  | staging, production      | `/ci`                                       | critical           | Vercel                     | GitHub deploy, Infisical Vercel connection setup | Rotate after migration and on incident                                          |
-| `VERCEL_ORG_ID`                  | CI/platform  | staging, production      | `/ci`                                       | internal           | Vercel                     | GitHub deploy                                    | Update when Vercel org changes                                                  |
-| `VERCEL_PROJECT_ID`              | CI/platform  | production               | `/ci`                                       | internal           | Vercel                     | GitHub production deploy                         | Update when production project changes                                          |
-| `VERCEL_PROJECT_ID_STAGING`      | CI/platform  | staging                  | `/ci`                                       | internal           | Vercel                     | GitHub staging deploy                            | Update when staging project changes                                             |
-| `RENDER_DEPLOY_HOOK_URL`         | CI/platform  | production               | `/ci`                                       | critical           | Render                     | GitHub production deploy                         | Rotate after migration and on incident                                          |
-| `RENDER_DEPLOY_HOOK_URL_STAGING` | CI/platform  | staging                  | `/ci`                                       | critical           | Render                     | GitHub staging deploy                            | Rotate after migration and on incident                                          |
-| `INFISICAL_CLIENT_ID`            | CI/security  | staging, production      | GitHub Environment secret                   | critical bootstrap | Infisical machine identity | GitHub Actions only                              | Rotate with machine identity lifecycle                                          |
-| `INFISICAL_CLIENT_SECRET`        | CI/security  | staging, production      | GitHub Environment secret                   | critical bootstrap | Infisical machine identity | GitHub Actions only                              | Rotate with machine identity lifecycle and on incident                          |
-| `INFISICAL_API_URL`              | CI/security  | staging, production      | GitHub Environment secret or non-secret env | internal           | Infisical                  | GitHub Actions for EU Cloud/self-hosted          | Update when Infisical domain changes                                            |
+| Variable                         | Owner        | Environments             | Infisical path                              | Sensitivity        | Source                     | Consumers                                        | Rotation guidance                                                      |
+| -------------------------------- | ------------ | ------------------------ | ------------------------------------------- | ------------------ | -------------------------- | ------------------------------------------------ | ---------------------------------------------------------------------- |
+| `PORT`                           | API          | dev, staging, production | `/apps/api`                                 | internal           | App config                 | Local API dev, Render backend                    | Change only with service port change                                   |
+| `DATABASE_URL`                   | API/platform | dev, staging, production | `/apps/api`                                 | critical           | Supabase/PostgreSQL        | Render backend, migration jobs, local API dev    | Rotate after migration and on incident; never expose to frontend       |
+| `SUPABASE_URL`                   | API/platform | dev, staging, production | `/apps/api`                                 | internal           | Supabase                   | Render backend, local API dev                    | Rotate/update when Supabase project changes                            |
+| `SUPABASE_ANON_KEY`              | API/platform | dev, staging, production | `/apps/api`                                 | internal           | Supabase                   | Render backend if needed, local API dev          | Rotate when Supabase anon key changes                                  |
+| `SUPABASE_SERVICE_ROLE_KEY`      | API/platform | dev, staging, production | `/apps/api`                                 | critical           | Supabase                   | Render backend only                              | Rotate after migration and on incident; backend-only                   |
+| `JWT_SECRET`                     | API/security | dev, staging, production | `/apps/api`, `/apps/web`                    | critical           | Generated secret           | Render backend, Next.js middleware, local dev    | Rotate after migration and on auth incident; dummy value only in tests |
+| `FRONTEND_URL`                   | API/platform | dev, staging, production | `/apps/api`                                 | internal           | Deployment config          | Render backend                                   | Update when frontend URL changes                                       |
+| `NEXT_PUBLIC_API_URL`            | Web/platform | dev, staging, production | `/apps/web`                                 | public             | Deployment config          | Vercel frontend, local web dev                   | Update when API URL changes                                            |
+| `NEXT_PUBLIC_SUPABASE_URL`       | Web/platform | dev, staging, production | `/apps/web`                                 | public             | Supabase                   | Vercel frontend, local web dev                   | Update when Supabase project changes                                   |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY`  | Web/platform | dev, staging, production | `/apps/web`                                 | public             | Supabase                   | Vercel frontend, local web dev                   | Rotate when Supabase anon key changes                                  |
+| `VERCEL_TOKEN`                   | CI/platform  | staging, production      | `/ci`                                       | critical           | Vercel                     | GitHub deploy, Infisical Vercel connection setup | Rotate after migration and on incident                                 |
+| `VERCEL_ORG_ID`                  | CI/platform  | staging, production      | `/ci`                                       | internal           | Vercel                     | GitHub deploy                                    | Update when Vercel org changes                                         |
+| `VERCEL_PROJECT_ID`              | CI/platform  | production               | `/ci`                                       | internal           | Vercel                     | GitHub production deploy                         | Update when production project changes                                 |
+| `VERCEL_PROJECT_ID_STAGING`      | CI/platform  | staging                  | `/ci`                                       | internal           | Vercel                     | GitHub staging deploy                            | Update when staging project changes                                    |
+| `RENDER_DEPLOY_HOOK_URL`         | CI/platform  | production               | `/ci`                                       | critical           | Render                     | GitHub production deploy                         | Rotate after migration and on incident                                 |
+| `RENDER_DEPLOY_HOOK_URL_STAGING` | CI/platform  | staging                  | `/ci`                                       | critical           | Render                     | GitHub staging deploy                            | Rotate after migration and on incident                                 |
+| `INFISICAL_CLIENT_ID`            | CI/security  | staging, production      | GitHub Environment secret                   | critical bootstrap | Infisical machine identity | GitHub Actions only                              | Rotate with machine identity lifecycle                                 |
+| `INFISICAL_CLIENT_SECRET`        | CI/security  | staging, production      | GitHub Environment secret                   | critical bootstrap | Infisical machine identity | GitHub Actions only                              | Rotate with machine identity lifecycle and on incident                 |
+| `INFISICAL_API_URL`              | CI/security  | staging, production      | GitHub Environment secret or non-secret env | internal           | Infisical                  | GitHub Actions for EU Cloud/self-hosted          | Update when Infisical domain changes                                   |
 
-High-risk variables are `DATABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `JWT_SECRET`, `WEB_SESSION_SECRET`, `VERCEL_TOKEN`, `RENDER_DEPLOY_HOOK_URL`, `RENDER_DEPLOY_HOOK_URL_STAGING`, and Render API keys or deploy hooks used for platform connections. Treat Infisical machine identity secrets as high-risk bootstrap secrets.
+High-risk variables are `DATABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `JWT_SECRET`, `VERCEL_TOKEN`, `RENDER_DEPLOY_HOOK_URL`, `RENDER_DEPLOY_HOOK_URL_STAGING`, and Render API keys or deploy hooks used for platform connections. Treat Infisical machine identity secrets as high-risk bootstrap secrets.
 
 When adding a new environment variable, update the relevant `.env.example` file and this inventory in the same PR.
 
 ## What must not be stored in each path
 
-| Location                   | Do not store                                                                                                                              |
-| -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| `/apps/web`                | `DATABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, backend `JWT_SECRET`, Render deploy hooks, Vercel tokens, Infisical machine identity secrets |
-| `/apps/api`                | Vercel deploy credentials, Render deploy hooks, GitHub-only Infisical bootstrap credentials                                               |
-| `/ci`                      | Frontend/backend runtime values unless a deploy job explicitly needs them during build or release orchestration                           |
-| GitHub Environment secrets | App/runtime secrets after migration; keep only Infisical bootstrap credentials where possible                                             |
-| Repo files                 | Real secret values, exported `.env` files, downloaded secret dumps                                                                        |
+| Location                   | Do not store                                                                                                        |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `/apps/web`                | `DATABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, Render deploy hooks, Vercel tokens, Infisical machine identity secrets |
+| `/apps/api`                | Vercel deploy credentials, Render deploy hooks, GitHub-only Infisical bootstrap credentials                         |
+| `/ci`                      | Frontend/backend runtime values unless a deploy job explicitly needs them during build or release orchestration     |
+| GitHub Environment secrets | App/runtime secrets after migration; keep only Infisical bootstrap credentials where possible                       |
+| Repo files                 | Real secret values, exported `.env` files, downloaded secret dumps                                                  |
 
 API smoke tests are intentionally not Infisical consumers. They must continue using dummy env vars and Testcontainers.
 
@@ -163,12 +162,12 @@ API smoke tests must remain isolated with dummy env vars and Testcontainers. Do 
 
 Use an Infisical Vercel sync from `/apps/web` to the Vercel project environment. Map frontend build/runtime variables to `/apps/web`:
 
-- `WEB_SESSION_SECRET`
+- `JWT_SECRET`
 - `NEXT_PUBLIC_API_URL`
 - `NEXT_PUBLIC_SUPABASE_URL`
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
 
-Only `NEXT_PUBLIC_*` values should reach browser-exposed frontend environments. `WEB_SESSION_SECRET` is server-side only for Next.js middleware and auth route handlers. Do not sync `DATABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, or backend `JWT_SECRET` to frontend public env.
+Only `NEXT_PUBLIC_*` values should reach browser-exposed frontend environments. `JWT_SECRET` is server-side only for Next.js middleware.
 
 ### Render backend
 
