@@ -144,7 +144,7 @@ export function CommandDialog({
       aria-modal="false"
       aria-labelledby="crm-command-dialog-title"
       aria-describedby="crm-command-dialog-description"
-      className="absolute left-0 right-0 top-full z-30 mt-2 rounded-2xl border border-slate-200 bg-white shadow-xl shadow-slate-950/10"
+      className="absolute left-0 top-full z-30 mt-2 w-full rounded-2xl border border-slate-200 bg-white shadow-xl shadow-slate-950/10"
     >
       <h2 id="crm-command-dialog-title" className="sr-only">
         Search or run command

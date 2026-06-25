@@ -8,6 +8,14 @@ jest.mock('@/services/contact.service', () => ({
   getContacts: jest.fn(),
 }))
 
+// Mock ResizeObserver for ResponsiveTableWrapper
+class ResizeObserverMock {
+  observe(): void {}
+  unobserve(): void {}
+  disconnect(): void {}
+}
+global.ResizeObserver = ResizeObserverMock as unknown as typeof ResizeObserver
+
 function renderWithQueryClient(ui: React.ReactElement): void {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>)
@@ -48,6 +56,30 @@ describe('ContactsTable', () => {
     expect(await screen.findByText('Ada Lovelace')).toBeInTheDocument()
     expect(screen.getByText('ada@example.com')).toBeInTheDocument()
     expect(screen.getByText('Analytical Engines')).toBeInTheDocument()
+  })
+
+  it('renders scrollable table region', async () => {
+    ;(getContacts as jest.Mock).mockResolvedValue({
+      total: 1,
+      page: 1,
+      pageSize: 10,
+      items: [
+        {
+          id: 'contact-1',
+          email: 'ada@example.com',
+          firstName: 'Ada',
+          lastName: 'Lovelace',
+          company: 'Analytical Engines',
+          jobTitle: 'Founder',
+        },
+      ],
+    })
+
+    renderWithQueryClient(<ContactsTable />)
+
+    await screen.findByText('Ada Lovelace')
+
+    expect(screen.getByRole('region', { name: 'Scrollable table' })).toBeInTheDocument()
   })
 
   it('renders error state with retry button when loading fails', async () => {
