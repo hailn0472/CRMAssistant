@@ -1,8 +1,8 @@
-import Link from 'next/link'
 import { cookies } from 'next/headers'
 import { notFound, redirect } from 'next/navigation'
 
 import { ContactForm } from '@/components/contacts/ContactForm'
+import { WorkspaceHeader } from '@/components/layout/AppShell'
 import type { Contact } from '@/services/contact.service'
 
 const API_URL = process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:4000'
@@ -69,24 +69,9 @@ export default async function EditContactPage({
   const contact = await loadContact(params.id)
 
   return (
-    <main className="crm-mesh min-h-screen p-6 text-white">
-      <section className="mx-auto max-w-4xl">
-        <Link
-          className="text-sm text-cyan-100 hover:text-cyan-200"
-          href={`/contacts/${contact.id}`}
-        >
-          Back to contact
-        </Link>
-        <div className="my-6">
-          <p className="text-xs font-semibold uppercase tracking-[0.34em] text-cyan-200">
-            Edit contact
-          </p>
-          <h1 className="mt-2 text-4xl font-semibold tracking-[-0.04em]">
-            {contact.firstName} {contact.lastName}
-          </h1>
-        </div>
-        <ContactForm contact={contact} />
-      </section>
+    <main className="space-y-6 p-6 text-slate-950">
+      <WorkspaceHeader eyebrow="Edit contact" title={`${contact.firstName} ${contact.lastName}`} />
+      <ContactForm contact={contact} />
     </main>
   )
 }
