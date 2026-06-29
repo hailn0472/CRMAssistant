@@ -28,7 +28,8 @@ const authResponse = {
   tenantId: 'tenant-1',
   role: 'SALES_REP' as const,
   email: 'user@example.com',
-  name: 'Test User',
+  firstName: 'Test',
+  lastName: 'User',
 }
 
 describe('useAuth', () => {
@@ -56,7 +57,8 @@ describe('useAuth', () => {
       tenantId: 'tenant-1',
       role: 'SALES_REP',
       email: 'user@example.com',
-      name: 'Test User',
+      firstName: 'Test',
+      lastName: 'User',
     })
     expect(mockPush).toHaveBeenCalledWith('/dashboard')
     expect(result.current.isLoading).toBe(false)
@@ -94,7 +96,8 @@ describe('useAuth', () => {
       await result.current.register({
         email: 'user@example.com',
         password: 'Password123',
-        name: 'Test User',
+        firstName: 'Test',
+        lastName: 'User',
         tenantName: 'ACME Corp',
       })
     })
@@ -102,7 +105,8 @@ describe('useAuth', () => {
     expect(mockAuthService.register).toHaveBeenCalledWith({
       email: 'user@example.com',
       password: 'Password123',
-      name: 'Test User',
+      firstName: 'Test',
+      lastName: 'User',
       tenantName: 'ACME Corp',
     })
     expect(result.current.user?.email).toBe('user@example.com')

@@ -6,23 +6,54 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import { useAuthStore } from '@/stores/auth.store'
+import type { UserRole } from '@/types/auth.types'
 
 interface NavigationItem {
   label: string
   href?: string
   marker: string
   isAi?: boolean
+  roles?: UserRole[]
 }
 
-const navigationItems: NavigationItem[] = [
-  { label: 'Command Center', href: '/dashboard', marker: 'CC' },
-  { label: 'Contacts', href: '/contacts', marker: 'CO' },
-  { label: 'Deals', marker: 'DE' },
-  { label: 'Activities', marker: 'AC' },
-  { label: 'Reports', marker: 'RE' },
-  { label: 'AI Query', marker: 'AI', isAi: true },
-  { label: 'Settings', marker: 'SE' },
+interface NavigationSection {
+  title: string
+  items: NavigationItem[]
+}
+
+const navigationSections: NavigationSection[] = [
+  {
+    title: 'Workspace',
+    items: [
+      { label: 'Command Center', href: '/dashboard', marker: 'CC' },
+      { label: 'Contacts', href: '/contacts', marker: 'CO' },
+      { label: 'Deals', marker: 'DE' },
+      { label: 'Activities', marker: 'AC' },
+      { label: 'Reports', marker: 'RE' },
+    ],
+  },
+  {
+    title: 'AI Assistant',
+    items: [{ label: 'AI Query', marker: 'AI', isAi: true }],
+  },
+  {
+    title: 'Administration',
+    items: [
+      { label: 'Users', href: '/users', marker: 'US', roles: ['ADMIN', 'MANAGER'] },
+      { label: 'Settings', href: '/settings', marker: 'SE' },
+    ],
+  },
 ]
+
+function getVisibleSections(role: UserRole | null): NavigationSection[] {
+  return navigationSections
+    .map((section) => ({
+      ...section,
+      items: section.items.filter((item) => !item.roles || (role && item.roles.includes(role))),
+    }))
+    .filter((section) => section.items.length > 0)
+}
 
 function isActivePath(pathname: string, href: string): boolean {
   return pathname === href || pathname.startsWith(`${href}/`)
@@ -36,67 +67,84 @@ function NavigationList({
   compact?: boolean
 }): React.JSX.Element {
   const pathname = usePathname()
+  const role = useAuthStore((state) => state.user?.role ?? null)
+  const sections = getVisibleSections(role)
 
   return (
     <nav
       aria-label="CRM navigation"
-      className={cn('flex flex-col gap-1', compact ? 'px-1 py-4' : 'px-3 py-4')}
+      className={cn('flex flex-col gap-2', compact ? 'px-1 py-4' : 'px-3 py-4')}
     >
-      {navigationItems.map((item) => {
-        const isActive = item.href ? isActivePath(pathname, item.href) : false
-        const className = cn(
-          compact
-            ? 'flex flex-col min-h-11 items-center justify-center gap-0.5 rounded-md text-[10px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-1'
-            : 'flex min-h-11 items-center gap-3 rounded-md px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2',
-          isActive && 'border-l-2 border-blue-600 bg-blue-50 text-blue-700',
-          !isActive && !item.isAi && 'text-slate-600 hover:bg-slate-100 hover:text-slate-950',
-          !isActive && item.isAi && 'text-violet-700 hover:bg-violet-50',
-          !item.href && 'cursor-not-allowed opacity-70',
-        )
-        const marker = (
-          <span
-            aria-hidden="true"
-            className={cn(
-              'flex items-center justify-center rounded-md border text-[10px] font-semibold',
-              compact ? 'h-7 w-7' : 'h-7 w-7',
-              isActive && 'border-blue-200 bg-white text-blue-700',
-              !isActive && !item.isAi && 'border-slate-200 bg-slate-50 text-slate-500',
-              !isActive && item.isAi && 'border-violet-200 bg-violet-50 text-violet-700',
-            )}
-          >
-            {item.marker}
-          </span>
-        )
-
-        if (item.href) {
-          return (
-            <Link
-              key={item.label}
-              href={item.href}
-              aria-current={isActive ? 'page' : undefined}
-              aria-label={compact ? item.label : undefined}
-              className={className}
-              onClick={onNavigate}
+      {sections.map((section, sectionIdx) => (
+        <div key={section.title} className="flex flex-col gap-1">
+          {sectionIdx > 0 && compact && <hr className="my-2 border-slate-100" />}
+          {!compact && (
+            <div
+              className={cn(
+                'px-3 text-[10px] font-bold uppercase tracking-wider text-slate-400/80 mb-1.5',
+                sectionIdx > 0 ? 'mt-4' : 'mt-1',
+              )}
             >
-              {marker}
-              {!compact && <span>{item.label}</span>}
-            </Link>
-          )
-        }
+              {section.title}
+            </div>
+          )}
+          {section.items.map((item) => {
+            const isActive = item.href ? isActivePath(pathname, item.href) : false
+            const className = cn(
+              compact
+                ? 'flex flex-col min-h-11 items-center justify-center gap-0.5 rounded-md text-[10px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-1'
+                : 'flex min-h-11 items-center gap-3 rounded-md px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2',
+              isActive && 'border-l-2 border-blue-600 bg-blue-50 text-blue-700',
+              !isActive && !item.isAi && 'text-slate-600 hover:bg-slate-100 hover:text-slate-950',
+              !isActive && item.isAi && 'text-violet-700 hover:bg-violet-50',
+              !item.href && 'cursor-not-allowed opacity-70',
+            )
+            const marker = (
+              <span
+                aria-hidden="true"
+                className={cn(
+                  'flex items-center justify-center rounded-md border text-[10px] font-semibold',
+                  compact ? 'h-7 w-7' : 'h-7 w-7',
+                  isActive && 'border-blue-200 bg-white text-blue-700',
+                  !isActive && !item.isAi && 'border-slate-200 bg-slate-50 text-slate-500',
+                  !isActive && item.isAi && 'border-violet-200 bg-violet-50 text-violet-700',
+                )}
+              >
+                {item.marker}
+              </span>
+            )
 
-        return (
-          <button
-            key={item.label}
-            type="button"
-            disabled
-            aria-label={`${item.label} coming soon`}
-            className={className}
-          >
-            {marker}
-            {!compact && <span>{item.label}</span>}
-          </button>
-        )
-      })}
+            if (item.href) {
+              return (
+                <Link
+                  key={item.label}
+                  href={item.href}
+                  aria-current={isActive ? 'page' : undefined}
+                  aria-label={compact ? item.label : undefined}
+                  className={className}
+                  onClick={onNavigate}
+                >
+                  {marker}
+                  {!compact && <span>{item.label}</span>}
+                </Link>
+              )
+            }
+
+            return (
+              <button
+                key={item.label}
+                type="button"
+                disabled
+                aria-label={`${item.label} coming soon`}
+                className={className}
+              >
+                {marker}
+                {!compact && <span>{item.label}</span>}
+              </button>
+            )
+          })}
+        </div>
+      ))}
     </nav>
   )
 }

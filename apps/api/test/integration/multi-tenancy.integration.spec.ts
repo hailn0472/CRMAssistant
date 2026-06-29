@@ -65,9 +65,9 @@ describe('Multi-Tenancy Database Patterns (integration)', () => {
     return prisma.tenant.create({ data: { name } })
   }
 
-  async function createUser(tenantId: string, email: string, name: string): Promise<User> {
+  async function createUser(tenantId: string, email: string, firstName: string): Promise<User> {
     return prisma.user.create({
-      data: { tenantId, email, name, createdBy: 'test', updatedBy: 'test' },
+      data: { tenantId, email, firstName, lastName: 'Test', createdBy: 'test', updatedBy: 'test' },
     })
   }
 

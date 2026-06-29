@@ -53,7 +53,8 @@ async function main(): Promise<void> {
     create: {
       tenantId: acmeTenant.id,
       email: 'admin@example.com',
-      name: 'Acme Admin',
+      firstName: 'Acme',
+      lastName: 'Admin',
       createdBy: 'system',
       updatedBy: 'system',
     },
@@ -70,7 +71,8 @@ async function main(): Promise<void> {
     create: {
       tenantId: acmeTenant.id,
       email: 'sales@example.com',
-      name: 'Acme Sales Rep',
+      firstName: 'Acme',
+      lastName: 'Sales Rep',
       createdBy: 'system',
       updatedBy: 'system',
     },
@@ -89,20 +91,21 @@ async function main(): Promise<void> {
     create: {
       tenantId: betaTenant.id,
       email: 'admin@example.com',
-      name: 'Beta Admin',
+      firstName: 'Beta',
+      lastName: 'Admin',
       createdBy: 'system',
       updatedBy: 'system',
     },
   })
 
   console.log(
-    `✅ Users seeded: "${acmeAdmin.name}" (Acme), "${acmeSales.name}" (Acme), "${betaAdmin.name}" (Beta)`,
+    `✅ Users seeded: "${acmeAdmin.firstName} ${acmeAdmin.lastName}" (Acme), "${acmeSales.firstName} ${acmeSales.lastName}" (Acme), "${betaAdmin.firstName} ${betaAdmin.lastName}" (Beta)`,
   )
 
   // ── Demonstrate tenant-filtered query ─────────────────────────────────────
   const acmeUsersOnly = await prisma.user.findMany({
     where: { tenantId: acmeTenant.id },
-    select: { id: true, email: true, name: true },
+    select: { id: true, email: true, firstName: true, lastName: true },
   })
 
   console.log(

@@ -41,13 +41,21 @@ enum UserRole {
 /// Tenant-scoped user model with authentication support.
 /// Follows multi-tenancy pattern from Story 1.6.
 /// Extended in Story 1.7 to support Supabase Auth integration.
+/// Extended in Story 2.1: name → firstName + lastName, added profile fields, deactivation, lastLoginAt.
 model User {
   id             String    @id @default(uuid())
   tenantId       String
   email          String
-  name           String
+  firstName      String    @default("")
+  lastName       String
+  avatar         String?
+  phone          String?
+  jobTitle       String?
+  department     String?
   role           UserRole  @default(SALES_REP)
+  isActive       Boolean   @default(true)
   supabaseUserId String?   @unique // Link to Supabase Auth user — null until first login
+  lastLoginAt    DateTime?
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
   createdBy      String    @default("system")
@@ -60,6 +68,8 @@ model User {
   @@unique([tenantId, email])
   // Index for all tenant-scoped queries
   @@index([tenantId])
+  // Index for active-user queries
+  @@index([tenantId, isActive])
   // Index for fast Supabase user lookups
   @@index([supabaseUserId])
 }

@@ -24,7 +24,8 @@ describe('AuthController', () => {
     const dto: RegisterDto = {
       email: 'user@example.com',
       password: 'Password123',
-      name: 'Test User',
+      firstName: 'Test',
+      lastName: 'User',
       tenantName: 'ACME Corp',
     }
     const response = {
@@ -33,7 +34,8 @@ describe('AuthController', () => {
       tenantId: 'tenant-1',
       role: 'SALES_REP',
       email: 'user@example.com',
-      name: 'Test User',
+      firstName: 'Test',
+      lastName: 'User',
     }
     jest.mocked(authService.register).mockResolvedValue(response)
 
@@ -49,7 +51,8 @@ describe('AuthController', () => {
       tenantId: 'tenant-1',
       role: 'SALES_REP',
       email: 'user@example.com',
-      name: 'Test User',
+      firstName: 'Test',
+      lastName: 'User',
     }
     jest.mocked(authService.login).mockResolvedValue(response)
 
