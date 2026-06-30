@@ -130,7 +130,8 @@ describe('Auth pages', () => {
     })
     render(<RegisterPage />)
 
-    await user.type(screen.getByLabelText('Họ và tên'), 'Nguyen Van A')
+    await user.type(screen.getByLabelText('Tên'), 'Van')
+    await user.type(screen.getByLabelText('Họ'), 'Nguyen')
     await user.type(screen.getByLabelText('Tên công ty'), 'ACME')
     await user.type(screen.getByLabelText('Email'), 'user@example.com')
     await user.type(screen.getByLabelText('Mật khẩu'), 'Password123')
@@ -153,7 +154,8 @@ describe('Auth pages', () => {
     })
     render(<RegisterPage />)
 
-    await user.type(screen.getByLabelText('Họ và tên'), 'Nguyen Van A')
+    await user.type(screen.getByLabelText('Tên'), 'Van')
+    await user.type(screen.getByLabelText('Họ'), 'Nguyen')
     await user.type(screen.getByLabelText('Tên công ty'), 'ACME')
     await user.type(screen.getByLabelText('Email'), 'user@example.com')
     await user.type(screen.getByLabelText('Mật khẩu'), 'Password123')

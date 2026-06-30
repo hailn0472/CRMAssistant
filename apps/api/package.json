@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "scripts": {
-    "dev": "infisical run --env=dev --path=/apps/api -- bash -c 'pnpm prisma:migrate:dev && nest start --watch'",
+    "dev": "infisical run --env=dev --path=/apps/api -- nest start --watch",
     "build": "nest build",
     "start": "node dist/main",
     "lint": "eslint \"src/**/*.ts\"",

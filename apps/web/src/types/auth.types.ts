@@ -5,7 +5,9 @@ export type AuthUser = {
   tenantId: string
   role: UserRole
   email: string
-  name: string
+  firstName: string
+  lastName: string
+  avatar?: string | null
 }
 
 export type AuthTokenResponse = {
@@ -14,7 +16,9 @@ export type AuthTokenResponse = {
   tenantId: string
   role: UserRole
   email: string
-  name: string
+  firstName: string
+  lastName: string
+  avatar?: string | null
 }
 
 export type LoginCredentials = {
@@ -29,6 +33,7 @@ export type ForgotPasswordData = {
 export type RegisterData = {
   email: string
   password: string
-  name: string
+  firstName: string
+  lastName: string
   tenantName: string
 }

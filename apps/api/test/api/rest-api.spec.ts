@@ -31,7 +31,8 @@ describe('REST API harness', () => {
       data: {
         tenantId: tenant.id,
         email: 'login@example.com',
-        name: 'Login User',
+        firstName: 'Login',
+        lastName: 'User',
         supabaseUserId: SUPABASE_UID,
         createdBy: 'api-test',
         updatedBy: 'api-test',

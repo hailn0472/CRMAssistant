@@ -97,7 +97,8 @@ describe('Authentication System (integration)', () => {
       const res = await request(app.getHttpServer()).post('/auth/register').send({
         email: 'alice@example.com',
         password: 'Password123',
-        name: 'Alice',
+        firstName: 'Alice',
+        lastName: 'Smith',
         tenantName: 'ACME Corp',
       })
 
@@ -131,7 +132,8 @@ describe('Authentication System (integration)', () => {
       const res = await request(app.getHttpServer()).post('/auth/register').send({
         email: 'bob@example.com',
         password: 'Password123',
-        name: 'Bob',
+        firstName: 'Bob',
+        lastName: 'Brown',
       })
 
       expect(res.status).toBe(400)
@@ -141,7 +143,8 @@ describe('Authentication System (integration)', () => {
       const res = await request(app.getHttpServer()).post('/auth/register').send({
         email: 'blank@example.com',
         password: 'Password123',
-        name: 'Blank',
+        firstName: 'Blank',
+        lastName: 'User',
         tenantName: '  ',
       })
 
@@ -152,7 +155,8 @@ describe('Authentication System (integration)', () => {
       const res = await request(app.getHttpServer()).post('/auth/register').send({
         email: 'charlie@example.com',
         password: 'short',
-        name: 'Charlie',
+        firstName: 'Charlie',
+        lastName: 'Test',
         tenantName: 'Corp',
       })
 
@@ -168,7 +172,8 @@ describe('Authentication System (integration)', () => {
       const res = await request(app.getHttpServer()).post('/auth/register').send({
         email: 'dup@example.com',
         password: 'Password123',
-        name: 'Dup',
+        firstName: 'Dup',
+        lastName: 'Test',
         tenantName: 'Corp',
       })
 
@@ -182,7 +187,8 @@ describe('Authentication System (integration)', () => {
       await request(app.getHttpServer()).post('/auth/register').send({
         email: 'dave@example.com',
         password: 'Password123',
-        name: 'Dave',
+        firstName: 'Dave',
+        lastName: 'Test',
         tenantName: 'Dave Corp',
       })
 
@@ -217,7 +223,8 @@ describe('Authentication System (integration)', () => {
       const registerRes = await request(app.getHttpServer()).post('/auth/register').send({
         email: 'eve@example.com',
         password: 'Password123',
-        name: 'Eve',
+        firstName: 'Eve',
+        lastName: 'Test',
         tenantName: 'Eve Corp',
       })
       const { accessToken } = registerRes.body as { accessToken: string }
@@ -246,7 +253,8 @@ describe('Authentication System (integration)', () => {
       const registerRes = await request(app.getHttpServer()).post('/auth/register').send({
         email: 'grace@example.com',
         password: 'Password123',
-        name: 'Grace',
+        firstName: 'Grace',
+        lastName: 'Test',
         tenantName: 'Grace Corp',
       })
       expect(registerRes.status).toBe(201)
@@ -277,14 +285,16 @@ describe('Authentication System (integration)', () => {
           {
             tenantId: firstTenant.id,
             email: 'same@example.com',
-            name: 'Same A',
+            firstName: 'Same',
+            lastName: 'A',
             createdBy: 'test',
             updatedBy: 'test',
           },
           {
             tenantId: secondTenant.id,
             email: 'same@example.com',
-            name: 'Same B',
+            firstName: 'Same',
+            lastName: 'B',
             createdBy: 'test',
             updatedBy: 'test',
           },

@@ -24,14 +24,16 @@ describe('authService', () => {
       tenantId: 'tenant-1',
       role: 'SALES_REP',
       email: 'user@example.com',
-      name: 'Test User',
+      firstName: 'Test',
+      lastName: 'User',
     }
     mockFetch.mockResolvedValue(jsonResponse(response))
 
     const result = await authService.register({
       email: 'user@example.com',
       password: 'Password123',
-      name: 'Test User',
+      firstName: 'Test',
+      lastName: 'User',
       tenantName: 'ACME Corp',
     })
 
@@ -49,7 +51,8 @@ describe('authService', () => {
       authService.register({
         email: 'user@example.com',
         password: 'Password123',
-        name: 'Test User',
+        firstName: 'Test',
+        lastName: 'User',
         tenantName: 'ACME Corp',
       }),
     ).rejects.toThrow('Email already registered')
@@ -66,7 +69,8 @@ describe('authService', () => {
       authService.register({
         email: 'user@example.com',
         password: 'Password123',
-        name: 'Test User',
+        firstName: 'Test',
+        lastName: 'User',
         tenantName: 'ACME Corp',
       }),
     ).rejects.toThrow('Bad Gateway')
@@ -79,7 +83,8 @@ describe('authService', () => {
       tenantId: 'tenant-1',
       role: 'SALES_REP',
       email: 'user@example.com',
-      name: 'Test User',
+      firstName: 'Test',
+      lastName: 'User',
     }
     mockFetch.mockResolvedValue(jsonResponse(response))
 

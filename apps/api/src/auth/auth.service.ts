@@ -24,7 +24,9 @@ export type AuthTokenResponse = {
   tenantId: string
   role: string
   email: string
-  name: string
+  firstName: string
+  lastName: string
+  avatar?: string | null
 }
 
 const SUPABASE_AUTH_TIMEOUT_MS = 10_000
@@ -32,7 +34,7 @@ const SUPABASE_AUTH_TIMEOUT_MS = 10_000
 @Injectable()
 export class AuthService {
   private readonly supabase: SupabaseClient
-  private readonly supabaseAdmin?: SupabaseClient
+  readonly supabaseAdmin?: SupabaseClient
 
   constructor(
     private readonly prisma: PrismaService,
@@ -101,9 +103,11 @@ export class AuthService {
           data: {
             tenantId: tenant.id,
             email: dto.email,
-            name: dto.name.trim(),
+            firstName: dto.firstName.trim(),
+            lastName: dto.lastName.trim(),
             role: 'SALES_REP',
             supabaseUserId: supabaseData.user!.id,
+            isActive: true,
             createdBy: 'system',
             updatedBy: 'system',
           },
@@ -123,7 +127,9 @@ export class AuthService {
         tenantId: user.tenantId,
         role: user.role,
         email: user.email,
-        name: user.name,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        avatar: user.avatar,
       }
     } catch (error) {
       await this.cleanupSupabaseUser(supabaseData.user.id)
@@ -152,6 +158,7 @@ export class AuthService {
       where: {
         supabaseUserId: supabaseData.user.id,
         deletedAt: null,
+        isActive: true,
       },
     })
 
@@ -160,10 +167,22 @@ export class AuthService {
         where: {
           email: dto.email,
           deletedAt: null,
+          isActive: true,
         },
       })
 
       if (usersByEmail.length !== 1) {
+        // Check if user exists but is deactivated
+        const deactivatedUser = await this.prisma.user.findFirst({
+          where: {
+            email: dto.email,
+            deletedAt: null,
+            isActive: false,
+          },
+        })
+        if (deactivatedUser) {
+          throw new UnauthorizedException('Account has been deactivated')
+        }
         throw new UnauthorizedException('User account not found or ambiguous')
       }
 
@@ -171,6 +190,12 @@ export class AuthService {
       const linkedUser = await this.prisma.user.update({
         where: { id: userByEmail.id },
         data: { supabaseUserId: supabaseData.user.id, updatedBy: 'system' },
+      })
+
+      // Set lastLoginAt
+      await this.prisma.user.update({
+        where: { id: linkedUser.id },
+        data: { lastLoginAt: new Date() },
       })
 
       const accessToken = this.signAuthToken({
@@ -186,9 +211,17 @@ export class AuthService {
         tenantId: linkedUser.tenantId,
         role: linkedUser.role,
         email: linkedUser.email,
-        name: linkedUser.name,
+        firstName: linkedUser.firstName,
+        lastName: linkedUser.lastName,
+        avatar: linkedUser.avatar,
       }
     }
+
+    // Set lastLoginAt
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: { lastLoginAt: new Date() },
+    })
 
     const accessToken = this.signAuthToken({
       userId: user.id,
@@ -203,7 +236,8 @@ export class AuthService {
       tenantId: user.tenantId,
       role: user.role,
       email: user.email,
-      name: user.name,
+      firstName: user.firstName,
+      lastName: user.lastName,
     }
   }
 

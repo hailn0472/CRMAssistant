@@ -10,11 +10,51 @@ jest.mock('next/navigation', () => ({
     push: mockPush,
   }),
   usePathname: (): string => mockUsePathname(),
+  useSearchParams: (): URLSearchParams => new URLSearchParams(),
 }))
+
+const mockGetMe = jest.fn(() =>
+  Promise.resolve({
+    id: 'user-1',
+    tenantId: 'tenant-1',
+    role: 'ADMIN',
+    email: 'admin@example.com',
+    firstName: 'Admin',
+    lastName: 'User',
+  }),
+)
+
+jest.mock('@/services/user.service', () => ({
+  getMe: (): Promise<unknown> => mockGetMe(),
+}))
+
+const mockSetUser = jest.fn()
+const mockSetLoading = jest.fn()
+
+const mockAuthState = {
+  user: { role: 'ADMIN' } as { role: string } | null,
+  setUser: mockSetUser,
+  setLoading: mockSetLoading,
+  isLoading: true,
+}
+
+jest.mock('@/stores/auth.store', () => ({
+  useAuthStore: jest.fn((selector?: (state: unknown) => unknown) => {
+    if (selector) {
+      return selector(mockAuthState)
+    }
+    return mockAuthState
+  }),
+}))
+
+function setAuthRole(role: string | null): void {
+  mockAuthState.user = role ? { role } : null
+}
 
 describe('AppShell', () => {
   beforeEach(() => {
     mockUsePathname.mockReturnValue('/contacts')
+    setAuthRole('ADMIN')
   })
 
   function getDesktopNavigation(): HTMLElement {
@@ -56,6 +96,7 @@ describe('AppShell', () => {
     expect(within(desktopLinks).getByText('Activities')).toBeInTheDocument()
     expect(within(desktopLinks).getByText('Reports')).toBeInTheDocument()
     expect(within(desktopLinks).getByText('AI Query')).toBeInTheDocument()
+    expect(within(desktopLinks).getByText('Users')).toBeInTheDocument()
     expect(within(desktopLinks).getByText('Settings')).toBeInTheDocument()
   })
 
@@ -73,9 +114,9 @@ describe('AppShell', () => {
 
     expect(screen.getByRole('searchbox', { name: 'Search or run command' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'View notifications' })).toBeInTheDocument()
-    // Tenant and user is now always visible - at least one badge exists
-    const badges = screen.getAllByLabelText('Current tenant and user')
-    expect(badges.length).toBeGreaterThanOrEqual(1)
+    // User menu button is always visible
+    const menuButtons = screen.getAllByRole('button', { name: 'User menu' })
+    expect(menuButtons.length).toBeGreaterThanOrEqual(1)
   })
 
   it('opens command dialog when topbar search trigger is clicked', () => {
@@ -181,7 +222,8 @@ describe('AppShell', () => {
       expect(within(tabletNav).getByLabelText('Activities coming soon')).toBeInTheDocument()
       expect(within(tabletNav).getByLabelText('Reports coming soon')).toBeInTheDocument()
       expect(within(tabletNav).getByLabelText('AI Query coming soon')).toBeInTheDocument()
-      expect(within(tabletNav).getByLabelText('Settings coming soon')).toBeInTheDocument()
+      expect(within(tabletNav).getByRole('link', { name: 'Users' })).toBeInTheDocument()
+      expect(within(tabletNav).getByRole('link', { name: 'Settings' })).toBeInTheDocument()
     })
 
     it('renders mobile navigation trigger visible below lg', () => {
@@ -275,19 +317,66 @@ describe('AppShell', () => {
 
   // Tenant/user visibility tests (AC: 7)
   describe('Tenant and user visibility', () => {
-    it('shows tenant/user badge at all breakpoints', () => {
+    it('shows user menu button at all breakpoints', () => {
       render(<AppShell>Content</AppShell>)
 
-      const badges = screen.getAllByLabelText('Current tenant and user')
-      expect(badges.length).toBeGreaterThanOrEqual(1)
+      const menuButtons = screen.getAllByRole('button', { name: 'User menu' })
+      expect(menuButtons.length).toBeGreaterThanOrEqual(1)
     })
 
-    it('has compact mobile badge with workspace initial', () => {
+    it('has compact mobile user menu visible below lg', () => {
       render(<AppShell>Content</AppShell>)
 
-      // Below lg, compact badge is visible (lg:hidden)
-      const badges = screen.getAllByLabelText('Current tenant and user')
-      expect(badges.length).toBeGreaterThan(1)
+      // Below lg, compact badge is visible (lg:hidden class on the mobile container)
+      const menuButtons = screen.getAllByRole('button', { name: 'User menu' })
+      expect(menuButtons.length).toBeGreaterThan(1)
+    })
+  })
+
+  // Role-aware navigation tests (AC: 5, 14, 15)
+  describe('Role-aware navigation', () => {
+    it('shows Users nav item for ADMIN role', () => {
+      setAuthRole('ADMIN')
+      render(<AppShell>Content</AppShell>)
+
+      const desktopNav = within(getDesktopNavigation())
+      const desktopLinks = desktopNav.getByRole('navigation', { name: 'CRM navigation' })
+
+      expect(within(desktopLinks).getByText('Users')).toBeInTheDocument()
+      expect(within(desktopLinks).getByRole('link', { name: 'Users' })).toHaveAttribute(
+        'href',
+        '/users',
+      )
+    })
+
+    it('shows Users nav item for MANAGER role', () => {
+      setAuthRole('MANAGER')
+      render(<AppShell>Content</AppShell>)
+
+      const desktopNav = within(getDesktopNavigation())
+      const desktopLinks = desktopNav.getByRole('navigation', { name: 'CRM navigation' })
+
+      expect(within(desktopLinks).getByText('Users')).toBeInTheDocument()
+    })
+
+    it('hides Users nav item for SALES_REP role', () => {
+      setAuthRole('SALES_REP')
+      render(<AppShell>Content</AppShell>)
+
+      const desktopNav = within(getDesktopNavigation())
+      const desktopLinks = desktopNav.getByRole('navigation', { name: 'CRM navigation' })
+
+      expect(within(desktopLinks).queryByText('Users')).not.toBeInTheDocument()
+    })
+
+    it('hides Users nav item when user is null (unauthenticated)', () => {
+      setAuthRole(null)
+      render(<AppShell>Content</AppShell>)
+
+      const desktopNav = within(getDesktopNavigation())
+      const desktopLinks = desktopNav.getByRole('navigation', { name: 'CRM navigation' })
+
+      expect(within(desktopLinks).queryByText('Users')).not.toBeInTheDocument()
     })
   })
 })

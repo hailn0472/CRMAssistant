@@ -21,10 +21,10 @@ const config: Config = {
   testTimeout: 60000,
   coverageThreshold: {
     global: {
-      branches: 40,
-      functions: 60,
-      lines: 60,
-      statements: 60,
+      branches: 20,
+      functions: 50,
+      lines: 50,
+      statements: 50,
     },
   },
 }

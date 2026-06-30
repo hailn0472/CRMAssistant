@@ -13,9 +13,15 @@ export class RegisterDto {
 
   @IsString()
   @IsNotEmpty()
-  @MinLength(2)
+  @MinLength(1)
   @Transform(({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value))
-  declare name: string
+  declare firstName: string
+
+  @IsString()
+  @IsNotEmpty()
+  @MinLength(1)
+  @Transform(({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value))
+  declare lastName: string
 
   @IsString()
   @IsNotEmpty()

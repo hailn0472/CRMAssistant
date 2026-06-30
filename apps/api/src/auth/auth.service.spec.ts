@@ -28,7 +28,8 @@ const FAKE_TENANT_ID = 'tenant-uuid-0001'
 const FAKE_USER_ID = 'user-uuid-0001'
 const FAKE_SUPABASE_UID = 'supabase-uid-0001'
 const FAKE_EMAIL = 'test@example.com'
-const FAKE_NAME = 'Test User'
+const FAKE_FIRST_NAME = 'Test'
+const FAKE_LAST_NAME = 'User'
 const FAKE_JWT = 'signed.jwt.token'
 
 type MockPrisma = {
@@ -102,7 +103,8 @@ describe('AuthService', () => {
     const dto: RegisterDto = {
       email: FAKE_EMAIL,
       password: 'Password123',
-      name: FAKE_NAME,
+      firstName: 'Test',
+      lastName: 'User',
       tenantName: 'ACME Corp',
     }
 
@@ -112,7 +114,8 @@ describe('AuthService', () => {
         id: FAKE_USER_ID,
         tenantId: FAKE_TENANT_ID,
         email: FAKE_EMAIL,
-        name: FAKE_NAME,
+        firstName: 'Test',
+        lastName: 'User',
         role: 'SALES_REP',
       }
       prisma.$transaction.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) =>
@@ -199,7 +202,8 @@ describe('AuthService', () => {
       id: FAKE_USER_ID,
       tenantId: FAKE_TENANT_ID,
       email: FAKE_EMAIL,
-      name: FAKE_NAME,
+      firstName: FAKE_FIRST_NAME,
+      lastName: FAKE_LAST_NAME,
       role: 'SALES_REP',
       supabaseUserId: FAKE_SUPABASE_UID,
     }

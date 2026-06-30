@@ -15,7 +15,8 @@ import { useAuth } from '@/hooks/useAuth'
 const registerSchema = z.object({
   email: z.string().email('Email không hợp lệ'),
   password: z.string().min(8, 'Mật khẩu phải có ít nhất 8 ký tự'),
-  name: z.string().min(2, 'Tên phải có ít nhất 2 ký tự'),
+  firstName: z.string().min(1, 'Tên không được để trống'),
+  lastName: z.string().min(1, 'Họ không được để trống'),
   tenantName: z.string().min(2, 'Tên công ty phải có ít nhất 2 ký tự'),
 })
 
@@ -64,21 +65,41 @@ function RegisterForm(): React.JSX.Element {
         <CardContent>
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4" noValidate>
             <div className="space-y-2">
-              <label className="text-sm font-medium text-slate-800" htmlFor="name">
-                Họ và tên
+              <label className="text-sm font-medium text-slate-800" htmlFor="firstName">
+                Tên
               </label>
               <Input
-                id="name"
+                id="firstName"
                 type="text"
-                placeholder="Nguyễn Văn A"
-                autoComplete="name"
-                aria-describedby={errors.name ? 'register-name-error' : undefined}
-                aria-invalid={errors.name ? 'true' : 'false'}
-                {...register('name')}
+                placeholder="Văn A"
+                autoComplete="given-name"
+                aria-describedby={errors.firstName ? 'register-firstName-error' : undefined}
+                aria-invalid={errors.firstName ? 'true' : 'false'}
+                {...register('firstName')}
               />
-              {errors.name && (
-                <p id="register-name-error" className="text-sm text-destructive" role="alert">
-                  {errors.name.message}
+              {errors.firstName && (
+                <p id="register-firstName-error" className="text-sm text-destructive" role="alert">
+                  {errors.firstName.message}
+                </p>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-slate-800" htmlFor="lastName">
+                Họ
+              </label>
+              <Input
+                id="lastName"
+                type="text"
+                placeholder="Nguyễn"
+                autoComplete="family-name"
+                aria-describedby={errors.lastName ? 'register-lastName-error' : undefined}
+                aria-invalid={errors.lastName ? 'true' : 'false'}
+                {...register('lastName')}
+              />
+              {errors.lastName && (
+                <p id="register-lastName-error" className="text-sm text-destructive" role="alert">
+                  {errors.lastName.message}
                 </p>
               )}
             </div>

@@ -35,7 +35,9 @@ export function useAuth(): {
           tenantId: response.tenantId,
           role: response.role,
           email: response.email,
-          name: response.name,
+          firstName: response.firstName,
+          lastName: response.lastName,
+          avatar: response.avatar,
         }
         setUser(authUser)
         setAccessToken(response.accessToken)
@@ -57,7 +59,9 @@ export function useAuth(): {
           tenantId: response.tenantId,
           role: response.role,
           email: response.email,
-          name: response.name,
+          firstName: response.firstName,
+          lastName: response.lastName,
+          avatar: response.avatar,
         }
         setUser(authUser)
         setAccessToken(response.accessToken)
