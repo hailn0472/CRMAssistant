@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 
 import { useAuthStore } from '@/stores/auth.store'
 import { getMe } from '@/services/user.service'
@@ -75,7 +75,11 @@ export function AppShell({ children }: AppShellProps): React.JSX.Element {
           <CommandDialog open={commandOpen} query={commandQuery} onOpenChange={setCommandOpen} />
         </div>
       }
-      topbarActionsSlot={<TopbarActions />}
+      topbarActionsSlot={
+        <Suspense fallback={null}>
+          <TopbarActions />
+        </Suspense>
+      }
     >
       {children}
     </AppShellChrome>
