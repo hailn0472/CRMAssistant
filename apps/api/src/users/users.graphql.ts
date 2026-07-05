@@ -54,11 +54,7 @@ UserRef.implement({
 })
 
 const UserConnectionRef = builder
-  .objectRef<
-    Awaited<ReturnType<UsersService['findMany']>> & {
-      _batchedRoles?: Map<string, { id: string; name: string }[]>
-    }
-  >('UserConnection')
+  .objectRef<Awaited<ReturnType<UsersService['findMany']>>>('UserConnection')
   .implement({
     fields: (t) => ({
       items: t.field({ type: [UserRef], resolve: (connection) => connection.items }),
@@ -174,11 +170,7 @@ builder.queryFields((t) => ({
       )
       // Preload roles for all items in a single batch query
       const userIds = connection.items.map((item) => item.id)
-      connection['_batchedRoles'] = await getUsersService().getUserRolesBatch(
-        user.tenantId,
-        userIds,
-      )
-      context.rolesBatchCache = connection['_batchedRoles']
+      context.rolesBatchCache = await getUsersService().getUserRolesBatch(user.tenantId, userIds)
       return connection
     },
   }),
