@@ -39,6 +39,7 @@ function makePrisma(): MockPrisma {
       findUnique: jest.fn(),
       create: jest.fn(),
       delete: jest.fn(),
+      upsert: jest.fn(),
     },
     user: {
       findFirst: jest.fn(),
