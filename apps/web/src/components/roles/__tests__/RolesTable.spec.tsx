@@ -23,7 +23,7 @@ describe('RolesTable', () => {
   it('renders loading state', () => {
     mockGetRoles.mockReturnValue(new Promise(() => {}))
     renderWithQuery(<RolesTable />)
-    expect(screen.getByRole('table', { hidden: true })).toBeInTheDocument()
+    expect(screen.getByRole('status')).toBeInTheDocument()
   })
 
   it('renders role list with system and custom roles', async () => {
