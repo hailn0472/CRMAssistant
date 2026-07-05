@@ -33,7 +33,7 @@ export function useAuth(): {
         const authUser: AuthUser = {
           userId: response.userId,
           tenantId: response.tenantId,
-          role: response.role,
+          roles: response.roles,
           email: response.email,
           firstName: response.firstName,
           lastName: response.lastName,
@@ -57,7 +57,7 @@ export function useAuth(): {
         const authUser: AuthUser = {
           userId: response.userId,
           tenantId: response.tenantId,
-          role: response.role,
+          roles: response.roles,
           email: response.email,
           firstName: response.firstName,
           lastName: response.lastName,

@@ -4,6 +4,8 @@ import { notFound, redirect } from 'next/navigation'
 
 import { Button } from '@/components/ui/button'
 import { WorkspaceHeader, WorkspacePanel } from '@/components/layout/AppShell'
+import { UserRoleAssignment } from '@/components/users/UserRoleAssignment'
+import { QueryProvider } from '@/components/contacts/QueryProvider'
 import type { User } from '@/services/user.service'
 
 const API_URL = process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:4000'
@@ -38,7 +40,7 @@ async function loadUser(id: string): Promise<User> {
           phone
           jobTitle
           department
-          role
+          roles { id name }
           isActive
           lastLoginAt
           createdAt
@@ -89,7 +91,14 @@ export default async function UserDetailPage({
         <div className="grid gap-4 md:grid-cols-2">
           <Detail label="Email" value={user.email} />
           <Detail label="Phone" value={user.phone ?? '—'} />
-          <Detail label="Role" value={user.role} />
+          <Detail
+            label="Role"
+            value={
+              user.roles && user.roles.length > 0
+                ? user.roles.map((r) => r.name).join(', ')
+                : 'No roles'
+            }
+          />
           <Detail label="Status" value={user.isActive ? 'Active' : 'Deactivated'} />
           <Detail label="Job title" value={user.jobTitle ?? '—'} />
           <Detail label="Department" value={user.department ?? '—'} />
@@ -99,6 +108,13 @@ export default async function UserDetailPage({
           />
           <Detail label="Created" value={new Date(user.createdAt).toLocaleString()} />
         </div>
+      </WorkspacePanel>
+
+      <WorkspacePanel className="p-6">
+        <p className="text-sm font-semibold text-slate-700 mb-4">Role Assignment</p>
+        <QueryProvider>
+          <UserRoleAssignment userId={user.id} />
+        </QueryProvider>
       </WorkspacePanel>
     </main>
   )

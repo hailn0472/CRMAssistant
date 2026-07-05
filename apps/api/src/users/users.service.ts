@@ -7,13 +7,12 @@ import {
 import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library'
 
 import { PrismaService } from '../prisma/prisma.service'
-import type { User, UserRole, Prisma } from '@prisma/client'
+import type { User, Prisma } from '@prisma/client'
 
 export type CreateUserInput = {
   email: string
   firstName: string
   lastName: string
-  role?: string
   phone?: string
   jobTitle?: string
   department?: string
@@ -23,7 +22,6 @@ export type UpdateUserInput = {
   email?: string
   firstName?: string
   lastName?: string
-  role?: string
   phone?: string | null
   jobTitle?: string | null
   department?: string | null
@@ -38,7 +36,6 @@ export type UpdateProfileInput = {
 
 export type UserFilterInput = {
   search?: string
-  role?: string
   isActive?: boolean
 }
 
@@ -59,7 +56,6 @@ const userListSelect = {
   lastName: true,
   avatar: true,
   phone: true,
-  role: true,
   isActive: true,
   jobTitle: true,
   department: true,
@@ -79,7 +75,6 @@ export type UserConnection = {
 
 const MAX_REQUIRED_FIELD_LENGTH = 100
 const MAX_OPTIONAL_FIELD_LENGTH = 200
-const VALID_ROLES = ['ADMIN', 'MANAGER', 'SALES_REP']
 
 function normalizeRequiredString(value: string, fieldName: string): string {
   const normalizedValue = value.trim()
@@ -125,23 +120,11 @@ function normalizeEmail(email: string): string {
   return normalizedEmail
 }
 
-function normalizeRole(role: string | undefined): string | undefined {
-  if (role === undefined) {
-    return undefined
-  }
-  const normalized = role.trim().toUpperCase()
-  if (!VALID_ROLES.includes(normalized)) {
-    throw new BadRequestException(`Role must be one of: ${VALID_ROLES.join(', ')}`)
-  }
-  return normalized
-}
-
 function normalizeCreateInput(input: CreateUserInput): CreateUserInput {
   return {
     email: normalizeEmail(input.email),
     firstName: normalizeRequiredString(input.firstName, 'First name'),
     lastName: normalizeRequiredString(input.lastName, 'Last name'),
-    role: normalizeRole(input.role) ?? 'SALES_REP',
     phone: normalizeOptionalString(input.phone, 'Phone') ?? undefined,
     jobTitle: normalizeOptionalString(input.jobTitle, 'Job title') ?? undefined,
     department: normalizeOptionalString(input.department, 'Department') ?? undefined,
@@ -159,7 +142,6 @@ function normalizeUpdateInput(input: UpdateUserInput): UpdateUserInput {
       input.lastName === undefined
         ? undefined
         : normalizeRequiredString(input.lastName, 'Last name'),
-    role: normalizeRole(input.role),
     phone: normalizeOptionalString(input.phone, 'Phone'),
     jobTitle: normalizeOptionalString(input.jobTitle, 'Job title'),
     department: normalizeOptionalString(input.department, 'Department'),
@@ -189,13 +171,12 @@ export class UsersService {
     const normalizedInput = normalizeCreateInput(input)
 
     try {
-      return await this.prisma.user.create({
+      const user = await this.prisma.user.create({
         data: {
           tenantId,
           email: normalizedInput.email,
           firstName: normalizedInput.firstName,
           lastName: normalizedInput.lastName,
-          role: normalizedInput.role as UserRole,
           phone: normalizedInput.phone,
           jobTitle: normalizedInput.jobTitle,
           department: normalizedInput.department,
@@ -203,6 +184,29 @@ export class UsersService {
           updatedBy: userId,
         },
       })
+
+      // Assign default SALES_REP role if it exists for this tenant
+      const salesRepRole = await this.prisma.role.findFirst({
+        where: { tenantId, name: 'SALES_REP', deletedAt: null },
+      })
+
+      if (salesRepRole) {
+        const existingAssignment = await this.prisma.userRole.findUnique({
+          where: { userId_roleId: { userId: user.id, roleId: salesRepRole.id } },
+        })
+
+        if (!existingAssignment) {
+          await this.prisma.userRole.create({
+            data: {
+              userId: user.id,
+              roleId: salesRepRole.id,
+              assignedBy: userId,
+            },
+          })
+        }
+      }
+
+      return user
     } catch (error) {
       if (error instanceof PrismaClientKnownRequestError && error.code === 'P2002') {
         throw new ConflictException('User email already exists in this tenant')
@@ -211,7 +215,7 @@ export class UsersService {
     }
   }
 
-  async findOne(tenantId: string, id: string): Promise<User> {
+  async findOne(tenantId: string, id: string): Promise<User & { userRoles?: unknown[] }> {
     const user = await this.prisma.user.findFirst({
       where: { id, tenantId, deletedAt: null },
     })
@@ -223,7 +227,7 @@ export class UsersService {
     return user
   }
 
-  async findMe(tenantId: string, userId: string): Promise<User> {
+  async findMe(tenantId: string, userId: string): Promise<User & { userRoles?: unknown[] }> {
     const user = await this.prisma.user.findFirst({
       where: { id: userId, tenantId, deletedAt: null },
     })
@@ -243,14 +247,12 @@ export class UsersService {
     const page = Math.max(pagination.page ?? DEFAULT_PAGE, 1)
     const pageSize = Math.min(Math.max(pagination.pageSize ?? DEFAULT_PAGE_SIZE, 1), MAX_PAGE_SIZE)
     const search = filter.search?.trim()
-    const role = filter.role?.trim()
     const isActive = filter.isActive
 
     const where: Prisma.UserWhereInput = {
       tenantId,
       deletedAt: null,
       ...(isActive !== undefined ? { isActive } : {}),
-      ...(role ? { role: role as UserRole } : {}),
       ...(search
         ? {
             OR: [
@@ -287,7 +289,7 @@ export class UsersService {
     try {
       const result = await this.prisma.user.updateMany({
         where: { id, tenantId, deletedAt: null },
-        data: { ...normalizedInput, role: normalizedInput.role as UserRole, updatedBy: userId },
+        data: { ...normalizedInput, updatedBy: userId },
       })
 
       if (result.count === 0) {
@@ -355,6 +357,57 @@ export class UsersService {
     }
 
     return await this.findOne(tenantId, id)
+  }
+
+  async getUserRoles(_tenantId: string, userId: string): Promise<{ id: string; name: string }[]> {
+    const userRoles = await this.prisma.userRole.findMany({
+      where: { userId, role: { tenantId: _tenantId } },
+      include: {
+        role: {
+          select: { id: true, name: true },
+        },
+      },
+    })
+
+    return userRoles
+      .filter((ur) => ur.role !== null)
+      .map((ur) => ({
+        id: ur.role.id,
+        name: ur.role.name,
+      }))
+  }
+
+  async getUserRolesBatch(
+    _tenantId: string,
+    userIds: string[],
+  ): Promise<Map<string, { id: string; name: string }[]>> {
+    if (userIds.length === 0) {
+      return new Map()
+    }
+
+    const userRoles = await this.prisma.userRole.findMany({
+      where: { userId: { in: userIds }, role: { tenantId: _tenantId } },
+      include: {
+        role: {
+          select: { id: true, name: true },
+        },
+      },
+    })
+
+    const result = new Map<string, { id: string; name: string }[]>()
+    for (const userId of userIds) {
+      result.set(userId, [])
+    }
+
+    for (const ur of userRoles) {
+      if (ur.role !== null) {
+        const existing = result.get(ur.userId) ?? []
+        existing.push({ id: ur.role.id, name: ur.role.name })
+        result.set(ur.userId, existing)
+      }
+    }
+
+    return result
   }
 
   async deactivateUsers(tenantId: string, userId: string, ids: string[]): Promise<number> {

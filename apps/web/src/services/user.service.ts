@@ -8,7 +8,7 @@ export type User = {
   phone?: string | null
   jobTitle?: string | null
   department?: string | null
-  role: string
+  roles: { id: string; name: string }[]
   isActive: boolean
   lastLoginAt?: string | null
   createdAt: string
@@ -26,7 +26,6 @@ export type CreateUserFormData = {
   email: string
   firstName: string
   lastName: string
-  role?: string
   phone?: string | null
   jobTitle?: string | null
   department?: string | null
@@ -36,7 +35,6 @@ export type UpdateUserFormData = {
   email?: string
   firstName?: string
   lastName?: string
-  role?: string
   phone?: string | null
   jobTitle?: string | null
   department?: string | null
@@ -79,7 +77,7 @@ const USER_LIST_FIELDS = `
   firstName
   lastName
   avatar
-  role
+  roles { id name }
   isActive
   jobTitle
   department
@@ -98,7 +96,7 @@ const USER_FULL_FIELDS = `
   phone
   jobTitle
   department
-  role
+  roles { id name }
   isActive
   lastLoginAt
   createdAt
@@ -123,7 +121,7 @@ export async function getUser(id: string): Promise<User> {
 export async function getUsers(
   page: number,
   pageSize: number,
-  filter?: { search?: string; role?: string; isActive?: boolean },
+  filter?: { search?: string; isActive?: boolean },
 ): Promise<UserConnection> {
   const data = await graphqlRequest<{ users: UserConnection }>(
     `query Users($filter: UserFilterInput, $pagination: UserPaginationInput) {

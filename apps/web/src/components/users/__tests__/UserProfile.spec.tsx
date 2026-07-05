@@ -9,7 +9,7 @@ const baseUser: User = {
   email: 'ada@example.com',
   firstName: 'Ada',
   lastName: 'Lovelace',
-  role: 'ADMIN',
+  roles: [{ id: 'role-1', name: 'ADMIN' }],
   isActive: true,
   createdAt: '2026-06-01T00:00:00.000Z',
   updatedAt: '2026-06-01T00:00:00.000Z',
@@ -44,7 +44,7 @@ describe('UserProfile', () => {
     expect(screen.getByText('Engineer')).toBeInTheDocument()
   })
 
-  it('falls back to role when job title is absent', () => {
+  it('falls back to roles when job title is absent', () => {
     render(<UserProfile user={baseUser} />)
 
     expect(screen.getByText('ADMIN')).toBeInTheDocument()

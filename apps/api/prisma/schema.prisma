@@ -27,21 +27,17 @@ model Tenant {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  users    User[]
-  contacts Contact[]
-}
-
-// User roles for RBAC
-enum UserRole {
-  ADMIN
-  MANAGER
-  SALES_REP
+  users     User[]
+  contacts  Contact[]
+  roles     Role[]
+  auditLogs AuditLog[]
 }
 
 /// Tenant-scoped user model with authentication support.
 /// Follows multi-tenancy pattern from Story 1.6.
 /// Extended in Story 1.7 to support Supabase Auth integration.
 /// Extended in Story 2.1: name → firstName + lastName, added profile fields, deactivation, lastLoginAt.
+/// Extended in Story 2.2: removed `role` column — roles now managed via UserRole junction table.
 model User {
   id             String    @id @default(uuid())
   tenantId       String
@@ -52,7 +48,6 @@ model User {
   phone          String?
   jobTitle       String?
   department     String?
-  role           UserRole  @default(SALES_REP)
   isActive       Boolean   @default(true)
   supabaseUserId String?   @unique // Link to Supabase Auth user — null until first login
   lastLoginAt    DateTime?
@@ -62,7 +57,9 @@ model User {
   updatedBy      String    @default("system")
   deletedAt      DateTime? // soft delete — null means active
 
-  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant    Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  userRoles UserRole[]
+  auditLogs AuditLog[]
 
   // Email is unique per tenant, NOT globally unique
   @@unique([tenantId, email])
@@ -72,6 +69,64 @@ model User {
   @@index([tenantId, isActive])
   // Index for fast Supabase user lookups
   @@index([supabaseUserId])
+}
+
+/// Tenant-scoped role model for RBAC (Story 2.2).
+/// System roles (isSystem = true) cannot be deleted or renamed.
+/// Designed to be extended with a permissions relation in Story 2.3.
+model Role {
+  id          String    @id @default(uuid())
+  tenantId    String
+  name        String
+  description String?
+  isSystem    Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  createdBy   String    @default("system")
+  updatedBy   String    @default("system")
+  deletedAt   DateTime?
+
+  tenant    Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  userRoles UserRole[]
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
+}
+
+/// Junction table linking users to roles (many-to-many).
+/// Replaces the old `UserRole` enum and `User.role` column.
+model UserRole {
+  userId     String
+  roleId     String
+  assignedAt DateTime @default(now())
+  assignedBy String   @default("system")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([userId, roleId])
+  @@index([userId])
+  @@index([roleId])
+}
+
+/// Append-only audit log for tracking role assignments and other admin actions (Story 2.2).
+/// No updates, no deletes. Indexed for efficient listing and lookup.
+model AuditLog {
+  id        String   @id @default(uuid())
+  tenantId  String
+  userId    String
+  action    String
+  entity    String
+  entityId  String
+  details   Json?
+  createdAt DateTime @default(now())
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  Tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId, createdAt])
+  @@index([entity, entityId])
+  @@index([userId])
 }
 
 /// Tenant-scoped contact model for CRM contact management.

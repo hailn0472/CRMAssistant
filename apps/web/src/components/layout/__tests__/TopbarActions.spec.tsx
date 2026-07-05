@@ -9,9 +9,9 @@ jest.mock('@/hooks/useAuth', () => ({
 }))
 
 let mockAuthState: {
-  user: { role: string; firstName: string; lastName: string; avatar?: string | null } | null
+  user: { roles: string[]; firstName: string; lastName: string; avatar?: string | null } | null
 } = {
-  user: { role: 'ADMIN', firstName: 'System', lastName: 'Admin' },
+  user: { roles: ['ADMIN'], firstName: 'System', lastName: 'Admin' },
 }
 
 jest.mock('@/stores/auth.store', () => ({
@@ -24,7 +24,9 @@ jest.mock('@/stores/auth.store', () => ({
 }))
 
 function setAuthRole(role: string | null): void {
-  mockAuthState = role ? { user: { role, firstName: 'Test', lastName: 'User' } } : { user: null }
+  mockAuthState = role
+    ? { user: { roles: [role], firstName: 'Test', lastName: 'User' } }
+    : { user: null }
 }
 
 describe('TopbarActions', () => {
@@ -46,11 +48,11 @@ describe('TopbarActions', () => {
     expect(screen.getAllByText('Admin').length).toBeGreaterThanOrEqual(1)
   })
 
-  it('renders role badge for MANAGER', () => {
-    setAuthRole('MANAGER')
+  it('renders role badge for SALES_MANAGER', () => {
+    setAuthRole('SALES_MANAGER')
     render(<TopbarActions />)
 
-    expect(screen.getAllByText('Manager').length).toBeGreaterThanOrEqual(1)
+    expect(screen.getAllByText('Sales Manager').length).toBeGreaterThanOrEqual(1)
   })
 
   it('renders role badge for SALES_REP', () => {
@@ -65,7 +67,7 @@ describe('TopbarActions', () => {
     render(<TopbarActions />)
 
     expect(screen.queryByText('Admin')).not.toBeInTheDocument()
-    expect(screen.queryByText('Manager')).not.toBeInTheDocument()
+    expect(screen.queryByText('Sales Manager')).not.toBeInTheDocument()
     expect(screen.queryByText('Sales Rep')).not.toBeInTheDocument()
   })
 

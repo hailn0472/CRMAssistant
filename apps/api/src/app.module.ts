@@ -1,8 +1,10 @@
 import { Module } from '@nestjs/common'
 import { ConfigModule } from '@nestjs/config'
 
+import { AuditModule } from './audit/audit.module'
 import { AuthModule } from './auth/auth.module'
 import { ContactsModule } from './contacts/contacts.module'
+import { RolesModule } from './roles/roles.module'
 import { UsersModule } from './users/users.module'
 import { AppGraphqlModule } from './graphql/graphql.module'
 import { HealthModule } from './health/health.module'
@@ -20,6 +22,8 @@ import { PrismaModule } from './prisma/prisma.module'
     AppGraphqlModule,
     ContactsModule,
     UsersModule,
+    RolesModule,
+    AuditModule,
   ],
 })
 export class AppModule {}

@@ -37,7 +37,7 @@ async function loadUser(id: string): Promise<User> {
           phone
           jobTitle
           department
-          role
+          roles { id name }
           isActive
         }
       }`,

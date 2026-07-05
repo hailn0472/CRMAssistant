@@ -8,7 +8,6 @@ import { z } from 'zod'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
-import { Select } from '@/components/ui/select'
 import {
   createUser,
   updateUser,
@@ -21,7 +20,6 @@ const userSchema = z.object({
   email: z.string().trim().email('Enter a valid email'),
   firstName: z.string().trim().min(1, 'First name is required'),
   lastName: z.string().trim().min(1, 'Last name is required'),
-  role: z.enum(['ADMIN', 'MANAGER', 'SALES_REP']),
   phone: z.string().trim().optional(),
   jobTitle: z.string().trim().optional(),
   department: z.string().trim().optional(),
@@ -53,7 +51,6 @@ export function UserForm({ user }: UserFormProps): React.JSX.Element {
       email: user?.email ?? '',
       firstName: user?.firstName ?? '',
       lastName: user?.lastName ?? '',
-      role: (user?.role as UserFormValues['role']) ?? 'SALES_REP',
       phone: user?.phone ?? '',
       jobTitle: user?.jobTitle ?? '',
       department: user?.department ?? '',
@@ -67,7 +64,6 @@ export function UserForm({ user }: UserFormProps): React.JSX.Element {
           email: values.email.trim(),
           firstName: values.firstName.trim(),
           lastName: values.lastName.trim(),
-          role: values.role,
           phone: optionalString(values.phone),
           jobTitle: optionalString(values.jobTitle),
           department: optionalString(values.department),
@@ -79,7 +75,6 @@ export function UserForm({ user }: UserFormProps): React.JSX.Element {
           email: values.email.trim(),
           firstName: values.firstName.trim(),
           lastName: values.lastName.trim(),
-          role: values.role,
           phone: optionalString(values.phone),
           jobTitle: optionalString(values.jobTitle),
           department: optionalString(values.department),
@@ -109,13 +104,6 @@ export function UserForm({ user }: UserFormProps): React.JSX.Element {
               {...register('email')}
               aria-invalid={Boolean(errors.email)}
             />
-          </Field>
-          <Field label="Role" error={errors.role?.message}>
-            <Select {...register('role')}>
-              <option value="SALES_REP">Sales Rep</option>
-              <option value="MANAGER">Manager</option>
-              <option value="ADMIN">Admin</option>
-            </Select>
           </Field>
           <Field label="First name" error={errors.firstName?.message}>
             <Input {...register('firstName')} aria-invalid={Boolean(errors.firstName)} />

@@ -7,7 +7,7 @@ const PUBLIC_PATHS = ['/login', '/register', '/forgot-password']
 type JwtClaims = {
   userId?: unknown
   tenantId?: unknown
-  role?: unknown
+  roles?: unknown
   exp?: unknown
 }
 
@@ -60,7 +60,7 @@ async function verifyJwt(token: string): Promise<boolean> {
     return (
       typeof claims.userId === 'string' &&
       typeof claims.tenantId === 'string' &&
-      typeof claims.role === 'string' &&
+      Array.isArray(claims.roles) &&
       typeof claims.exp === 'number' &&
       claims.exp > nowSeconds
     )

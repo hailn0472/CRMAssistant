@@ -48,7 +48,7 @@ async function main(): Promise<void> {
   })
 
   if (existingUser) {
-    console.log(`ℹ️  Admin DB user exists: ${existingUser.email} (role: ${existingUser.role})`)
+    console.log(`ℹ️  Admin DB user exists: ${existingUser.email}`)
   } else {
     // 3. Create Supabase Auth user
     const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
@@ -80,26 +80,51 @@ async function main(): Promise<void> {
       process.exit(1)
     }
 
-    // 4. Create DB User with ADMIN role
-    const user = await prisma.user.create({
-      data: {
-        tenantId: tenant.id,
-        email: ADMIN_EMAIL,
-        firstName: ADMIN_FIRST_NAME,
-        lastName: ADMIN_LAST_NAME,
-        role: 'ADMIN',
-        isActive: true,
-        supabaseUserId,
-        createdBy: 'seed',
-        updatedBy: 'seed',
-      },
+    // 4. Create DB User + assign ADMIN role
+    await prisma.$transaction(async (tx) => {
+      const created = await tx.user.create({
+        data: {
+          tenantId: tenant!.id,
+          email: ADMIN_EMAIL,
+          firstName: ADMIN_FIRST_NAME,
+          lastName: ADMIN_LAST_NAME,
+          isActive: true,
+          supabaseUserId,
+          createdBy: 'seed',
+          updatedBy: 'seed',
+        },
+      })
+
+      // Assign ADMIN role (create if doesn't exist)
+      let adminRole = await tx.role.findFirst({
+        where: { tenantId: tenant!.id, name: 'ADMIN', deletedAt: null },
+      })
+      if (!adminRole) {
+        adminRole = await tx.role.create({
+          data: {
+            tenantId: tenant!.id,
+            name: 'ADMIN',
+            description: 'Full system access',
+            isSystem: true,
+            createdBy: 'seed',
+            updatedBy: 'seed',
+          },
+        })
+      }
+
+      await tx.userRole.create({
+        data: {
+          userId: created.id,
+          roleId: adminRole.id,
+          assignedBy: 'seed',
+        },
+      })
     })
 
     console.log(`✅ Admin created:`)
     console.log(`   Email:    ${ADMIN_EMAIL}`)
     console.log(`   Password: ${ADMIN_PASSWORD}`)
-    console.log(`   Role:     ${user.role}`)
-    console.log(`   Tenant:   ${TENANT_NAME} (${tenant.id})`)
+    console.log(`   Tenant:   ${TENANT_NAME} (${tenant!.id})`)
   }
 
   await prisma.$disconnect()

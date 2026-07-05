@@ -10,7 +10,7 @@ export type JwtPayload = {
   sub: string
   userId: string
   tenantId: string
-  role: string
+  roles: string[]
   email: string
 }
 

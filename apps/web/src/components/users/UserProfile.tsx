@@ -27,7 +27,12 @@ export function UserProfile({ user }: UserProfileProps): React.JSX.Element {
             {user.firstName} {user.lastName}
           </p>
           <p className="text-sm text-slate-600">{user.email}</p>
-          <p className="text-sm text-slate-500">{user.jobTitle ?? user.role}</p>
+          <p className="text-sm text-slate-500">
+            {user.jobTitle ??
+              (user.roles && user.roles.length > 0
+                ? user.roles.map((r) => r.name).join(', ')
+                : 'No role')}
+          </p>
         </div>
       </div>
     </div>

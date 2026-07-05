@@ -4,7 +4,7 @@ import * as path from 'path'
 import { INestApplication } from '@nestjs/common'
 import { Test, TestingModule } from '@nestjs/testing'
 import { JwtService } from '@nestjs/jwt'
-import { PrismaClient, UserRole } from '@prisma/client'
+import { PrismaClient } from '@prisma/client'
 import request from 'supertest'
 import { PostgreSqlContainer } from '@testcontainers/postgresql'
 
@@ -70,7 +70,7 @@ describe('Contact persistence tenant pattern (integration)', () => {
       sub: userId,
       userId,
       tenantId,
-      role: UserRole.SALES_REP,
+      roles: ['SALES_REP'],
       email: `${userId}@example.com`,
     })
   }
