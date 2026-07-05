@@ -5,7 +5,7 @@ export type Role = {
   isSystem: boolean
 }
 
-export type RoleWithUserCount = Role & { userCount: number }
+export type RoleWithUserCount = Role & { userCount: number; createdAt: string; updatedAt: string }
 
 type GraphqlResponse<T> = {
   data?: T

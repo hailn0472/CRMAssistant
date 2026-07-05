@@ -26,7 +26,7 @@ const authResponse = {
   accessToken: 'jwt-token',
   userId: 'user-1',
   tenantId: 'tenant-1',
-  role: 'SALES_REP' as const,
+  roles: ['SALES_REP'] as string[],
   email: 'user@example.com',
   firstName: 'Test',
   lastName: 'User',
@@ -55,7 +55,7 @@ describe('useAuth', () => {
     expect(result.current.user).toEqual({
       userId: 'user-1',
       tenantId: 'tenant-1',
-      role: 'SALES_REP',
+      roles: ['SALES_REP'],
       email: 'user@example.com',
       firstName: 'Test',
       lastName: 'User',
