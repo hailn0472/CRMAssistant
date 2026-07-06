@@ -14,6 +14,7 @@ import type { WebSocketLikeConstructor } from '@supabase/realtime-js'
 
 import { PrismaService } from '../prisma/prisma.service'
 import { TokenRevocationService } from './token-revocation.service'
+import { DEFAULT_ROLE_PERMISSIONS } from '../permissions/default-role-permissions'
 import type { LoginDto } from './dto/login.dto'
 import type { RegisterDto } from './dto/register.dto'
 import type { JwtPayload } from './strategies/jwt.strategy'
@@ -108,7 +109,8 @@ export class AuthService {
           { name: 'MARKETING_USER', description: 'Marketing team member' },
         ]
 
-        let salesRepRole: { id: string } | null = null
+        let salesRepRole: { id: string; name: string } | null = null
+        const createdRoles: { id: string; name: string }[] = []
 
         for (const roleDef of systemRoles) {
           const role = await tx.role.create({
@@ -121,10 +123,14 @@ export class AuthService {
               updatedBy: 'system',
             },
           })
+          createdRoles.push({ id: role.id, name: role.name })
           if (roleDef.name === 'SALES_REP') {
             salesRepRole = role
           }
         }
+
+        // Assign default permissions to system roles
+        await this.assignDefaultPermissionsForRoles(tx, createdRoles)
 
         const user = await tx.user.create({
           data: {
@@ -312,6 +318,45 @@ export class AuthService {
           reject(error)
         })
     })
+  }
+
+  private async assignDefaultPermissionsForRoles(
+    tx: {
+      permission: {
+        findMany: (args: {
+          select: { id: boolean; resource: boolean; action: boolean }
+        }) => Promise<{ id: string; resource: string; action: string }[]>
+      }
+      rolePermission: {
+        createMany: (args: { data: { roleId: string; permissionId: string }[] }) => Promise<unknown>
+      }
+    },
+    roles: { id: string; name: string }[],
+  ): Promise<void> {
+    const permissions = await tx.permission.findMany({
+      select: { id: true, resource: true, action: true },
+    })
+
+    const permMap: Record<string, string> = {}
+    for (const p of permissions) {
+      permMap[`${p.resource}:${p.action}`] = p.id
+    }
+
+    const rolePermissions: { roleId: string; permissionId: string }[] = []
+
+    for (const role of roles) {
+      const defaults = DEFAULT_ROLE_PERMISSIONS[role.name] ?? []
+      for (const def of defaults) {
+        const permId = permMap[`${def.resource}:${def.action}`]
+        if (permId) {
+          rolePermissions.push({ roleId: role.id, permissionId: permId })
+        }
+      }
+    }
+
+    if (rolePermissions.length > 0) {
+      await tx.rolePermission.createMany({ data: rolePermissions })
+    }
   }
 
   private async resolveUserRoles(userId: string): Promise<string[]> {

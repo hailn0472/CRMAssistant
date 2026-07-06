@@ -3,10 +3,17 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth.store'
+import { getMyPermissions } from '@/services/permission.service'
+
+interface NavigationPermission {
+  resource: string
+  action: string
+}
 
 interface NavigationItem {
   label: string
@@ -14,6 +21,7 @@ interface NavigationItem {
   marker: string
   isAi?: boolean
   roles?: string[]
+  permission?: NavigationPermission
 }
 
 interface NavigationSection {
@@ -26,7 +34,12 @@ const navigationSections: NavigationSection[] = [
     title: 'Workspace',
     items: [
       { label: 'Command Center', href: '/dashboard', marker: 'CC' },
-      { label: 'Contacts', href: '/contacts', marker: 'CO' },
+      {
+        label: 'Contacts',
+        href: '/contacts',
+        marker: 'CO',
+        permission: { resource: 'CONTACT', action: 'READ' },
+      },
       { label: 'Deals', marker: 'DE' },
       { label: 'Activities', marker: 'AC' },
       { label: 'Reports', marker: 'RE' },
@@ -39,26 +52,67 @@ const navigationSections: NavigationSection[] = [
   {
     title: 'Administration',
     items: [
-      { label: 'Users', href: '/users', marker: 'US', roles: ['ADMIN', 'SALES_MANAGER'] },
-      { label: 'Roles', href: '/settings/roles', marker: 'RL', roles: ['ADMIN'] },
+      {
+        label: 'Users',
+        href: '/users',
+        marker: 'US',
+        roles: ['ADMIN', 'SALES_MANAGER'],
+        permission: { resource: 'USER', action: 'READ' },
+      },
+      {
+        label: 'Roles',
+        href: '/settings/roles',
+        marker: 'RL',
+        roles: ['ADMIN'],
+        permission: { resource: 'ROLE', action: 'READ' },
+      },
       { label: 'Settings', href: '/settings', marker: 'SE' },
     ],
   },
 ]
 
-function getVisibleSections(userRoles: string[] | null): NavigationSection[] {
+function getVisibleSections(
+  userRoles: string[] | null,
+  grantedPermissions: Set<string>,
+  isPermissionsLoading = false,
+): NavigationSection[] {
   return navigationSections
     .map((section) => ({
       ...section,
-      items: section.items.filter(
-        (item) => !item.roles || (userRoles && item.roles.some((r) => userRoles.includes(r))),
-      ),
+      items: section.items.filter((item) => {
+        // Show all items while permissions are loading to avoid flash
+        if (isPermissionsLoading) return true
+        // Permission-based gating takes priority
+        if (item.permission) {
+          const key = `${item.permission.resource}:${item.permission.action}`
+          if (grantedPermissions.has(key)) return true
+          // Fallback to role-based gating if user has no permission data yet
+          if (grantedPermissions.size === 0 && item.roles) {
+            return userRoles !== null && item.roles.some((r) => userRoles.includes(r))
+          }
+          return false
+        }
+        // Role-based fallback
+        if (item.roles) {
+          return userRoles !== null && item.roles.some((r) => userRoles.includes(r))
+        }
+        // No restriction
+        return true
+      }),
     }))
     .filter((section) => section.items.length > 0)
 }
 
-function isActivePath(pathname: string, href: string): boolean {
-  return pathname === href || pathname.startsWith(`${href}/`)
+function isActivePath(pathname: string, href: string, allHrefs: string[]): boolean {
+  if (pathname === href) return true
+  if (!pathname.startsWith(`${href}/`)) return false
+  // Check if there is a more specific (longer) matching href in the navigation
+  return !allHrefs.some(
+    (otherHref) =>
+      otherHref !== href &&
+      otherHref.startsWith(`${href}/`) &&
+      (pathname === otherHref || pathname.startsWith(`${otherHref}/`)),
+  )
 }
 
 function NavigationList({
@@ -70,7 +124,43 @@ function NavigationList({
 }): React.JSX.Element {
   const pathname = usePathname()
   const userRoles = useAuthStore((state) => state.user?.roles ?? null)
-  const sections = getVisibleSections(userRoles)
+  const isAuthenticated = useAuthStore((state) => !!state.user)
+
+  const { data: permissionChecks, isLoading: isPermissionsLoading } = useQuery({
+    queryKey: ['myPermissions'],
+    queryFn: getMyPermissions,
+    staleTime: 5 * 60 * 1000,
+    enabled: isAuthenticated,
+  })
+
+  const grantedPermissions = new Set(
+    (permissionChecks ?? []).filter((p) => p.granted).map((p) => `${p.resource}:${p.action}`),
+  )
+
+  const sections = getVisibleSections(userRoles, grantedPermissions, isPermissionsLoading)
+
+  const allHrefs = sections
+    .flatMap((s) => s.items.map((i) => i.href))
+    .filter((h): h is string => !!h)
+
+  if (isPermissionsLoading && isAuthenticated) {
+    // Show skeleton rows while permissions load to avoid layout flash
+    return (
+      <nav aria-label="CRM navigation" className="px-3 py-4">
+        <div className="animate-pulse space-y-3">
+          {navigationSections.map((section, si) => (
+            <div key={section.title} className="flex flex-col gap-1">
+              {si > 0 && <hr className="my-2 border-slate-100" />}
+              <div className="mb-1.5 mt-4 h-4 w-20 rounded bg-slate-100 px-3" />
+              {section.items.map((_item, ii) => (
+                <div key={ii} className="mx-3 h-9 rounded bg-slate-100" />
+              ))}
+            </div>
+          ))}
+        </div>
+      </nav>
+    )
+  }
 
   return (
     <nav
@@ -91,12 +181,12 @@ function NavigationList({
             </div>
           )}
           {section.items.map((item) => {
-            const isActive = item.href ? isActivePath(pathname, item.href) : false
+            const isActive = item.href ? isActivePath(pathname, item.href, allHrefs) : false
             const className = cn(
               compact
                 ? 'flex flex-col min-h-11 items-center justify-center gap-0.5 rounded-md text-[10px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-1'
                 : 'flex min-h-11 items-center gap-3 rounded-md px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2',
-              isActive && 'border-l-2 border-blue-600 bg-blue-50 text-blue-700',
+              isActive && 'border-l-2 border-blue-600 bg-blue-50 text-blue-700 rounded-l-none',
               !isActive && !item.isAi && 'text-slate-600 hover:bg-slate-100 hover:text-slate-950',
               !isActive && item.isAi && 'text-violet-700 hover:bg-violet-50',
               !item.href && 'cursor-not-allowed opacity-70',

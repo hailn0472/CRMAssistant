@@ -1,6 +1,7 @@
 import { ForbiddenException, UnauthorizedException } from '@nestjs/common'
 
 import { builder } from '../graphql/schema.builder'
+import { requirePermission } from '../common/guards/permission-check'
 import type { RolesService } from './roles.service'
 import type { GraphqlContext } from '../graphql/graphql-context'
 import type { JwtPayload } from '../auth/strategies/jwt.strategy'
@@ -130,6 +131,7 @@ builder.mutationFields((t) => ({
     type: RoleWithUserCountRef,
     args: { input: t.arg({ type: CreateRoleInputRef, required: true }) },
     resolve: async (_parent, args, context) => {
+      await requirePermission(context, 'ROLE', 'CREATE')
       const user = requireAdmin(context)
       const role = await getRolesService().create(user.tenantId, user.userId, {
         name: args.input.name,
@@ -150,6 +152,7 @@ builder.mutationFields((t) => ({
       input: t.arg({ type: UpdateRoleInputRef, required: true }),
     },
     resolve: async (_parent, args, context) => {
+      await requirePermission(context, 'ROLE', 'UPDATE')
       const user = requireAdmin(context)
       await getRolesService().update(user.tenantId, user.userId, String(args.id), {
         name: args.input.name ?? undefined,
@@ -168,6 +171,7 @@ builder.mutationFields((t) => ({
   deleteRole: t.boolean({
     args: { id: t.arg.id({ required: true }) },
     resolve: async (_parent, args, context) => {
+      await requirePermission(context, 'ROLE', 'DELETE')
       const user = requireAdmin(context)
       return getRolesService().delete(user.tenantId, user.userId, String(args.id))
     },

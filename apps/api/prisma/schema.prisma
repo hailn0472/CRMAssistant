@@ -86,8 +86,9 @@ model Role {
   updatedBy   String    @default("system")
   deletedAt   DateTime?
 
-  tenant    Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  userRoles UserRole[]
+  tenant          Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  userRoles       UserRole[]
+  rolePermissions RolePermission[]
 
   @@unique([tenantId, name])
   @@index([tenantId])
@@ -127,6 +128,34 @@ model AuditLog {
   @@index([tenantId, createdAt])
   @@index([entity, entityId])
   @@index([userId])
+}
+
+/// Global permission catalog (Story 2.3).
+/// NOT tenant-scoped — shared across all tenants.
+/// Defines all possible resource-action combinations.
+model Permission {
+  id          String   @id @default(uuid())
+  resource    String
+  action      String
+  description String
+  createdAt   DateTime @default(now())
+
+  rolePermissions RolePermission[]
+
+  @@unique([resource, action])
+  @@index([resource])
+}
+
+/// Junction table linking roles to permissions (many-to-many).
+/// Role is tenant-scoped; Permission is global.
+model RolePermission {
+  roleId       String
+  permissionId String
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
 }
 
 /// Tenant-scoped contact model for CRM contact management.

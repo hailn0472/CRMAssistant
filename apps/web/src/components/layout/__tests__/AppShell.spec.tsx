@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, within } from '@testing-library/react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 
 import { AppShell } from '../AppShell'
 
@@ -27,6 +28,33 @@ const mockGetMe = jest.fn(() =>
 jest.mock('@/services/user.service', () => ({
   getMe: (): Promise<unknown> => mockGetMe(),
 }))
+
+jest.mock('@tanstack/react-query', () => {
+  const actual = jest.requireActual('@tanstack/react-query') as Record<string, unknown>
+  return {
+    ...actual,
+    useQuery: jest.fn(({ queryKey, enabled }: { queryKey: string[]; enabled?: boolean }) => {
+      if (queryKey[0] === 'myPermissions') {
+        if (enabled === false) {
+          return { data: undefined, isLoading: false, isError: false }
+        }
+        return {
+          data: ['CONTACT', 'DEAL', 'TASK', 'TICKET', 'REPORT', 'USER', 'ROLE', 'SETTINGS'].flatMap(
+            (r) =>
+              ['CREATE', 'READ', 'UPDATE', 'DELETE', 'EXPORT', 'IMPORT', 'ASSIGN'].map((a) => ({
+                resource: r,
+                action: a,
+                granted: true,
+              })),
+          ),
+          isLoading: false,
+          isError: false,
+        }
+      }
+      return actual.useQuery
+    }),
+  }
+})
 
 const mockSetUser = jest.fn()
 const mockSetLoading = jest.fn()
@@ -57,6 +85,13 @@ describe('AppShell', () => {
     setAuthRole('ADMIN')
   })
 
+  function renderApp(children: React.ReactNode): ReturnType<typeof render> {
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    })
+    return render(<QueryClientProvider client={queryClient}>{children}</QueryClientProvider>)
+  }
+
   function getDesktopNavigation(): HTMLElement {
     return screen.getByRole('complementary', { name: 'Desktop CRM navigation' })
   }
@@ -66,7 +101,7 @@ describe('AppShell', () => {
   }
 
   it('renders sidebar navigation, topbar, and main workspace content', () => {
-    render(
+    renderApp(
       <AppShell>
         <section>Workspace content</section>
       </AppShell>,
@@ -82,7 +117,7 @@ describe('AppShell', () => {
   })
 
   it('shows the MVP sidebar navigation items', () => {
-    render(<AppShell>Content</AppShell>)
+    renderApp(<AppShell>Content</AppShell>)
 
     const desktopNav = within(getDesktopNavigation())
     const desktopLinks = desktopNav.getByRole('navigation', { name: 'CRM navigation' })
@@ -101,7 +136,7 @@ describe('AppShell', () => {
   })
 
   it('marks the current route as active in the sidebar', () => {
-    render(<AppShell>Content</AppShell>)
+    renderApp(<AppShell>Content</AppShell>)
 
     // Both desktop and tablet rail have Contacts link; at least one must have aria-current
     const allContactsLinks = screen.getAllByRole('link', { name: 'Contacts' })
@@ -110,7 +145,7 @@ describe('AppShell', () => {
   })
 
   it('renders accessible topbar placeholders', () => {
-    render(<AppShell>Content</AppShell>)
+    renderApp(<AppShell>Content</AppShell>)
 
     expect(screen.getByRole('searchbox', { name: 'Search or run command' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'View notifications' })).toBeInTheDocument()
@@ -120,7 +155,7 @@ describe('AppShell', () => {
   })
 
   it('opens command dialog when topbar search trigger is clicked', () => {
-    render(<AppShell>Content</AppShell>)
+    renderApp(<AppShell>Content</AppShell>)
 
     const searchbox = screen.getByRole('searchbox', { name: 'Search or run command' })
     fireEvent.click(searchbox)
@@ -136,7 +171,7 @@ describe('AppShell', () => {
   })
 
   it('opens mobile navigation and exposes tenant/user context in the collapsed state', () => {
-    render(<AppShell>Content</AppShell>)
+    renderApp(<AppShell>Content</AppShell>)
 
     fireEvent.click(screen.getByRole('button', { name: 'Open navigation menu' }))
 
@@ -149,7 +184,7 @@ describe('AppShell', () => {
   })
 
   it('closes mobile navigation from the collapsed state', () => {
-    render(<AppShell>Content</AppShell>)
+    renderApp(<AppShell>Content</AppShell>)
 
     fireEvent.click(screen.getByRole('button', { name: 'Open navigation menu' }))
     fireEvent.click(screen.getAllByRole('button', { name: 'Close navigation menu' })[1])
@@ -160,7 +195,7 @@ describe('AppShell', () => {
   })
 
   it('renders Command Center as a navigable sidebar link', () => {
-    render(<AppShell>Content</AppShell>)
+    renderApp(<AppShell>Content</AppShell>)
 
     const desktopNav = within(getDesktopNavigation())
     const desktopLinks = desktopNav.getByRole('navigation', { name: 'CRM navigation' })
@@ -178,7 +213,7 @@ describe('AppShell', () => {
   it('marks Command Center active on the dashboard route', () => {
     mockUsePathname.mockReturnValue('/dashboard')
 
-    render(<AppShell>Content</AppShell>)
+    renderApp(<AppShell>Content</AppShell>)
 
     const allCommandCenterLinks = screen.getAllByRole('link', { name: 'Command Center' })
     const activeLink = allCommandCenterLinks.find(
@@ -195,7 +230,7 @@ describe('AppShell', () => {
   it('exposes Command Center in mobile navigation', () => {
     mockUsePathname.mockReturnValue('/dashboard')
 
-    render(<AppShell>Content</AppShell>)
+    renderApp(<AppShell>Content</AppShell>)
 
     fireEvent.click(screen.getByRole('button', { name: 'Open navigation menu' }))
 
@@ -210,7 +245,7 @@ describe('AppShell', () => {
   // New responsive tests (AC: 9)
   describe('Responsive behavior', () => {
     it('renders tablet rail navigation with compact markers', () => {
-      render(<AppShell>Content</AppShell>)
+      renderApp(<AppShell>Content</AppShell>)
 
       const tabletRail = getTabletRailNavigation()
       const tabletNav = within(tabletRail).getByRole('navigation', { name: 'CRM navigation' })
@@ -227,7 +262,7 @@ describe('AppShell', () => {
     })
 
     it('renders mobile navigation trigger visible below lg', () => {
-      render(<AppShell>Content</AppShell>)
+      renderApp(<AppShell>Content</AppShell>)
 
       const hamburger = screen.getByRole('button', { name: 'Open navigation menu' })
       expect(hamburger).toBeInTheDocument()
@@ -235,7 +270,7 @@ describe('AppShell', () => {
     })
 
     it('applies aria-hidden to main content when drawer is open', () => {
-      render(<AppShell>Content</AppShell>)
+      renderApp(<AppShell>Content</AppShell>)
 
       fireEvent.click(screen.getByRole('button', { name: 'Open navigation menu' }))
 
@@ -246,7 +281,7 @@ describe('AppShell', () => {
     })
 
     it('closes drawer on Escape key press', () => {
-      render(<AppShell>Content</AppShell>)
+      renderApp(<AppShell>Content</AppShell>)
 
       fireEvent.click(screen.getByRole('button', { name: 'Open navigation menu' }))
 
@@ -261,7 +296,7 @@ describe('AppShell', () => {
     })
 
     it('closes drawer when a navigation link is clicked', () => {
-      render(<AppShell>Content</AppShell>)
+      renderApp(<AppShell>Content</AppShell>)
 
       fireEvent.click(screen.getByRole('button', { name: 'Open navigation menu' }))
 
@@ -274,7 +309,7 @@ describe('AppShell', () => {
     })
 
     it('closes drawer when backdrop is clicked', () => {
-      render(<AppShell>Content</AppShell>)
+      renderApp(<AppShell>Content</AppShell>)
 
       fireEvent.click(screen.getByRole('button', { name: 'Open navigation menu' }))
 
@@ -291,21 +326,21 @@ describe('AppShell', () => {
   // Touch target tests (AC: 4, 9)
   describe('Touch targets', () => {
     it('renders notification button with minimum 44x44px size', () => {
-      render(<AppShell>Content</AppShell>)
+      renderApp(<AppShell>Content</AppShell>)
 
       const notificationButton = screen.getByRole('button', { name: 'View notifications' })
       expect(notificationButton).toHaveClass('h-11', 'w-11')
     })
 
     it('renders hamburger button with minimum 44x44px size', () => {
-      render(<AppShell>Content</AppShell>)
+      renderApp(<AppShell>Content</AppShell>)
 
       const hamburger = screen.getByRole('button', { name: 'Open navigation menu' })
       expect(hamburger).toHaveClass('h-11', 'w-11')
     })
 
     it('renders sidebar links with minimum 44px height', () => {
-      render(<AppShell>Content</AppShell>)
+      renderApp(<AppShell>Content</AppShell>)
 
       const desktopNav = within(getDesktopNavigation())
       const navLinks = desktopNav.getByRole('navigation', { name: 'CRM navigation' })
@@ -318,14 +353,14 @@ describe('AppShell', () => {
   // Tenant/user visibility tests (AC: 7)
   describe('Tenant and user visibility', () => {
     it('shows user menu button at all breakpoints', () => {
-      render(<AppShell>Content</AppShell>)
+      renderApp(<AppShell>Content</AppShell>)
 
       const menuButtons = screen.getAllByRole('button', { name: 'User menu' })
       expect(menuButtons.length).toBeGreaterThanOrEqual(1)
     })
 
     it('has compact mobile user menu visible below lg', () => {
-      render(<AppShell>Content</AppShell>)
+      renderApp(<AppShell>Content</AppShell>)
 
       // Below lg, compact badge is visible (lg:hidden class on the mobile container)
       const menuButtons = screen.getAllByRole('button', { name: 'User menu' })
@@ -337,7 +372,7 @@ describe('AppShell', () => {
   describe('Role-aware navigation', () => {
     it('shows Users nav item for ADMIN role', () => {
       setAuthRole('ADMIN')
-      render(<AppShell>Content</AppShell>)
+      renderApp(<AppShell>Content</AppShell>)
 
       const desktopNav = within(getDesktopNavigation())
       const desktopLinks = desktopNav.getByRole('navigation', { name: 'CRM navigation' })
@@ -351,7 +386,7 @@ describe('AppShell', () => {
 
     it('shows Users nav item for SALES_MANAGER role', () => {
       setAuthRole('SALES_MANAGER')
-      render(<AppShell>Content</AppShell>)
+      renderApp(<AppShell>Content</AppShell>)
 
       const desktopNav = within(getDesktopNavigation())
       const desktopLinks = desktopNav.getByRole('navigation', { name: 'CRM navigation' })
@@ -359,19 +394,20 @@ describe('AppShell', () => {
       expect(within(desktopLinks).getByText('Users')).toBeInTheDocument()
     })
 
-    it('hides Users nav item for SALES_REP role', () => {
+    it('shows Users nav item for SALES_REP role when USER:READ permission is granted', () => {
       setAuthRole('SALES_REP')
-      render(<AppShell>Content</AppShell>)
+      renderApp(<AppShell>Content</AppShell>)
 
       const desktopNav = within(getDesktopNavigation())
       const desktopLinks = desktopNav.getByRole('navigation', { name: 'CRM navigation' })
 
-      expect(within(desktopLinks).queryByText('Users')).not.toBeInTheDocument()
+      // Permission-based gating: if USER:READ is granted, Users nav is visible regardless of role
+      expect(within(desktopLinks).getByText('Users')).toBeInTheDocument()
     })
 
     it('hides Users nav item when user is null (unauthenticated)', () => {
       setAuthRole(null)
-      render(<AppShell>Content</AppShell>)
+      renderApp(<AppShell>Content</AppShell>)
 
       const desktopNav = within(getDesktopNavigation())
       const desktopLinks = desktopNav.getByRole('navigation', { name: 'CRM navigation' })
