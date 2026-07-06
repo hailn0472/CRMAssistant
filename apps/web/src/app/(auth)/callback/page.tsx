@@ -1,13 +1,13 @@
 'use client'
 
-import { useEffect, useRef } from 'react'
+import { Suspense, useEffect, useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/hooks/useAuth'
 import { Card } from '@/components/ui/card'
 
-export default function OAuthCallbackPage(): React.JSX.Element {
+function OAuthCallback(): React.JSX.Element {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { oauthLogin } = useAuth()
@@ -50,5 +50,13 @@ export default function OAuthCallbackPage(): React.JSX.Element {
         </div>
       </Card>
     </main>
+  )
+}
+
+export default function OAuthCallbackPage(): React.JSX.Element {
+  return (
+    <Suspense>
+      <OAuthCallback />
+    </Suspense>
   )
 }
