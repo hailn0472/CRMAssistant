@@ -5,9 +5,11 @@ import { ContactsService } from './contacts.service'
 import type { Contact } from '@prisma/client'
 
 jest.mock('../common/guards/visibility-check', () => ({
-  resolveVisibilityFilter: jest.fn().mockResolvedValue(undefined),
+  resolveVisibilityFilter: jest.fn(),
   registerVisibilityService: jest.fn(),
 }))
+
+import { resolveVisibilityFilter } from '../common/guards/visibility-check'
 
 type MockContactDelegate = {
   create: jest.Mock
@@ -68,6 +70,7 @@ describe('ContactsService', () => {
     service = new ContactsService(
       prisma as unknown as ConstructorParameters<typeof ContactsService>[0],
     )
+    ;(resolveVisibilityFilter as jest.Mock).mockResolvedValue(undefined)
   })
 
   describe('create()', () => {
@@ -191,12 +194,49 @@ describe('ContactsService', () => {
     it('returns active contact scoped to tenant and visible to user', async () => {
       const contact = makeContact()
       prisma.contact.findFirst.mockResolvedValue(contact)
+      ;(resolveVisibilityFilter as jest.Mock).mockResolvedValue(undefined)
 
       await expect(service.findOne(TENANT_ID, USER_ID, CONTACT_ID)).resolves.toBe(contact)
       expect(prisma.contact.findFirst).toHaveBeenCalledWith({
         where: { id: CONTACT_ID, tenantId: TENANT_ID, deletedAt: null },
         include: { owner: { select: { id: true, firstName: true, lastName: true, email: true } } },
       })
+    })
+
+    it('allows access when visibility resolves to OWN and ownerId matches', async () => {
+      const contact = makeContact()
+      prisma.contact.findFirst.mockResolvedValue(contact)
+      ;(resolveVisibilityFilter as jest.Mock).mockResolvedValue(USER_ID)
+
+      await expect(service.findOne(TENANT_ID, USER_ID, CONTACT_ID)).resolves.toBe(contact)
+    })
+
+    it('throws NotFoundException when OWN visibility rejects different owner', async () => {
+      const contact = makeContact({ ownerId: 'other-user' })
+      prisma.contact.findFirst.mockResolvedValue(contact)
+      ;(resolveVisibilityFilter as jest.Mock).mockResolvedValue(USER_ID)
+
+      await expect(service.findOne(TENANT_ID, USER_ID, CONTACT_ID)).rejects.toThrow(
+        NotFoundException,
+      )
+    })
+
+    it('throws NotFoundException when TEAM visibility rejects non-member owner', async () => {
+      const contact = makeContact({ ownerId: 'external-user' })
+      prisma.contact.findFirst.mockResolvedValue(contact)
+      ;(resolveVisibilityFilter as jest.Mock).mockResolvedValue({ in: [USER_ID, 'teammate'] })
+
+      await expect(service.findOne(TENANT_ID, USER_ID, CONTACT_ID)).rejects.toThrow(
+        NotFoundException,
+      )
+    })
+
+    it('allows access when TEAM visibility includes contact owner', async () => {
+      const contact = makeContact({ ownerId: 'teammate' })
+      prisma.contact.findFirst.mockResolvedValue(contact)
+      ;(resolveVisibilityFilter as jest.Mock).mockResolvedValue({ in: [USER_ID, 'teammate'] })
+
+      await expect(service.findOne(TENANT_ID, USER_ID, CONTACT_ID)).resolves.toBe(contact)
     })
 
     it('throws NotFoundException for cross-tenant or deleted contacts', async () => {
@@ -258,6 +298,15 @@ describe('ContactsService', () => {
         data: { company: 'Acme', updatedBy: USER_ID },
       })
     })
+
+    it('throws NotFoundException when updateMany affects zero rows', async () => {
+      prisma.contact.findFirst.mockResolvedValue(makeContact()) // visibility check passes
+      prisma.contact.updateMany.mockResolvedValue({ count: 0 })
+
+      await expect(
+        service.update(TENANT_ID, USER_ID, CONTACT_ID, { company: 'Acme' }),
+      ).rejects.toThrow(NotFoundException)
+    })
   })
 
   describe('delete()', () => {
@@ -275,6 +324,15 @@ describe('ContactsService', () => {
 
     it('throws NotFoundException when no visible contact is found', async () => {
       prisma.contact.findFirst.mockResolvedValue(null)
+
+      await expect(service.delete(TENANT_ID, USER_ID, CONTACT_ID)).rejects.toThrow(
+        NotFoundException,
+      )
+    })
+
+    it('throws NotFoundException when updateMany affects zero rows on delete', async () => {
+      prisma.contact.findFirst.mockResolvedValue(makeContact()) // visibility check passes
+      prisma.contact.updateMany.mockResolvedValue({ count: 0 })
 
       await expect(service.delete(TENANT_ID, USER_ID, CONTACT_ID)).rejects.toThrow(
         NotFoundException,

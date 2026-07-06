@@ -136,6 +136,19 @@ describe('TeamsService', () => {
         BadRequestException,
       )
     })
+
+    it('throws BadRequestException when name exceeds max length', async () => {
+      await expect(service.create(TENANT_ID, USER_ID, { name: 'A'.repeat(101) })).rejects.toThrow(
+        BadRequestException,
+      )
+    })
+
+    it('rethrows unknown create errors', async () => {
+      prisma.team.create.mockRejectedValue(new Error('database unavailable'))
+      await expect(service.create(TENANT_ID, USER_ID, { name: 'Valid Name' })).rejects.toThrow(
+        'database unavailable',
+      )
+    })
   })
 
   describe('findMany()', () => {
@@ -194,6 +207,27 @@ describe('TeamsService', () => {
       prisma.team.findFirst.mockResolvedValue(null)
       await expect(service.update(TENANT_ID, USER_ID, TEAM_ID, { name: 'X' })).rejects.toThrow(
         NotFoundException,
+      )
+    })
+
+    it('throws ConflictException on duplicate name during update', async () => {
+      prisma.team.findFirst.mockResolvedValueOnce(makeTeam())
+      prisma.team.update.mockRejectedValue(
+        new PrismaClientKnownRequestError('Unique constraint', {
+          code: 'P2002',
+          clientVersion: '5',
+        }),
+      )
+      await expect(service.update(TENANT_ID, USER_ID, TEAM_ID, { name: 'Dup' })).rejects.toThrow(
+        ConflictException,
+      )
+    })
+
+    it('rethrows unknown update errors', async () => {
+      prisma.team.findFirst.mockResolvedValueOnce(makeTeam())
+      prisma.team.update.mockRejectedValue(new Error('database unavailable'))
+      await expect(service.update(TENANT_ID, USER_ID, TEAM_ID, { name: 'X' })).rejects.toThrow(
+        'database unavailable',
       )
     })
   })
@@ -260,6 +294,73 @@ describe('TeamsService', () => {
       prisma.team.findFirst.mockResolvedValue(null)
       await expect(service.setTeamMembers(TENANT_ID, USER_ID, 'invalid', [])).rejects.toThrow(
         NotFoundException,
+      )
+    })
+
+    it('throws ConflictException when members already belong to another team', async () => {
+      const team = makeTeam({ members: [] })
+      prisma.team.findFirst.mockResolvedValueOnce(team)
+      prisma.user.findMany.mockResolvedValue([{ id: 'user-2' }])
+      const txMock = {
+        team: {
+          findFirst: jest
+            .fn()
+            .mockResolvedValue({ id: TEAM_ID, tenantId: TENANT_ID, deletedAt: null }),
+        },
+        user: {
+          findMany: jest.fn().mockResolvedValue([{ id: 'user-2', teamId: 'other-team' }]),
+          updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+        },
+      }
+      prisma.$transaction.mockImplementation(async (fn) => fn(txMock))
+      await expect(service.setTeamMembers(TENANT_ID, USER_ID, TEAM_ID, ['user-2'])).rejects.toThrow(
+        ConflictException,
+      )
+    })
+
+    it('throws NotFoundException when team is deleted during transaction', async () => {
+      const team = makeTeam({ members: [] })
+      prisma.team.findFirst.mockResolvedValueOnce(team)
+      prisma.user.findMany.mockResolvedValue([])
+      const txMock = {
+        team: {
+          findFirst: jest.fn().mockResolvedValue(null),
+        },
+        user: {
+          findMany: jest.fn().mockResolvedValue([]),
+          updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+        },
+      }
+      prisma.$transaction.mockImplementation(async (fn) => fn(txMock))
+      await expect(service.setTeamMembers(TENANT_ID, USER_ID, TEAM_ID, [])).rejects.toThrow(
+        NotFoundException,
+      )
+    })
+
+    it('handles setTeamMembers with empty memberIds', async () => {
+      const team = makeTeam({ members: [] })
+      prisma.team.findFirst.mockResolvedValueOnce(team)
+      prisma.user.findMany.mockResolvedValue([])
+      const txMock = {
+        team: {
+          findFirst: jest
+            .fn()
+            .mockResolvedValue({ id: TEAM_ID, tenantId: TENANT_ID, deletedAt: null }),
+        },
+        user: {
+          findMany: jest.fn().mockResolvedValue([]),
+          updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+        },
+      }
+      prisma.$transaction.mockImplementation(async (fn) => fn(txMock))
+      prisma.team.findFirst.mockResolvedValueOnce({
+        ...team,
+        members: [],
+      })
+      const result = await service.setTeamMembers(TENANT_ID, USER_ID, TEAM_ID, [])
+      expect(result.members).toHaveLength(0)
+      expect(audit.log).toHaveBeenCalledWith(
+        expect.objectContaining({ action: 'TEAM_MEMBERS_SET' }),
       )
     })
   })
