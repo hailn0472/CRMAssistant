@@ -10,6 +10,22 @@ type ContactGraphqlShape = Awaited<ReturnType<ContactsService['findOne']>> | Con
 
 const ContactRef = builder.objectRef<ContactGraphqlShape>('Contact')
 
+const UserRef = builder.objectRef<{
+  id: string
+  firstName: string
+  lastName: string
+  email: string
+}>('ContactOwner')
+
+UserRef.implement({
+  fields: (t) => ({
+    id: t.exposeID('id'),
+    firstName: t.exposeString('firstName'),
+    lastName: t.exposeString('lastName'),
+    email: t.exposeString('email'),
+  }),
+})
+
 ContactRef.implement({
   fields: (t) => ({
     id: t.exposeID('id'),
@@ -19,6 +35,19 @@ ContactRef.implement({
     phone: t.exposeString('phone', { nullable: true }),
     company: t.exposeString('company', { nullable: true }),
     jobTitle: t.exposeString('jobTitle', { nullable: true }),
+    ownerId: t.exposeString('ownerId'),
+    owner: t.field({
+      type: UserRef,
+      nullable: true,
+      resolve: async (contact) => {
+        // Use the contactsService's bound prisma to resolve owner
+        // contact object may only have ownerId but not owner relation loaded
+        if ('owner' in contact && contact.owner) {
+          return contact.owner as { id: string; firstName: string; lastName: string; email: string }
+        }
+        return null
+      },
+    }),
     createdAt: t.string({ resolve: (contact) => contact.createdAt.toISOString() }),
     updatedAt: t.string({ resolve: (contact) => contact.updatedAt.toISOString() }),
   }),
@@ -93,7 +122,7 @@ builder.queryFields((t) => ({
     args: { id: t.arg.id({ required: true }) },
     resolve: async (_parent, args, context) => {
       const user = requireUser(context)
-      return getContactsService().findOne(user.tenantId, String(args.id))
+      return getContactsService().findOne(user.tenantId, user.userId, String(args.id))
     },
   }),
   contacts: t.field({
@@ -106,6 +135,7 @@ builder.queryFields((t) => ({
       const user = requireUser(context)
       return getContactsService().findMany(
         user.tenantId,
+        user.userId,
         {
           search: args.filter?.search ?? undefined,
           company: args.filter?.company ?? undefined,

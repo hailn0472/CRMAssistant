@@ -21,6 +21,12 @@ datasource db {
 // Services MUST always filter by tenantId in all tenant-scoped queries.
 // =============================================================================
 
+enum DataVisibility {
+  OWN
+  TEAM
+  ALL
+}
+
 model Tenant {
   id        String   @id @default(uuid())
   name      String
@@ -31,6 +37,7 @@ model Tenant {
   contacts  Contact[]
   roles     Role[]
   auditLogs AuditLog[]
+  teams     Team[]
 }
 
 /// Tenant-scoped user model with authentication support.
@@ -38,6 +45,7 @@ model Tenant {
 /// Extended in Story 1.7 to support Supabase Auth integration.
 /// Extended in Story 2.1: name → firstName + lastName, added profile fields, deactivation, lastLoginAt.
 /// Extended in Story 2.2: removed `role` column — roles now managed via UserRole junction table.
+/// Extended in Story 2.4: added teamId + team relation for team-based data visibility.
 model User {
   id             String    @id @default(uuid())
   tenantId       String
@@ -50,6 +58,7 @@ model User {
   department     String?
   isActive       Boolean   @default(true)
   supabaseUserId String?   @unique // Link to Supabase Auth user — null until first login
+  teamId         String? // FK to Team — null means not assigned to any team
   lastLoginAt    DateTime?
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
@@ -57,9 +66,12 @@ model User {
   updatedBy      String    @default("system")
   deletedAt      DateTime? // soft delete — null means active
 
-  tenant    Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  userRoles UserRole[]
-  auditLogs AuditLog[]
+  tenant      Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  team        Team?      @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  managedTeam Team[]     @relation("TeamManager")
+  userRoles   UserRole[]
+  auditLogs   AuditLog[]
+  ownedContacts Contact[] @relation("ContactOwner")
 
   // Email is unique per tenant, NOT globally unique
   @@unique([tenantId, email])
@@ -74,21 +86,43 @@ model User {
 /// Tenant-scoped role model for RBAC (Story 2.2).
 /// System roles (isSystem = true) cannot be deleted or renamed.
 /// Designed to be extended with a permissions relation in Story 2.3.
+/// Extended in Story 2.4: added dataVisibility field.
 model Role {
-  id          String    @id @default(uuid())
-  tenantId    String
-  name        String
-  description String?
-  isSystem    Boolean   @default(false)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  createdBy   String    @default("system")
-  updatedBy   String    @default("system")
-  deletedAt   DateTime?
+  id             String         @id @default(uuid())
+  tenantId       String
+  name           String
+  description    String?
+  isSystem       Boolean        @default(false)
+  dataVisibility DataVisibility @default(OWN)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  createdBy      String         @default("system")
+  updatedBy      String         @default("system")
+  deletedAt      DateTime?
 
   tenant          Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   userRoles       UserRole[]
   rolePermissions RolePermission[]
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
+}
+
+/// Tenant-scoped team model for team-based data visibility (Story 2.4).
+model Team {
+  id        String    @id @default(uuid())
+  tenantId  String
+  name      String
+  managerId String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  createdBy String    @default("system")
+  updatedBy String    @default("system")
+  deletedAt DateTime?
+
+  tenant  Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  manager User?  @relation("TeamManager", fields: [managerId], references: [id], onDelete: SetNull)
+  members User[] // users with this teamId
 
   @@unique([tenantId, name])
   @@index([tenantId])
@@ -159,6 +193,7 @@ model RolePermission {
 }
 
 /// Tenant-scoped contact model for CRM contact management.
+/// Extended in Story 2.4: added ownerId + owner relation for data visibility.
 model Contact {
   id        String    @id @default(uuid())
   tenantId  String
@@ -168,6 +203,7 @@ model Contact {
   phone     String?
   company   String?
   jobTitle  String?
+  ownerId   String    @default("system")
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   createdBy String    @default("system")
@@ -175,7 +211,10 @@ model Contact {
   deletedAt DateTime?
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  owner  User   @relation("ContactOwner", fields: [ownerId], references: [id], onDelete: Cascade)
 
+  @@unique([tenantId, email])
   @@index([tenantId])
+  @@index([tenantId, ownerId])
   @@index([tenantId, createdAt])
 }

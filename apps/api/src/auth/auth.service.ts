@@ -103,11 +103,27 @@ export class AuthService {
 
         // Seed system roles for the new tenant (migration only seeds existing tenants)
         const systemRoles = [
-          { name: 'ADMIN', description: 'Full system access' },
-          { name: 'SALES_MANAGER', description: 'Sales team manager' },
-          { name: 'SALES_REP', description: 'Sales representative' },
-          { name: 'SUPPORT_AGENT', description: 'Customer support agent' },
-          { name: 'MARKETING_USER', description: 'Marketing team member' },
+          { name: 'ADMIN', description: 'Full system access', dataVisibility: 'ALL' as const },
+          {
+            name: 'SALES_MANAGER',
+            description: 'Sales team manager',
+            dataVisibility: 'TEAM' as const,
+          },
+          {
+            name: 'SALES_REP',
+            description: 'Sales representative',
+            dataVisibility: 'OWN' as const,
+          },
+          {
+            name: 'SUPPORT_AGENT',
+            description: 'Customer support agent',
+            dataVisibility: 'OWN' as const,
+          },
+          {
+            name: 'MARKETING_USER',
+            description: 'Marketing team member',
+            dataVisibility: 'OWN' as const,
+          },
         ]
 
         let salesRepRole: { id: string; name: string } | null = null
@@ -120,6 +136,7 @@ export class AuthService {
               name: roleDef.name,
               description: roleDef.description,
               isSystem: true,
+              dataVisibility: roleDef.dataVisibility,
               createdBy: 'system',
               updatedBy: 'system',
             },
@@ -426,11 +443,27 @@ export class AuthService {
         })
 
         const systemRoles = [
-          { name: 'ADMIN', description: 'Full system access' },
-          { name: 'SALES_MANAGER', description: 'Sales team manager' },
-          { name: 'SALES_REP', description: 'Sales representative' },
-          { name: 'SUPPORT_AGENT', description: 'Customer support agent' },
-          { name: 'MARKETING_USER', description: 'Marketing team member' },
+          { name: 'ADMIN', description: 'Full system access', dataVisibility: 'ALL' as const },
+          {
+            name: 'SALES_MANAGER',
+            description: 'Sales team manager',
+            dataVisibility: 'TEAM' as const,
+          },
+          {
+            name: 'SALES_REP',
+            description: 'Sales representative',
+            dataVisibility: 'OWN' as const,
+          },
+          {
+            name: 'SUPPORT_AGENT',
+            description: 'Customer support agent',
+            dataVisibility: 'OWN' as const,
+          },
+          {
+            name: 'MARKETING_USER',
+            description: 'Marketing team member',
+            dataVisibility: 'OWN' as const,
+          },
         ]
 
         let salesRepRole: { id: string; name: string } | null = null
@@ -443,6 +476,7 @@ export class AuthService {
               name: roleDef.name,
               description: roleDef.description,
               isSystem: true,
+              dataVisibility: roleDef.dataVisibility,
               createdBy: 'system',
               updatedBy: 'system',
             },

@@ -19,6 +19,15 @@ UserRoleRef.implement({
 
 const UserRef = builder.objectRef<UserGraphqlShape>('User')
 
+const TeamRef = builder.objectRef<{ id: string; name: string }>('UserTeam')
+
+TeamRef.implement({
+  fields: (t) => ({
+    id: t.exposeID('id'),
+    name: t.exposeString('name'),
+  }),
+})
+
 UserRef.implement({
   fields: (t) => ({
     id: t.exposeID('id'),
@@ -31,6 +40,17 @@ UserRef.implement({
     jobTitle: t.exposeString('jobTitle', { nullable: true }),
     department: t.exposeString('department', { nullable: true }),
     isActive: t.exposeBoolean('isActive'),
+    teamId: t.exposeString('teamId', { nullable: true }),
+    team: t.field({
+      type: TeamRef,
+      nullable: true,
+      resolve: (user) => {
+        if ('team' in user && user.team) {
+          return user.team as { id: string; name: string }
+        }
+        return null
+      },
+    }),
     lastLoginAt: t.string({
       nullable: true,
       resolve: (user) => (user.lastLoginAt ? user.lastLoginAt.toISOString() : null),
@@ -84,6 +104,7 @@ const UpdateUserInputRef = builder.inputType('UpdateUserInput', {
     phone: t.string(),
     jobTitle: t.string(),
     department: t.string(),
+    teamId: t.string(),
   }),
 })
 
@@ -215,6 +236,9 @@ builder.mutationFields((t) => ({
           : undefined,
         department: Object.prototype.hasOwnProperty.call(args.input, 'department')
           ? args.input.department
+          : undefined,
+        teamId: Object.prototype.hasOwnProperty.call(args.input, 'teamId')
+          ? args.input.teamId ?? null
           : undefined,
       })
     },

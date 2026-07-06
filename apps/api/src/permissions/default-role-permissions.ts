@@ -16,7 +16,7 @@ export function buildAllPermissionActions(
  * MARKETING_USER: 4 permissions
  */
 export const DEFAULT_ROLE_PERMISSIONS: Record<string, { resource: string; action: string }[]> = {
-  ADMIN: [],
+  ADMIN: [{ resource: 'DATA', action: 'VIEW_ALL' }],
   SALES_MANAGER: [
     ...ACTIONS.map((a) => ({ resource: 'CONTACT', action: a })),
     ...ACTIONS.filter((a) => a !== 'DELETE').map((a) => ({ resource: 'DEAL', action: a })),

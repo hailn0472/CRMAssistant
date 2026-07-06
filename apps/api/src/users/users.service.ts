@@ -25,6 +25,7 @@ export type UpdateUserInput = {
   phone?: string | null
   jobTitle?: string | null
   department?: string | null
+  teamId?: string | null
 }
 
 export type UpdateProfileInput = {
@@ -59,6 +60,7 @@ const userListSelect = {
   isActive: true,
   jobTitle: true,
   department: true,
+  teamId: true,
   lastLoginAt: true,
   createdAt: true,
   updatedAt: true,
@@ -286,10 +288,26 @@ export class UsersService {
   ): Promise<User> {
     const normalizedInput = normalizeUpdateInput(input)
 
+    // Validate teamId belongs to same tenant if provided
+    if (input.teamId !== undefined && input.teamId !== null) {
+      const team = await this.prisma.team.findFirst({
+        where: { id: input.teamId, tenantId, deletedAt: null },
+      })
+      if (!team) {
+        throw new NotFoundException('Team not found in this tenant')
+      }
+    } else if (input.teamId === null) {
+      // Allow unsetting teamId
+    }
+
     try {
       const result = await this.prisma.user.updateMany({
         where: { id, tenantId, deletedAt: null },
-        data: { ...normalizedInput, updatedBy: userId },
+        data: {
+          ...normalizedInput,
+          ...(input.teamId !== undefined ? { teamId: input.teamId } : {}),
+          updatedBy: userId,
+        },
       })
 
       if (result.count === 0) {

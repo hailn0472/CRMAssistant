@@ -154,22 +154,24 @@ export function TopbarActions(): React.JSX.Element {
           className="hidden lg:flex h-10 items-center gap-2.5 rounded-full border border-slate-200 bg-white pl-1.5 pr-3.5 text-sm hover:bg-slate-50 transition-colors shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-600/40"
           onClick={toggleDropdown}
         >
-          <AvatarOrInitials
-            avatar={user?.avatar}
-            firstName={firstName}
-            lastName={lastName}
-            size="h-7 w-7"
-          />
-          <div className="leading-tight text-left">
-            <p className="text-xs font-semibold text-slate-900">
+          <div className="shrink-0">
+            <AvatarOrInitials
+              avatar={user?.avatar}
+              firstName={firstName}
+              lastName={lastName}
+              size="h-7 w-7"
+            />
+          </div>
+          <div className="leading-tight text-left min-w-0 max-w-[120px]">
+            <p className="text-xs font-semibold text-slate-900 truncate">
               {firstName} {lastName}
             </p>
             {primaryRole ? (
-              <p className="text-[10px] text-slate-500 font-medium">
+              <p className="text-[10px] text-slate-500 font-medium truncate">
                 {ROLE_LABELS[primaryRole] ?? primaryRole}
               </p>
             ) : (
-              <p className="text-[10px] text-slate-500">Signed in</p>
+              <p className="text-[10px] text-slate-500 truncate">Signed in</p>
             )}
           </div>
         </button>

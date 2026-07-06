@@ -11,6 +11,11 @@ export type AuditAction =
   | 'PERMISSION_ASSIGNED'
   | 'PERMISSION_REMOVED'
   | 'ROLE_PERMISSIONS_SET'
+  | 'TEAM_CREATED'
+  | 'TEAM_UPDATED'
+  | 'TEAM_DELETED'
+  | 'TEAM_MEMBERS_SET'
+  | 'VISIBILITY_FILTER_APPLIED'
 
 @Injectable()
 export class AuditService {
