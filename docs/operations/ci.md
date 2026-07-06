@@ -76,7 +76,7 @@ Playwright reports are uploaded on E2E failure:
 
 ## Environment Variables
 
-CI uses placeholder values for tests that mock external auth boundaries. Real deployment values must be stored in GitHub Actions secrets. See `docs/ci-secrets-checklist.md`.
+CI uses placeholder values for tests that mock external auth boundaries. Real deployment values must be stored in GitHub Actions secrets. See `docs/operations/ci-secrets-checklist.md`.
 
 ## Troubleshooting
 
