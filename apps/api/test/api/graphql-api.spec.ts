@@ -41,7 +41,7 @@ describe('GraphQL API harness', () => {
     const token = harness.signToken({
       userId: 'graphql-role-smoke-user',
       tenantId: tenant.id,
-      roles: ['SALES_REP'],
+      roles: ['ADMIN'],
       email: 'graphql-role-smoke-user@example.com',
     })
     const payload: GraphqlRequestPayload = {
@@ -63,7 +63,7 @@ describe('GraphQL API harness', () => {
     const token = harness.signToken({
       userId: 'graphql-api-user',
       tenantId: tenant.id,
-      roles: ['SALES_REP'],
+      roles: ['ADMIN'],
       email: 'graphql-api-user@example.com',
     })
     const payload: GraphqlRequestPayload = {
@@ -111,13 +111,13 @@ describe('GraphQL API harness', () => {
     const tenantAToken = harness.signToken({
       userId: 'tenant-a-user',
       tenantId: tenantA.id,
-      roles: ['SALES_REP'],
+      roles: ['ADMIN'],
       email: 'tenant-a-user@example.com',
     })
     const tenantBToken = harness.signToken({
       userId: 'tenant-b-user',
       tenantId: tenantB.id,
-      roles: ['SALES_REP'],
+      roles: ['ADMIN'],
       email: 'tenant-b-user@example.com',
     })
     const createTenantAContactMutation: GraphqlRequestPayload = {
