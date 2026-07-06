@@ -15,7 +15,7 @@ type MockUserDelegate = {
 type MockPrisma = {
   user: MockUserDelegate
   role: { findFirst: jest.Mock }
-  userRole: { findUnique: jest.Mock; create: jest.Mock }
+  userRole: { findUnique: jest.Mock; create: jest.Mock; findMany: jest.Mock }
 }
 
 const NOW = new Date('2026-06-01T00:00:00.000Z')
@@ -62,6 +62,7 @@ function makePrisma(): MockPrisma {
     userRole: {
       findUnique: jest.fn(),
       create: jest.fn(),
+      findMany: jest.fn(),
     },
   }
 }
@@ -483,6 +484,64 @@ describe('UsersService', () => {
       const result = await service.findMany(TENANT_ID, {}, { page: 0, pageSize: 500 })
 
       expect(result).toEqual({ items: [], total: 0, page: 1, pageSize: 100 })
+    })
+  })
+
+  describe('getUserRoles()', () => {
+    it('returns roles for a user filtered by tenantId', async () => {
+      prisma.userRole.findMany.mockResolvedValue([
+        { userId: TARGET_USER_ID, role: { id: 'role-1', name: 'ADMIN' } },
+      ])
+
+      const result = await service.getUserRoles(TENANT_ID, TARGET_USER_ID)
+
+      expect(result).toEqual([{ id: 'role-1', name: 'ADMIN' }])
+      expect(prisma.userRole.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { userId: TARGET_USER_ID, role: { tenantId: TENANT_ID } },
+        }),
+      )
+    })
+
+    it('filters out null roles', async () => {
+      prisma.userRole.findMany.mockResolvedValue([{ userId: TARGET_USER_ID, role: null }])
+
+      const result = await service.getUserRoles(TENANT_ID, TARGET_USER_ID)
+
+      expect(result).toEqual([])
+    })
+  })
+
+  describe('getUserRolesBatch()', () => {
+    it('returns empty map for empty userIds array', async () => {
+      const result = await service.getUserRolesBatch(TENANT_ID, [])
+
+      expect(result.size).toBe(0)
+      expect(prisma.userRole.findMany).not.toHaveBeenCalled()
+    })
+
+    it('returns roles grouped by userId', async () => {
+      prisma.userRole.findMany.mockResolvedValue([
+        { userId: 'user-1', role: { id: 'role-1', name: 'ADMIN' } },
+        { userId: 'user-2', role: { id: 'role-2', name: 'SALES_REP' } },
+        { userId: 'user-1', role: { id: 'role-3', name: 'SALES_MANAGER' } },
+      ])
+
+      const result = await service.getUserRolesBatch(TENANT_ID, ['user-1', 'user-2'])
+
+      expect(result.get('user-1')).toEqual([
+        { id: 'role-1', name: 'ADMIN' },
+        { id: 'role-3', name: 'SALES_MANAGER' },
+      ])
+      expect(result.get('user-2')).toEqual([{ id: 'role-2', name: 'SALES_REP' }])
+    })
+
+    it('initializes empty array for users with no roles', async () => {
+      prisma.userRole.findMany.mockResolvedValue([])
+
+      const result = await service.getUserRolesBatch(TENANT_ID, ['user-no-roles'])
+
+      expect(result.get('user-no-roles')).toEqual([])
     })
   })
 

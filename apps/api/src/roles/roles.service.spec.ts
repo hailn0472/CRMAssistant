@@ -185,20 +185,167 @@ describe('RolesService', () => {
     })
   })
 
+  describe('findOne', () => {
+    it('returns a role when found', async () => {
+      const role = { id: ROLE_ID, name: 'ADMIN', isSystem: true }
+      prisma.role.findFirst.mockResolvedValue(role)
+
+      const result = await service.findOne(TENANT_ID, ROLE_ID)
+
+      expect(result).toBe(role)
+    })
+
+    it('throws NotFoundException when role does not exist', async () => {
+      prisma.role.findFirst.mockResolvedValue(null)
+
+      await expect(service.findOne(TENANT_ID, ROLE_ID)).rejects.toThrow('Role not found')
+    })
+  })
+
+  describe('findMany', () => {
+    it('returns roles with user count for tenant', async () => {
+      const roles = [{ id: ROLE_ID, name: 'ADMIN', _count: { userRoles: 2 } }]
+      prisma.role.findMany.mockResolvedValue(roles)
+
+      const result = await service.findMany(TENANT_ID)
+
+      expect(result).toBe(roles)
+      expect(prisma.role.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { tenantId: TENANT_ID, deletedAt: null } }),
+      )
+    })
+  })
+
+  describe('update', () => {
+    it('allows updating description of a system role', async () => {
+      prisma.role.findFirst.mockResolvedValue({ id: ROLE_ID, name: 'ADMIN', isSystem: true })
+      const updated = { id: ROLE_ID, name: 'ADMIN', description: 'Updated desc' }
+      prisma.role.update.mockResolvedValue(updated)
+
+      const result = await service.update(TENANT_ID, ACTOR_ID, ROLE_ID, {
+        description: 'Updated desc',
+      })
+
+      expect(result).toBe(updated)
+    })
+
+    it('throws ConflictException on duplicate name during update', async () => {
+      prisma.role.findFirst.mockResolvedValue({ id: ROLE_ID, name: 'Custom', isSystem: false })
+      prisma.role.update.mockRejectedValue(
+        new PrismaClientKnownRequestError('duplicate', { code: 'P2002', clientVersion: '5.22.0' }),
+      )
+
+      await expect(
+        service.update(TENANT_ID, ACTOR_ID, ROLE_ID, { name: 'ExistingName' }),
+      ).rejects.toThrow(ConflictException)
+    })
+
+    it('rejects name exceeding 100 characters', async () => {
+      prisma.role.findFirst.mockResolvedValue({ id: ROLE_ID, name: 'Custom', isSystem: false })
+
+      await expect(
+        service.update(TENANT_ID, ACTOR_ID, ROLE_ID, { name: 'a'.repeat(101) }),
+      ).rejects.toThrow(BadRequestException)
+    })
+  })
+
+  describe('assignRoleToUser', () => {
+    it('throws NotFoundException when user not found', async () => {
+      prisma.user.findFirst.mockResolvedValue(null)
+      prisma.role.findFirst.mockResolvedValue({ id: ROLE_ID, name: 'Viewer' })
+
+      await expect(
+        service.assignRoleToUser(TENANT_ID, ACTOR_ID, 'missing-user', ROLE_ID),
+      ).rejects.toThrow('User not found')
+    })
+
+    it('throws NotFoundException when role not found', async () => {
+      prisma.user.findFirst.mockResolvedValue({ id: 'user-1' })
+      prisma.role.findFirst.mockResolvedValue(null)
+
+      await expect(
+        service.assignRoleToUser(TENANT_ID, ACTOR_ID, 'user-1', 'missing-role'),
+      ).rejects.toThrow('Role not found')
+    })
+  })
+
   describe('removeRoleFromUser', () => {
-    it('removes a role from a user', async () => {
+    it('throws NotFoundException when user not found', async () => {
+      prisma.user.findFirst.mockResolvedValue(null)
+
+      await expect(
+        service.removeRoleFromUser(TENANT_ID, ACTOR_ID, 'missing-user', ROLE_ID),
+      ).rejects.toThrow('User not found')
+    })
+
+    it('throws NotFoundException when assignment does not exist (P2025)', async () => {
+      prisma.user.findFirst.mockResolvedValue({ id: 'user-1' })
+      prisma.userRole.delete.mockRejectedValue(
+        new PrismaClientKnownRequestError('not found', { code: 'P2025', clientVersion: '5.22.0' }),
+      )
+
+      await expect(
+        service.removeRoleFromUser(TENANT_ID, ACTOR_ID, 'user-1', ROLE_ID),
+      ).rejects.toThrow('User does not have this role assigned')
+    })
+
+    it('logs with unknown role name when role lookup returns null', async () => {
       prisma.user.findFirst.mockResolvedValue({ id: 'user-1' })
       prisma.userRole.delete.mockResolvedValue({})
-      prisma.role.findUnique.mockResolvedValue({ id: ROLE_ID, name: 'Viewer' })
+      prisma.role.findUnique.mockResolvedValue(null)
 
-      const result = await service.removeRoleFromUser(TENANT_ID, ACTOR_ID, 'user-1', ROLE_ID)
+      await service.removeRoleFromUser(TENANT_ID, ACTOR_ID, 'user-1', ROLE_ID)
 
-      expect(result).toBe(true)
       expect(auditService.log).toHaveBeenCalledWith(
         expect.objectContaining({
-          action: 'ROLE_REMOVED',
+          details: expect.objectContaining({ roleName: 'unknown' }),
         }),
       )
+    })
+  })
+
+  describe('getUserRoles', () => {
+    it('returns roles for a user filtered by tenant', async () => {
+      prisma.userRole.findMany.mockResolvedValue([
+        {
+          userId: 'user-1',
+          role: { id: ROLE_ID, name: 'ADMIN', description: null, isSystem: true },
+        },
+      ])
+
+      const result = await service.getUserRoles(TENANT_ID, 'user-1')
+
+      expect(result).toEqual([{ id: ROLE_ID, name: 'ADMIN', description: null, isSystem: true }])
+    })
+
+    it('filters out entries with null role', async () => {
+      prisma.userRole.findMany.mockResolvedValue([{ userId: 'user-1', role: null }])
+
+      const result = await service.getUserRoles(TENANT_ID, 'user-1')
+
+      expect(result).toEqual([])
+    })
+  })
+
+  describe('getUsersForRole', () => {
+    it('returns users assigned to a role', async () => {
+      prisma.userRole.findMany.mockResolvedValue([
+        {
+          user: { id: 'user-1', email: 'a@b.com', firstName: 'A', lastName: 'B' },
+        },
+      ])
+
+      const result = await service.getUsersForRole(TENANT_ID, ROLE_ID)
+
+      expect(result).toEqual([{ id: 'user-1', email: 'a@b.com', firstName: 'A', lastName: 'B' }])
+    })
+
+    it('filters out entries with null user', async () => {
+      prisma.userRole.findMany.mockResolvedValue([{ user: null }])
+
+      const result = await service.getUsersForRole(TENANT_ID, ROLE_ID)
+
+      expect(result).toEqual([])
     })
   })
 })
