@@ -57,12 +57,27 @@ describe('Contact persistence tenant pattern (integration)', () => {
   })
 
   afterEach(async () => {
-    await prisma.contact.deleteMany()
-    await prisma.tenant.deleteMany()
+    await prisma.$executeRawUnsafe(
+      'TRUNCATE TABLE "Contact", "User", "UserRole", "Role", "Team", "Tenant" RESTART IDENTITY CASCADE',
+    )
   })
 
   async function createTenant(name: string): Promise<Tenant> {
     return prisma.tenant.create({ data: { name } })
+  }
+
+  async function createTestUser(tenantId: string, userId: string): Promise<void> {
+    await prisma.user.create({
+      data: {
+        id: userId,
+        tenantId,
+        email: `${userId}@example.com`,
+        firstName: 'Test',
+        lastName: 'User',
+        createdBy: 'test',
+        updatedBy: 'test',
+      },
+    })
   }
 
   function tokenFor(tenantId: string, userId: string): string {
@@ -86,21 +101,27 @@ describe('Contact persistence tenant pattern (integration)', () => {
       .send({ query, variables })
   }
 
-  async function createContact(tenantId: string, email: string): Promise<Contact> {
+  async function createContact(
+    tenantId: string,
+    email: string,
+    ownerId = 'test-user',
+  ): Promise<Contact> {
     return prisma.contact.create({
       data: {
         tenantId,
         email,
         firstName: 'Ada',
         lastName: 'Lovelace',
-        createdBy: 'test-user',
-        updatedBy: 'test-user',
+        ownerId,
+        createdBy: ownerId,
+        updatedBy: ownerId,
       },
     })
   }
 
   it('creates contacts with required tenant and audit fields', async () => {
     const tenant = await createTenant('Acme')
+    await createTestUser(tenant.id, 'test-user')
 
     const contact = await createContact(tenant.id, 'ada@example.com')
 
@@ -116,13 +137,16 @@ describe('Contact persistence tenant pattern (integration)', () => {
   it('allows the same contact email in different tenants', async () => {
     const tenantA = await createTenant('Tenant A')
     const tenantB = await createTenant('Tenant B')
+    await createTestUser(tenantA.id, 'test-user-A')
+    await createTestUser(tenantB.id, 'test-user-B')
 
-    await expect(createContact(tenantA.id, 'same@example.com')).resolves.toBeTruthy()
-    await expect(createContact(tenantB.id, 'same@example.com')).resolves.toBeTruthy()
+    await expect(createContact(tenantA.id, 'same@example.com', 'test-user-A')).resolves.toBeTruthy()
+    await expect(createContact(tenantB.id, 'same@example.com', 'test-user-B')).resolves.toBeTruthy()
   })
 
   it('rejects duplicate contact email within the same tenant', async () => {
     const tenant = await createTenant('Tenant A')
+    await createTestUser(tenant.id, 'test-user')
 
     await createContact(tenant.id, 'duplicate@example.com')
 
@@ -131,6 +155,7 @@ describe('Contact persistence tenant pattern (integration)', () => {
 
   it('excludes soft-deleted contacts from active tenant queries', async () => {
     const tenant = await createTenant('Acme')
+    await createTestUser(tenant.id, 'test-user')
     const contact = await createContact(tenant.id, 'deleted@example.com')
 
     await prisma.contact.update({
@@ -147,8 +172,9 @@ describe('Contact persistence tenant pattern (integration)', () => {
     expect(storedContact?.deletedAt).toBeInstanceOf(Date)
   })
 
-  it('allows recreating an active contact after soft delete', async () => {
+  it('rejects recreating a contact with same email after soft delete due to unique constraint', async () => {
     const tenant = await createTenant('Acme')
+    await createTestUser(tenant.id, 'test-user')
     const contact = await createContact(tenant.id, 'restore@example.com')
 
     await prisma.contact.update({
@@ -156,14 +182,19 @@ describe('Contact persistence tenant pattern (integration)', () => {
       data: { deletedAt: new Date(), updatedBy: 'test-user' },
     })
 
-    await expect(createContact(tenant.id, 'restore@example.com')).resolves.toBeTruthy()
+    // Story 2.4 added @@unique([tenantId, email]) on Contact.
+    // A soft-deleted contact still holds the email — creating another active
+    // contact with the same email violates the DB-level unique constraint.
+    await expect(createContact(tenant.id, 'restore@example.com')).rejects.toThrow()
   })
 
   it('returns only contacts for the requested tenant', async () => {
     const tenantA = await createTenant('Tenant A')
     const tenantB = await createTenant('Tenant B')
-    await createContact(tenantA.id, 'a@example.com')
-    await createContact(tenantB.id, 'b@example.com')
+    await createTestUser(tenantA.id, 'test-user-X')
+    await createTestUser(tenantB.id, 'test-user-Y')
+    await createContact(tenantA.id, 'a@example.com', 'test-user-X')
+    await createContact(tenantB.id, 'b@example.com', 'test-user-Y')
 
     const tenantAContacts = await prisma.contact.findMany({
       where: { tenantId: tenantA.id, deletedAt: null },
@@ -175,7 +206,20 @@ describe('Contact persistence tenant pattern (integration)', () => {
 
   it('creates and queries contacts through authenticated GraphQL API', async () => {
     const tenant = await createTenant('GraphQL Tenant')
-    const token = tokenFor(tenant.id, 'graphql-user')
+    const userId = 'graphql-user'
+    await createTestUser(tenant.id, userId)
+    const role = await prisma.role.create({
+      data: {
+        tenantId: tenant.id,
+        name: 'ADMIN',
+        isSystem: true,
+        dataVisibility: 'ALL',
+        createdBy: 'test',
+        updatedBy: 'test',
+      },
+    })
+    await prisma.userRole.create({ data: { userId, roleId: role.id, assignedBy: 'test' } })
+    const token = tokenFor(tenant.id, userId)
 
     const createResponse = await graphqlRequest(
       token,
@@ -210,6 +254,34 @@ describe('Contact persistence tenant pattern (integration)', () => {
   it('prevents cross-tenant contact access through GraphQL API', async () => {
     const tenantA = await createTenant('Tenant A')
     const tenantB = await createTenant('Tenant B')
+    await createTestUser(tenantA.id, 'test-user')
+    await createTestUser(tenantB.id, 'tenant-b-user')
+    const roleA = await prisma.role.create({
+      data: {
+        tenantId: tenantA.id,
+        name: 'ADMIN',
+        isSystem: true,
+        dataVisibility: 'ALL',
+        createdBy: 'test',
+        updatedBy: 'test',
+      },
+    })
+    await prisma.userRole.create({
+      data: { userId: 'test-user', roleId: roleA.id, assignedBy: 'test' },
+    })
+    const roleB = await prisma.role.create({
+      data: {
+        tenantId: tenantB.id,
+        name: 'ADMIN',
+        isSystem: true,
+        dataVisibility: 'ALL',
+        createdBy: 'test',
+        updatedBy: 'test',
+      },
+    })
+    await prisma.userRole.create({
+      data: { userId: 'tenant-b-user', roleId: roleB.id, assignedBy: 'test' },
+    })
     const contact = await createContact(tenantA.id, 'cross@example.com')
     const tenantBToken = tokenFor(tenantB.id, 'tenant-b-user')
 
