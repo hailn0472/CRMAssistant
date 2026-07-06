@@ -60,6 +60,12 @@ function buildPermissionCatalog(): { resource: string; action: string; descripti
       catalog.push({ resource, action, description: describePermission(resource, action) })
     }
   }
+  // Story 2.4: Add DATA:VIEW_ALL as the 57th entry
+  catalog.push({
+    resource: 'DATA',
+    action: 'VIEW_ALL',
+    description: 'View all data regardless of visibility rules',
+  })
   return catalog
 }
 
@@ -164,11 +170,36 @@ async function seedRolePermissionsForTenant(tenantId: string, roleNames: string[
 export { seedPermissions, seedRolePermissions, seedRolePermissionsForTenant }
 
 const SYSTEM_ROLES = [
-  { name: 'ADMIN', description: 'Full system access', isSystem: true },
-  { name: 'SALES_MANAGER', description: 'Sales team manager', isSystem: true },
-  { name: 'SALES_REP', description: 'Sales representative', isSystem: true },
-  { name: 'SUPPORT_AGENT', description: 'Customer support agent', isSystem: true },
-  { name: 'MARKETING_USER', description: 'Marketing team member', isSystem: true },
+  {
+    name: 'ADMIN',
+    description: 'Full system access',
+    isSystem: true,
+    dataVisibility: 'ALL' as const,
+  },
+  {
+    name: 'SALES_MANAGER',
+    description: 'Sales team manager',
+    isSystem: true,
+    dataVisibility: 'TEAM' as const,
+  },
+  {
+    name: 'SALES_REP',
+    description: 'Sales representative',
+    isSystem: true,
+    dataVisibility: 'OWN' as const,
+  },
+  {
+    name: 'SUPPORT_AGENT',
+    description: 'Customer support agent',
+    isSystem: true,
+    dataVisibility: 'OWN' as const,
+  },
+  {
+    name: 'MARKETING_USER',
+    description: 'Marketing team member',
+    isSystem: true,
+    dataVisibility: 'OWN' as const,
+  },
 ]
 
 async function seedSystemRoles(tenantId: string): Promise<Record<string, string>> {
@@ -187,6 +218,7 @@ async function seedSystemRoles(tenantId: string): Promise<Record<string, string>
             name: roleDef.name,
             description: roleDef.description,
             isSystem: roleDef.isSystem,
+            dataVisibility: roleDef.dataVisibility,
             createdBy: 'seed',
             updatedBy: 'seed',
           },

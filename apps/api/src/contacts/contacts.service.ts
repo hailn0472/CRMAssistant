@@ -7,6 +7,7 @@ import {
 import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library'
 
 import { PrismaService } from '../prisma/prisma.service'
+import { resolveVisibilityFilter } from '../common/guards/visibility-check'
 import type { Contact, Prisma } from '@prisma/client'
 
 export type CreateContactInput = {
@@ -49,6 +50,8 @@ const contactListSelect = {
   phone: true,
   company: true,
   jobTitle: true,
+  ownerId: true,
+  owner: { select: { id: true, firstName: true, lastName: true, email: true } },
   createdAt: true,
   updatedAt: true,
 } as const
@@ -154,6 +157,7 @@ export class ContactsService {
           phone: normalizedInput.phone,
           company: normalizedInput.company,
           jobTitle: normalizedInput.jobTitle,
+          ownerId: userId,
           createdBy: userId,
           updatedBy: userId,
         },
@@ -166,20 +170,39 @@ export class ContactsService {
     }
   }
 
-  async findOne(tenantId: string, id: string): Promise<Contact> {
+  async findOne(tenantId: string, userId: string, id: string): Promise<Contact> {
     const contact = await this.prisma.contact.findFirst({
       where: { id, tenantId, deletedAt: null },
+      include: { owner: { select: { id: true, firstName: true, lastName: true, email: true } } },
     })
 
     if (!contact) {
       throw new NotFoundException('Contact not found')
     }
 
+    const visibilityFilter = await resolveVisibilityFilter(userId, tenantId)
+    if (visibilityFilter !== undefined) {
+      // OWN case: visibilityFilter is a string (userId)
+      if (typeof visibilityFilter === 'string') {
+        if (contact.ownerId !== visibilityFilter) {
+          throw new NotFoundException('Contact not found')
+        }
+      } else {
+        // TEAM case: visibilityFilter is { in: string[] }
+        const allowedIds = (visibilityFilter as { in: string[] }).in
+        if (!allowedIds.includes(contact.ownerId)) {
+          throw new NotFoundException('Contact not found')
+        }
+      }
+    }
+    // ALL case: visibilityFilter is undefined → no check needed
+
     return contact
   }
 
   async findMany(
     tenantId: string,
+    userId: string,
     filter: ContactFilterInput = {},
     pagination: ContactPaginationInput = {},
   ): Promise<ContactConnection> {
@@ -187,6 +210,7 @@ export class ContactsService {
     const pageSize = Math.min(Math.max(pagination.pageSize ?? DEFAULT_PAGE_SIZE, 1), MAX_PAGE_SIZE)
     const search = filter.search?.trim()
     const company = filter.company?.trim()
+    const visibilityOwnerFilter = await resolveVisibilityFilter(userId, tenantId)
     const where: Prisma.ContactWhereInput = {
       tenantId,
       deletedAt: null,
@@ -201,6 +225,7 @@ export class ContactsService {
             ],
           }
         : {}),
+      ...(visibilityOwnerFilter ? { ownerId: visibilityOwnerFilter } : {}),
     }
 
     const [items, total] = await Promise.all([
@@ -223,6 +248,9 @@ export class ContactsService {
     id: string,
     input: UpdateContactInput,
   ): Promise<Contact> {
+    // Verify visibility before updating
+    await this.findOne(tenantId, userId, id)
+
     const normalizedInput = normalizeUpdateInput(input)
 
     try {
@@ -235,7 +263,7 @@ export class ContactsService {
         throw new NotFoundException('Contact not found')
       }
 
-      return await this.findOne(tenantId, id)
+      return await this.findOne(tenantId, userId, id)
     } catch (error) {
       if (error instanceof PrismaClientKnownRequestError && error.code === 'P2002') {
         throw new ConflictException('Contact email already exists')
@@ -245,6 +273,9 @@ export class ContactsService {
   }
 
   async delete(tenantId: string, userId: string, id: string): Promise<boolean> {
+    // Verify visibility before deleting
+    await this.findOne(tenantId, userId, id)
+
     const result = await this.prisma.contact.updateMany({
       where: { id, tenantId, deletedAt: null },
       data: { deletedAt: new Date(), updatedBy: userId },

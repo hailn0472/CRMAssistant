@@ -60,6 +60,13 @@ const navigationSections: NavigationSection[] = [
         permission: { resource: 'USER', action: 'READ' },
       },
       {
+        label: 'Teams',
+        href: '/settings/teams',
+        marker: 'TM',
+        roles: ['ADMIN'],
+        permission: { resource: 'ROLE', action: 'READ' },
+      },
+      {
         label: 'Roles',
         href: '/settings/roles',
         marker: 'RL',

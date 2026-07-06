@@ -55,14 +55,14 @@ describe('contacts.graphql', () => {
   it('uses authenticated tenant and user when service methods are invoked', async () => {
     const service = makeContactsService()
 
-    await service.findOne(user.tenantId, 'contact-1')
+    await service.findOne(user.tenantId, user.userId, 'contact-1')
     await service.create(user.tenantId, user.userId, {
       email: 'ada@example.com',
       firstName: 'Ada',
       lastName: 'Lovelace',
     })
 
-    expect(service.findOne).toHaveBeenCalledWith('tenant-1', 'contact-1')
+    expect(service.findOne).toHaveBeenCalledWith('tenant-1', 'user-1', 'contact-1')
     expect(service.create).toHaveBeenCalledWith('tenant-1', 'user-1', expect.any(Object))
   })
 

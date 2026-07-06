@@ -10,6 +10,8 @@ export type User = {
   department?: string | null
   roles: { id: string; name: string }[]
   isActive: boolean
+  teamId?: string | null
+  team?: { id: string; name: string } | null
   lastLoginAt?: string | null
   createdAt: string
   updatedAt: string
@@ -38,6 +40,7 @@ export type UpdateUserFormData = {
   phone?: string | null
   jobTitle?: string | null
   department?: string | null
+  teamId?: string | null
 }
 
 export type UpdateProfileFormData = {
@@ -79,6 +82,8 @@ const USER_LIST_FIELDS = `
   avatar
   roles { id name }
   isActive
+  teamId
+  team { id name }
   jobTitle
   department
   lastLoginAt
@@ -98,6 +103,8 @@ const USER_FULL_FIELDS = `
   department
   roles { id name }
   isActive
+  teamId
+  team { id name }
   lastLoginAt
   createdAt
   updatedAt

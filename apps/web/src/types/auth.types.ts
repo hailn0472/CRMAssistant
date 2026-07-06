@@ -55,3 +55,16 @@ export type PermissionCheck = {
   action: string
   granted: boolean
 }
+
+export type Team = {
+  id: string
+  name: string
+  managerId?: string | null
+  manager?: {
+    id: string
+    firstName: string
+    lastName: string
+  } | null
+  memberCount?: number
+  _count?: { members: number }
+}

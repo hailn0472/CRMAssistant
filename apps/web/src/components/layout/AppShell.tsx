@@ -63,7 +63,7 @@ export function AppShell({ children }: AppShellProps): React.JSX.Element {
       tabletRailSlot={<TabletRailNavigation />}
       mobileNavSlot={<MobileNavigation />}
       searchSlot={
-        <div className="relative w-[min(38rem,calc(100vw-9rem))]">
+        <div className="relative w-full max-w-[38rem]">
           <TopbarSearch
             value={commandQuery}
             onChange={(value) => {
