@@ -25,3 +25,12 @@ global.ResizeObserver = class ResizeObserver {
 if (typeof Element !== 'undefined') {
   Element.prototype.scrollIntoView = jest.fn()
 }
+
+jest.mock('@/lib/supabase', () => ({
+  supabase: {
+    auth: {
+      signInWithOAuth: jest.fn().mockResolvedValue({ data: {}, error: null }),
+      exchangeCodeForSession: jest.fn(),
+    },
+  },
+}))

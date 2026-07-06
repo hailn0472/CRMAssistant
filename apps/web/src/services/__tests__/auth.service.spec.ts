@@ -148,4 +148,32 @@ describe('authService', () => {
       expect.objectContaining({ method: 'POST' }),
     )
   })
+
+  it('should call oauthLogin endpoint', async () => {
+    const response = {
+      accessToken: 'token',
+      userId: 'user-1',
+      tenantId: 'tenant-1',
+      roles: ['SALES_REP'],
+      email: 'user@example.com',
+      firstName: 'Test',
+      lastName: 'User',
+    }
+    mockFetch.mockResolvedValue(jsonResponse(response))
+
+    const result = await authService.oauthLogin('google-access-token-123')
+
+    expect(result).toEqual(response)
+    expect(mockFetch).toHaveBeenCalledWith('/api/auth/oauth', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ accessToken: 'google-access-token-123' }),
+    })
+  })
+
+  it('should throw when oauthLogin fails', async () => {
+    mockFetch.mockResolvedValue(jsonResponse({ message: 'OAuth login failed' }, false))
+
+    await expect(authService.oauthLogin('bad-code')).rejects.toThrow('OAuth login failed')
+  })
 })
