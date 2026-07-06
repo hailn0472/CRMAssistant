@@ -8,7 +8,7 @@ import { useAuthStore } from '../stores/auth.store'
 import type { AuthUser, RegisterData } from '../types/auth.types'
 
 function safeRedirectTarget(value: string | null): string {
-  if (!value || !value.startsWith('/') || value.startsWith('//')) {
+  if (!value || !value.startsWith('/') || value.startsWith('//') || value.includes('\\')) {
     return '/dashboard'
   }
   return value
@@ -19,6 +19,7 @@ export function useAuth(): {
   isLoading: boolean
   login: (email: string, password: string) => Promise<void>
   register: (data: RegisterData) => Promise<void>
+  oauthLogin: (accessToken: string, redirect?: string | null) => Promise<void>
   logout: () => Promise<void>
 } {
   const router = useRouter()
@@ -73,6 +74,30 @@ export function useAuth(): {
     [setLoading, setUser, setAccessToken, router],
   )
 
+  const oauthLogin = useCallback(
+    async (accessToken: string, redirect?: string | null): Promise<void> => {
+      setLoading(true)
+      try {
+        const response = await authService.oauthLogin(accessToken)
+        const authUser: AuthUser = {
+          userId: response.userId,
+          tenantId: response.tenantId,
+          roles: response.roles,
+          email: response.email,
+          firstName: response.firstName,
+          lastName: response.lastName,
+          avatar: response.avatar,
+        }
+        setUser(authUser)
+        setAccessToken(response.accessToken)
+        router.push(safeRedirectTarget(redirect ?? null))
+      } finally {
+        setLoading(false)
+      }
+    },
+    [setLoading, setUser, setAccessToken, router],
+  )
+
   const logout = useCallback(async (): Promise<void> => {
     setLoading(true)
     try {
@@ -86,5 +111,5 @@ export function useAuth(): {
     }
   }, [clearAuth, setLoading, router])
 
-  return { user, isLoading, login, register, logout }
+  return { user, isLoading, login, register, oauthLogin, logout }
 }

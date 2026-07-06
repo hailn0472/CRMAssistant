@@ -16,6 +16,7 @@ import { PrismaService } from '../prisma/prisma.service'
 import { TokenRevocationService } from './token-revocation.service'
 import { DEFAULT_ROLE_PERMISSIONS } from '../permissions/default-role-permissions'
 import type { LoginDto } from './dto/login.dto'
+import type { OAuthTokenDto } from './dto/oauth-token.dto'
 import type { RegisterDto } from './dto/register.dto'
 import type { JwtPayload } from './strategies/jwt.strategy'
 
@@ -235,13 +236,11 @@ export class AuthService {
       const userByEmail = usersByEmail[0]
       const linkedUser = await this.prisma.user.update({
         where: { id: userByEmail.id },
-        data: { supabaseUserId: supabaseData.user.id, updatedBy: 'system' },
-      })
-
-      // Set lastLoginAt
-      await this.prisma.user.update({
-        where: { id: linkedUser.id },
-        data: { lastLoginAt: new Date() },
+        data: {
+          supabaseUserId: supabaseData.user.id,
+          lastLoginAt: new Date(),
+          updatedBy: 'system',
+        },
       })
 
       const roles = await this.resolveUserRoles(linkedUser.id)
@@ -288,6 +287,225 @@ export class AuthService {
       email: user.email,
       firstName: user.firstName,
       lastName: user.lastName,
+      avatar: user.avatar,
+    }
+  }
+
+  async oauthLogin(dto: OAuthTokenDto): Promise<AuthTokenResponse> {
+    // Phase 1: Verify Supabase token
+    const { data: supabaseData, error: supabaseError } = await this.withSupabaseAuthTimeout(
+      this.supabase.auth.getUser(dto.accessToken),
+      'Xác thực Google quá thời gian — vui lòng thử lại',
+    )
+
+    if (supabaseError || !supabaseData.user) {
+      throw new UnauthorizedException('Xác thực Google không thành công — vui lòng thử lại')
+    }
+
+    const supabaseUser = supabaseData.user
+    const email = supabaseUser.email
+    if (!email) {
+      throw new UnauthorizedException('Không thể lấy email từ tài khoản Google')
+    }
+
+    // Phase 2: Lookup existing user by supabaseUserId
+    let user = await this.prisma.user.findFirst({
+      where: {
+        supabaseUserId: supabaseUser.id,
+        deletedAt: null,
+        isActive: true,
+      },
+    })
+
+    if (user) {
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: { lastLoginAt: new Date() },
+      })
+
+      const roles = await this.resolveUserRoles(user.id)
+      const accessToken = await this.signAuthToken({
+        userId: user.id,
+        tenantId: user.tenantId,
+        email: user.email,
+        roles,
+      })
+
+      return {
+        accessToken,
+        userId: user.id,
+        tenantId: user.tenantId,
+        roles,
+        email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        avatar: user.avatar,
+      }
+    }
+
+    // Not found by supabaseUserId — email fallback
+    const usersByEmail = await this.prisma.user.findMany({
+      where: {
+        email,
+        deletedAt: null,
+        isActive: true,
+      },
+    })
+
+    if (usersByEmail.length === 1) {
+      const userByEmail = usersByEmail[0]
+      user = await this.prisma.user.update({
+        where: { id: userByEmail.id },
+        data: { supabaseUserId: supabaseUser.id, lastLoginAt: new Date(), updatedBy: 'system' },
+      })
+
+      const roles = await this.resolveUserRoles(user.id)
+      const accessToken = await this.signAuthToken({
+        userId: user.id,
+        tenantId: user.tenantId,
+        email: user.email,
+        roles,
+      })
+
+      return {
+        accessToken,
+        userId: user.id,
+        tenantId: user.tenantId,
+        roles,
+        email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        avatar: user.avatar,
+      }
+    }
+
+    if (usersByEmail.length > 1) {
+      throw new UnauthorizedException(
+        'Không thể xác định tài khoản — email này thuộc về nhiều workspace. Vui lòng liên hệ hỗ trợ.',
+      )
+    }
+
+    // Check for deactivated account
+    const deactivatedUser = await this.prisma.user.findFirst({
+      where: {
+        email,
+        deletedAt: null,
+        isActive: false,
+      },
+    })
+    if (deactivatedUser) {
+      throw new UnauthorizedException('Tài khoản đã bị vô hiệu hóa')
+    }
+
+    // Phase 3: First-time signup
+    const fullName = supabaseUser.user_metadata?.['full_name'] as string | undefined
+    let firstName = ''
+    let lastName = ''
+    if (fullName) {
+      const lastSpaceIndex = fullName.lastIndexOf(' ')
+      if (lastSpaceIndex >= 0) {
+        firstName = fullName.substring(0, lastSpaceIndex).trim()
+        lastName = fullName.substring(lastSpaceIndex + 1).trim()
+      } else {
+        firstName = fullName.trim()
+      }
+    }
+    if (!firstName) {
+      firstName = email.split('@')[0] ?? 'User'
+    }
+
+    const tenantName = dto.tenantName?.trim() || (email.split('@')[1]?.split('.')[0] ?? 'Crm')
+    const displayTenantName = tenantName.charAt(0).toUpperCase() + tenantName.slice(1)
+
+    const avatar = (supabaseUser.user_metadata?.['avatar_url'] as string) ?? null
+
+    try {
+      const result = await this.prisma.$transaction(async (tx) => {
+        const tenant = await tx.tenant.create({
+          data: { name: displayTenantName },
+        })
+
+        const systemRoles = [
+          { name: 'ADMIN', description: 'Full system access' },
+          { name: 'SALES_MANAGER', description: 'Sales team manager' },
+          { name: 'SALES_REP', description: 'Sales representative' },
+          { name: 'SUPPORT_AGENT', description: 'Customer support agent' },
+          { name: 'MARKETING_USER', description: 'Marketing team member' },
+        ]
+
+        let salesRepRole: { id: string; name: string } | null = null
+        const createdRoles: { id: string; name: string }[] = []
+
+        for (const roleDef of systemRoles) {
+          const role = await tx.role.create({
+            data: {
+              tenantId: tenant.id,
+              name: roleDef.name,
+              description: roleDef.description,
+              isSystem: true,
+              createdBy: 'system',
+              updatedBy: 'system',
+            },
+          })
+          createdRoles.push({ id: role.id, name: role.name })
+          if (roleDef.name === 'SALES_REP') {
+            salesRepRole = role
+          }
+        }
+
+        await this.assignDefaultPermissionsForRoles(tx, createdRoles)
+
+        const newUser = await tx.user.create({
+          data: {
+            tenantId: tenant.id,
+            email,
+            firstName,
+            lastName,
+            supabaseUserId: supabaseUser.id,
+            avatar,
+            isActive: true,
+            createdBy: 'system',
+            updatedBy: 'system',
+          },
+        })
+
+        if (salesRepRole) {
+          await tx.userRole.create({
+            data: {
+              userId: newUser.id,
+              roleId: salesRepRole.id,
+              assignedBy: 'system',
+            },
+          })
+        }
+
+        const roles = salesRepRole ? ['SALES_REP'] : []
+
+        return { user: newUser, roles }
+      })
+
+      const accessToken = await this.signAuthToken({
+        userId: result.user.id,
+        tenantId: result.user.tenantId,
+        email: result.user.email,
+        roles: result.roles,
+      })
+
+      return {
+        accessToken,
+        userId: result.user.id,
+        tenantId: result.user.tenantId,
+        roles: result.roles,
+        email: result.user.email,
+        firstName: result.user.firstName,
+        lastName: result.user.lastName,
+        avatar: result.user.avatar,
+      }
+    } catch (error) {
+      if (error instanceof PrismaClientKnownRequestError && error.code === 'P2002') {
+        throw new ConflictException('Email already exists in this tenant')
+      }
+      throw new InternalServerErrorException('Đăng ký Google thất bại — vui lòng thử lại')
     }
   }
 

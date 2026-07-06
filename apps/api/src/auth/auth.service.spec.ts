@@ -6,10 +6,12 @@ import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library'
 import { AuthService } from './auth.service'
 import { TokenRevocationService } from './token-revocation.service'
 import type { LoginDto } from './dto/login.dto'
+import type { OAuthTokenDto } from './dto/oauth-token.dto'
 import type { RegisterDto } from './dto/register.dto'
 
 const mockSignUp = jest.fn()
 const mockSignInWithPassword = jest.fn()
+const mockGetUser = jest.fn()
 const mockSignOut = jest.fn()
 const mockDeleteUser = jest.fn()
 
@@ -18,6 +20,7 @@ jest.mock('@supabase/supabase-js', () => ({
     auth: {
       signUp: mockSignUp,
       signInWithPassword: mockSignInWithPassword,
+      getUser: mockGetUser,
       signOut: mockSignOut,
       admin: { deleteUser: mockDeleteUser },
     },
@@ -316,6 +319,215 @@ describe('AuthService', () => {
           data: expect.objectContaining({ supabaseUserId: 'new-supabase-uid' }),
         }),
       )
+    })
+  })
+
+  describe('oauthLogin()', () => {
+    const dto: OAuthTokenDto = { accessToken: 'google-oauth-token' }
+    const supabaseUser = {
+      id: FAKE_SUPABASE_UID,
+      email: FAKE_EMAIL,
+      user_metadata: {
+        full_name: 'Test User',
+        avatar_url: 'https://example.com/avatar.jpg',
+      },
+    }
+    const dbUser = {
+      id: FAKE_USER_ID,
+      tenantId: FAKE_TENANT_ID,
+      email: FAKE_EMAIL,
+      firstName: FAKE_FIRST_NAME,
+      lastName: FAKE_LAST_NAME,
+      supabaseUserId: FAKE_SUPABASE_UID,
+      avatar: null,
+    }
+
+    it('should login existing user by supabaseUserId', async () => {
+      mockGetUser.mockResolvedValue({ data: { user: supabaseUser }, error: null })
+      prisma.user.findFirst.mockResolvedValue(dbUser)
+      prisma.userRole.findMany.mockResolvedValue([{ role: { name: 'SALES_REP' } }])
+
+      const result = await service.oauthLogin(dto)
+
+      expect(result.accessToken).toBe(FAKE_JWT)
+      expect(result.roles).toEqual(['SALES_REP'])
+      expect(result.email).toBe(FAKE_EMAIL)
+      expect(jwtService.sign).toHaveBeenCalledWith({
+        sub: FAKE_USER_ID,
+        userId: FAKE_USER_ID,
+        tenantId: FAKE_TENANT_ID,
+        roles: ['SALES_REP'],
+        email: FAKE_EMAIL,
+      })
+    })
+
+    it('should auto-link when email fallback finds exactly 1 user', async () => {
+      mockGetUser.mockResolvedValue({ data: { user: supabaseUser }, error: null })
+      prisma.user.findFirst.mockResolvedValue(null)
+      prisma.user.findMany.mockResolvedValue([{ ...dbUser, supabaseUserId: null }])
+      prisma.user.update.mockResolvedValue({ ...dbUser, supabaseUserId: supabaseUser.id })
+      prisma.userRole.findMany.mockResolvedValue([])
+
+      const result = await service.oauthLogin(dto)
+
+      expect(result.accessToken).toBe(FAKE_JWT)
+      expect(prisma.user.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ supabaseUserId: FAKE_SUPABASE_UID }),
+        }),
+      )
+    })
+
+    it('should create tenant + user + SALES_REP role for first-time signup', async () => {
+      mockGetUser.mockResolvedValue({ data: { user: supabaseUser }, error: null })
+      prisma.user.findFirst.mockResolvedValue(null)
+      prisma.user.findMany.mockResolvedValue([])
+      const mockUser = {
+        id: FAKE_USER_ID,
+        tenantId: FAKE_TENANT_ID,
+        email: FAKE_EMAIL,
+        firstName: 'Test',
+        lastName: 'User',
+        avatar: 'https://example.com/avatar.jpg',
+      }
+      prisma.$transaction.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) =>
+        fn({
+          tenant: { create: jest.fn().mockResolvedValue({ id: FAKE_TENANT_ID }) },
+          user: { create: jest.fn().mockResolvedValue(mockUser) },
+          role: {
+            create: jest
+              .fn()
+              .mockImplementation((args: { data: { name: string } }) =>
+                Promise.resolve({ id: `role-uuid-${args.data.name}`, ...args.data }),
+              ),
+          },
+          userRole: { create: jest.fn().mockResolvedValue({}) },
+          permission: { findMany: jest.fn().mockResolvedValue([]) },
+          rolePermission: { createMany: jest.fn().mockResolvedValue({ count: 0 }) },
+        }),
+      )
+      prisma.userRole.findMany.mockResolvedValue([{ role: { name: 'SALES_REP' } }])
+
+      const result = await service.oauthLogin(dto)
+
+      expect(result.accessToken).toBe(FAKE_JWT)
+      expect(result.roles).toEqual(['SALES_REP'])
+      expect(result.avatar).toBe('https://example.com/avatar.jpg')
+    })
+
+    it('should use tenantName from dto when provided for first-time signup', async () => {
+      const dtoWithTenant: OAuthTokenDto = { accessToken: 'google-oauth-token', tenantName: 'MyCo' }
+      mockGetUser.mockResolvedValue({ data: { user: supabaseUser }, error: null })
+      prisma.user.findFirst.mockResolvedValue(null)
+      prisma.user.findMany.mockResolvedValue([])
+
+      let createdTenantName = ''
+      prisma.$transaction.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) =>
+        fn({
+          tenant: {
+            create: jest.fn().mockImplementation((args: { data: { name: string } }) => {
+              createdTenantName = args.data.name
+              return Promise.resolve({ id: FAKE_TENANT_ID })
+            }),
+          },
+          user: {
+            create: jest.fn().mockResolvedValue({
+              id: FAKE_USER_ID,
+              tenantId: FAKE_TENANT_ID,
+              email: FAKE_EMAIL,
+              firstName: 'Test',
+              lastName: 'User',
+              avatar: null,
+            }),
+          },
+          role: {
+            create: jest
+              .fn()
+              .mockImplementation((args: { data: { name: string } }) =>
+                Promise.resolve({ id: `role-uuid-${args.data.name}`, ...args.data }),
+              ),
+          },
+          userRole: { create: jest.fn().mockResolvedValue({}) },
+          permission: { findMany: jest.fn().mockResolvedValue([]) },
+          rolePermission: { createMany: jest.fn().mockResolvedValue({ count: 0 }) },
+        }),
+      )
+      prisma.userRole.findMany.mockResolvedValue([{ role: { name: 'SALES_REP' } }])
+
+      await service.oauthLogin(dtoWithTenant)
+      expect(createdTenantName).toBe('MyCo')
+    })
+
+    it('should throw UnauthorizedException for ambiguous email across tenants', async () => {
+      mockGetUser.mockResolvedValue({ data: { user: supabaseUser }, error: null })
+      prisma.user.findFirst.mockResolvedValue(null)
+      prisma.user.findMany.mockResolvedValue([
+        { ...dbUser, id: 'user-1', tenantId: 'tenant-1', supabaseUserId: null },
+        { ...dbUser, id: 'user-2', tenantId: 'tenant-2', supabaseUserId: null },
+      ])
+
+      await expect(service.oauthLogin(dto)).rejects.toThrow(UnauthorizedException)
+    })
+
+    it('should throw UnauthorizedException for deactivated account', async () => {
+      mockGetUser.mockResolvedValue({ data: { user: supabaseUser }, error: null })
+      prisma.user.findFirst.mockResolvedValue(null)
+      prisma.user.findMany.mockResolvedValue([])
+      // Override findFirst: call 1 (supabaseUserId lookup) → null, call 2 (deactivated check) → deactivated user
+      prisma.user.findFirst
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce({ ...dbUser, isActive: false })
+
+      await expect(service.oauthLogin(dto)).rejects.toThrow(UnauthorizedException)
+    })
+
+    it('should throw UnauthorizedException for invalid/expired token', async () => {
+      mockGetUser.mockResolvedValue({ data: { user: null }, error: { message: 'Token expired' } })
+
+      await expect(service.oauthLogin(dto)).rejects.toThrow(UnauthorizedException)
+    })
+
+    it('should timeout after 10s', async () => {
+      jest.useFakeTimers()
+      mockGetUser.mockReturnValue(new Promise(() => undefined))
+
+      const oauthLogin = expect(service.oauthLogin(dto)).rejects.toThrow(BadRequestException)
+      await jest.advanceTimersByTimeAsync(10_000)
+
+      await oauthLogin
+      jest.useRealTimers()
+    })
+
+    it('should return JWT payload matching existing shape', async () => {
+      mockGetUser.mockResolvedValue({ data: { user: supabaseUser }, error: null })
+      prisma.user.findFirst.mockResolvedValue(dbUser)
+      prisma.userRole.findMany.mockResolvedValue([{ role: { name: 'SALES_REP' } }])
+
+      const result = await service.oauthLogin(dto)
+
+      expect(jwtService.sign).toHaveBeenCalledWith({
+        sub: FAKE_USER_ID,
+        userId: FAKE_USER_ID,
+        tenantId: FAKE_TENANT_ID,
+        roles: ['SALES_REP'],
+        email: FAKE_EMAIL,
+      })
+      expect(result).toHaveProperty('accessToken')
+      expect(result).toHaveProperty('userId')
+      expect(result).toHaveProperty('tenantId')
+      expect(result).toHaveProperty('roles')
+      expect(result).toHaveProperty('email')
+      expect(result).toHaveProperty('firstName')
+      expect(result).toHaveProperty('lastName')
+    })
+
+    it('should throw UnauthorizedException when Google account has no email', async () => {
+      mockGetUser.mockResolvedValue({
+        data: { user: { ...supabaseUser, email: undefined } },
+        error: null,
+      })
+
+      await expect(service.oauthLogin(dto)).rejects.toThrow(UnauthorizedException)
     })
   })
 

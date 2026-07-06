@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
 const AUTH_COOKIE = 'auth-token'
-const PUBLIC_PATHS = ['/login', '/register', '/forgot-password']
+const PUBLIC_PATHS = ['/login', '/register', '/forgot-password', '/callback']
 
 type JwtClaims = {
   userId?: unknown

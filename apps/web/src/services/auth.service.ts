@@ -48,6 +48,20 @@ export const authService = {
     return response.json() as Promise<AuthTokenResponse>
   },
 
+  async oauthLogin(accessToken: string): Promise<AuthTokenResponse> {
+    const response = await fetch('/api/auth/oauth', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ accessToken }),
+    })
+
+    if (!response.ok) {
+      throw new Error(await parseErrorMessage(response, 'OAuth login failed'))
+    }
+
+    return response.json() as Promise<AuthTokenResponse>
+  },
+
   async forgotPassword(email: string): Promise<void> {
     const data: ForgotPasswordData = { email }
     const response = await fetch('/api/auth/forgot-password', {
