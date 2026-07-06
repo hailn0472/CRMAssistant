@@ -9,6 +9,7 @@ import request from 'supertest'
 import { PostgreSqlContainer } from '@testcontainers/postgresql'
 
 import { AppModule } from '../../src/app.module'
+import { PermissionsService } from '../../src/permissions/permissions.service'
 
 import type { StartedPostgreSqlContainer } from '@testcontainers/postgresql'
 
@@ -467,20 +468,16 @@ describe('Permissions (integration)', () => {
 
   describe('hasPermission service method', () => {
     it('returns true when user has permission via assigned role', async () => {
-      const PermissionsService = app.get('PermissionsService' as never) as {
-        hasPermission: (userId: string, resource: string, action: string) => Promise<boolean>
-      }
+      const permissionsService = app.get(PermissionsService)
 
-      const result = await PermissionsService.hasPermission(salesRepAId, 'CONTACT', 'READ')
+      const result = await permissionsService.hasPermission(salesRepAId, 'CONTACT', 'READ')
       expect(result).toBe(true)
     })
 
     it('returns false when user lacks permission', async () => {
-      const PermissionsService = app.get('PermissionsService' as never) as {
-        hasPermission: (userId: string, resource: string, action: string) => Promise<boolean>
-      }
+      const permissionsService = app.get(PermissionsService)
 
-      const result = await PermissionsService.hasPermission(salesRepAId, 'ROLE', 'DELETE')
+      const result = await permissionsService.hasPermission(salesRepAId, 'ROLE', 'DELETE')
       expect(result).toBe(false)
     })
   })

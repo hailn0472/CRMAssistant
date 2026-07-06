@@ -70,7 +70,7 @@ describe('Contact persistence tenant pattern (integration)', () => {
       sub: userId,
       userId,
       tenantId,
-      roles: ['SALES_REP'],
+      roles: ['ADMIN'],
       email: `${userId}@example.com`,
     })
   }
