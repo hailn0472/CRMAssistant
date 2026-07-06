@@ -37,7 +37,7 @@ type MockPrisma = {
   user: { findFirst: jest.Mock; findMany: jest.Mock; update: jest.Mock }
   userRole: { findMany: jest.Mock; create: jest.Mock }
   tenant: { create: jest.Mock }
-  role: { findFirst: jest.Mock }
+  role: { findFirst: jest.Mock; create: jest.Mock }
 }
 
 function makePrisma(): MockPrisma {
@@ -57,6 +57,7 @@ function makePrisma(): MockPrisma {
     },
     role: {
       findFirst: jest.fn(),
+      create: jest.fn(),
     },
   }
 }
@@ -126,17 +127,21 @@ describe('AuthService', () => {
         firstName: 'Test',
         lastName: 'User',
       }
-      const mockSalesRepRole = { id: 'role-uuid-sales-rep', name: 'SALES_REP' }
-      prisma.role.findFirst.mockResolvedValue(mockSalesRepRole)
-      prisma.userRole.findMany.mockResolvedValue([{ role: { name: 'SALES_REP' } }])
       prisma.$transaction.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) =>
         fn({
           tenant: { create: jest.fn().mockResolvedValue({ id: FAKE_TENANT_ID }) },
           user: { create: jest.fn().mockResolvedValue(mockUser) },
-          role: { findFirst: jest.fn().mockResolvedValue(mockSalesRepRole) },
+          role: {
+            create: jest
+              .fn()
+              .mockImplementation((args: { data: { name: string } }) =>
+                Promise.resolve({ id: `role-uuid-${args.data.name}`, ...args.data }),
+              ),
+          },
           userRole: { create: jest.fn().mockResolvedValue({}) },
         }),
       )
+      prisma.userRole.findMany.mockResolvedValue([{ role: { name: 'SALES_REP' } }])
 
       const result = await service.register(dto)
 

@@ -92,12 +92,39 @@ export class AuthService {
       throw new BadRequestException(supabaseError?.message ?? 'Registration failed')
     }
 
-    // 2. Create Tenant + User + assign SALES_REP role in a transaction
+    // 2. Create Tenant + System Roles + User + assign SALES_REP role in a transaction
     try {
       const result = await this.prisma.$transaction(async (tx) => {
         const tenant = await tx.tenant.create({
           data: { name: tenantName },
         })
+
+        // Seed system roles for the new tenant (migration only seeds existing tenants)
+        const systemRoles = [
+          { name: 'ADMIN', description: 'Full system access' },
+          { name: 'SALES_MANAGER', description: 'Sales team manager' },
+          { name: 'SALES_REP', description: 'Sales representative' },
+          { name: 'SUPPORT_AGENT', description: 'Customer support agent' },
+          { name: 'MARKETING_USER', description: 'Marketing team member' },
+        ]
+
+        let salesRepRole: { id: string } | null = null
+
+        for (const roleDef of systemRoles) {
+          const role = await tx.role.create({
+            data: {
+              tenantId: tenant.id,
+              name: roleDef.name,
+              description: roleDef.description,
+              isSystem: true,
+              createdBy: 'system',
+              updatedBy: 'system',
+            },
+          })
+          if (roleDef.name === 'SALES_REP') {
+            salesRepRole = role
+          }
+        }
 
         const user = await tx.user.create({
           data: {
@@ -110,11 +137,6 @@ export class AuthService {
             createdBy: 'system',
             updatedBy: 'system',
           },
-        })
-
-        // Find the SALES_REP role for this tenant (seeded in migration)
-        const salesRepRole = await tx.role.findFirst({
-          where: { tenantId: tenant.id, name: 'SALES_REP', deletedAt: null },
         })
 
         if (salesRepRole) {
