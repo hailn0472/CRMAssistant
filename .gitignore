@@ -1,7 +1,6 @@
 # BMad
+_bmad/
 _bmad-output/
-_bmad/config.user.toml
-_bmad/custom/config.user.toml
 
 # Claude Code
 .codex
