@@ -204,7 +204,7 @@ describe('Roles RBAC (integration)', () => {
       const mutation = `mutation CreateRole($input: CreateRoleInput!) { createRole(input: $input) { id name } }`
       const res = await graphqlRequest(userAToken, mutation, { input: { name: 'Should Fail' } })
       expect(res.body.errors).toBeDefined()
-      expect(res.body.errors[0].message).toContain('Only admins')
+      expect(res.body.errors[0].message).toContain('Missing required permission')
     })
 
     it('rejects duplicate role name in same tenant', async () => {

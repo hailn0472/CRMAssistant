@@ -42,3 +42,16 @@ export type RegisterData = {
   lastName: string
   tenantName: string
 }
+
+export type Permission = {
+  id: string
+  resource: string
+  action: string
+  description?: string | null
+}
+
+export type PermissionCheck = {
+  resource: string
+  action: string
+  granted: boolean
+}

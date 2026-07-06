@@ -1,6 +1,7 @@
 import { UnauthorizedException } from '@nestjs/common'
 
 import { builder } from '../graphql/schema.builder'
+import { requirePermission } from '../common/guards/permission-check'
 import type { ContactListItem, ContactsService } from './contacts.service'
 import type { GraphqlContext } from '../graphql/graphql-context'
 import type { JwtPayload } from '../auth/strategies/jwt.strategy'
@@ -124,6 +125,7 @@ builder.mutationFields((t) => ({
     args: { input: t.arg({ type: CreateContactInputRef, required: true }) },
     resolve: async (_parent, args, context) => {
       const user = requireUser(context)
+      await requirePermission(context, 'CONTACT', 'CREATE')
       return getContactsService().create(user.tenantId, user.userId, {
         email: args.input.email,
         firstName: args.input.firstName,
@@ -142,6 +144,7 @@ builder.mutationFields((t) => ({
     },
     resolve: async (_parent, args, context) => {
       const user = requireUser(context)
+      await requirePermission(context, 'CONTACT', 'UPDATE')
       return getContactsService().update(user.tenantId, user.userId, String(args.id), {
         email: args.input.email ?? undefined,
         firstName: args.input.firstName ?? undefined,
@@ -162,6 +165,7 @@ builder.mutationFields((t) => ({
     args: { id: t.arg.id({ required: true }) },
     resolve: async (_parent, args, context) => {
       const user = requireUser(context)
+      await requirePermission(context, 'CONTACT', 'DELETE')
       return getContactsService().delete(user.tenantId, user.userId, String(args.id))
     },
   }),

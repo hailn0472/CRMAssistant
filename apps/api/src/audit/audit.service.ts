@@ -8,6 +8,9 @@ export type AuditAction =
   | 'ROLE_DELETED'
   | 'ROLE_ASSIGNED'
   | 'ROLE_REMOVED'
+  | 'PERMISSION_ASSIGNED'
+  | 'PERMISSION_REMOVED'
+  | 'ROLE_PERMISSIONS_SET'
 
 @Injectable()
 export class AuditService {

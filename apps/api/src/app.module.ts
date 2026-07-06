@@ -5,6 +5,7 @@ import { AuditModule } from './audit/audit.module'
 import { AuthModule } from './auth/auth.module'
 import { ContactsModule } from './contacts/contacts.module'
 import { RolesModule } from './roles/roles.module'
+import { PermissionsModule } from './permissions/permissions.module'
 import { UsersModule } from './users/users.module'
 import { AppGraphqlModule } from './graphql/graphql.module'
 import { HealthModule } from './health/health.module'
@@ -23,6 +24,7 @@ import { PrismaModule } from './prisma/prisma.module'
     ContactsModule,
     UsersModule,
     RolesModule,
+    PermissionsModule,
     AuditModule,
   ],
 })

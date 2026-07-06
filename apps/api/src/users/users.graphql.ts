@@ -1,6 +1,7 @@
 import { ForbiddenException, UnauthorizedException } from '@nestjs/common'
 
 import { builder } from '../graphql/schema.builder'
+import { requirePermission } from '../common/guards/permission-check'
 import type { UserListItem, UsersService } from './users.service'
 import type { GraphqlContext } from '../graphql/graphql-context'
 import type { JwtPayload } from '../auth/strategies/jwt.strategy'
@@ -182,6 +183,7 @@ builder.mutationFields((t) => ({
     args: { input: t.arg({ type: CreateUserInputRef, required: true }) },
     resolve: async (_parent, args, context) => {
       const user = requireAdminOrManager(context)
+      await requirePermission(context, 'USER', 'CREATE')
       return getUsersService().create(user.tenantId, user.userId, {
         email: args.input.email,
         firstName: args.input.firstName,
@@ -200,6 +202,7 @@ builder.mutationFields((t) => ({
     },
     resolve: async (_parent, args, context) => {
       const user = requireAdminOrManager(context)
+      await requirePermission(context, 'USER', 'UPDATE')
       return getUsersService().update(user.tenantId, user.userId, String(args.id), {
         email: args.input.email ?? undefined,
         firstName: args.input.firstName ?? undefined,
@@ -238,6 +241,7 @@ builder.mutationFields((t) => ({
     args: { id: t.arg.id({ required: true }) },
     resolve: async (_parent, args, context) => {
       const user = requireAdminOrManager(context)
+      await requirePermission(context, 'USER', 'DELETE')
       return getUsersService().deactivate(user.tenantId, user.userId, String(args.id))
     },
   }),

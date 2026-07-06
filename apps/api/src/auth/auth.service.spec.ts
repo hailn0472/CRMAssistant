@@ -139,6 +139,12 @@ describe('AuthService', () => {
               ),
           },
           userRole: { create: jest.fn().mockResolvedValue({}) },
+          permission: {
+            findMany: jest.fn().mockResolvedValue([]),
+          },
+          rolePermission: {
+            createMany: jest.fn().mockResolvedValue({ count: 0 }),
+          },
         }),
       )
       prisma.userRole.findMany.mockResolvedValue([{ role: { name: 'SALES_REP' } }])
@@ -203,6 +209,17 @@ describe('AuthService', () => {
     it('should throw ConflictException when DB unique constraint fails', async () => {
       mockSignUp.mockResolvedValue({ data: { user: { id: FAKE_SUPABASE_UID } }, error: null })
       mockDeleteUser.mockResolvedValue({ error: null })
+      prisma.$transaction.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) =>
+        fn({
+          tenant: { create: jest.fn() },
+          user: { create: jest.fn() },
+          role: { create: jest.fn() },
+          userRole: { create: jest.fn() },
+          permission: { findMany: jest.fn().mockResolvedValue([]) },
+          rolePermission: { createMany: jest.fn().mockResolvedValue({ count: 0 }) },
+        }),
+      )
+      // Override to throw for this test
       prisma.$transaction.mockRejectedValue(
         new PrismaClientKnownRequestError('Unique constraint failed', {
           code: 'P2002',

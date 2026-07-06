@@ -43,11 +43,16 @@ function RoleDetailContent(): React.JSX.Element {
       <Card className="border-slate-200 bg-white text-slate-950 shadow-sm">
         <CardHeader className="flex-row items-center justify-between space-y-0 border-b border-slate-100">
           <CardTitle className="text-lg">Role details</CardTitle>
-          {!data.isSystem && (
+          <div className="flex gap-2">
             <Button asChild variant="outline">
-              <Link href={`/settings/roles/${data.id}/edit`}>Edit</Link>
+              <Link href={`/settings/roles/${data.id}/permissions`}>Permissions</Link>
             </Button>
-          )}
+            {!data.isSystem && (
+              <Button asChild variant="outline">
+                <Link href={`/settings/roles/${data.id}/edit`}>Edit</Link>
+              </Button>
+            )}
+          </div>
         </CardHeader>
         <CardContent className="pt-6">
           <div className="grid gap-4 md:grid-cols-2">
