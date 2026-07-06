@@ -7,6 +7,15 @@ import type { JwtPayload } from '../auth/strategies/jwt.strategy'
 
 type UserGraphqlShape = Awaited<ReturnType<UsersService['findOne']>> | UserListItem
 
+const UserRoleRef = builder.objectRef<{ id: string; name: string }>('UserRole')
+
+UserRoleRef.implement({
+  fields: (t) => ({
+    id: t.exposeID('id'),
+    name: t.exposeString('name'),
+  }),
+})
+
 const UserRef = builder.objectRef<UserGraphqlShape>('User')
 
 UserRef.implement({
@@ -20,7 +29,6 @@ UserRef.implement({
     phone: t.exposeString('phone', { nullable: true }),
     jobTitle: t.exposeString('jobTitle', { nullable: true }),
     department: t.exposeString('department', { nullable: true }),
-    role: t.exposeString('role'),
     isActive: t.exposeBoolean('isActive'),
     lastLoginAt: t.string({
       nullable: true,
@@ -28,6 +36,20 @@ UserRef.implement({
     }),
     createdAt: t.string({ resolve: (user) => user.createdAt.toISOString() }),
     updatedAt: t.string({ resolve: (user) => user.updatedAt.toISOString() }),
+    roles: t.field({
+      type: [UserRoleRef],
+      resolve: async (user, _args, context) => {
+        if (!context.user) {
+          return []
+        }
+        // Use batch cache if available, otherwise query individually
+        if (context.rolesBatchCache && context.rolesBatchCache.has(user.id)) {
+          return context.rolesBatchCache.get(user.id) ?? []
+        }
+        const userRoles = await getUsersService().getUserRoles(context.user.tenantId, user.id)
+        return userRoles
+      },
+    }),
   }),
 })
 
@@ -47,7 +69,6 @@ const CreateUserInputRef = builder.inputType('CreateUserInput', {
     email: t.string({ required: true }),
     firstName: t.string({ required: true }),
     lastName: t.string({ required: true }),
-    role: t.string(),
     phone: t.string(),
     jobTitle: t.string(),
     department: t.string(),
@@ -59,7 +80,6 @@ const UpdateUserInputRef = builder.inputType('UpdateUserInput', {
     email: t.string(),
     firstName: t.string(),
     lastName: t.string(),
-    role: t.string(),
     phone: t.string(),
     jobTitle: t.string(),
     department: t.string(),
@@ -78,7 +98,6 @@ const UpdateProfileInputRef = builder.inputType('UpdateProfileInput', {
 const UserFilterInputRef = builder.inputType('UserFilterInput', {
   fields: (t) => ({
     search: t.string(),
-    role: t.string(),
     isActive: t.boolean(),
   }),
 })
@@ -99,8 +118,6 @@ function getUsersService(): UsersService {
   return usersService
 }
 
-const ADMIN_ROLES: string[] = ['ADMIN', 'MANAGER']
-
 function requireUser(context: GraphqlContext): JwtPayload {
   if (!context.user) {
     throw new UnauthorizedException('Authentication required')
@@ -110,7 +127,7 @@ function requireUser(context: GraphqlContext): JwtPayload {
 
 function requireAdminOrManager(context: GraphqlContext): JwtPayload {
   const user = requireUser(context)
-  if (!ADMIN_ROLES.includes(user.role)) {
+  if (!user.roles.includes('ADMIN') && !user.roles.includes('SALES_MANAGER')) {
     throw new ForbiddenException('Only admins and managers can perform this action')
   }
   return user
@@ -140,11 +157,10 @@ builder.queryFields((t) => ({
     },
     resolve: async (_parent, args, context) => {
       const user = requireUser(context)
-      return getUsersService().findMany(
+      const connection = await getUsersService().findMany(
         user.tenantId,
         {
           search: args.filter?.search ?? undefined,
-          role: args.filter?.role ?? undefined,
           isActive: args.filter?.isActive ?? undefined,
         },
         {
@@ -152,6 +168,10 @@ builder.queryFields((t) => ({
           pageSize: args.pagination?.pageSize ?? undefined,
         },
       )
+      // Preload roles for all items in a single batch query
+      const userIds = connection.items.map((item) => item.id)
+      context.rolesBatchCache = await getUsersService().getUserRolesBatch(user.tenantId, userIds)
+      return connection
     },
   }),
 }))
@@ -166,7 +186,6 @@ builder.mutationFields((t) => ({
         email: args.input.email,
         firstName: args.input.firstName,
         lastName: args.input.lastName,
-        role: args.input.role ?? undefined,
         phone: args.input.phone ?? undefined,
         jobTitle: args.input.jobTitle ?? undefined,
         department: args.input.department ?? undefined,
@@ -185,7 +204,6 @@ builder.mutationFields((t) => ({
         email: args.input.email ?? undefined,
         firstName: args.input.firstName ?? undefined,
         lastName: args.input.lastName ?? undefined,
-        role: args.input.role ?? undefined,
         phone: Object.prototype.hasOwnProperty.call(args.input, 'phone')
           ? args.input.phone
           : undefined,

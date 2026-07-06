@@ -66,6 +66,8 @@ pnpm prisma generate
 pnpm prisma db seed
 ```
 
+See [Database Migrations](docs/database-migrations.md) for migration workflow, reset/re-seed instructions, and migration history.
+
 ### Redis Setup
 
 ```bash

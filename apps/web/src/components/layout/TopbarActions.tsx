@@ -7,26 +7,53 @@ import { Bell, LogOut, Settings } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useAuthStore } from '@/stores/auth.store'
 import { useAuth } from '@/hooks/useAuth'
-import type { UserRole } from '@/types/auth.types'
 
-const ROLE_LABELS: Record<UserRole, string> = {
+const ROLE_PRIORITY: Record<string, number> = {
+  ADMIN: 0,
+  SALES_MANAGER: 1,
+  SUPPORT_AGENT: 2,
+  MARKETING_USER: 3,
+  SALES_REP: 4,
+}
+
+const ROLE_LABELS: Record<string, string> = {
   ADMIN: 'Admin',
-  MANAGER: 'Manager',
+  SALES_MANAGER: 'Sales Manager',
   SALES_REP: 'Sales Rep',
+  SUPPORT_AGENT: 'Support Agent',
+  MARKETING_USER: 'Marketing',
 }
 
-const ROLE_COLORS: Record<UserRole, string> = {
+const ROLE_COLORS: Record<string, string> = {
   ADMIN: 'bg-purple-50 text-purple-700 border-purple-200/60',
-  MANAGER: 'bg-blue-50 text-blue-700 border-blue-200/60',
+  SALES_MANAGER: 'bg-blue-50 text-blue-700 border-blue-200/60',
   SALES_REP: 'bg-slate-50 text-slate-700 border-slate-200/60',
+  SUPPORT_AGENT: 'bg-emerald-50 text-emerald-700 border-emerald-200/60',
+  MARKETING_USER: 'bg-amber-50 text-amber-700 border-amber-200/60',
 }
 
-function RoleBadge({ role }: { role: UserRole }): React.JSX.Element {
+function getPrimaryRole(roles: string[]): string | null {
+  if (roles.length === 0) return null
+  let primary = roles[0]
+  let primaryPriority = ROLE_PRIORITY[primary] ?? 99
+  for (const r of roles) {
+    const p = ROLE_PRIORITY[r] ?? 99
+    if (p < primaryPriority) {
+      primary = r
+      primaryPriority = p
+    }
+  }
+  return primary
+}
+
+function RoleBadge({ role }: { role: string }): React.JSX.Element {
+  const color = ROLE_COLORS[role] ?? 'bg-slate-50 text-slate-700 border-slate-200/60'
+  const label = ROLE_LABELS[role] ?? role
   return (
     <span
-      className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold ${ROLE_COLORS[role]}`}
+      className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold ${color}`}
     >
-      {ROLE_LABELS[role]}
+      {label}
     </span>
   )
 }
@@ -78,7 +105,8 @@ function AvatarOrInitials({
 export function TopbarActions(): React.JSX.Element {
   const { user } = useAuthStore()
   const { logout } = useAuth()
-  const role = user?.role ?? null
+  const userRoles = user?.roles ?? []
+  const primaryRole = getPrimaryRole(userRoles)
   const firstName = user?.firstName ?? ''
   const lastName = user?.lastName ?? ''
   const [dropdownOpen, setDropdownOpen] = useState(false)
@@ -136,8 +164,10 @@ export function TopbarActions(): React.JSX.Element {
             <p className="text-xs font-semibold text-slate-900">
               {firstName} {lastName}
             </p>
-            {role ? (
-              <p className="text-[10px] text-slate-500 font-medium">{ROLE_LABELS[role]}</p>
+            {primaryRole ? (
+              <p className="text-[10px] text-slate-500 font-medium">
+                {ROLE_LABELS[primaryRole] ?? primaryRole}
+              </p>
             ) : (
               <p className="text-[10px] text-slate-500">Signed in</p>
             )}
@@ -184,7 +214,7 @@ export function TopbarActions(): React.JSX.Element {
                     {firstName} {lastName}
                   </p>
                   <p className="text-xs text-slate-500 truncate mb-1.5">{user?.email ?? ''}</p>
-                  <div className="flex">{role && <RoleBadge role={role} />}</div>
+                  <div className="flex">{primaryRole && <RoleBadge role={primaryRole} />}</div>
                 </div>
               </div>
 

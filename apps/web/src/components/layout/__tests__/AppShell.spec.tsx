@@ -17,7 +17,7 @@ const mockGetMe = jest.fn(() =>
   Promise.resolve({
     id: 'user-1',
     tenantId: 'tenant-1',
-    role: 'ADMIN',
+    roles: [{ name: 'ADMIN' }],
     email: 'admin@example.com',
     firstName: 'Admin',
     lastName: 'User',
@@ -32,7 +32,7 @@ const mockSetUser = jest.fn()
 const mockSetLoading = jest.fn()
 
 const mockAuthState = {
-  user: { role: 'ADMIN' } as { role: string } | null,
+  user: { roles: ['ADMIN'] } as { roles: string[] } | null,
   setUser: mockSetUser,
   setLoading: mockSetLoading,
   isLoading: true,
@@ -48,7 +48,7 @@ jest.mock('@/stores/auth.store', () => ({
 }))
 
 function setAuthRole(role: string | null): void {
-  mockAuthState.user = role ? { role } : null
+  mockAuthState.user = role ? { roles: [role] } : null
 }
 
 describe('AppShell', () => {
@@ -349,8 +349,8 @@ describe('AppShell', () => {
       )
     })
 
-    it('shows Users nav item for MANAGER role', () => {
-      setAuthRole('MANAGER')
+    it('shows Users nav item for SALES_MANAGER role', () => {
+      setAuthRole('SALES_MANAGER')
       render(<AppShell>Content</AppShell>)
 
       const desktopNav = within(getDesktopNavigation())

@@ -35,7 +35,9 @@ const FAKE_JWT = 'signed.jwt.token'
 type MockPrisma = {
   $transaction: jest.Mock
   user: { findFirst: jest.Mock; findMany: jest.Mock; update: jest.Mock }
+  userRole: { findMany: jest.Mock; create: jest.Mock }
   tenant: { create: jest.Mock }
+  role: { findFirst: jest.Mock; create: jest.Mock }
 }
 
 function makePrisma(): MockPrisma {
@@ -46,7 +48,15 @@ function makePrisma(): MockPrisma {
       findMany: jest.fn(),
       update: jest.fn(),
     },
+    userRole: {
+      findMany: jest.fn(),
+      create: jest.fn(),
+    },
     tenant: {
+      create: jest.fn(),
+    },
+    role: {
+      findFirst: jest.fn(),
       create: jest.fn(),
     },
   }
@@ -116,23 +126,32 @@ describe('AuthService', () => {
         email: FAKE_EMAIL,
         firstName: 'Test',
         lastName: 'User',
-        role: 'SALES_REP',
       }
       prisma.$transaction.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) =>
         fn({
           tenant: { create: jest.fn().mockResolvedValue({ id: FAKE_TENANT_ID }) },
           user: { create: jest.fn().mockResolvedValue(mockUser) },
+          role: {
+            create: jest
+              .fn()
+              .mockImplementation((args: { data: { name: string } }) =>
+                Promise.resolve({ id: `role-uuid-${args.data.name}`, ...args.data }),
+              ),
+          },
+          userRole: { create: jest.fn().mockResolvedValue({}) },
         }),
       )
+      prisma.userRole.findMany.mockResolvedValue([{ role: { name: 'SALES_REP' } }])
 
       const result = await service.register(dto)
 
       expect(result.accessToken).toBe(FAKE_JWT)
+      expect(result.roles).toEqual(['SALES_REP'])
       expect(jwtService.sign).toHaveBeenCalledWith({
         sub: FAKE_USER_ID,
         userId: FAKE_USER_ID,
         tenantId: FAKE_TENANT_ID,
-        role: 'SALES_REP',
+        roles: ['SALES_REP'],
         email: FAKE_EMAIL,
       })
     })
@@ -204,7 +223,6 @@ describe('AuthService', () => {
       email: FAKE_EMAIL,
       firstName: FAKE_FIRST_NAME,
       lastName: FAKE_LAST_NAME,
-      role: 'SALES_REP',
       supabaseUserId: FAKE_SUPABASE_UID,
     }
 
@@ -214,15 +232,17 @@ describe('AuthService', () => {
         error: null,
       })
       prisma.user.findFirst.mockResolvedValue(dbUser)
+      prisma.userRole.findMany.mockResolvedValue([{ role: { name: 'SALES_REP' } }])
 
       const result = await service.login(dto)
 
       expect(result.accessToken).toBe(FAKE_JWT)
+      expect(result.roles).toEqual(['SALES_REP'])
       expect(jwtService.sign).toHaveBeenCalledWith({
         sub: FAKE_USER_ID,
         userId: FAKE_USER_ID,
         tenantId: FAKE_TENANT_ID,
-        role: 'SALES_REP',
+        roles: ['SALES_REP'],
         email: FAKE_EMAIL,
       })
     })
@@ -269,6 +289,7 @@ describe('AuthService', () => {
       prisma.user.findFirst.mockResolvedValue(null)
       prisma.user.findMany.mockResolvedValue([{ ...dbUser, supabaseUserId: null }])
       prisma.user.update.mockResolvedValue({ ...dbUser, supabaseUserId: 'new-supabase-uid' })
+      prisma.userRole.findMany.mockResolvedValue([])
 
       const result = await service.login(dto)
 

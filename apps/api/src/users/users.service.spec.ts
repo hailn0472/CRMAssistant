@@ -14,6 +14,8 @@ type MockUserDelegate = {
 
 type MockPrisma = {
   user: MockUserDelegate
+  role: { findFirst: jest.Mock }
+  userRole: { findUnique: jest.Mock; create: jest.Mock; findMany: jest.Mock }
 }
 
 const NOW = new Date('2026-06-01T00:00:00.000Z')
@@ -22,7 +24,7 @@ const OTHER_TENANT_ID = 'tenant-2'
 const USER_ID = 'user-1'
 const TARGET_USER_ID = 'user-2'
 
-function makeUser(overrides: Partial<User> = {}): User {
+function makeUser(overrides: Record<string, unknown> = {}): User {
   return {
     id: TARGET_USER_ID,
     tenantId: TENANT_ID,
@@ -33,7 +35,6 @@ function makeUser(overrides: Partial<User> = {}): User {
     phone: null,
     jobTitle: null,
     department: null,
-    role: 'SALES_REP',
     isActive: true,
     supabaseUserId: null,
     lastLoginAt: null,
@@ -43,7 +44,7 @@ function makeUser(overrides: Partial<User> = {}): User {
     updatedBy: USER_ID,
     deletedAt: null,
     ...overrides,
-  }
+  } as User
 }
 
 function makePrisma(): MockPrisma {
@@ -54,6 +55,14 @@ function makePrisma(): MockPrisma {
       findMany: jest.fn(),
       count: jest.fn(),
       updateMany: jest.fn(),
+    },
+    role: {
+      findFirst: jest.fn(),
+    },
+    userRole: {
+      findUnique: jest.fn(),
+      create: jest.fn(),
+      findMany: jest.fn(),
     },
   }
 }
@@ -71,6 +80,7 @@ describe('UsersService', () => {
     it('creates a user scoped to authenticated tenant and user', async () => {
       const user = makeUser()
       prisma.user.create.mockResolvedValue(user)
+      prisma.role.findFirst.mockResolvedValue(null) // no SALES_REP role for this test
 
       const result = await service.create(TENANT_ID, USER_ID, {
         email: 'ada@example.com',
@@ -85,7 +95,6 @@ describe('UsersService', () => {
           email: 'ada@example.com',
           firstName: 'Ada',
           lastName: 'Lovelace',
-          role: 'SALES_REP',
           phone: undefined,
           jobTitle: undefined,
           department: undefined,
@@ -178,13 +187,12 @@ describe('UsersService', () => {
       ).rejects.toThrow(BadRequestException)
     })
 
-    it('rejects invalid roles', async () => {
+    it('rejects invalid email', async () => {
       await expect(
         service.create(TENANT_ID, USER_ID, {
-          email: 'ada@example.com',
+          email: 'not-an-email',
           firstName: 'Ada',
           lastName: 'Lovelace',
-          role: 'SUPER_ADMIN',
         }),
       ).rejects.toThrow(BadRequestException)
     })
@@ -261,16 +269,16 @@ describe('UsersService', () => {
       )
     })
 
-    it('filters by role', async () => {
+    it('filters by isActive only (role filter removed in Story 2.2)', async () => {
       prisma.user.findMany.mockResolvedValue([])
       prisma.user.count.mockResolvedValue(0)
 
-      await service.findMany(TENANT_ID, { role: 'ADMIN' })
+      await service.findMany(TENANT_ID, { isActive: true })
 
       expect(prisma.user.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
           where: expect.objectContaining({
-            role: 'ADMIN',
+            isActive: true,
           }) as Record<string, unknown>,
         }) as Record<string, unknown>,
       )
@@ -309,7 +317,7 @@ describe('UsersService', () => {
       expect(result).toBe(updated)
       expect(prisma.user.updateMany).toHaveBeenCalledWith({
         where: { id: TARGET_USER_ID, tenantId: TENANT_ID, deletedAt: null },
-        data: { firstName: 'Updated', role: undefined, updatedBy: USER_ID },
+        data: { firstName: 'Updated', updatedBy: USER_ID },
       })
     })
 
@@ -476,6 +484,64 @@ describe('UsersService', () => {
       const result = await service.findMany(TENANT_ID, {}, { page: 0, pageSize: 500 })
 
       expect(result).toEqual({ items: [], total: 0, page: 1, pageSize: 100 })
+    })
+  })
+
+  describe('getUserRoles()', () => {
+    it('returns roles for a user filtered by tenantId', async () => {
+      prisma.userRole.findMany.mockResolvedValue([
+        { userId: TARGET_USER_ID, role: { id: 'role-1', name: 'ADMIN' } },
+      ])
+
+      const result = await service.getUserRoles(TENANT_ID, TARGET_USER_ID)
+
+      expect(result).toEqual([{ id: 'role-1', name: 'ADMIN' }])
+      expect(prisma.userRole.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { userId: TARGET_USER_ID, role: { tenantId: TENANT_ID } },
+        }),
+      )
+    })
+
+    it('filters out null roles', async () => {
+      prisma.userRole.findMany.mockResolvedValue([{ userId: TARGET_USER_ID, role: null }])
+
+      const result = await service.getUserRoles(TENANT_ID, TARGET_USER_ID)
+
+      expect(result).toEqual([])
+    })
+  })
+
+  describe('getUserRolesBatch()', () => {
+    it('returns empty map for empty userIds array', async () => {
+      const result = await service.getUserRolesBatch(TENANT_ID, [])
+
+      expect(result.size).toBe(0)
+      expect(prisma.userRole.findMany).not.toHaveBeenCalled()
+    })
+
+    it('returns roles grouped by userId', async () => {
+      prisma.userRole.findMany.mockResolvedValue([
+        { userId: 'user-1', role: { id: 'role-1', name: 'ADMIN' } },
+        { userId: 'user-2', role: { id: 'role-2', name: 'SALES_REP' } },
+        { userId: 'user-1', role: { id: 'role-3', name: 'SALES_MANAGER' } },
+      ])
+
+      const result = await service.getUserRolesBatch(TENANT_ID, ['user-1', 'user-2'])
+
+      expect(result.get('user-1')).toEqual([
+        { id: 'role-1', name: 'ADMIN' },
+        { id: 'role-3', name: 'SALES_MANAGER' },
+      ])
+      expect(result.get('user-2')).toEqual([{ id: 'role-2', name: 'SALES_REP' }])
+    })
+
+    it('initializes empty array for users with no roles', async () => {
+      prisma.userRole.findMany.mockResolvedValue([])
+
+      const result = await service.getUserRolesBatch(TENANT_ID, ['user-no-roles'])
+
+      expect(result.get('user-no-roles')).toEqual([])
     })
   })
 

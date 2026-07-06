@@ -7,14 +7,13 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth.store'
-import type { UserRole } from '@/types/auth.types'
 
 interface NavigationItem {
   label: string
   href?: string
   marker: string
   isAi?: boolean
-  roles?: UserRole[]
+  roles?: string[]
 }
 
 interface NavigationSection {
@@ -40,17 +39,20 @@ const navigationSections: NavigationSection[] = [
   {
     title: 'Administration',
     items: [
-      { label: 'Users', href: '/users', marker: 'US', roles: ['ADMIN', 'MANAGER'] },
+      { label: 'Users', href: '/users', marker: 'US', roles: ['ADMIN', 'SALES_MANAGER'] },
+      { label: 'Roles', href: '/settings/roles', marker: 'RL', roles: ['ADMIN'] },
       { label: 'Settings', href: '/settings', marker: 'SE' },
     ],
   },
 ]
 
-function getVisibleSections(role: UserRole | null): NavigationSection[] {
+function getVisibleSections(userRoles: string[] | null): NavigationSection[] {
   return navigationSections
     .map((section) => ({
       ...section,
-      items: section.items.filter((item) => !item.roles || (role && item.roles.includes(role))),
+      items: section.items.filter(
+        (item) => !item.roles || (userRoles && item.roles.some((r) => userRoles.includes(r))),
+      ),
     }))
     .filter((section) => section.items.length > 0)
 }
@@ -67,8 +69,8 @@ function NavigationList({
   compact?: boolean
 }): React.JSX.Element {
   const pathname = usePathname()
-  const role = useAuthStore((state) => state.user?.role ?? null)
-  const sections = getVisibleSections(role)
+  const userRoles = useAuthStore((state) => state.user?.roles ?? null)
+  const sections = getVisibleSections(userRoles)
 
   return (
     <nav

@@ -84,7 +84,7 @@ describe('UserForm', () => {
       email: 'ada@example.com',
       firstName: 'Ada',
       lastName: 'Lovelace',
-      role: 'ADMIN' as const,
+      roles: [{ id: 'role-1', name: 'ADMIN' }],
       isActive: true,
       createdAt: '2026-06-01T00:00:00.000Z',
       updatedAt: '2026-06-01T00:00:00.000Z',

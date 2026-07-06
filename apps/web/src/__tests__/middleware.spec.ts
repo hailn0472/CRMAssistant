@@ -101,7 +101,7 @@ describe('middleware', () => {
     const token = makeToken({
       userId: 'user-1',
       tenantId: 'tenant-1',
-      role: 'SALES_REP',
+      roles: ['SALES_REP'],
       exp: Math.floor(Date.now() / 1000) + 60,
     })
 
@@ -115,7 +115,7 @@ describe('middleware', () => {
     const token = makeToken({
       userId: 'user-1',
       tenantId: 'tenant-1',
-      role: 'SALES_REP',
+      roles: ['SALES_REP'],
       exp: Math.floor(Date.now() / 1000) + 60,
     })
 
@@ -129,7 +129,7 @@ describe('middleware', () => {
     const token = makeToken({
       userId: 'user-1',
       tenantId: 'tenant-1',
-      role: 'SALES_REP',
+      roles: ['SALES_REP'],
       exp: Math.floor(Date.now() / 1000) + 60,
     })
 
@@ -142,7 +142,7 @@ describe('middleware', () => {
     const token = makeToken({
       userId: 'user-1',
       tenantId: 'tenant-1',
-      role: 'SALES_REP',
+      roles: ['SALES_REP'],
       exp: Math.floor(Date.now() / 1000) - 60,
     })
 
@@ -156,7 +156,7 @@ describe('middleware', () => {
     const token = makeToken({
       userId: 'user-1',
       tenantId: 'tenant-1',
-      role: 'SALES_REP',
+      roles: ['SALES_REP'],
       exp: Math.floor(Date.now() / 1000) + 60,
     })
     // Tamper with the signature

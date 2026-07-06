@@ -22,7 +22,7 @@ export type AuthTokenResponse = {
   accessToken: string
   userId: string
   tenantId: string
-  role: string
+  roles: string[]
   email: string
   firstName: string
   lastName: string
@@ -92,44 +92,84 @@ export class AuthService {
       throw new BadRequestException(supabaseError?.message ?? 'Registration failed')
     }
 
-    // 2. Create Tenant + User in a transaction
+    // 2. Create Tenant + System Roles + User + assign SALES_REP role in a transaction
     try {
-      const user = await this.prisma.$transaction(async (tx) => {
+      const result = await this.prisma.$transaction(async (tx) => {
         const tenant = await tx.tenant.create({
           data: { name: tenantName },
         })
 
-        return tx.user.create({
+        // Seed system roles for the new tenant (migration only seeds existing tenants)
+        const systemRoles = [
+          { name: 'ADMIN', description: 'Full system access' },
+          { name: 'SALES_MANAGER', description: 'Sales team manager' },
+          { name: 'SALES_REP', description: 'Sales representative' },
+          { name: 'SUPPORT_AGENT', description: 'Customer support agent' },
+          { name: 'MARKETING_USER', description: 'Marketing team member' },
+        ]
+
+        let salesRepRole: { id: string } | null = null
+
+        for (const roleDef of systemRoles) {
+          const role = await tx.role.create({
+            data: {
+              tenantId: tenant.id,
+              name: roleDef.name,
+              description: roleDef.description,
+              isSystem: true,
+              createdBy: 'system',
+              updatedBy: 'system',
+            },
+          })
+          if (roleDef.name === 'SALES_REP') {
+            salesRepRole = role
+          }
+        }
+
+        const user = await tx.user.create({
           data: {
             tenantId: tenant.id,
             email: dto.email,
             firstName: dto.firstName.trim(),
             lastName: dto.lastName.trim(),
-            role: 'SALES_REP',
             supabaseUserId: supabaseData.user!.id,
             isActive: true,
             createdBy: 'system',
             updatedBy: 'system',
           },
         })
+
+        if (salesRepRole) {
+          await tx.userRole.create({
+            data: {
+              userId: user.id,
+              roleId: salesRepRole.id,
+              assignedBy: 'system',
+            },
+          })
+        }
+
+        const roles = salesRepRole ? ['SALES_REP'] : []
+
+        return { user, roles }
       })
 
-      const accessToken = this.signAuthToken({
-        userId: user.id,
-        tenantId: user.tenantId,
-        role: user.role,
-        email: user.email,
+      const accessToken = await this.signAuthToken({
+        userId: result.user.id,
+        tenantId: result.user.tenantId,
+        email: result.user.email,
+        roles: result.roles,
       })
 
       return {
         accessToken,
-        userId: user.id,
-        tenantId: user.tenantId,
-        role: user.role,
-        email: user.email,
-        firstName: user.firstName,
-        lastName: user.lastName,
-        avatar: user.avatar,
+        userId: result.user.id,
+        tenantId: result.user.tenantId,
+        roles: result.roles,
+        email: result.user.email,
+        firstName: result.user.firstName,
+        lastName: result.user.lastName,
+        avatar: result.user.avatar,
       }
     } catch (error) {
       await this.cleanupSupabaseUser(supabaseData.user.id)
@@ -198,18 +238,20 @@ export class AuthService {
         data: { lastLoginAt: new Date() },
       })
 
-      const accessToken = this.signAuthToken({
+      const roles = await this.resolveUserRoles(linkedUser.id)
+
+      const accessToken = await this.signAuthToken({
         userId: linkedUser.id,
         tenantId: linkedUser.tenantId,
-        role: linkedUser.role,
         email: linkedUser.email,
+        roles,
       })
 
       return {
         accessToken,
         userId: linkedUser.id,
         tenantId: linkedUser.tenantId,
-        role: linkedUser.role,
+        roles,
         email: linkedUser.email,
         firstName: linkedUser.firstName,
         lastName: linkedUser.lastName,
@@ -223,18 +265,20 @@ export class AuthService {
       data: { lastLoginAt: new Date() },
     })
 
-    const accessToken = this.signAuthToken({
+    const roles = await this.resolveUserRoles(user.id)
+
+    const accessToken = await this.signAuthToken({
       userId: user.id,
       tenantId: user.tenantId,
-      role: user.role,
       email: user.email,
+      roles,
     })
 
     return {
       accessToken,
       userId: user.id,
       tenantId: user.tenantId,
-      role: user.role,
+      roles,
       email: user.email,
       firstName: user.firstName,
       lastName: user.lastName,
@@ -270,17 +314,25 @@ export class AuthService {
     })
   }
 
-  private signAuthToken(input: {
+  private async resolveUserRoles(userId: string): Promise<string[]> {
+    const userRoles = await this.prisma.userRole.findMany({
+      where: { userId, role: { deletedAt: null } },
+      include: { role: { select: { name: true } } },
+    })
+    return userRoles.map((ur) => ur.role.name)
+  }
+
+  private async signAuthToken(input: {
     userId: string
     tenantId: string
-    role: string
     email: string
-  }): string {
+    roles: string[]
+  }): Promise<string> {
     const payload: JwtPayload = {
       sub: input.userId,
       userId: input.userId,
       tenantId: input.tenantId,
-      role: input.role,
+      roles: input.roles,
       email: input.email,
     }
     return this.jwtService.sign(payload)

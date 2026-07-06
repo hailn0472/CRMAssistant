@@ -125,7 +125,7 @@ export function UsersTable(): React.JSX.Element {
                   Name
                 </th>
                 <th className="py-3 pr-4 font-medium">Email</th>
-                <th className="py-3 pr-4 font-medium">Role</th>
+                <th className="py-3 pr-4 font-medium">Roles</th>
                 <th className="py-3 pr-4 font-medium">Status</th>
                 <th className="py-3 pr-4 font-medium">Last login</th>
               </tr>
@@ -151,7 +151,13 @@ export function UsersTable(): React.JSX.Element {
                   </td>
                   <td className="py-3 pr-4 text-slate-600">{user.email}</td>
                   <td className="py-3 pr-4">
-                    <RoleBadge role={user.role} />
+                    <div className="flex flex-wrap gap-1">
+                      {user.roles && user.roles.length > 0 ? (
+                        user.roles.map((r) => <RoleBadge key={r.id} role={r.name} />)
+                      ) : (
+                        <span className="text-xs text-slate-400">No roles</span>
+                      )}
+                    </div>
                   </td>
                   <td className="py-3 pr-4">
                     <StatusBadge isActive={user.isActive} />

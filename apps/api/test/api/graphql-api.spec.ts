@@ -1,5 +1,3 @@
-import { UserRole } from '@prisma/client'
-
 import { ApiTestHarness, type GraphqlRequestPayload } from './api-test-harness'
 
 describe('GraphQL API harness', () => {
@@ -43,7 +41,7 @@ describe('GraphQL API harness', () => {
     const token = harness.signToken({
       userId: 'graphql-role-smoke-user',
       tenantId: tenant.id,
-      role: UserRole.SALES_REP,
+      roles: ['SALES_REP'],
       email: 'graphql-role-smoke-user@example.com',
     })
     const payload: GraphqlRequestPayload = {
@@ -65,7 +63,7 @@ describe('GraphQL API harness', () => {
     const token = harness.signToken({
       userId: 'graphql-api-user',
       tenantId: tenant.id,
-      role: UserRole.SALES_REP,
+      roles: ['SALES_REP'],
       email: 'graphql-api-user@example.com',
     })
     const payload: GraphqlRequestPayload = {
@@ -113,13 +111,13 @@ describe('GraphQL API harness', () => {
     const tenantAToken = harness.signToken({
       userId: 'tenant-a-user',
       tenantId: tenantA.id,
-      role: UserRole.SALES_REP,
+      roles: ['SALES_REP'],
       email: 'tenant-a-user@example.com',
     })
     const tenantBToken = harness.signToken({
       userId: 'tenant-b-user',
       tenantId: tenantB.id,
-      role: UserRole.SALES_REP,
+      roles: ['SALES_REP'],
       email: 'tenant-b-user@example.com',
     })
     const createTenantAContactMutation: GraphqlRequestPayload = {

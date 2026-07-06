@@ -26,7 +26,7 @@ const user: JwtPayload = {
   sub: 'user-1',
   userId: 'user-1',
   tenantId: 'tenant-1',
-  role: 'SALES_REP',
+  roles: ['SALES_REP'],
   email: 'ada@example.com',
 }
 

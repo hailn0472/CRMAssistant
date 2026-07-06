@@ -1,9 +1,14 @@
-export type UserRole = 'ADMIN' | 'MANAGER' | 'SALES_REP'
+export type Role = {
+  id: string
+  name: string
+  description?: string | null
+  isSystem: boolean
+}
 
 export type AuthUser = {
   userId: string
   tenantId: string
-  role: UserRole
+  roles: string[]
   email: string
   firstName: string
   lastName: string
@@ -14,7 +19,7 @@ export type AuthTokenResponse = {
   accessToken: string
   userId: string
   tenantId: string
-  role: UserRole
+  roles: string[]
   email: string
   firstName: string
   lastName: string

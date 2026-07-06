@@ -30,7 +30,7 @@ export function AppShell({ children }: AppShellProps): React.JSX.Element {
           setUser({
             userId: me.id,
             tenantId: me.tenantId,
-            role: me.role as any,
+            roles: me.roles ? me.roles.map((r: { name: string }) => r.name) : [],
             email: me.email,
             firstName: me.firstName,
             lastName: me.lastName,
