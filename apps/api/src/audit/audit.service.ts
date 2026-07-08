@@ -16,6 +16,9 @@ export type AuditAction =
   | 'TEAM_DELETED'
   | 'TEAM_MEMBERS_SET'
   | 'VISIBILITY_FILTER_APPLIED'
+  | 'SHARE_CREATED'
+  | 'SHARE_UPDATED'
+  | 'SHARE_REVOKED'
 
 @Injectable()
 export class AuditService {
