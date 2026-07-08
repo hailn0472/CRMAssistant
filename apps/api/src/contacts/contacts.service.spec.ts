@@ -1,4 +1,9 @@
-import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common'
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common'
 import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library'
 
 import { ContactsService } from './contacts.service'
@@ -9,7 +14,13 @@ jest.mock('../common/guards/visibility-check', () => ({
   registerVisibilityService: jest.fn(),
 }))
 
+jest.mock('../common/guards/sharing-check', () => ({
+  resolveSharedRecordIds: jest.fn(),
+  registerSharingCheck: jest.fn(),
+}))
+
 import { resolveVisibilityFilter } from '../common/guards/visibility-check'
+import { resolveSharedRecordIds } from '../common/guards/sharing-check'
 
 type MockContactDelegate = {
   create: jest.Mock
@@ -19,8 +30,18 @@ type MockContactDelegate = {
   updateMany: jest.Mock
 }
 
+type MockSharingRuleDelegate = {
+  findFirst: jest.Mock
+}
+
+type MockUserRoleDelegate = {
+  findMany: jest.Mock
+}
+
 type MockPrisma = {
   contact: MockContactDelegate
+  sharingRule: MockSharingRuleDelegate
+  userRole: MockUserRoleDelegate
 }
 
 const NOW = new Date('2026-05-13T00:00:00.000Z')
@@ -58,6 +79,12 @@ function makePrisma(): MockPrisma {
       count: jest.fn(),
       updateMany: jest.fn(),
     },
+    sharingRule: {
+      findFirst: jest.fn(),
+    },
+    userRole: {
+      findMany: jest.fn(),
+    },
   }
 }
 
@@ -71,6 +98,7 @@ describe('ContactsService', () => {
       prisma as unknown as ConstructorParameters<typeof ContactsService>[0],
     )
     ;(resolveVisibilityFilter as jest.Mock).mockResolvedValue(undefined)
+    ;(resolveSharedRecordIds as jest.Mock).mockResolvedValue([])
   })
 
   describe('create()', () => {
@@ -239,6 +267,35 @@ describe('ContactsService', () => {
       await expect(service.findOne(TENANT_ID, USER_ID, CONTACT_ID)).resolves.toBe(contact)
     })
 
+    it('allows access when sharing grants access but OWN visibility denies', async () => {
+      const contact = makeContact({ ownerId: 'other-user' })
+      prisma.contact.findFirst.mockResolvedValue(contact)
+      ;(resolveVisibilityFilter as jest.Mock).mockResolvedValue(USER_ID)
+      ;(resolveSharedRecordIds as jest.Mock).mockResolvedValue([CONTACT_ID])
+
+      await expect(service.findOne(TENANT_ID, USER_ID, CONTACT_ID)).resolves.toBe(contact)
+    })
+
+    it('throws NotFoundException when neither visibility nor sharing grants access', async () => {
+      const contact = makeContact({ ownerId: 'other-user' })
+      prisma.contact.findFirst.mockResolvedValue(contact)
+      ;(resolveVisibilityFilter as jest.Mock).mockResolvedValue(USER_ID)
+      ;(resolveSharedRecordIds as jest.Mock).mockResolvedValue([])
+
+      await expect(service.findOne(TENANT_ID, USER_ID, CONTACT_ID)).rejects.toThrow(
+        NotFoundException,
+      )
+    })
+
+    it('allows access via team sharing', async () => {
+      const contact = makeContact({ ownerId: 'other-user' })
+      prisma.contact.findFirst.mockResolvedValue(contact)
+      ;(resolveVisibilityFilter as jest.Mock).mockResolvedValue(USER_ID)
+      ;(resolveSharedRecordIds as jest.Mock).mockResolvedValue([CONTACT_ID])
+
+      await expect(service.findOne(TENANT_ID, USER_ID, CONTACT_ID)).resolves.toBe(contact)
+    })
+
     it('throws NotFoundException for cross-tenant or deleted contacts', async () => {
       prisma.contact.findFirst.mockResolvedValue(null)
 
@@ -256,7 +313,12 @@ describe('ContactsService', () => {
 
       const result = await service.findMany(TENANT_ID, USER_ID, {}, { page: 2, pageSize: 10 })
 
-      expect(result).toEqual({ items: [contact], total: 1, page: 2, pageSize: 10 })
+      expect(result).toEqual({
+        items: [{ ...contact, sharedWithMe: false }],
+        total: 1,
+        page: 2,
+        pageSize: 10,
+      })
       expect(prisma.contact.findMany).toHaveBeenCalledWith({
         where: { tenantId: TENANT_ID, deletedAt: null },
         orderBy: { createdAt: 'desc' },
@@ -279,6 +341,89 @@ describe('ContactsService', () => {
       expect(prisma.contact.count).toHaveBeenCalledWith({
         where: { tenantId: TENANT_ID, deletedAt: null },
       })
+    })
+
+    it('returns owned + shared contacts when sharing rules exist for OWN visibility', async () => {
+      const owned = makeContact()
+      const shared = makeContact({ id: 'shared-contact', ownerId: 'other-user' })
+      prisma.contact.findMany.mockResolvedValue([owned, shared])
+      prisma.contact.count.mockResolvedValue(2)
+      ;(resolveVisibilityFilter as jest.Mock).mockResolvedValue(USER_ID)
+      ;(resolveSharedRecordIds as jest.Mock).mockResolvedValue(['shared-contact'])
+
+      const result = await service.findMany(TENANT_ID, USER_ID)
+
+      expect(result.items).toHaveLength(2)
+      expect(result.items[0]!.sharedWithMe).toBe(false)
+      expect(result.items[1]!.sharedWithMe).toBe(true)
+      expect(prisma.contact.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            AND: expect.arrayContaining([
+              expect.objectContaining({
+                OR: expect.arrayContaining([
+                  { ownerId: USER_ID },
+                  { id: { in: ['shared-contact'] } },
+                ]),
+              }),
+            ]),
+          }),
+        }),
+      )
+    })
+
+    it('returns all contacts for ALL visibility regardless of sharing rules', async () => {
+      const contact = makeContact()
+      prisma.contact.findMany.mockResolvedValue([contact])
+      prisma.contact.count.mockResolvedValue(1)
+      ;(resolveVisibilityFilter as jest.Mock).mockResolvedValue(undefined)
+      ;(resolveSharedRecordIds as jest.Mock).mockResolvedValue(['shared-contact'])
+
+      const result = await service.findMany(TENANT_ID, USER_ID)
+
+      // ALL mode should not add ANY ownerConditions (no OR filter)
+      expect(result.items).toHaveLength(1)
+    })
+
+    it('applies sharing OR filter for TEAM visibility', async () => {
+      const teamContact = makeContact({ ownerId: 'teammate' })
+      const sharedContact = makeContact({ id: 'shared-contact', ownerId: 'external-user' })
+      prisma.contact.findMany.mockResolvedValue([teamContact, sharedContact])
+      prisma.contact.count.mockResolvedValue(2)
+      ;(resolveVisibilityFilter as jest.Mock).mockResolvedValue({ in: [USER_ID, 'teammate'] })
+      ;(resolveSharedRecordIds as jest.Mock).mockResolvedValue(['shared-contact'])
+
+      const result = await service.findMany(TENANT_ID, USER_ID)
+
+      expect(result.items).toHaveLength(2)
+      expect(prisma.contact.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            AND: expect.arrayContaining([
+              expect.objectContaining({
+                OR: expect.arrayContaining([
+                  { ownerId: { in: [USER_ID, 'teammate'] } },
+                  { id: { in: ['shared-contact'] } },
+                ]),
+              }),
+            ]),
+          }),
+        }),
+      )
+    })
+
+    it('returns sharedWithMe true for shared contacts and false for owned', async () => {
+      const owned = makeContact()
+      const shared = makeContact({ id: 'shared-contact', ownerId: 'other-user' })
+      prisma.contact.findMany.mockResolvedValue([owned, shared])
+      prisma.contact.count.mockResolvedValue(2)
+      ;(resolveVisibilityFilter as jest.Mock).mockResolvedValue(USER_ID)
+      ;(resolveSharedRecordIds as jest.Mock).mockResolvedValue(['shared-contact'])
+
+      const result = await service.findMany(TENANT_ID, USER_ID)
+
+      expect(result.items.find((c) => c.id === CONTACT_ID)!.sharedWithMe).toBe(false)
+      expect(result.items.find((c) => c.id === 'shared-contact')!.sharedWithMe).toBe(true)
     })
   })
 
@@ -306,6 +451,40 @@ describe('ContactsService', () => {
       await expect(
         service.update(TENANT_ID, USER_ID, CONTACT_ID, { company: 'Acme' }),
       ).rejects.toThrow(NotFoundException)
+    })
+
+    it('allows update when user has EDIT sharing access', async () => {
+      const updated = makeContact({ ownerId: 'other-user' })
+      prisma.contact.findFirst.mockResolvedValue(makeContact({ ownerId: 'other-user' }))
+      prisma.userRole.findMany.mockResolvedValue([]) // not ADMIN
+      prisma.sharingRule.findFirst.mockResolvedValue({ accessLevel: 'EDIT' })
+      prisma.contact.updateMany.mockResolvedValue({ count: 1 })
+      prisma.contact.findFirst.mockResolvedValue(updated)
+
+      const result = await service.update(TENANT_ID, USER_ID, CONTACT_ID, { company: 'Acme' })
+      expect(result).toBe(updated)
+    })
+
+    it('allows update when user has FULL sharing access', async () => {
+      const updated = makeContact({ ownerId: 'other-user' })
+      prisma.contact.findFirst.mockResolvedValue(makeContact({ ownerId: 'other-user' }))
+      prisma.userRole.findMany.mockResolvedValue([]) // not ADMIN
+      prisma.sharingRule.findFirst.mockResolvedValue({ accessLevel: 'FULL' })
+      prisma.contact.updateMany.mockResolvedValue({ count: 1 })
+      prisma.contact.findFirst.mockResolvedValue(updated)
+
+      const result = await service.update(TENANT_ID, USER_ID, CONTACT_ID, { company: 'Acme' })
+      expect(result).toBe(updated)
+    })
+
+    it('throws ForbiddenException when user has READ sharing access and tries to update', async () => {
+      prisma.contact.findFirst.mockResolvedValue(makeContact({ ownerId: 'other-user' }))
+      prisma.userRole.findMany.mockResolvedValue([]) // not ADMIN
+      prisma.sharingRule.findFirst.mockResolvedValue({ accessLevel: 'READ' })
+
+      await expect(
+        service.update(TENANT_ID, USER_ID, CONTACT_ID, { company: 'Acme' }),
+      ).rejects.toThrow(ForbiddenException)
     })
   })
 
@@ -336,6 +515,35 @@ describe('ContactsService', () => {
 
       await expect(service.delete(TENANT_ID, USER_ID, CONTACT_ID)).rejects.toThrow(
         NotFoundException,
+      )
+    })
+
+    it('allows delete when user has FULL sharing access', async () => {
+      prisma.contact.findFirst.mockResolvedValue(makeContact({ ownerId: 'other-user' }))
+      prisma.userRole.findMany.mockResolvedValue([]) // not ADMIN
+      prisma.sharingRule.findFirst.mockResolvedValue({ accessLevel: 'FULL' })
+      prisma.contact.updateMany.mockResolvedValue({ count: 1 })
+
+      await expect(service.delete(TENANT_ID, USER_ID, CONTACT_ID)).resolves.toBe(true)
+    })
+
+    it('throws ForbiddenException when user has EDIT sharing access and tries to delete', async () => {
+      prisma.contact.findFirst.mockResolvedValue(makeContact({ ownerId: 'other-user' }))
+      prisma.userRole.findMany.mockResolvedValue([]) // not ADMIN
+      prisma.sharingRule.findFirst.mockResolvedValue({ accessLevel: 'EDIT' })
+
+      await expect(service.delete(TENANT_ID, USER_ID, CONTACT_ID)).rejects.toThrow(
+        ForbiddenException,
+      )
+    })
+
+    it('throws ForbiddenException when user has READ sharing access and tries to delete', async () => {
+      prisma.contact.findFirst.mockResolvedValue(makeContact({ ownerId: 'other-user' }))
+      prisma.userRole.findMany.mockResolvedValue([]) // not ADMIN
+      prisma.sharingRule.findFirst.mockResolvedValue({ accessLevel: 'READ' })
+
+      await expect(service.delete(TENANT_ID, USER_ID, CONTACT_ID)).rejects.toThrow(
+        ForbiddenException,
       )
     })
   })

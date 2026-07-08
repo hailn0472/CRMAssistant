@@ -56,6 +56,7 @@ describe('ContactForm', () => {
           email: 'ada@example.com',
           firstName: 'Ada',
           lastName: 'Lovelace',
+          ownerId: 'user-1',
           createdAt: '2026-05-13T00:00:00.000Z',
           updatedAt: '2026-05-13T00:00:00.000Z',
         }}

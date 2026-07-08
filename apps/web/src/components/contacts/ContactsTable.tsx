@@ -10,6 +10,7 @@ import { EmptyState } from '@/components/shared/EmptyState'
 import { ErrorState } from '@/components/shared/ErrorState'
 import { ResponsiveTableWrapper } from '@/components/shared/ResponsiveTableWrapper'
 import { TableSkeleton } from '@/components/shared/LoadingSkeleton'
+import { SharedBadge } from '@/components/sharing/SharedBadge'
 import { getContacts } from '@/services/contact.service'
 
 const PAGE_SIZE = 10
@@ -77,6 +78,7 @@ export function ContactsTable(): React.JSX.Element {
                       href={`/contacts/${contact.id}`}
                     >
                       {contact.firstName} {contact.lastName}
+                      <SharedBadge visible={!!contact.sharedWithMe} />
                     </Link>
                   </td>
                   <td className="py-3 pr-4 text-slate-600">{contact.email}</td>
