@@ -9,6 +9,7 @@ type MockUserDelegate = {
   findFirst: jest.Mock
   findMany: jest.Mock
   count: jest.Mock
+  update: jest.Mock
   updateMany: jest.Mock
 }
 
@@ -17,6 +18,12 @@ type MockPrisma = {
   role: { findFirst: jest.Mock }
   userRole: { findUnique: jest.Mock; create: jest.Mock; findMany: jest.Mock }
   tenant: { update: jest.Mock; findFirst: jest.Mock }
+}
+
+function makeAuthService(): Record<string, jest.Mock> {
+  return {
+    verifyPassword: jest.fn().mockResolvedValue(true),
+  }
 }
 
 const NOW = new Date('2026-06-01T00:00:00.000Z')
@@ -55,6 +62,7 @@ function makePrisma(): MockPrisma {
       findFirst: jest.fn(),
       findMany: jest.fn(),
       count: jest.fn(),
+      update: jest.fn(),
       updateMany: jest.fn(),
     },
     role: {
@@ -103,7 +111,7 @@ describe('UsersService', () => {
       prisma as unknown as ConstructorParameters<typeof UsersService>[0],
       makeTwoFactorService() as never,
       makeAuditService() as never,
-      {} as never, // AuthService mock — not needed for existing tests
+      makeAuthService() as never,
     )
   })
 
@@ -595,6 +603,130 @@ describe('UsersService', () => {
       await expect(
         service.update(TENANT_ID, USER_ID, TARGET_USER_ID, { firstName: 'X' }),
       ).rejects.toThrow('database unavailable')
+    })
+  })
+
+  describe('enable2FA()', () => {
+    it('generates secret, QR code, and backup codes for user', async () => {
+      const user = makeUser({ id: USER_ID, tenantId: TENANT_ID })
+      prisma.user.findFirst.mockResolvedValue(user)
+      prisma.user.update.mockResolvedValue(user)
+
+      const result = await service.enable2FA(TENANT_ID, USER_ID)
+
+      expect(result).toMatchObject({
+        secret: expect.any(String) as string,
+        qrCodeDataUrl: expect.any(String) as string,
+        backupCodes: expect.arrayContaining([expect.any(String)]) as string[],
+      })
+      expect(prisma.user.update).toHaveBeenCalled()
+    })
+
+    it('throws BadRequestException if 2FA is already enabled', async () => {
+      const user = makeUser({ id: USER_ID, tenantId: TENANT_ID, twoFactorEnabled: true })
+      prisma.user.findFirst.mockResolvedValue(user)
+
+      await expect(service.enable2FA(TENANT_ID, USER_ID)).rejects.toThrow(BadRequestException)
+    })
+  })
+
+  describe('verify2FA()', () => {
+    it('enables 2FA on successful verification', async () => {
+      const user = makeUser({ id: USER_ID, tenantId: TENANT_ID, twoFactorSecret: 'secret' })
+      prisma.user.findFirst.mockResolvedValue(user)
+      prisma.user.update.mockResolvedValue(user)
+
+      const result = await service.verify2FA(TENANT_ID, USER_ID, '123456')
+
+      expect(result).toEqual({ success: true })
+      expect(prisma.user.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ twoFactorEnabled: true }) as Record<string, unknown>,
+        }),
+      )
+    })
+
+    it('throws BadRequestException if 2FA already enabled', async () => {
+      const user = makeUser({ id: USER_ID, tenantId: TENANT_ID, twoFactorEnabled: true })
+      prisma.user.findFirst.mockResolvedValue(user)
+
+      await expect(service.verify2FA(TENANT_ID, USER_ID, '123456')).rejects.toThrow(BadRequestException)
+    })
+
+    it('throws BadRequestException if verify2FA called without enable2FA first', async () => {
+      const user = makeUser({ id: USER_ID, tenantId: TENANT_ID, twoFactorSecret: null })
+      prisma.user.findFirst.mockResolvedValue(user)
+
+      await expect(service.verify2FA(TENANT_ID, USER_ID, '123456')).rejects.toThrow(BadRequestException)
+    })
+  })
+
+  describe('disable2FA()', () => {
+    it('disables 2FA after password verification', async () => {
+      const user = makeUser({ id: USER_ID, tenantId: TENANT_ID, twoFactorEnabled: true })
+      prisma.user.findFirst.mockResolvedValue(user)
+      prisma.user.update.mockResolvedValue(user)
+
+      const result = await service.disable2FA(TENANT_ID, USER_ID, 'password')
+
+      expect(result).toBe(true)
+      expect(prisma.user.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ twoFactorEnabled: false }) as Record<string, unknown>,
+        }),
+      )
+    })
+  })
+
+  describe('regenerateBackupCodes()', () => {
+    it('regenerates backup codes when 2FA is enabled', async () => {
+      const user = makeUser({ id: USER_ID, tenantId: TENANT_ID, twoFactorEnabled: true })
+      prisma.user.findFirst.mockResolvedValue(user)
+      prisma.user.update.mockResolvedValue(user)
+
+      const result = await service.regenerateBackupCodes(TENANT_ID, USER_ID, 'password')
+
+      expect(result).toHaveLength(10)
+      expect(prisma.user.update).toHaveBeenCalled()
+    })
+
+    it('throws BadRequestException if 2FA is not enabled', async () => {
+      const user = makeUser({ id: USER_ID, tenantId: TENANT_ID, twoFactorEnabled: false })
+      prisma.user.findFirst.mockResolvedValue(user)
+
+      await expect(service.regenerateBackupCodes(TENANT_ID, USER_ID, 'password')).rejects.toThrow(
+        BadRequestException,
+      )
+    })
+  })
+
+  describe('updateTenantSettings()', () => {
+    it('updates enforce2FA for admin user', async () => {
+      const user = makeUser({ id: USER_ID, tenantId: TENANT_ID })
+      prisma.user.findFirst.mockResolvedValue(user)
+      prisma.userRole.findMany.mockResolvedValue([
+        { userId: USER_ID, role: { id: 'role-1', name: 'ADMIN' } },
+      ])
+      prisma.tenant.update.mockResolvedValue({ id: TENANT_ID, enforce2FA: true })
+
+      const result = await service.updateTenantSettings(TENANT_ID, USER_ID, true)
+
+      expect(result).toEqual({ enforce2FA: true })
+      expect(prisma.tenant.update).toHaveBeenCalledWith({
+        where: { id: TENANT_ID },
+        data: { enforce2FA: true },
+      })
+    })
+
+    it('throws ForbiddenException for non-admin user', async () => {
+      const { ForbiddenException } = require('@nestjs/common')
+      prisma.userRole.findMany.mockResolvedValue([
+        { userId: USER_ID, role: { id: 'role-2', name: 'SALES_REP' } },
+      ])
+
+      await expect(service.updateTenantSettings(TENANT_ID, USER_ID, true)).rejects.toThrow(
+        ForbiddenException,
+      )
     })
   })
 })
