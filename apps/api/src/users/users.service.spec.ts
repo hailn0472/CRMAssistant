@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common'
+import { BadRequestException, ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common'
 import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library'
 
 import { UsersService } from './users.service'
@@ -779,7 +779,6 @@ describe('UsersService', () => {
     })
 
     it('throws ForbiddenException for non-admin user', async () => {
-      const { ForbiddenException } = require('@nestjs/common')
       prisma.userRole.findMany.mockResolvedValue([
         { userId: USER_ID, role: { id: 'role-2', name: 'SALES_REP' } },
       ])
