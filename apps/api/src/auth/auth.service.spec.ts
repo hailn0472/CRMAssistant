@@ -92,15 +92,30 @@ function makeConfigService(overrides: Record<string, string> = {}): MockConfigSe
   }
 }
 
-function makeTwoFactorService() {
+function makeTwoFactorService(): Record<string, jest.Mock> {
   return {
     generateSecret: jest.fn().mockReturnValue('MOCK_SECRET'),
     generateQrCodeDataUrl: jest.fn().mockResolvedValue('data:image/png;base64,mock'),
     verifyTotp: jest.fn().mockResolvedValue(true),
-    generateBackupCodes: jest.fn().mockReturnValue(Array.from({ length: 10 }, (_, i) => `CODE${i}`)),
-    hashBackupCodes: jest.fn().mockImplementation((codes: string[]) => Promise.resolve(codes.map((c) => `hashed_${c}`))),
+    generateBackupCodes: jest
+      .fn()
+      .mockReturnValue(Array.from({ length: 10 }, (_, i) => `CODE${i}`)),
+    hashBackupCodes: jest
+      .fn()
+      .mockImplementation((codes: string[]) => Promise.resolve(codes.map((c) => `hashed_${c}`))),
     verifyBackupCode: jest.fn().mockImplementation((code: string) => {
-      const idx = ['CODE0', 'CODE1', 'CODE2', 'CODE3', 'CODE4', 'CODE5', 'CODE6', 'CODE7', 'CODE8', 'CODE9'].indexOf(code)
+      const idx = [
+        'CODE0',
+        'CODE1',
+        'CODE2',
+        'CODE3',
+        'CODE4',
+        'CODE5',
+        'CODE6',
+        'CODE7',
+        'CODE8',
+        'CODE9',
+      ].indexOf(code)
       return Promise.resolve(idx)
     }),
   }

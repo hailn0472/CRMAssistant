@@ -72,18 +72,22 @@ function makePrisma(): MockPrisma {
   }
 }
 
-function makeTwoFactorService() {
+function makeTwoFactorService(): Record<string, jest.Mock> {
   return {
     generateSecret: jest.fn().mockReturnValue('MOCK_SECRET'),
     generateQrCodeDataUrl: jest.fn().mockResolvedValue('data:image/png;base64,mock'),
     verifyTotp: jest.fn().mockResolvedValue(true),
-    generateBackupCodes: jest.fn().mockReturnValue(Array.from({ length: 10 }, (_, i) => `CODE${i}`)),
-    hashBackupCodes: jest.fn().mockImplementation((codes: string[]) => Promise.resolve(codes.map((c) => `hashed_${c}`))),
+    generateBackupCodes: jest
+      .fn()
+      .mockReturnValue(Array.from({ length: 10 }, (_, i) => `CODE${i}`)),
+    hashBackupCodes: jest
+      .fn()
+      .mockImplementation((codes: string[]) => Promise.resolve(codes.map((c) => `hashed_${c}`))),
     verifyBackupCode: jest.fn().mockResolvedValue(-1),
   }
 }
 
-function makeAuditService() {
+function makeAuditService(): Record<string, jest.Mock> {
   return {
     log: jest.fn().mockResolvedValue(undefined),
   }

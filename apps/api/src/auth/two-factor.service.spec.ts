@@ -4,7 +4,11 @@ jest.mock('otplib', () => {
     generateSecret: jest.fn().mockReturnValue('MOCK_SECRET'),
     generate: jest.fn().mockResolvedValue('123456'),
     verify: jest.fn().mockResolvedValue({ valid: true }),
-    toURI: jest.fn().mockReturnValue('otpauth://totp/CRMAssistant:test@test.com?secret=MOCK_SECRET&issuer=CRMAssistant'),
+    toURI: jest
+      .fn()
+      .mockReturnValue(
+        'otpauth://totp/CRMAssistant:test@test.com?secret=MOCK_SECRET&issuer=CRMAssistant',
+      ),
   }))
   return {
     TOTP: mockTOTP,
@@ -56,6 +60,7 @@ describe('TwoFactorService', () => {
 
     it('should reject an invalid TOTP code', async () => {
       // Override mock to return failure
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
       const { TOTP } = require('otplib')
       const mockInstance = TOTP.mock.results[0].value
       mockInstance.verify.mockResolvedValueOnce({ valid: false })
@@ -65,6 +70,7 @@ describe('TwoFactorService', () => {
     })
 
     it('should handle errors gracefully', async () => {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
       const { TOTP } = require('otplib')
       const mockInstance = TOTP.mock.results[0].value
       mockInstance.verify.mockRejectedValueOnce(new Error('TOTP error'))
