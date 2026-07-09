@@ -631,6 +631,18 @@ describe('UsersService', () => {
   })
 
   describe('verify2FA()', () => {
+    let twoFactorService: Record<string, jest.Mock>
+
+    beforeEach(() => {
+      twoFactorService = makeTwoFactorService()
+      service = new UsersService(
+        prisma as unknown as ConstructorParameters<typeof UsersService>[0],
+        twoFactorService as never,
+        makeAuditService() as never,
+        makeAuthService() as never,
+      )
+    })
+
     it('enables 2FA on successful verification', async () => {
       const user = makeUser({ id: USER_ID, tenantId: TENANT_ID, twoFactorSecret: 'secret' })
       prisma.user.findFirst.mockResolvedValue(user)
@@ -659,9 +671,29 @@ describe('UsersService', () => {
 
       await expect(service.verify2FA(TENANT_ID, USER_ID, '123456')).rejects.toThrow(BadRequestException)
     })
+
+    it('throws BadRequestException for invalid TOTP code', async () => {
+      twoFactorService.verifyTotp.mockResolvedValue(false)
+      const user = makeUser({ id: USER_ID, tenantId: TENANT_ID, twoFactorSecret: 'secret' })
+      prisma.user.findFirst.mockResolvedValue(user)
+
+      await expect(service.verify2FA(TENANT_ID, USER_ID, '000000')).rejects.toThrow(BadRequestException)
+    })
   })
 
   describe('disable2FA()', () => {
+    let authService: Record<string, jest.Mock>
+
+    beforeEach(() => {
+      authService = makeAuthService()
+      service = new UsersService(
+        prisma as unknown as ConstructorParameters<typeof UsersService>[0],
+        makeTwoFactorService() as never,
+        makeAuditService() as never,
+        authService as never,
+      )
+    })
+
     it('disables 2FA after password verification', async () => {
       const user = makeUser({ id: USER_ID, tenantId: TENANT_ID, twoFactorEnabled: true })
       prisma.user.findFirst.mockResolvedValue(user)
@@ -676,9 +708,29 @@ describe('UsersService', () => {
         }),
       )
     })
+
+    it('throws UnauthorizedException when password is wrong', async () => {
+      authService.verifyPassword.mockResolvedValue(false)
+
+      await expect(
+        service.disable2FA(TENANT_ID, USER_ID, 'wrong'),
+      ).rejects.toThrow('Mật khẩu không đúng')
+    })
   })
 
   describe('regenerateBackupCodes()', () => {
+    let authService: Record<string, jest.Mock>
+
+    beforeEach(() => {
+      authService = makeAuthService()
+      service = new UsersService(
+        prisma as unknown as ConstructorParameters<typeof UsersService>[0],
+        makeTwoFactorService() as never,
+        makeAuditService() as never,
+        authService as never,
+      )
+    })
+
     it('regenerates backup codes when 2FA is enabled', async () => {
       const user = makeUser({ id: USER_ID, tenantId: TENANT_ID, twoFactorEnabled: true })
       prisma.user.findFirst.mockResolvedValue(user)
@@ -697,6 +749,14 @@ describe('UsersService', () => {
       await expect(service.regenerateBackupCodes(TENANT_ID, USER_ID, 'password')).rejects.toThrow(
         BadRequestException,
       )
+    })
+
+    it('throws UnauthorizedException when password is wrong', async () => {
+      authService.verifyPassword.mockResolvedValue(false)
+
+      await expect(
+        service.regenerateBackupCodes(TENANT_ID, USER_ID, 'wrong'),
+      ).rejects.toThrow('Mật khẩu không đúng')
     })
   })
 
