@@ -12,6 +12,8 @@ export type JwtPayload = {
   tenantId: string
   roles: string[]
   email: string
+  apiKeyId?: string
+  permissions?: string[]
 }
 
 function getRequiredJwtSecret(configService: ConfigService): string {

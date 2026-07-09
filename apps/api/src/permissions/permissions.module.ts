@@ -7,6 +7,7 @@ import { registerPermissionGraphql } from './permissions.graphql'
 import { registerPermissionService } from '../common/guards/permission-check'
 import { registerVisibilityService } from '../common/guards/visibility-check'
 import { registerSharingCheck } from '../common/guards/sharing-check'
+import { registerApiKeyGuard } from '../common/guards/api-key.guard'
 
 @Module({
   imports: [PrismaModule, AuditModule],
@@ -24,5 +25,6 @@ export class PermissionsModule implements OnModuleInit {
     registerPermissionService(this.prismaService)
     registerVisibilityService(this.prismaService)
     registerSharingCheck(this.prismaService)
+    registerApiKeyGuard(this.prismaService)
   }
 }

@@ -3,7 +3,10 @@ type GraphqlResponse<T> = {
   errors?: Array<{ message: string }>
 }
 
-async function graphqlRequest<T>(query: string, variables: Record<string, unknown>): Promise<T> {
+export async function graphqlRequest<T>(
+  query: string,
+  variables: Record<string, unknown>,
+): Promise<T> {
   const response = await fetch('/api/graphql', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
