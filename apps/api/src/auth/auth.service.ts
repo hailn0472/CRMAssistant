@@ -15,6 +15,7 @@ import type { WebSocketLikeConstructor } from '@supabase/realtime-js'
 import { PrismaService } from '../prisma/prisma.service'
 import { TokenRevocationService } from './token-revocation.service'
 import { DEFAULT_ROLE_PERMISSIONS } from '../permissions/default-role-permissions'
+import { TwoFactorService } from './two-factor.service'
 import type { LoginDto } from './dto/login.dto'
 import type { OAuthTokenDto } from './dto/oauth-token.dto'
 import type { RegisterDto } from './dto/register.dto'
@@ -31,6 +32,18 @@ export type AuthTokenResponse = {
   avatar?: string | null
 }
 
+export type TwoFactorRequiredResponse = {
+  requires2FA: true
+  tempToken: string
+}
+
+export type TwoFactorSetupRequiredResponse = {
+  requires2FASetup: true
+  tempToken: string
+}
+
+export type LoginResult = AuthTokenResponse | TwoFactorRequiredResponse | TwoFactorSetupRequiredResponse
+
 const SUPABASE_AUTH_TIMEOUT_MS = 10_000
 
 @Injectable()
@@ -43,6 +56,7 @@ export class AuthService {
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
     private readonly tokenRevocationService: TokenRevocationService,
+    private readonly twoFactorService: TwoFactorService,
   ) {
     const supabaseUrl = this.configService.get<string>('SUPABASE_URL') ?? ''
     const supabaseAnonKey = this.configService.get<string>('SUPABASE_ANON_KEY') ?? ''
@@ -205,7 +219,7 @@ export class AuthService {
     }
   }
 
-  async login(dto: LoginDto): Promise<AuthTokenResponse> {
+  async login(dto: LoginDto): Promise<LoginResult> {
     const { data: supabaseData, error: supabaseError } = await this.withSupabaseAuthTimeout(
       this.supabase.auth.signInWithPassword({
         email: dto.email,
@@ -224,6 +238,9 @@ export class AuthService {
         deletedAt: null,
         isActive: true,
       },
+      include: {
+        tenant: { select: { enforce2FA: true } },
+      },
     })
 
     if (!user) {
@@ -232,6 +249,9 @@ export class AuthService {
           email: dto.email,
           deletedAt: null,
           isActive: true,
+        },
+        include: {
+          tenant: { select: { enforce2FA: true } },
         },
       })
 
@@ -260,25 +280,32 @@ export class AuthService {
         },
       })
 
-      const roles = await this.resolveUserRoles(linkedUser.id)
-
-      const accessToken = await this.signAuthToken({
-        userId: linkedUser.id,
-        tenantId: linkedUser.tenantId,
-        email: linkedUser.email,
-        roles,
-      })
-
-      return {
-        accessToken,
-        userId: linkedUser.id,
-        tenantId: linkedUser.tenantId,
-        roles,
-        email: linkedUser.email,
-        firstName: linkedUser.firstName,
-        lastName: linkedUser.lastName,
-        avatar: linkedUser.avatar,
+      // Check 2FA after linking
+      if (linkedUser.twoFactorEnabled) {
+        return this.respondTwoFactorRequired(linkedUser.id, linkedUser.tenantId)
       }
+
+      // Check enforce2FA — query tenant separately since update doesn't include relations
+      const linkedTenant = await this.prisma.tenant.findFirst({
+        where: { id: linkedUser.tenantId },
+        select: { enforce2FA: true },
+      })
+      if (linkedTenant?.enforce2FA && !linkedUser.twoFactorEnabled) {
+        return this.respondTwoFactorSetupRequired(linkedUser.id, linkedUser.tenantId)
+      }
+
+      const roles = await this.resolveUserRoles(linkedUser.id)
+      return this.buildAuthTokenResponse(linkedUser, roles)
+    }
+
+    // Check 2FA
+    if (user.twoFactorEnabled) {
+      return this.respondTwoFactorRequired(user.id, user.tenantId)
+    }
+
+    // Check enforce2FA from included tenant relation
+    if ('tenant' in user && user.tenant?.enforce2FA && !user.twoFactorEnabled) {
+      return this.respondTwoFactorSetupRequired(user.id, user.tenantId)
     }
 
     // Set lastLoginAt
@@ -288,24 +315,7 @@ export class AuthService {
     })
 
     const roles = await this.resolveUserRoles(user.id)
-
-    const accessToken = await this.signAuthToken({
-      userId: user.id,
-      tenantId: user.tenantId,
-      email: user.email,
-      roles,
-    })
-
-    return {
-      accessToken,
-      userId: user.id,
-      tenantId: user.tenantId,
-      roles,
-      email: user.email,
-      firstName: user.firstName,
-      lastName: user.lastName,
-      avatar: user.avatar,
-    }
+    return this.buildAuthTokenResponse(user, roles)
   }
 
   async oauthLogin(dto: OAuthTokenDto): Promise<AuthTokenResponse> {
@@ -325,6 +335,11 @@ export class AuthService {
       throw new UnauthorizedException('Không thể lấy email từ tài khoản Google')
     }
 
+    // Detect SSO provider from Supabase user metadata
+    const provider = supabaseUser.app_metadata?.provider as string | undefined
+    const ssoProviderName = provider === 'google' ? 'GOOGLE' : provider === 'azure' ? 'AZURE_AD' : undefined
+    const ssoId = supabaseUser.id
+
     // Phase 2: Lookup existing user by supabaseUserId
     let user = await this.prisma.user.findFirst({
       where: {
@@ -335,9 +350,30 @@ export class AuthService {
     })
 
     if (user) {
+      // Check 2FA enforcement
+      const ssoUser = await this.prisma.user.findFirst({
+        where: { id: user.id },
+        include: { tenant: { select: { enforce2FA: true } } },
+      })
+      if (ssoUser?.tenant?.enforce2FA && !ssoUser.twoFactorEnabled) {
+        throw new UnauthorizedException(
+          'Quản trị viên yêu cầu xác thực hai yếu tố. Vui lòng đăng nhập bằng email và thiết lập 2FA trước.',
+        )
+      }
+
+      const avatar = (supabaseUser.user_metadata?.['avatar_url'] as string) ?? null
+      const ssoUpdate: Record<string, unknown> = {
+        lastLoginAt: new Date(),
+        avatar,
+        updatedBy: 'system',
+      }
+      if (ssoProviderName && ssoId && (!user.ssoProvider || !user.ssoId)) {
+        ssoUpdate.ssoProvider = ssoProviderName
+        ssoUpdate.ssoId = ssoId
+      }
       await this.prisma.user.update({
         where: { id: user.id },
-        data: { lastLoginAt: new Date() },
+        data: ssoUpdate,
       })
 
       const roles = await this.resolveUserRoles(user.id)
@@ -367,13 +403,33 @@ export class AuthService {
         deletedAt: null,
         isActive: true,
       },
+      include: {
+        tenant: { select: { enforce2FA: true } },
+      },
     })
 
     if (usersByEmail.length === 1) {
       const userByEmail = usersByEmail[0]
+      // Check 2FA enforcement
+      if (userByEmail.tenant?.enforce2FA && !userByEmail.twoFactorEnabled) {
+        throw new UnauthorizedException(
+          'Quản trị viên yêu cầu xác thực hai yếu tố. Vui lòng đăng nhập bằng email và thiết lập 2FA trước.',
+        )
+      }
+      const avatar = (supabaseUser.user_metadata?.['avatar_url'] as string) ?? null
+      const updateData: Record<string, unknown> = {
+        supabaseUserId: supabaseUser.id,
+        lastLoginAt: new Date(),
+        updatedBy: 'system',
+        avatar,
+      }
+      if (ssoProviderName && ssoId && (!userByEmail.ssoProvider || !userByEmail.ssoId)) {
+        updateData.ssoProvider = ssoProviderName
+        updateData.ssoId = ssoId
+      }
       user = await this.prisma.user.update({
         where: { id: userByEmail.id },
-        data: { supabaseUserId: supabaseUser.id, lastLoginAt: new Date(), updatedBy: 'system' },
+        data: updateData,
       })
 
       const roles = await this.resolveUserRoles(user.id)
@@ -489,6 +545,11 @@ export class AuthService {
 
         await this.assignDefaultPermissionsForRoles(tx, createdRoles)
 
+        const newUserSsoData: Record<string, unknown> = {}
+        if (ssoProviderName && ssoId) {
+          newUserSsoData.ssoProvider = ssoProviderName
+          newUserSsoData.ssoId = ssoId
+        }
         const newUser = await tx.user.create({
           data: {
             tenantId: tenant.id,
@@ -500,6 +561,7 @@ export class AuthService {
             isActive: true,
             createdBy: 'system',
             updatedBy: 'system',
+            ...newUserSsoData,
           },
         })
 
@@ -552,6 +614,119 @@ export class AuthService {
     } catch {
       // Token already invalid — logout remains idempotent
     }
+  }
+
+  private async buildAuthTokenResponse(
+    user: { id: string; tenantId: string; email: string; firstName: string; lastName: string; avatar?: string | null },
+    roles: string[],
+    backupCodesRemaining?: number,
+  ): Promise<AuthTokenResponse> {
+    const accessToken = await this.signAuthToken({
+      userId: user.id,
+      tenantId: user.tenantId,
+      email: user.email,
+      roles,
+    })
+
+    return {
+      accessToken,
+      userId: user.id,
+      tenantId: user.tenantId,
+      roles,
+      email: user.email,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      avatar: user.avatar,
+      ...(backupCodesRemaining !== undefined && backupCodesRemaining <= 3
+        ? { backupCodesRemaining }
+        : {}),
+    }
+  }
+
+  private respondTwoFactorRequired(userId: string, tenantId: string): TwoFactorRequiredResponse {
+    const tempToken = this.jwtService.sign(
+      { sub: userId, userId, tenantId, purpose: '2fa_pending' },
+      { expiresIn: '5m' },
+    )
+    return { requires2FA: true, tempToken }
+  }
+
+  private respondTwoFactorSetupRequired(userId: string, tenantId: string): TwoFactorSetupRequiredResponse {
+    const tempToken = this.jwtService.sign(
+      { sub: userId, userId, tenantId, purpose: '2fa_setup' },
+      { expiresIn: '15m' },
+    )
+    return { requires2FASetup: true, tempToken }
+  }
+
+  async verify2FALogin(tempToken: string, code: string): Promise<AuthTokenResponse> {
+    let payload: { userId: string; tenantId: string; purpose: string }
+    try {
+      payload = this.jwtService.verify(tempToken)
+    } catch {
+      throw new UnauthorizedException('2FA session expired — please login again')
+    }
+
+    if (payload.purpose !== '2fa_pending') {
+      throw new UnauthorizedException('Invalid 2FA session')
+    }
+
+    const user = await this.prisma.user.findFirst({
+      where: {
+        id: payload.userId,
+        tenantId: payload.tenantId,
+        deletedAt: null,
+        isActive: true,
+      },
+    })
+
+    if (!user || !user.twoFactorEnabled || !user.twoFactorSecret) {
+      throw new UnauthorizedException('2FA is not enabled for this account')
+    }
+
+    // Try TOTP first
+    const totpValid = await this.twoFactorService.verifyTotp(user.twoFactorSecret, code)
+
+    if (totpValid) {
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: { lastLoginAt: new Date() },
+      })
+
+      const roles = await this.resolveUserRoles(user.id)
+      return this.buildAuthTokenResponse(user, roles)
+    }
+
+    // Fallback to backup codes
+    const backupCodes = (user.twoFactorBackupCodes as string[]) ?? []
+    const usedIndex = await this.twoFactorService.verifyBackupCode(code, backupCodes)
+
+    if (usedIndex >= 0) {
+      const updatedCodes = [...backupCodes]
+      updatedCodes.splice(usedIndex, 1)
+      const backupCodesRemaining = updatedCodes.length
+
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: { twoFactorBackupCodes: updatedCodes, lastLoginAt: new Date() },
+      })
+
+      const roles = await this.resolveUserRoles(user.id)
+      return this.buildAuthTokenResponse(user, roles, backupCodesRemaining)
+    }
+
+    throw new UnauthorizedException('Invalid 2FA code')
+  }
+
+  async verifyPassword(userId: string, password: string): Promise<boolean> {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } })
+    if (!user) return false
+
+    const { error } = await this.supabase.auth.signInWithPassword({
+      email: user.email,
+      password,
+    })
+    return !error
   }
 
   private withSupabaseAuthTimeout<T>(operation: Promise<T>, message: string): Promise<T> {

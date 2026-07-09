@@ -1,13 +1,19 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
+  UnauthorizedException,
 } from '@nestjs/common'
 import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library'
 
 import { PrismaService } from '../prisma/prisma.service'
-import type { User, Prisma } from '@prisma/client'
+import { AuthService } from '../auth/auth.service'
+import { TwoFactorService } from '../auth/two-factor.service'
+import { AuditService } from '../audit/audit.service'
+import type { User } from '@prisma/client'
+import { Prisma } from '@prisma/client'
 
 export type CreateUserInput = {
   email: string
@@ -58,6 +64,7 @@ const userListSelect = {
   avatar: true,
   phone: true,
   isActive: true,
+  ssoProvider: true,
   jobTitle: true,
   department: true,
   teamId: true,
@@ -167,7 +174,12 @@ function normalizeProfileInput(input: UpdateProfileInput): UpdateProfileInput {
 
 @Injectable()
 export class UsersService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly twoFactorService: TwoFactorService,
+    private readonly auditService: AuditService,
+    private readonly authService: AuthService,
+  ) {}
 
   async create(tenantId: string, userId: string, input: CreateUserInput): Promise<User> {
     const normalizedInput = normalizeCreateInput(input)
@@ -375,6 +387,160 @@ export class UsersService {
     }
 
     return await this.findOne(tenantId, id)
+  }
+
+  async enable2FA(tenantId: string, userId: string): Promise<{
+    secret: string
+    qrCodeDataUrl: string
+    backupCodes: string[]
+  }> {
+    const user = await this.findOne(tenantId, userId)
+
+    if (user.twoFactorEnabled) {
+      throw new BadRequestException('2FA is already enabled')
+    }
+
+    const secret = this.twoFactorService.generateSecret()
+    const qrCodeDataUrl = await this.twoFactorService.generateQrCodeDataUrl(secret, user.email)
+    const backupCodes = this.twoFactorService.generateBackupCodes()
+    const hashedBackupCodes = await this.twoFactorService.hashBackupCodes(backupCodes)
+
+    // Store secret and hashed backup codes, but don't enable 2FA yet — user must verify first
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: {
+        twoFactorSecret: secret,
+        twoFactorBackupCodes: hashedBackupCodes as unknown as Prisma.InputJsonValue,
+        updatedBy: userId,
+      },
+    })
+
+    return { secret, qrCodeDataUrl, backupCodes }
+  }
+
+  async verify2FA(tenantId: string, userId: string, code: string): Promise<{
+    success: boolean
+  }> {
+    const user = await this.findOne(tenantId, userId)
+
+    if (user.twoFactorEnabled) {
+      throw new BadRequestException('2FA is already enabled')
+    }
+
+    if (!user.twoFactorSecret) {
+      throw new BadRequestException('2FA setup not initiated — call enable2FA first')
+    }
+
+    const isValid = await this.twoFactorService.verifyTotp(user.twoFactorSecret, code)
+
+    if (!isValid) {
+      throw new BadRequestException('Invalid verification code')
+    }
+
+    // Use stored backup codes from enable2FA — just enable 2FA
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: {
+        twoFactorEnabled: true,
+        updatedBy: userId,
+      },
+    })
+
+    await this.auditService.log({
+      tenantId,
+      userId,
+      action: 'TWO_FACTOR_ENABLED',
+      entity: 'User',
+      entityId: user.id,
+    })
+
+    return { success: true }
+  }
+
+  async disable2FA(tenantId: string, userId: string, password: string): Promise<boolean> {
+    const passwordValid = await this.authService.verifyPassword(userId, password)
+    if (!passwordValid) {
+      throw new UnauthorizedException('Mật khẩu không đúng')
+    }
+    const user = await this.findOne(tenantId, userId)
+
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: {
+        twoFactorEnabled: false,
+        twoFactorSecret: null,
+        twoFactorBackupCodes: Prisma.DbNull,
+        updatedBy: userId,
+      },
+    })
+
+    await this.auditService.log({
+      tenantId,
+      userId,
+      action: 'TWO_FACTOR_DISABLED',
+      entity: 'User',
+      entityId: user.id,
+    })
+
+    return true
+  }
+
+  async regenerateBackupCodes(tenantId: string, userId: string, password: string): Promise<string[]> {
+    const passwordValid = await this.authService.verifyPassword(userId, password)
+    if (!passwordValid) {
+      throw new UnauthorizedException('Mật khẩu không đúng')
+    }
+    const user = await this.findOne(tenantId, userId)
+
+    if (!user.twoFactorEnabled) {
+      throw new BadRequestException('2FA is not enabled')
+    }
+
+    const backupCodes = this.twoFactorService.generateBackupCodes()
+    const hashedBackupCodes = await this.twoFactorService.hashBackupCodes(backupCodes)
+
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: {
+        twoFactorBackupCodes: hashedBackupCodes as unknown as Prisma.InputJsonValue,
+        updatedBy: userId,
+      },
+    })
+
+    await this.auditService.log({
+      tenantId,
+      userId,
+      action: 'TWO_FACTOR_BACKUP_CODES_REGENERATED',
+      entity: 'User',
+      entityId: user.id,
+    })
+
+    return backupCodes
+  }
+
+  async updateTenantSettings(tenantId: string, userId: string, enforce2FA: boolean): Promise<{ enforce2FA: boolean }> {
+    // Verify user is ADMIN
+    const userRoles = await this.getUserRoles(tenantId, userId)
+    const roleNames = userRoles.map((r) => r.name)
+    if (!roleNames.includes('ADMIN')) {
+      throw new ForbiddenException('Only admins can update tenant settings')
+    }
+
+    const tenant = await this.prisma.tenant.update({
+      where: { id: tenantId },
+      data: { enforce2FA },
+    })
+
+    await this.auditService.log({
+      tenantId,
+      userId,
+      action: 'TENANT_SETTINGS_UPDATED',
+      entity: 'Tenant',
+      entityId: tenant.id,
+      details: { enforce2FA },
+    })
+
+    return { enforce2FA: tenant.enforce2FA }
   }
 
   async getUserRoles(_tenantId: string, userId: string): Promise<{ id: string; name: string }[]> {

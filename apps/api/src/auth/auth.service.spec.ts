@@ -39,7 +39,7 @@ type MockPrisma = {
   $transaction: jest.Mock
   user: { findFirst: jest.Mock; findMany: jest.Mock; update: jest.Mock }
   userRole: { findMany: jest.Mock; create: jest.Mock }
-  tenant: { create: jest.Mock }
+  tenant: { create: jest.Mock; findFirst: jest.Mock }
   role: { findFirst: jest.Mock; create: jest.Mock }
 }
 
@@ -57,6 +57,7 @@ function makePrisma(): MockPrisma {
     },
     tenant: {
       create: jest.fn(),
+      findFirst: jest.fn(),
     },
     role: {
       findFirst: jest.fn(),
@@ -91,6 +92,20 @@ function makeConfigService(overrides: Record<string, string> = {}): MockConfigSe
   }
 }
 
+function makeTwoFactorService() {
+  return {
+    generateSecret: jest.fn().mockReturnValue('MOCK_SECRET'),
+    generateQrCodeDataUrl: jest.fn().mockResolvedValue('data:image/png;base64,mock'),
+    verifyTotp: jest.fn().mockResolvedValue(true),
+    generateBackupCodes: jest.fn().mockReturnValue(Array.from({ length: 10 }, (_, i) => `CODE${i}`)),
+    hashBackupCodes: jest.fn().mockImplementation((codes: string[]) => Promise.resolve(codes.map((c) => `hashed_${c}`))),
+    verifyBackupCode: jest.fn().mockImplementation((code: string) => {
+      const idx = ['CODE0', 'CODE1', 'CODE2', 'CODE3', 'CODE4', 'CODE5', 'CODE6', 'CODE7', 'CODE8', 'CODE9'].indexOf(code)
+      return Promise.resolve(idx)
+    }),
+  }
+}
+
 describe('AuthService', () => {
   let service: AuthService
   let prisma: MockPrisma
@@ -103,12 +118,14 @@ describe('AuthService', () => {
     jwtService = makeJwtService()
     tokenRevocationService = new TokenRevocationService()
     const configService = makeConfigService()
+    const twoFactorService = makeTwoFactorService()
 
     service = new AuthService(
       prisma as unknown as ConstructorParameters<typeof AuthService>[0],
       jwtService as unknown as JwtService,
       configService as unknown as ConfigService,
       tokenRevocationService,
+      twoFactorService as never,
     )
   })
 
@@ -244,6 +261,8 @@ describe('AuthService', () => {
       firstName: FAKE_FIRST_NAME,
       lastName: FAKE_LAST_NAME,
       supabaseUserId: FAKE_SUPABASE_UID,
+      twoFactorEnabled: false,
+      tenant: { enforce2FA: false },
     }
 
     it('should log in a user and sign JWT with userId claim', async () => {
@@ -256,8 +275,11 @@ describe('AuthService', () => {
 
       const result = await service.login(dto)
 
-      expect(result.accessToken).toBe(FAKE_JWT)
-      expect(result.roles).toEqual(['SALES_REP'])
+      expect('accessToken' in result).toBe(true)
+      if ('accessToken' in result) {
+        expect(result.accessToken).toBe(FAKE_JWT)
+        expect(result.roles).toEqual(['SALES_REP'])
+      }
       expect(jwtService.sign).toHaveBeenCalledWith({
         sub: FAKE_USER_ID,
         userId: FAKE_USER_ID,
@@ -313,7 +335,10 @@ describe('AuthService', () => {
 
       const result = await service.login(dto)
 
-      expect(result.accessToken).toBe(FAKE_JWT)
+      expect('accessToken' in result).toBe(true)
+      if ('accessToken' in result) {
+        expect(result.accessToken).toBe(FAKE_JWT)
+      }
       expect(prisma.user.update).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({ supabaseUserId: 'new-supabase-uid' }),
@@ -340,6 +365,8 @@ describe('AuthService', () => {
       lastName: FAKE_LAST_NAME,
       supabaseUserId: FAKE_SUPABASE_UID,
       avatar: null,
+      ssoProvider: null,
+      ssoId: null,
     }
 
     it('should login existing user by supabaseUserId', async () => {

@@ -16,6 +16,10 @@ export type AuditAction =
   | 'TEAM_DELETED'
   | 'TEAM_MEMBERS_SET'
   | 'VISIBILITY_FILTER_APPLIED'
+  | 'TWO_FACTOR_ENABLED'
+  | 'TWO_FACTOR_DISABLED'
+  | 'TWO_FACTOR_BACKUP_CODES_REGENERATED'
+  | 'TENANT_SETTINGS_UPDATED'
 
 @Injectable()
 export class AuditService {

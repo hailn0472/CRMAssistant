@@ -28,10 +28,11 @@ enum DataVisibility {
 }
 
 model Tenant {
-  id        String   @id @default(uuid())
-  name      String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id         String   @id @default(uuid())
+  name       String
+  enforce2FA Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
   users     User[]
   contacts  Contact[]
@@ -46,25 +47,32 @@ model Tenant {
 /// Extended in Story 2.1: name → firstName + lastName, added profile fields, deactivation, lastLoginAt.
 /// Extended in Story 2.2: removed `role` column — roles now managed via UserRole junction table.
 /// Extended in Story 2.4: added teamId + team relation for team-based data visibility.
+/// Extended in Story 2.6: added 2FA fields (twoFactorEnabled, twoFactorSecret, twoFactorBackupCodes),
+/// SSO fields (ssoProvider, ssoId), and @@unique([tenantId, ssoProvider, ssoId]).
 model User {
-  id             String    @id @default(uuid())
-  tenantId       String
-  email          String
-  firstName      String    @default("")
-  lastName       String
-  avatar         String?
-  phone          String?
-  jobTitle       String?
-  department     String?
-  isActive       Boolean   @default(true)
-  supabaseUserId String?   @unique // Link to Supabase Auth user — null until first login
-  teamId         String? // FK to Team — null means not assigned to any team
-  lastLoginAt    DateTime?
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
-  createdBy      String    @default("system")
-  updatedBy      String    @default("system")
-  deletedAt      DateTime? // soft delete — null means active
+  id                  String    @id @default(uuid())
+  tenantId            String
+  email               String
+  firstName           String    @default("")
+  lastName            String
+  avatar              String?
+  phone               String?
+  jobTitle            String?
+  department          String?
+  isActive            Boolean   @default(true)
+  supabaseUserId      String?   @unique // Link to Supabase Auth user — null until first login
+  teamId              String?   // FK to Team — null means not assigned to any team
+  lastLoginAt         DateTime?
+  twoFactorEnabled    Boolean   @default(false)
+  twoFactorSecret     String?
+  twoFactorBackupCodes Json?   // string[] — bcrypt-hashed backup codes
+  ssoProvider         String?   // 'GOOGLE' | 'AZURE_AD'
+  ssoId               String?   // Provider-specific user ID
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  createdBy           String    @default("system")
+  updatedBy           String    @default("system")
+  deletedAt           DateTime? // soft delete — null means active
 
   tenant      Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   team        Team?      @relation(fields: [teamId], references: [id], onDelete: SetNull)
@@ -75,6 +83,8 @@ model User {
 
   // Email is unique per tenant, NOT globally unique
   @@unique([tenantId, email])
+  // SSO link is unique per tenant + provider (Prisma 5+ supports nullable fields in composite unique)
+  @@unique([tenantId, ssoProvider, ssoId])
   // Index for all tenant-scoped queries
   @@index([tenantId])
   // Index for active-user queries

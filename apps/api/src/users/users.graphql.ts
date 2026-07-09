@@ -6,6 +6,33 @@ import type { UserListItem, UsersService } from './users.service'
 import type { GraphqlContext } from '../graphql/graphql-context'
 import type { JwtPayload } from '../auth/strategies/jwt.strategy'
 
+// 2FA types
+const Enable2FAResultRef = builder.objectRef<{
+  secret: string
+  qrCodeDataUrl: string
+  backupCodes: string[]
+}>('Enable2FAResult').implement({
+  fields: (t) => ({
+    secret: t.exposeString('secret'),
+    qrCodeDataUrl: t.exposeString('qrCodeDataUrl'),
+    backupCodes: t.exposeStringList('backupCodes'),
+  }),
+})
+
+const Verify2FAResultRef = builder.objectRef<{
+  success: boolean
+}>('Verify2FAResult').implement({
+  fields: (t) => ({
+    success: t.exposeBoolean('success'),
+  }),
+})
+
+const TenantSettingsRef = builder.objectRef<{ enforce2FA: boolean }>('TenantSettings').implement({
+  fields: (t) => ({
+    enforce2FA: t.exposeBoolean('enforce2FA'),
+  }),
+})
+
 type UserGraphqlShape = Awaited<ReturnType<UsersService['findOne']>> | UserListItem
 
 const UserRoleRef = builder.objectRef<{ id: string; name: string }>('UserRole')
@@ -40,6 +67,7 @@ UserRef.implement({
     jobTitle: t.exposeString('jobTitle', { nullable: true }),
     department: t.exposeString('department', { nullable: true }),
     isActive: t.exposeBoolean('isActive'),
+    ssoProvider: t.exposeString('ssoProvider', { nullable: true }),
     teamId: t.exposeString('teamId', { nullable: true }),
     team: t.field({
       type: TeamRef,
@@ -289,6 +317,45 @@ builder.mutationFields((t) => ({
     resolve: async (_parent, args, context) => {
       const user = requireAdminOrManager(context)
       return getUsersService().reactivateUsers(user.tenantId, user.userId, args.ids.map(String))
+    },
+  }),
+  enable2FA: t.field({
+    type: Enable2FAResultRef,
+    resolve: async (_parent, _args, context) => {
+      const user = requireUser(context)
+      return getUsersService().enable2FA(user.tenantId, user.userId)
+    },
+  }),
+  verify2FA: t.field({
+    type: Verify2FAResultRef,
+    args: { code: t.arg.string({ required: true }) },
+    resolve: async (_parent, args, context) => {
+      const user = requireUser(context)
+      return getUsersService().verify2FA(user.tenantId, user.userId, args.code)
+    },
+  }),
+  disable2FA: t.field({
+    type: 'Boolean',
+    args: { password: t.arg.string({ required: true }) },
+    resolve: async (_parent, args, context) => {
+      const user = requireUser(context)
+      return getUsersService().disable2FA(user.tenantId, user.userId, args.password)
+    },
+  }),
+  regenerateBackupCodes: t.field({
+    type: ['String'],
+    args: { password: t.arg.string({ required: true }) },
+    resolve: async (_parent, args, context) => {
+      const user = requireUser(context)
+      return getUsersService().regenerateBackupCodes(user.tenantId, user.userId, args.password)
+    },
+  }),
+  updateTenantSettings: t.field({
+    type: TenantSettingsRef,
+    args: { enforce2FA: t.arg.boolean({ required: true }) },
+    resolve: async (_parent, args, context) => {
+      const user = requireUser(context)
+      return getUsersService().updateTenantSettings(user.tenantId, user.userId, args.enforce2FA)
     },
   }),
   deleteUser: t.boolean({

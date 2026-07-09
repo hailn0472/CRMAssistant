@@ -16,6 +16,7 @@ type MockPrisma = {
   user: MockUserDelegate
   role: { findFirst: jest.Mock }
   userRole: { findUnique: jest.Mock; create: jest.Mock; findMany: jest.Mock }
+  tenant: { update: jest.Mock; findFirst: jest.Mock }
 }
 
 const NOW = new Date('2026-06-01T00:00:00.000Z')
@@ -64,6 +65,27 @@ function makePrisma(): MockPrisma {
       create: jest.fn(),
       findMany: jest.fn(),
     },
+    tenant: {
+      update: jest.fn(),
+      findFirst: jest.fn(),
+    },
+  }
+}
+
+function makeTwoFactorService() {
+  return {
+    generateSecret: jest.fn().mockReturnValue('MOCK_SECRET'),
+    generateQrCodeDataUrl: jest.fn().mockResolvedValue('data:image/png;base64,mock'),
+    verifyTotp: jest.fn().mockResolvedValue(true),
+    generateBackupCodes: jest.fn().mockReturnValue(Array.from({ length: 10 }, (_, i) => `CODE${i}`)),
+    hashBackupCodes: jest.fn().mockImplementation((codes: string[]) => Promise.resolve(codes.map((c) => `hashed_${c}`))),
+    verifyBackupCode: jest.fn().mockResolvedValue(-1),
+  }
+}
+
+function makeAuditService() {
+  return {
+    log: jest.fn().mockResolvedValue(undefined),
   }
 }
 
@@ -73,7 +95,12 @@ describe('UsersService', () => {
 
   beforeEach(() => {
     prisma = makePrisma()
-    service = new UsersService(prisma as unknown as ConstructorParameters<typeof UsersService>[0])
+    service = new UsersService(
+      prisma as unknown as ConstructorParameters<typeof UsersService>[0],
+      makeTwoFactorService() as never,
+      makeAuditService() as never,
+      {} as never, // AuthService mock — not needed for existing tests
+    )
   })
 
   describe('create()', () => {
