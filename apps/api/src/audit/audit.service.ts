@@ -20,6 +20,9 @@ export type AuditAction =
   | 'TWO_FACTOR_DISABLED'
   | 'TWO_FACTOR_BACKUP_CODES_REGENERATED'
   | 'TENANT_SETTINGS_UPDATED'
+  | 'SHARE_CREATED'
+  | 'SHARE_UPDATED'
+  | 'SHARE_REVOKED'
 
 @Injectable()
 export class AuditService {

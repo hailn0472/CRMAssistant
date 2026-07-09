@@ -27,6 +27,18 @@ enum DataVisibility {
   ALL
 }
 
+enum AccessLevel {
+  READ
+  EDIT
+  FULL
+}
+
+enum ResourceType {
+  CONTACT
+  DEAL
+  TASK
+}
+
 model Tenant {
   id         String   @id @default(uuid())
   name       String
@@ -34,11 +46,12 @@ model Tenant {
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
-  users     User[]
-  contacts  Contact[]
-  roles     Role[]
-  auditLogs AuditLog[]
-  teams     Team[]
+  users       User[]
+  contacts    Contact[]
+  roles       Role[]
+  auditLogs   AuditLog[]
+  teams       Team[]
+  sharingRules SharingRule[]
 }
 
 /// Tenant-scoped user model with authentication support.
@@ -80,6 +93,7 @@ model User {
   userRoles   UserRole[]
   auditLogs   AuditLog[]
   ownedContacts Contact[] @relation("ContactOwner")
+  sharedWithRules SharingRule[] @relation("SharedWithUser")
 
   // Email is unique per tenant, NOT globally unique
   @@unique([tenantId, email])
@@ -130,9 +144,10 @@ model Team {
   updatedBy String    @default("system")
   deletedAt DateTime?
 
-  tenant  Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  manager User?  @relation("TeamManager", fields: [managerId], references: [id], onDelete: SetNull)
-  members User[] // users with this teamId
+  tenant         Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  manager        User?          @relation("TeamManager", fields: [managerId], references: [id], onDelete: SetNull)
+  members        User[]         // users with this teamId
+  sharedWithRules SharingRule[] @relation("SharedWithTeam")
 
   @@unique([tenantId, name])
   @@index([tenantId])
@@ -227,4 +242,31 @@ model Contact {
   @@index([tenantId])
   @@index([tenantId, ownerId])
   @@index([tenantId, createdAt])
+}
+
+/// Sharing rules for cross-team collaboration (Story 2.5).
+/// Exactly one of sharedWithUserId or sharedWithTeamId must be set (enforced at application layer).
+model SharingRule {
+  id              String       @id @default(uuid())
+  tenantId        String
+  resourceType    ResourceType
+  resourceId      String       // UUID of the shared record
+  sharedWithUserId String?     // null if shared with team
+  sharedWithTeamId String?     // null if shared with user
+  accessLevel     AccessLevel
+  sharedBy        String       // userId who created the share
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  deletedAt       DateTime?
+
+  tenant        Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  sharedWithUser User?  @relation("SharedWithUser", fields: [sharedWithUserId], references: [id], onDelete: Cascade)
+  sharedWithTeam Team?  @relation("SharedWithTeam", fields: [sharedWithTeamId], references: [id], onDelete: SetNull)
+
+  @@unique([tenantId, resourceType, resourceId, sharedWithUserId])
+  @@unique([tenantId, resourceType, resourceId, sharedWithTeamId])
+  @@index([tenantId, resourceType, resourceId])
+  @@index([tenantId, sharedWithUserId])
+  @@index([tenantId, sharedWithTeamId])
+  @@index([tenantId, resourceType, sharedWithUserId])
 }

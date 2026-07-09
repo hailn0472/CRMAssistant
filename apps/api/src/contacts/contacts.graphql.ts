@@ -2,11 +2,14 @@ import { UnauthorizedException } from '@nestjs/common'
 
 import { builder } from '../graphql/schema.builder'
 import { requirePermission } from '../common/guards/permission-check'
-import type { ContactListItem, ContactsService } from './contacts.service'
+import { resolveSharedRecordIds } from '../common/guards/sharing-check'
+import type { ContactListItemWithSharing, ContactsService } from './contacts.service'
 import type { GraphqlContext } from '../graphql/graphql-context'
 import type { JwtPayload } from '../auth/strategies/jwt.strategy'
 
-type ContactGraphqlShape = Awaited<ReturnType<ContactsService['findOne']>> | ContactListItem
+type ContactGraphqlShape =
+  | (Awaited<ReturnType<ContactsService['findOne']>> & { sharedWithMe?: boolean })
+  | ContactListItemWithSharing
 
 const ContactRef = builder.objectRef<ContactGraphqlShape>('Contact')
 
@@ -46,6 +49,18 @@ ContactRef.implement({
           return contact.owner as { id: string; firstName: string; lastName: string; email: string }
         }
         return null
+      },
+    }),
+    sharedWithMe: t.boolean({
+      resolve: (contact) => {
+        // Pre-computed at service layer for list queries, fallback for findOne
+        if (
+          'sharedWithMe' in contact &&
+          typeof (contact as ContactListItemWithSharing).sharedWithMe === 'boolean'
+        ) {
+          return (contact as ContactListItemWithSharing).sharedWithMe
+        }
+        return false
       },
     }),
     createdAt: t.string({ resolve: (contact) => contact.createdAt.toISOString() }),
@@ -122,7 +137,18 @@ builder.queryFields((t) => ({
     args: { id: t.arg.id({ required: true }) },
     resolve: async (_parent, args, context) => {
       const user = requireUser(context)
-      return getContactsService().findOne(user.tenantId, user.userId, String(args.id))
+      const contact = await getContactsService().findOne(
+        user.tenantId,
+        user.userId,
+        String(args.id),
+      )
+      // Compute sharing status at query level to avoid N+1
+      const sharedIds = await resolveSharedRecordIds(user.userId, user.tenantId, 'CONTACT')
+      const result: ContactGraphqlShape = {
+        ...contact,
+        sharedWithMe: sharedIds.includes(contact.id),
+      }
+      return result
     },
   }),
   contacts: t.field({

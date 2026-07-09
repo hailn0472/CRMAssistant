@@ -3,7 +3,9 @@ import { cookies } from 'next/headers'
 import { notFound, redirect } from 'next/navigation'
 
 import { Button } from '@/components/ui/button'
+import { QueryProvider } from '@/components/contacts/QueryProvider'
 import { WorkspaceHeader, WorkspacePanel } from '@/components/layout/AppShell'
+import { ShareSection } from '@/components/sharing/ShareSection'
 import type { Contact } from '@/services/contact.service'
 
 const API_URL = process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:4000'
@@ -36,6 +38,8 @@ async function loadContact(id: string): Promise<Contact> {
           phone
           company
           jobTitle
+          ownerId
+          owner { id firstName lastName email }
           createdAt
           updatedAt
         }
@@ -75,9 +79,14 @@ export default async function ContactDetailPage({
         eyebrow="Contact detail"
         title={`${contact.firstName} ${contact.lastName}`}
         actions={
-          <Button asChild variant="outline">
-            <Link href={`/contacts/${contact.id}/edit`}>Edit</Link>
-          </Button>
+          <>
+            <QueryProvider>
+              <ShareSection resourceType="CONTACT" resourceId={contact.id} />
+            </QueryProvider>
+            <Button asChild variant="outline">
+              <Link href={`/contacts/${contact.id}/edit`}>Edit</Link>
+            </Button>
+          </>
         }
       />
       <WorkspacePanel className="p-6">

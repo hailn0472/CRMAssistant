@@ -12,6 +12,8 @@ import { AppGraphqlModule } from './graphql/graphql.module'
 import { HealthModule } from './health/health.module'
 import { PrismaModule } from './prisma/prisma.module'
 
+import { SharingModule } from './sharing/sharing.module'
+
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -28,6 +30,7 @@ import { PrismaModule } from './prisma/prisma.module'
     PermissionsModule,
     TeamsModule,
     AuditModule,
+    SharingModule,
   ],
 })
 export class AppModule {}

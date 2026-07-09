@@ -6,6 +6,9 @@ export type Contact = {
   phone?: string | null
   company?: string | null
   jobTitle?: string | null
+  ownerId: string
+  owner?: { id: string; firstName: string; lastName: string; email: string } | null
+  sharedWithMe?: boolean
   createdAt: string
   updatedAt: string
 }
@@ -58,6 +61,9 @@ const CONTACT_FIELDS = `
   phone
   company
   jobTitle
+  ownerId
+  owner { id firstName lastName email }
+  sharedWithMe
   createdAt
   updatedAt
 `
