@@ -6,38 +6,43 @@ import { useQuery } from '@tanstack/react-query'
 
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { EmptyState } from '@/components/shared/EmptyState'
+import { ErrorState } from '@/components/shared/ErrorState'
+import { ResponsiveTableWrapper } from '@/components/shared/ResponsiveTableWrapper'
+import { TableSkeleton } from '@/components/shared/LoadingSkeleton'
+import { SharedBadge } from '@/components/sharing/SharedBadge'
 import { getContacts } from '@/services/contact.service'
 
 const PAGE_SIZE = 10
 
 export function ContactsTable(): React.JSX.Element {
   const [page, setPage] = useState(1)
-  const { data, error, isLoading } = useQuery({
+  const { data, error, isLoading, refetch } = useQuery({
     queryKey: ['contacts', page],
     queryFn: () => getContacts(page, PAGE_SIZE),
   })
 
   if (isLoading) {
-    return <p className="text-sm text-slate-600">Loading contacts...</p>
+    return <TableSkeleton rows={5} columns={4} />
   }
 
   if (error) {
-    return <p className="text-sm text-red-700">Unable to load contacts: {error.message}</p>
+    const errorMessage = error instanceof Error ? error.message : 'Unable to load contacts.'
+
+    return <ErrorState message={errorMessage} onRetry={() => refetch()} />
   }
 
   if (!data || data.items.length === 0) {
     return (
-      <Card className="border-slate-200 bg-white text-slate-950 shadow-sm">
-        <CardContent className="p-10 text-center">
-          <h2 className="text-xl font-semibold tracking-tight text-slate-950">No contacts yet</h2>
-          <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-600">
-            Create your first contact to build the customer source of truth.
-          </p>
-          <Button asChild className="mt-5 bg-slate-950 text-white hover:bg-slate-800">
+      <EmptyState
+        title="No contacts yet"
+        description="Create your first contact to build the customer source of truth."
+        action={
+          <Button asChild className="bg-slate-950 text-white hover:bg-slate-800">
             <Link href="/contacts/new">Create contact</Link>
           </Button>
-        </CardContent>
-      </Card>
+        }
+      />
     )
   }
 
@@ -52,11 +57,13 @@ export function ContactsTable(): React.JSX.Element {
         </Button>
       </CardHeader>
       <CardContent>
-        <div className="overflow-x-auto rounded-lg border border-slate-200">
+        <ResponsiveTableWrapper>
           <table className="w-full text-left text-sm">
             <thead className="border-b border-slate-200 bg-slate-50 text-slate-600">
               <tr>
-                <th className="py-3 pr-4 pl-4 font-medium">Name</th>
+                <th className="sticky left-0 z-10 bg-slate-50 py-3 pr-4 pl-4 font-medium shadow-[2px_0_4px_-2px_rgba(0,0,0,0.06)]">
+                  Name
+                </th>
                 <th className="py-3 pr-4 font-medium">Email</th>
                 <th className="py-3 pr-4 font-medium">Company</th>
                 <th className="py-3 pr-4 font-medium">Job title</th>
@@ -64,13 +71,14 @@ export function ContactsTable(): React.JSX.Element {
             </thead>
             <tbody className="divide-y divide-slate-100">
               {data.items.map((contact) => (
-                <tr className="hover:bg-slate-50" key={contact.id}>
-                  <td className="py-3 pr-4 pl-4">
+                <tr className="group hover:bg-slate-50" key={contact.id}>
+                  <td className="sticky left-0 z-10 bg-white py-3 pr-4 pl-4 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.06)] group-hover:bg-slate-50">
                     <Link
                       className="font-medium text-blue-700 hover:text-blue-800 hover:underline"
                       href={`/contacts/${contact.id}`}
                     >
                       {contact.firstName} {contact.lastName}
+                      <SharedBadge visible={!!contact.sharedWithMe} />
                     </Link>
                   </td>
                   <td className="py-3 pr-4 text-slate-600">{contact.email}</td>
@@ -80,7 +88,7 @@ export function ContactsTable(): React.JSX.Element {
               ))}
             </tbody>
           </table>
-        </div>
+        </ResponsiveTableWrapper>
         <div className="mt-5 flex items-center justify-between text-sm text-slate-600">
           <span>
             Page {data.page} of {totalPages} · {data.total} contacts

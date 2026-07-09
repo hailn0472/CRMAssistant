@@ -1,13 +1,33 @@
 import { UnauthorizedException } from '@nestjs/common'
 
 import { builder } from '../graphql/schema.builder'
-import type { ContactListItem, ContactsService } from './contacts.service'
+import { requirePermission } from '../common/guards/permission-check'
+import { resolveSharedRecordIds } from '../common/guards/sharing-check'
+import type { ContactListItemWithSharing, ContactsService } from './contacts.service'
 import type { GraphqlContext } from '../graphql/graphql-context'
 import type { JwtPayload } from '../auth/strategies/jwt.strategy'
 
-type ContactGraphqlShape = Awaited<ReturnType<ContactsService['findOne']>> | ContactListItem
+type ContactGraphqlShape =
+  | (Awaited<ReturnType<ContactsService['findOne']>> & { sharedWithMe?: boolean })
+  | ContactListItemWithSharing
 
 const ContactRef = builder.objectRef<ContactGraphqlShape>('Contact')
+
+const UserRef = builder.objectRef<{
+  id: string
+  firstName: string
+  lastName: string
+  email: string
+}>('ContactOwner')
+
+UserRef.implement({
+  fields: (t) => ({
+    id: t.exposeID('id'),
+    firstName: t.exposeString('firstName'),
+    lastName: t.exposeString('lastName'),
+    email: t.exposeString('email'),
+  }),
+})
 
 ContactRef.implement({
   fields: (t) => ({
@@ -18,6 +38,31 @@ ContactRef.implement({
     phone: t.exposeString('phone', { nullable: true }),
     company: t.exposeString('company', { nullable: true }),
     jobTitle: t.exposeString('jobTitle', { nullable: true }),
+    ownerId: t.exposeString('ownerId'),
+    owner: t.field({
+      type: UserRef,
+      nullable: true,
+      resolve: async (contact) => {
+        // Use the contactsService's bound prisma to resolve owner
+        // contact object may only have ownerId but not owner relation loaded
+        if ('owner' in contact && contact.owner) {
+          return contact.owner as { id: string; firstName: string; lastName: string; email: string }
+        }
+        return null
+      },
+    }),
+    sharedWithMe: t.boolean({
+      resolve: (contact) => {
+        // Pre-computed at service layer for list queries, fallback for findOne
+        if (
+          'sharedWithMe' in contact &&
+          typeof (contact as ContactListItemWithSharing).sharedWithMe === 'boolean'
+        ) {
+          return (contact as ContactListItemWithSharing).sharedWithMe
+        }
+        return false
+      },
+    }),
     createdAt: t.string({ resolve: (contact) => contact.createdAt.toISOString() }),
     updatedAt: t.string({ resolve: (contact) => contact.updatedAt.toISOString() }),
   }),
@@ -92,7 +137,18 @@ builder.queryFields((t) => ({
     args: { id: t.arg.id({ required: true }) },
     resolve: async (_parent, args, context) => {
       const user = requireUser(context)
-      return getContactsService().findOne(user.tenantId, String(args.id))
+      const contact = await getContactsService().findOne(
+        user.tenantId,
+        user.userId,
+        String(args.id),
+      )
+      // Compute sharing status at query level to avoid N+1
+      const sharedIds = await resolveSharedRecordIds(user.userId, user.tenantId, 'CONTACT')
+      const result: ContactGraphqlShape = {
+        ...contact,
+        sharedWithMe: sharedIds.includes(contact.id),
+      }
+      return result
     },
   }),
   contacts: t.field({
@@ -105,6 +161,7 @@ builder.queryFields((t) => ({
       const user = requireUser(context)
       return getContactsService().findMany(
         user.tenantId,
+        user.userId,
         {
           search: args.filter?.search ?? undefined,
           company: args.filter?.company ?? undefined,
@@ -124,6 +181,7 @@ builder.mutationFields((t) => ({
     args: { input: t.arg({ type: CreateContactInputRef, required: true }) },
     resolve: async (_parent, args, context) => {
       const user = requireUser(context)
+      await requirePermission(context, 'CONTACT', 'CREATE')
       return getContactsService().create(user.tenantId, user.userId, {
         email: args.input.email,
         firstName: args.input.firstName,
@@ -142,6 +200,7 @@ builder.mutationFields((t) => ({
     },
     resolve: async (_parent, args, context) => {
       const user = requireUser(context)
+      await requirePermission(context, 'CONTACT', 'UPDATE')
       return getContactsService().update(user.tenantId, user.userId, String(args.id), {
         email: args.input.email ?? undefined,
         firstName: args.input.firstName ?? undefined,
@@ -162,6 +221,7 @@ builder.mutationFields((t) => ({
     args: { id: t.arg.id({ required: true }) },
     resolve: async (_parent, args, context) => {
       const user = requireUser(context)
+      await requirePermission(context, 'CONTACT', 'DELETE')
       return getContactsService().delete(user.tenantId, user.userId, String(args.id))
     },
   }),

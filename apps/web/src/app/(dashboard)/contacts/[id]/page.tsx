@@ -3,7 +3,9 @@ import { cookies } from 'next/headers'
 import { notFound, redirect } from 'next/navigation'
 
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { QueryProvider } from '@/components/contacts/QueryProvider'
+import { WorkspaceHeader, WorkspacePanel } from '@/components/layout/AppShell'
+import { ShareSection } from '@/components/sharing/ShareSection'
 import type { Contact } from '@/services/contact.service'
 
 const API_URL = process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:4000'
@@ -36,6 +38,8 @@ async function loadContact(id: string): Promise<Contact> {
           phone
           company
           jobTitle
+          ownerId
+          owner { id firstName lastName email }
           createdAt
           updatedAt
         }
@@ -70,35 +74,31 @@ export default async function ContactDetailPage({
   const contact = await loadContact(params.id)
 
   return (
-    <main className="crm-mesh min-h-screen p-6 text-white">
-      <section className="mx-auto max-w-4xl">
-        <Link className="text-sm text-cyan-100 hover:text-cyan-200" href="/contacts">
-          Back to contacts
-        </Link>
-        <Card className="mt-6 border-white/10 bg-white/[0.07] text-white">
-          <CardHeader className="flex-row items-start justify-between space-y-0">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.34em] text-cyan-200">
-                Contact detail
-              </p>
-              <CardTitle className="mt-2 text-4xl tracking-[-0.04em]">
-                {contact.firstName} {contact.lastName}
-              </CardTitle>
-            </div>
+    <main className="space-y-6 p-6 text-slate-950">
+      <WorkspaceHeader
+        eyebrow="Contact detail"
+        title={`${contact.firstName} ${contact.lastName}`}
+        actions={
+          <>
+            <QueryProvider>
+              <ShareSection resourceType="CONTACT" resourceId={contact.id} />
+            </QueryProvider>
             <Button asChild variant="outline">
               <Link href={`/contacts/${contact.id}/edit`}>Edit</Link>
             </Button>
-          </CardHeader>
-          <CardContent className="grid gap-4 md:grid-cols-2">
-            <Detail label="Email" value={contact.email} />
-            <Detail label="Phone" value={contact.phone ?? '—'} />
-            <Detail label="Company" value={contact.company ?? '—'} />
-            <Detail label="Job title" value={contact.jobTitle ?? '—'} />
-            <Detail label="Created" value={new Date(contact.createdAt).toLocaleString()} />
-            <Detail label="Updated" value={new Date(contact.updatedAt).toLocaleString()} />
-          </CardContent>
-        </Card>
-      </section>
+          </>
+        }
+      />
+      <WorkspacePanel className="p-6">
+        <div className="grid gap-4 md:grid-cols-2">
+          <Detail label="Email" value={contact.email} />
+          <Detail label="Phone" value={contact.phone ?? '—'} />
+          <Detail label="Company" value={contact.company ?? '—'} />
+          <Detail label="Job title" value={contact.jobTitle ?? '—'} />
+          <Detail label="Created" value={new Date(contact.createdAt).toLocaleString()} />
+          <Detail label="Updated" value={new Date(contact.updatedAt).toLocaleString()} />
+        </div>
+      </WorkspacePanel>
     </main>
   )
 }
@@ -110,9 +110,9 @@ type DetailProps = {
 
 function Detail({ label, value }: DetailProps): React.JSX.Element {
   return (
-    <div className="rounded-2xl border border-white/10 bg-slate-950/30 p-4">
-      <p className="text-xs uppercase tracking-[0.2em] text-slate-400">{label}</p>
-      <p className="mt-2 text-sm font-medium text-white">{value}</p>
+    <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">{label}</p>
+      <p className="mt-2 text-sm font-medium text-slate-950">{value}</p>
     </div>
   )
 }

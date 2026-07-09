@@ -1,19 +1,22 @@
 import { AuthController } from './auth.controller'
 import { AuthService } from './auth.service'
 import type { LoginDto } from './dto/login.dto'
+import type { OAuthTokenDto } from './dto/oauth-token.dto'
 import type { RegisterDto } from './dto/register.dto'
 
-function makeAuthService(): Pick<AuthService, 'register' | 'login' | 'logout'> {
+function makeAuthService(): Pick<AuthService, 'register' | 'login' | 'oauthLogin' | 'logout' | 'verify2FALogin'> {
   return {
     register: jest.fn(),
     login: jest.fn(),
+    oauthLogin: jest.fn(),
     logout: jest.fn(),
+    verify2FALogin: jest.fn(),
   }
 }
 
 describe('AuthController', () => {
   let controller: AuthController
-  let authService: Pick<AuthService, 'register' | 'login' | 'logout'>
+  let authService: Pick<AuthService, 'register' | 'login' | 'oauthLogin' | 'logout' | 'verify2FALogin'>
 
   beforeEach(() => {
     authService = makeAuthService()
@@ -24,16 +27,18 @@ describe('AuthController', () => {
     const dto: RegisterDto = {
       email: 'user@example.com',
       password: 'Password123',
-      name: 'Test User',
+      firstName: 'Test',
+      lastName: 'User',
       tenantName: 'ACME Corp',
     }
     const response = {
       accessToken: 'token',
       userId: 'user-1',
       tenantId: 'tenant-1',
-      role: 'SALES_REP',
+      roles: ['SALES_REP'],
       email: 'user@example.com',
-      name: 'Test User',
+      firstName: 'Test',
+      lastName: 'User',
     }
     jest.mocked(authService.register).mockResolvedValue(response)
 
@@ -47,14 +52,33 @@ describe('AuthController', () => {
       accessToken: 'token',
       userId: 'user-1',
       tenantId: 'tenant-1',
-      role: 'SALES_REP',
+      roles: ['SALES_REP'],
       email: 'user@example.com',
-      name: 'Test User',
+      firstName: 'Test',
+      lastName: 'User',
     }
     jest.mocked(authService.login).mockResolvedValue(response)
 
     await expect(controller.login(dto)).resolves.toEqual(response)
     expect(authService.login).toHaveBeenCalledWith(dto)
+  })
+
+  it('should delegate oauthLogin to AuthService', async () => {
+    const dto: OAuthTokenDto = { accessToken: 'google-oauth-token' }
+    const response = {
+      accessToken: 'token',
+      userId: 'user-1',
+      tenantId: 'tenant-1',
+      roles: ['SALES_REP'],
+      email: 'user@example.com',
+      firstName: 'Test',
+      lastName: 'User',
+      avatar: null,
+    }
+    jest.mocked(authService.oauthLogin).mockResolvedValue(response)
+
+    await expect(controller.oauthLogin(dto)).resolves.toEqual(response)
+    expect(authService.oauthLogin).toHaveBeenCalledWith(dto)
   })
 
   it('should extract bearer token and delegate logout to AuthService', async () => {

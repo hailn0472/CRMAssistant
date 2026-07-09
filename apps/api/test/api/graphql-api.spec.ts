@@ -1,5 +1,3 @@
-import { UserRole } from '@prisma/client'
-
 import { ApiTestHarness, type GraphqlRequestPayload } from './api-test-harness'
 
 describe('GraphQL API harness', () => {
@@ -40,10 +38,33 @@ describe('GraphQL API harness', () => {
 
   it('documents current GraphQL authorization behavior for signed user roles', async () => {
     const tenant = await harness.createTenant('GraphQL Role Smoke Tenant')
+    const userId = 'graphql-role-smoke-user'
+    await harness.prisma.user.create({
+      data: {
+        id: userId,
+        tenantId: tenant.id,
+        email: 'graphql-role-smoke-user@example.com',
+        firstName: 'Smoke',
+        lastName: 'User',
+        createdBy: 'test',
+        updatedBy: 'test',
+      },
+    })
+    const role = await harness.prisma.role.create({
+      data: {
+        tenantId: tenant.id,
+        name: 'ADMIN',
+        isSystem: true,
+        dataVisibility: 'ALL',
+        createdBy: 'test',
+        updatedBy: 'test',
+      },
+    })
+    await harness.prisma.userRole.create({ data: { userId, roleId: role.id, assignedBy: 'test' } })
     const token = harness.signToken({
-      userId: 'graphql-role-smoke-user',
+      userId,
       tenantId: tenant.id,
-      role: UserRole.SALES_REP,
+      roles: ['ADMIN'],
       email: 'graphql-role-smoke-user@example.com',
     })
     const payload: GraphqlRequestPayload = {
@@ -62,10 +83,34 @@ describe('GraphQL API harness', () => {
 
   it('posts a typed GraphQL payload through the real /graphql endpoint', async () => {
     const tenant = await harness.createTenant('GraphQL API Tenant')
+    const userId = 'graphql-api-user'
+    // Create user + role + userRole for FK and visibility check
+    await harness.prisma.user.create({
+      data: {
+        id: userId,
+        tenantId: tenant.id,
+        email: 'graphql-api-user@example.com',
+        firstName: 'Test',
+        lastName: 'User',
+        createdBy: 'test',
+        updatedBy: 'test',
+      },
+    })
+    const role = await harness.prisma.role.create({
+      data: {
+        tenantId: tenant.id,
+        name: 'ADMIN',
+        isSystem: true,
+        dataVisibility: 'ALL',
+        createdBy: 'test',
+        updatedBy: 'test',
+      },
+    })
+    await harness.prisma.userRole.create({ data: { userId, roleId: role.id, assignedBy: 'test' } })
     const token = harness.signToken({
-      userId: 'graphql-api-user',
+      userId,
       tenantId: tenant.id,
-      role: UserRole.SALES_REP,
+      roles: ['ADMIN'],
       email: 'graphql-api-user@example.com',
     })
     const payload: GraphqlRequestPayload = {
@@ -110,16 +155,67 @@ describe('GraphQL API harness', () => {
       harness.createTenant('Tenant Isolation A'),
       harness.createTenant('Tenant Isolation B'),
     ])
+    // Create users + roles for FK and visibility check in both tenants
+    const userAId = 'tenant-a-user'
+    const userBId = 'tenant-b-user'
+    await harness.prisma.user.create({
+      data: {
+        id: userAId,
+        tenantId: tenantA.id,
+        email: 'tenant-a-user@example.com',
+        firstName: 'A',
+        lastName: 'User',
+        createdBy: 'test',
+        updatedBy: 'test',
+      },
+    })
+    const roleA = await harness.prisma.role.create({
+      data: {
+        tenantId: tenantA.id,
+        name: 'ADMIN',
+        isSystem: true,
+        dataVisibility: 'ALL',
+        createdBy: 'test',
+        updatedBy: 'test',
+      },
+    })
+    await harness.prisma.userRole.create({
+      data: { userId: userAId, roleId: roleA.id, assignedBy: 'test' },
+    })
+    await harness.prisma.user.create({
+      data: {
+        id: userBId,
+        tenantId: tenantB.id,
+        email: 'tenant-b-user@example.com',
+        firstName: 'B',
+        lastName: 'User',
+        createdBy: 'test',
+        updatedBy: 'test',
+      },
+    })
+    const roleB = await harness.prisma.role.create({
+      data: {
+        tenantId: tenantB.id,
+        name: 'ADMIN',
+        isSystem: true,
+        dataVisibility: 'ALL',
+        createdBy: 'test',
+        updatedBy: 'test',
+      },
+    })
+    await harness.prisma.userRole.create({
+      data: { userId: userBId, roleId: roleB.id, assignedBy: 'test' },
+    })
     const tenantAToken = harness.signToken({
-      userId: 'tenant-a-user',
+      userId: userAId,
       tenantId: tenantA.id,
-      role: UserRole.SALES_REP,
+      roles: ['ADMIN'],
       email: 'tenant-a-user@example.com',
     })
     const tenantBToken = harness.signToken({
-      userId: 'tenant-b-user',
+      userId: userBId,
       tenantId: tenantB.id,
-      role: UserRole.SALES_REP,
+      roles: ['ADMIN'],
       email: 'tenant-b-user@example.com',
     })
     const createTenantAContactMutation: GraphqlRequestPayload = {

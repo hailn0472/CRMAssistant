@@ -21,50 +21,233 @@ datasource db {
 // Services MUST always filter by tenantId in all tenant-scoped queries.
 // =============================================================================
 
-model Tenant {
-  id        String   @id @default(uuid())
-  name      String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  users    User[]
-  contacts Contact[]
+enum DataVisibility {
+  OWN
+  TEAM
+  ALL
 }
 
-// User roles for RBAC
-enum UserRole {
-  ADMIN
-  MANAGER
-  SALES_REP
+enum AccessLevel {
+  READ
+  EDIT
+  FULL
+}
+
+enum ResourceType {
+  CONTACT
+  DEAL
+  TASK
+}
+
+model Tenant {
+  id         String   @id @default(uuid())
+  name       String
+  enforce2FA Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  users       User[]
+  contacts    Contact[]
+  roles       Role[]
+  auditLogs   AuditLog[]
+  apiKeys     ApiKey[]
+  teams       Team[]
+  sharingRules SharingRule[]
 }
 
 /// Tenant-scoped user model with authentication support.
 /// Follows multi-tenancy pattern from Story 1.6.
 /// Extended in Story 1.7 to support Supabase Auth integration.
+/// Extended in Story 2.1: name → firstName + lastName, added profile fields, deactivation, lastLoginAt.
+/// Extended in Story 2.2: removed `role` column — roles now managed via UserRole junction table.
+/// Extended in Story 2.4: added teamId + team relation for team-based data visibility.
+/// Extended in Story 2.6: added 2FA fields (twoFactorEnabled, twoFactorSecret, twoFactorBackupCodes),
+/// SSO fields (ssoProvider, ssoId), and @@unique([tenantId, ssoProvider, ssoId]).
 model User {
-  id             String    @id @default(uuid())
-  tenantId       String
-  email          String
-  name           String
-  role           UserRole  @default(SALES_REP)
-  supabaseUserId String?   @unique // Link to Supabase Auth user — null until first login
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
-  createdBy      String    @default("system")
-  updatedBy      String    @default("system")
-  deletedAt      DateTime? // soft delete — null means active
+  id                  String    @id @default(uuid())
+  tenantId            String
+  email               String
+  firstName           String    @default("")
+  lastName            String
+  avatar              String?
+  phone               String?
+  jobTitle            String?
+  department          String?
+  isActive            Boolean   @default(true)
+  supabaseUserId      String?   @unique // Link to Supabase Auth user — null until first login
+  teamId              String?   // FK to Team — null means not assigned to any team
+  lastLoginAt         DateTime?
+  twoFactorEnabled    Boolean   @default(false)
+  twoFactorSecret     String?
+  twoFactorBackupCodes Json?   // string[] — bcrypt-hashed backup codes
+  ssoProvider         String?   // 'GOOGLE' | 'AZURE_AD'
+  ssoId               String?   // Provider-specific user ID
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  createdBy           String    @default("system")
+  updatedBy           String    @default("system")
+  deletedAt           DateTime? // soft delete — null means active
 
-  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant      Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  team        Team?      @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  managedTeam Team[]     @relation("TeamManager")
+  userRoles   UserRole[]
+  auditLogs   AuditLog[]
+  apiKeys     ApiKey[]
+  ownedContacts Contact[] @relation("ContactOwner")
+  sharedWithRules SharingRule[] @relation("SharedWithUser")
 
   // Email is unique per tenant, NOT globally unique
   @@unique([tenantId, email])
+  // SSO link is unique per tenant + provider (Prisma 5+ supports nullable fields in composite unique)
+  @@unique([tenantId, ssoProvider, ssoId])
   // Index for all tenant-scoped queries
   @@index([tenantId])
+  // Index for active-user queries
+  @@index([tenantId, isActive])
   // Index for fast Supabase user lookups
   @@index([supabaseUserId])
 }
 
+/// Tenant-scoped role model for RBAC (Story 2.2).
+/// System roles (isSystem = true) cannot be deleted or renamed.
+/// Designed to be extended with a permissions relation in Story 2.3.
+/// Extended in Story 2.4: added dataVisibility field.
+model Role {
+  id             String         @id @default(uuid())
+  tenantId       String
+  name           String
+  description    String?
+  isSystem       Boolean        @default(false)
+  dataVisibility DataVisibility @default(OWN)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  createdBy      String         @default("system")
+  updatedBy      String         @default("system")
+  deletedAt      DateTime?
+
+  tenant          Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  userRoles       UserRole[]
+  rolePermissions RolePermission[]
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
+}
+
+/// Tenant-scoped team model for team-based data visibility (Story 2.4).
+model Team {
+  id        String    @id @default(uuid())
+  tenantId  String
+  name      String
+  managerId String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  createdBy String    @default("system")
+  updatedBy String    @default("system")
+  deletedAt DateTime?
+
+  tenant         Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  manager        User?          @relation("TeamManager", fields: [managerId], references: [id], onDelete: SetNull)
+  members        User[]         // users with this teamId
+  sharedWithRules SharingRule[] @relation("SharedWithTeam")
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
+}
+
+/// Junction table linking users to roles (many-to-many).
+/// Replaces the old `UserRole` enum and `User.role` column.
+model UserRole {
+  userId     String
+  roleId     String
+  assignedAt DateTime @default(now())
+  assignedBy String   @default("system")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([userId, roleId])
+  @@index([userId])
+  @@index([roleId])
+}
+
+/// Append-only audit log for tracking role assignments and other admin actions (Story 2.2).
+/// Extended in Story 2.7: added ipAddress, userAgent fields.
+/// No updates, no deletes. Indexed for efficient listing and lookup.
+model AuditLog {
+  id        String   @id @default(uuid())
+  tenantId  String
+  userId    String
+  action    String
+  entity    String
+  entityId  String
+  details   Json?
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  Tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId, createdAt])
+  @@index([entity, entityId])
+  @@index([userId])
+}
+
+/// API key model for third-party integrations (Story 2.7).
+/// Key is bcrypt-hashed before storage — raw key is returned only at creation.
+model ApiKey {
+  id          String    @id @default(uuid())
+  tenantId    String
+  name        String
+  keyPrefix   String
+  keyHash     String
+  userId      String
+  permissions Json?
+  expiresAt   DateTime?
+  lastUsedAt  DateTime?
+  isRevoked   Boolean   @default(false)
+  revokedAt   DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([keyHash])
+}
+
+/// Global permission catalog (Story 2.3).
+/// NOT tenant-scoped — shared across all tenants.
+/// Defines all possible resource-action combinations.
+model Permission {
+  id          String   @id @default(uuid())
+  resource    String
+  action      String
+  description String
+  createdAt   DateTime @default(now())
+
+  rolePermissions RolePermission[]
+
+  @@unique([resource, action])
+  @@index([resource])
+}
+
+/// Junction table linking roles to permissions (many-to-many).
+/// Role is tenant-scoped; Permission is global.
+model RolePermission {
+  roleId       String
+  permissionId String
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+}
+
 /// Tenant-scoped contact model for CRM contact management.
+/// Extended in Story 2.4: added ownerId + owner relation for data visibility.
 model Contact {
   id        String    @id @default(uuid())
   tenantId  String
@@ -74,6 +257,7 @@ model Contact {
   phone     String?
   company   String?
   jobTitle  String?
+  ownerId   String    @default("system")
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   createdBy String    @default("system")
@@ -81,7 +265,37 @@ model Contact {
   deletedAt DateTime?
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  owner  User   @relation("ContactOwner", fields: [ownerId], references: [id], onDelete: Cascade)
 
+  @@unique([tenantId, email])
   @@index([tenantId])
+  @@index([tenantId, ownerId])
   @@index([tenantId, createdAt])
+}
+
+/// Sharing rules for cross-team collaboration (Story 2.5).
+/// Exactly one of sharedWithUserId or sharedWithTeamId must be set (enforced at application layer).
+model SharingRule {
+  id              String       @id @default(uuid())
+  tenantId        String
+  resourceType    ResourceType
+  resourceId      String       // UUID of the shared record
+  sharedWithUserId String?     // null if shared with team
+  sharedWithTeamId String?     // null if shared with user
+  accessLevel     AccessLevel
+  sharedBy        String       // userId who created the share
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  deletedAt       DateTime?
+
+  tenant        Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  sharedWithUser User?  @relation("SharedWithUser", fields: [sharedWithUserId], references: [id], onDelete: Cascade)
+  sharedWithTeam Team?  @relation("SharedWithTeam", fields: [sharedWithTeamId], references: [id], onDelete: SetNull)
+
+  @@unique([tenantId, resourceType, resourceId, sharedWithUserId])
+  @@unique([tenantId, resourceType, resourceId, sharedWithTeamId])
+  @@index([tenantId, resourceType, resourceId])
+  @@index([tenantId, sharedWithUserId])
+  @@index([tenantId, sharedWithTeamId])
+  @@index([tenantId, resourceType, sharedWithUserId])
 }

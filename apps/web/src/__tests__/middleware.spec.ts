@@ -30,7 +30,12 @@ function encodeBase64Url(value: unknown): string {
 }
 
 function makeToken(payload: Record<string, unknown>): string {
-  return `${encodeBase64Url({ alg: 'HS256', typ: 'JWT' })}.${encodeBase64Url(payload)}.c2ln`
+  const { createHmac } = require('crypto') as typeof import('crypto')
+  const header = encodeBase64Url({ alg: 'HS256', typ: 'JWT' })
+  const body = encodeBase64Url(payload)
+  const secret = process.env['JWT_SECRET'] || 'middleware-test-secret-min-32-chars!!'
+  const sig = createHmac('sha256', secret).update(`${header}.${body}`).digest('base64url')
+  return `${header}.${body}.${sig}`
 }
 
 function makeRequest(path: string, token?: string): MockRequest {
@@ -48,15 +53,6 @@ describe('middleware', () => {
   beforeEach(() => {
     jest.clearAllMocks()
     process.env['JWT_SECRET'] = 'middleware-test-secret-min-32-chars!!'
-    Object.defineProperty(globalThis, 'crypto', {
-      configurable: true,
-      value: {
-        subtle: {
-          importKey: jest.fn().mockResolvedValue('key'),
-          verify: jest.fn().mockResolvedValue(true),
-        },
-      },
-    })
   })
 
   it('should redirect unauthenticated users to login for protected routes preserving query string', async () => {
@@ -101,39 +97,39 @@ describe('middleware', () => {
     expect(response.headers.get('location')).toContain('redirect=%2Fcontacts%2Fjohn.doe')
   })
 
-  it('should redirect authenticated users away from login page', async () => {
+  it('should redirect authenticated users away from login page to Command Center', async () => {
     const token = makeToken({
       userId: 'user-1',
       tenantId: 'tenant-1',
-      role: 'SALES_REP',
+      roles: ['SALES_REP'],
       exp: Math.floor(Date.now() / 1000) + 60,
     })
 
     const response = await middleware(makeRequest('/login', token) as never)
 
     expect(response.status).toBe(307)
-    expect(response.headers.get('location')).toContain('/contacts')
+    expect(response.headers.get('location')).toContain('/dashboard')
   })
 
-  it('should redirect authenticated users from the root page to contacts', async () => {
+  it('should redirect authenticated users from the root page to Command Center', async () => {
     const token = makeToken({
       userId: 'user-1',
       tenantId: 'tenant-1',
-      role: 'SALES_REP',
+      roles: ['SALES_REP'],
       exp: Math.floor(Date.now() / 1000) + 60,
     })
 
     const response = await middleware(makeRequest('/', token) as never)
 
     expect(response.status).toBe(307)
-    expect(response.headers.get('location')).toContain('/contacts')
+    expect(response.headers.get('location')).toContain('/dashboard')
   })
 
   it('should allow authenticated users to visit protected routes', async () => {
     const token = makeToken({
       userId: 'user-1',
       tenantId: 'tenant-1',
-      role: 'SALES_REP',
+      roles: ['SALES_REP'],
       exp: Math.floor(Date.now() / 1000) + 60,
     })
 
@@ -146,7 +142,7 @@ describe('middleware', () => {
     const token = makeToken({
       userId: 'user-1',
       tenantId: 'tenant-1',
-      role: 'SALES_REP',
+      roles: ['SALES_REP'],
       exp: Math.floor(Date.now() / 1000) - 60,
     })
 
@@ -157,15 +153,17 @@ describe('middleware', () => {
   })
 
   it('should reject invalid signatures and delete the stale auth cookie', async () => {
-    ;(crypto.subtle.verify as jest.Mock).mockResolvedValue(false)
     const token = makeToken({
       userId: 'user-1',
       tenantId: 'tenant-1',
-      role: 'SALES_REP',
+      roles: ['SALES_REP'],
       exp: Math.floor(Date.now() / 1000) + 60,
     })
+    // Tamper with the signature
+    const [header, payload] = token.split('.')
+    const tamperedToken = `${header}.${payload}.badtoken`
 
-    const response = await middleware(makeRequest('/dashboard', token) as never)
+    const response = await middleware(makeRequest('/dashboard', tamperedToken) as never)
 
     expect(response.status).toBe(307)
     expect(response.cookies.delete).toHaveBeenCalledWith('auth-token')

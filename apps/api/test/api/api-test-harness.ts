@@ -4,7 +4,7 @@ import * as path from 'path'
 import { INestApplication, ValidationPipe } from '@nestjs/common'
 import { JwtService } from '@nestjs/jwt'
 import { Test } from '@nestjs/testing'
-import { PrismaClient, UserRole } from '@prisma/client'
+import { PrismaClient } from '@prisma/client'
 import { PostgreSqlContainer } from '@testcontainers/postgresql'
 import request from 'supertest'
 
@@ -22,7 +22,7 @@ export type GraphqlRequestPayload = {
 export type ApiTestUser = {
   userId: string
   tenantId: string
-  role: UserRole
+  roles: string[]
   email: string
 }
 
@@ -115,7 +115,7 @@ export class ApiTestHarness {
       sub: input.userId,
       userId: input.userId,
       tenantId: input.tenantId,
-      role: input.role,
+      roles: input.roles,
       email: input.email,
     })
   }

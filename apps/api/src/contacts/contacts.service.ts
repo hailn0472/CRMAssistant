@@ -1,12 +1,15 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common'
 import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library'
 
 import { PrismaService } from '../prisma/prisma.service'
+import { resolveVisibilityFilter } from '../common/guards/visibility-check'
+import { resolveSharedRecordIds } from '../common/guards/sharing-check'
 import type { Contact, Prisma } from '@prisma/client'
 
 export type CreateContactInput = {
@@ -49,14 +52,18 @@ const contactListSelect = {
   phone: true,
   company: true,
   jobTitle: true,
+  ownerId: true,
+  owner: { select: { id: true, firstName: true, lastName: true, email: true } },
   createdAt: true,
   updatedAt: true,
 } as const
 
 export type ContactListItem = Prisma.ContactGetPayload<{ select: typeof contactListSelect }>
 
+export type ContactListItemWithSharing = ContactListItem & { sharedWithMe: boolean }
+
 export type ContactConnection = {
-  items: ContactListItem[]
+  items: ContactListItemWithSharing[]
   total: number
   page: number
   pageSize: number
@@ -154,6 +161,7 @@ export class ContactsService {
           phone: normalizedInput.phone,
           company: normalizedInput.company,
           jobTitle: normalizedInput.jobTitle,
+          ownerId: userId,
           createdBy: userId,
           updatedBy: userId,
         },
@@ -166,20 +174,94 @@ export class ContactsService {
     }
   }
 
-  async findOne(tenantId: string, id: string): Promise<Contact> {
+  async findOne(tenantId: string, userId: string, id: string): Promise<Contact> {
     const contact = await this.prisma.contact.findFirst({
       where: { id, tenantId, deletedAt: null },
+      include: { owner: { select: { id: true, firstName: true, lastName: true, email: true } } },
     })
 
     if (!contact) {
       throw new NotFoundException('Contact not found')
     }
 
+    const visibilityFilter = await resolveVisibilityFilter(userId, tenantId)
+    const sharedIds = await resolveSharedRecordIds(userId, tenantId, 'CONTACT')
+
+    // Check visibility
+    let hasAccess = false
+
+    if (visibilityFilter === undefined) {
+      hasAccess = true // ALL/ADMIN bypass
+    } else if (typeof visibilityFilter === 'string') {
+      hasAccess = contact.ownerId === visibilityFilter
+    } else {
+      const allowedIds = (visibilityFilter as { in: string[] }).in
+      hasAccess = allowedIds.includes(contact.ownerId)
+    }
+
+    // Check sharing (OR logic)
+    if (!hasAccess && sharedIds.includes(id)) {
+      hasAccess = true
+    }
+
+    if (!hasAccess) {
+      throw new NotFoundException('Contact not found')
+    }
+
     return contact
+  }
+
+  /**
+   * Resolves the user's effective access level for a contact.
+   * - Record owner → FULL
+   * - User with sharing rule → sharing rule's access level
+   * - No access → throws ForbiddenException
+   * Used by update() (requires EDIT) and delete() (requires FULL).
+   */
+  private async resolveAccessLevel(
+    tenantId: string,
+    userId: string,
+    contact: { id: string; ownerId: string },
+  ): Promise<'READ' | 'EDIT' | 'FULL'> {
+    // Owner gets full access
+    if (contact.ownerId === userId) return 'FULL'
+
+    // ADMIN bypass: admin gets FULL access
+    const userRoles = await this.prisma.userRole.findMany({
+      where: {
+        userId,
+        role: { tenantId, deletedAt: null },
+      },
+      include: { role: { select: { name: true } } },
+    })
+    if (userRoles.some((ur) => ur.role.name === 'ADMIN')) return 'FULL'
+
+    // Check sharing rules for this contact (most permissive first)
+    const rule = await this.prisma.sharingRule.findFirst({
+      where: {
+        tenantId,
+        resourceType: 'CONTACT',
+        resourceId: contact.id,
+        deletedAt: null,
+        OR: [
+          { sharedWithUserId: userId },
+          { sharedWithTeam: { members: { some: { id: userId } } } },
+        ],
+      },
+      orderBy: { accessLevel: 'desc' },
+      select: { accessLevel: true },
+    })
+
+    if (!rule) {
+      throw new ForbiddenException('You do not have access to this record')
+    }
+
+    return rule.accessLevel
   }
 
   async findMany(
     tenantId: string,
+    userId: string,
     filter: ContactFilterInput = {},
     pagination: ContactPaginationInput = {},
   ): Promise<ContactConnection> {
@@ -187,20 +269,46 @@ export class ContactsService {
     const pageSize = Math.min(Math.max(pagination.pageSize ?? DEFAULT_PAGE_SIZE, 1), MAX_PAGE_SIZE)
     const search = filter.search?.trim()
     const company = filter.company?.trim()
+    const visibilityFilter = await resolveVisibilityFilter(userId, tenantId)
+    const sharedIds = await resolveSharedRecordIds(userId, tenantId, 'CONTACT')
+
+    const ownerConditions: Prisma.ContactWhereInput[] = []
+    // When visibilityFilter is undefined (ALL/ADMIN bypass), no owner filter is needed
+    // and the sharing filter should not be applied (user sees everything).
+    // Only when visibility restricts results do we OR it with shared records.
+    if (visibilityFilter !== undefined) {
+      ownerConditions.push({ ownerId: visibilityFilter })
+      if (sharedIds.length > 0) {
+        ownerConditions.push({ id: { in: sharedIds } })
+      }
+    }
+
     const where: Prisma.ContactWhereInput = {
       tenantId,
       deletedAt: null,
       ...(company ? { company: { contains: company, mode: 'insensitive' } } : {}),
-      ...(search
-        ? {
-            OR: [
-              { email: { contains: search, mode: 'insensitive' } },
-              { firstName: { contains: search, mode: 'insensitive' } },
-              { lastName: { contains: search, mode: 'insensitive' } },
-              { company: { contains: search, mode: 'insensitive' } },
-            ],
-          }
-        : {}),
+    }
+
+    // Build AND conditions array to avoid OR key conflicts
+    const andConditions: Prisma.ContactWhereInput[] = []
+
+    if (search) {
+      andConditions.push({
+        OR: [
+          { email: { contains: search, mode: 'insensitive' } },
+          { firstName: { contains: search, mode: 'insensitive' } },
+          { lastName: { contains: search, mode: 'insensitive' } },
+          { company: { contains: search, mode: 'insensitive' } },
+        ],
+      })
+    }
+
+    if (ownerConditions.length > 0) {
+      andConditions.push({ OR: ownerConditions })
+    }
+
+    if (andConditions.length > 0) {
+      where.AND = andConditions
     }
 
     const [items, total] = await Promise.all([
@@ -214,7 +322,12 @@ export class ContactsService {
       this.prisma.contact.count({ where }),
     ])
 
-    return { items, total, page, pageSize }
+    return {
+      items: items.map((c) => ({ ...c, sharedWithMe: sharedIds.includes(c.id) })),
+      total,
+      page,
+      pageSize,
+    }
   }
 
   async update(
@@ -223,6 +336,15 @@ export class ContactsService {
     id: string,
     input: UpdateContactInput,
   ): Promise<Contact> {
+    // Verify visibility before updating
+    const contact = await this.findOne(tenantId, userId, id)
+
+    // Check sharing access level: EDIT or FULL required
+    const accessLevel = await this.resolveAccessLevel(tenantId, userId, contact)
+    if (accessLevel === 'READ') {
+      throw new ForbiddenException('Read-only access: cannot edit this contact')
+    }
+
     const normalizedInput = normalizeUpdateInput(input)
 
     try {
@@ -235,7 +357,7 @@ export class ContactsService {
         throw new NotFoundException('Contact not found')
       }
 
-      return await this.findOne(tenantId, id)
+      return await this.findOne(tenantId, userId, id)
     } catch (error) {
       if (error instanceof PrismaClientKnownRequestError && error.code === 'P2002') {
         throw new ConflictException('Contact email already exists')
@@ -245,6 +367,17 @@ export class ContactsService {
   }
 
   async delete(tenantId: string, userId: string, id: string): Promise<boolean> {
+    // Verify visibility before deleting
+    const contact = await this.findOne(tenantId, userId, id)
+
+    // Check sharing access level: FULL required for delete
+    const accessLevel = await this.resolveAccessLevel(tenantId, userId, contact)
+    if (accessLevel !== 'FULL') {
+      throw new ForbiddenException(
+        'Insufficient access: only owners or FULL-access shares can delete',
+      )
+    }
+
     const result = await this.prisma.contact.updateMany({
       where: { id, tenantId, deletedAt: null },
       data: { deletedAt: new Date(), updatedBy: userId },

@@ -2,88 +2,260 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import { useAuthStore } from '@/stores/auth.store'
+import { getMyPermissions } from '@/services/permission.service'
+
+interface NavigationPermission {
+  resource: string
+  action: string
+}
 
 interface NavigationItem {
   label: string
   href?: string
   marker: string
   isAi?: boolean
+  roles?: string[]
+  permission?: NavigationPermission
 }
 
-const navigationItems: NavigationItem[] = [
-  { label: 'Command Center', marker: 'CC' },
-  { label: 'Contacts', href: '/contacts', marker: 'CO' },
-  { label: 'Deals', marker: 'DE' },
-  { label: 'Activities', marker: 'AC' },
-  { label: 'Reports', marker: 'RE' },
-  { label: 'AI Query', marker: 'AI', isAi: true },
-  { label: 'Settings', marker: 'SE' },
+interface NavigationSection {
+  title: string
+  items: NavigationItem[]
+}
+
+const navigationSections: NavigationSection[] = [
+  {
+    title: 'Workspace',
+    items: [
+      { label: 'Command Center', href: '/dashboard', marker: 'CC' },
+      {
+        label: 'Contacts',
+        href: '/contacts',
+        marker: 'CO',
+        permission: { resource: 'CONTACT', action: 'READ' },
+      },
+      { label: 'Deals', marker: 'DE' },
+      { label: 'Activities', marker: 'AC' },
+      { label: 'Reports', marker: 'RE' },
+    ],
+  },
+  {
+    title: 'AI Assistant',
+    items: [{ label: 'AI Query', marker: 'AI', isAi: true }],
+  },
+  {
+    title: 'Administration',
+    items: [
+      {
+        label: 'Users',
+        href: '/users',
+        marker: 'US',
+        roles: ['ADMIN', 'SALES_MANAGER'],
+        permission: { resource: 'USER', action: 'READ' },
+      },
+      {
+        label: 'Teams',
+        href: '/settings/teams',
+        marker: 'TM',
+        roles: ['ADMIN'],
+        permission: { resource: 'ROLE', action: 'READ' },
+      },
+      {
+        label: 'Roles',
+        href: '/settings/roles',
+        marker: 'RL',
+        roles: ['ADMIN'],
+        permission: { resource: 'ROLE', action: 'READ' },
+      },
+      {
+        label: 'Audit Logs',
+        href: '/settings/audit-logs',
+        marker: 'AL',
+        roles: ['ADMIN'],
+      },
+      {
+        label: 'API Keys',
+        href: '/settings/api-keys',
+        marker: 'AK',
+        roles: ['ADMIN'],
+      },
+      { label: 'Settings', href: '/settings', marker: 'SE' },
+    ],
+  },
 ]
 
-function isActivePath(pathname: string, href: string): boolean {
-  return pathname === href || pathname.startsWith(`${href}/`)
+function getVisibleSections(
+  userRoles: string[] | null,
+  grantedPermissions: Set<string>,
+  isPermissionsLoading = false,
+): NavigationSection[] {
+  return navigationSections
+    .map((section) => ({
+      ...section,
+      items: section.items.filter((item) => {
+        // Show all items while permissions are loading to avoid flash
+        if (isPermissionsLoading) return true
+        // Permission-based gating takes priority
+        if (item.permission) {
+          const key = `${item.permission.resource}:${item.permission.action}`
+          if (grantedPermissions.has(key)) return true
+          // Fallback to role-based gating if user has no permission data yet
+          if (grantedPermissions.size === 0 && item.roles) {
+            return userRoles !== null && item.roles.some((r) => userRoles.includes(r))
+          }
+          return false
+        }
+        // Role-based fallback
+        if (item.roles) {
+          return userRoles !== null && item.roles.some((r) => userRoles.includes(r))
+        }
+        // No restriction
+        return true
+      }),
+    }))
+    .filter((section) => section.items.length > 0)
 }
 
-function NavigationList({ onNavigate }: { onNavigate?: () => void }): React.JSX.Element {
+function isActivePath(pathname: string, href: string, allHrefs: string[]): boolean {
+  if (pathname === href) return true
+  if (!pathname.startsWith(`${href}/`)) return false
+  // Check if there is a more specific (longer) matching href in the navigation
+  return !allHrefs.some(
+    (otherHref) =>
+      otherHref !== href &&
+      otherHref.startsWith(`${href}/`) &&
+      (pathname === otherHref || pathname.startsWith(`${otherHref}/`)),
+  )
+}
+
+function NavigationList({
+  onNavigate,
+  compact,
+}: {
+  onNavigate?: () => void
+  compact?: boolean
+}): React.JSX.Element {
   const pathname = usePathname()
+  const userRoles = useAuthStore((state) => state.user?.roles ?? null)
+  const isAuthenticated = useAuthStore((state) => !!state.user)
+
+  const { data: permissionChecks, isLoading: isPermissionsLoading } = useQuery({
+    queryKey: ['myPermissions'],
+    queryFn: getMyPermissions,
+    staleTime: 5 * 60 * 1000,
+    enabled: isAuthenticated,
+  })
+
+  const grantedPermissions = new Set(
+    (permissionChecks ?? []).filter((p) => p.granted).map((p) => `${p.resource}:${p.action}`),
+  )
+
+  const sections = getVisibleSections(userRoles, grantedPermissions, isPermissionsLoading)
+
+  const allHrefs = sections
+    .flatMap((s) => s.items.map((i) => i.href))
+    .filter((h): h is string => !!h)
+
+  if (isPermissionsLoading && isAuthenticated) {
+    // Show skeleton rows while permissions load to avoid layout flash
+    return (
+      <nav aria-label="CRM navigation" className="px-3 py-4">
+        <div className="animate-pulse space-y-3">
+          {navigationSections.map((section, si) => (
+            <div key={section.title} className="flex flex-col gap-1">
+              {si > 0 && <hr className="my-2 border-slate-100" />}
+              <div className="mb-1.5 mt-4 h-4 w-20 rounded bg-slate-100 px-3" />
+              {section.items.map((_item, ii) => (
+                <div key={ii} className="mx-3 h-9 rounded bg-slate-100" />
+              ))}
+            </div>
+          ))}
+        </div>
+      </nav>
+    )
+  }
 
   return (
-    <nav aria-label="CRM navigation" className="flex flex-col gap-1 px-3 py-4">
-      {navigationItems.map((item) => {
-        const isActive = item.href ? isActivePath(pathname, item.href) : false
-        const className = cn(
-          'flex min-h-11 items-center gap-3 rounded-md px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2',
-          isActive && 'border-l-2 border-blue-600 bg-blue-50 text-blue-700',
-          !isActive && !item.isAi && 'text-slate-600 hover:bg-slate-100 hover:text-slate-950',
-          !isActive && item.isAi && 'text-violet-700 hover:bg-violet-50',
-          !item.href && 'cursor-not-allowed opacity-70',
-        )
-        const marker = (
-          <span
-            aria-hidden="true"
-            className={cn(
-              'flex h-7 w-7 items-center justify-center rounded-md border text-[10px] font-semibold',
-              isActive && 'border-blue-200 bg-white text-blue-700',
-              !isActive && !item.isAi && 'border-slate-200 bg-slate-50 text-slate-500',
-              !isActive && item.isAi && 'border-violet-200 bg-violet-50 text-violet-700',
-            )}
-          >
-            {item.marker}
-          </span>
-        )
-
-        if (item.href) {
-          return (
-            <Link
-              key={item.label}
-              href={item.href}
-              aria-current={isActive ? 'page' : undefined}
-              className={className}
-              onClick={onNavigate}
+    <nav
+      aria-label="CRM navigation"
+      className={cn('flex flex-col gap-2', compact ? 'px-1 py-4' : 'px-3 py-4')}
+    >
+      {sections.map((section, sectionIdx) => (
+        <div key={section.title} className="flex flex-col gap-1">
+          {sectionIdx > 0 && compact && <hr className="my-2 border-slate-100" />}
+          {!compact && (
+            <div
+              className={cn(
+                'px-3 text-[10px] font-bold uppercase tracking-wider text-slate-400/80 mb-1.5',
+                sectionIdx > 0 ? 'mt-4' : 'mt-1',
+              )}
             >
-              {marker}
-              <span>{item.label}</span>
-            </Link>
-          )
-        }
+              {section.title}
+            </div>
+          )}
+          {section.items.map((item) => {
+            const isActive = item.href ? isActivePath(pathname, item.href, allHrefs) : false
+            const className = cn(
+              compact
+                ? 'flex flex-col min-h-11 items-center justify-center gap-0.5 rounded-md text-[10px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-1'
+                : 'flex min-h-11 items-center gap-3 rounded-md px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2',
+              isActive && 'border-l-2 border-blue-600 bg-blue-50 text-blue-700 rounded-l-none',
+              !isActive && !item.isAi && 'text-slate-600 hover:bg-slate-100 hover:text-slate-950',
+              !isActive && item.isAi && 'text-violet-700 hover:bg-violet-50',
+              !item.href && 'cursor-not-allowed opacity-70',
+            )
+            const marker = (
+              <span
+                aria-hidden="true"
+                className={cn(
+                  'flex items-center justify-center rounded-md border text-[10px] font-semibold',
+                  compact ? 'h-7 w-7' : 'h-7 w-7',
+                  isActive && 'border-blue-200 bg-white text-blue-700',
+                  !isActive && !item.isAi && 'border-slate-200 bg-slate-50 text-slate-500',
+                  !isActive && item.isAi && 'border-violet-200 bg-violet-50 text-violet-700',
+                )}
+              >
+                {item.marker}
+              </span>
+            )
 
-        return (
-          <button
-            key={item.label}
-            type="button"
-            disabled
-            aria-label={`${item.label} coming soon`}
-            className={className}
-          >
-            {marker}
-            <span>{item.label}</span>
-          </button>
-        )
-      })}
+            if (item.href) {
+              return (
+                <Link
+                  key={item.label}
+                  href={item.href}
+                  aria-current={isActive ? 'page' : undefined}
+                  aria-label={compact ? item.label : undefined}
+                  className={className}
+                  onClick={onNavigate}
+                >
+                  {marker}
+                  {!compact && <span>{item.label}</span>}
+                </Link>
+              )
+            }
+
+            return (
+              <button
+                key={item.label}
+                type="button"
+                disabled
+                aria-label={`${item.label} coming soon`}
+                className={className}
+              >
+                {marker}
+                {!compact && <span>{item.label}</span>}
+              </button>
+            )
+          })}
+        </div>
+      ))}
     </nav>
   )
 }
@@ -92,27 +264,86 @@ export function DesktopNavigation(): React.JSX.Element {
   return <NavigationList />
 }
 
+export function TabletRailNavigation(): React.JSX.Element {
+  return <NavigationList compact />
+}
+
 export function MobileNavigation(): React.JSX.Element {
   const [isOpen, setIsOpen] = useState(false)
+  const hamburgerRef = useRef<HTMLButtonElement>(null)
+  const drawerRef = useRef<HTMLDivElement>(null)
 
-  function openNavigation(): void {
+  const openNavigation = useCallback((): void => {
     setIsOpen(true)
-  }
+  }, [])
 
-  function closeNavigation(): void {
+  const closeNavigation = useCallback((): void => {
     setIsOpen(false)
-  }
+  }, [])
+
+  // Focus trap, scroll lock, Escape key, and aria-hidden on main content
+  useEffect(() => {
+    if (!isOpen) return
+
+    const drawer = drawerRef.current
+    const hamburger = hamburgerRef.current
+    if (!drawer) return
+
+    // Lock body scroll
+    const originalOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+
+    // Focus first focusable element
+    const focusableSelector =
+      'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+    const focusableElements = drawer.querySelectorAll<HTMLElement>(focusableSelector)
+    const firstFocusable = focusableElements[0]
+    const lastFocusable = focusableElements[focusableElements.length - 1]
+
+    firstFocusable?.focus()
+
+    function handleKeyDown(e: KeyboardEvent): void {
+      if (e.key === 'Escape') {
+        closeNavigation()
+        return
+      }
+      if (e.key === 'Tab') {
+        if (e.shiftKey && document.activeElement === firstFocusable) {
+          e.preventDefault()
+          lastFocusable?.focus()
+        } else if (!e.shiftKey && document.activeElement === lastFocusable) {
+          e.preventDefault()
+          firstFocusable?.focus()
+        }
+      }
+    }
+
+    drawer.addEventListener('keydown', handleKeyDown)
+
+    // Set aria-hidden on main content
+    const mainContent = document.querySelector('main[aria-label="CRM workspace"]')
+    mainContent?.setAttribute('aria-hidden', 'true')
+
+    return () => {
+      document.body.style.overflow = originalOverflow
+      drawer.removeEventListener('keydown', handleKeyDown)
+      mainContent?.removeAttribute('aria-hidden')
+      // Return focus to hamburger trigger on close
+      hamburger?.focus()
+    }
+  }, [isOpen, closeNavigation])
 
   return (
     <>
       <Button
+        ref={hamburgerRef}
         type="button"
         variant="ghost"
         size="icon"
         aria-label="Open navigation menu"
         aria-expanded={isOpen}
         aria-controls="mobile-crm-navigation"
-        className="lg:hidden"
+        className="h-11 w-11 lg:hidden"
         onClick={openNavigation}
       >
         <span aria-hidden="true" className="text-lg leading-none">
@@ -125,13 +356,15 @@ export function MobileNavigation(): React.JSX.Element {
           <button
             type="button"
             aria-label="Close navigation menu"
-            className="absolute inset-0 cursor-default bg-slate-950/30"
+            className="absolute inset-0 cursor-default bg-slate-950/30 transition-opacity duration-200"
             onClick={closeNavigation}
           />
           <aside
+            ref={drawerRef}
             id="mobile-crm-navigation"
+            role="complementary"
             aria-label="Mobile CRM navigation"
-            className="relative flex h-full w-72 max-w-[85vw] flex-col border-r border-slate-200 bg-white shadow-sm"
+            className="relative flex h-full w-72 max-w-[85vw] flex-col border-r border-slate-200 bg-white shadow-sm transition-transform duration-200"
           >
             <div className="flex h-16 items-center justify-between border-b border-slate-200 px-5">
               <div>
@@ -143,6 +376,7 @@ export function MobileNavigation(): React.JSX.Element {
                 variant="ghost"
                 size="icon"
                 aria-label="Close navigation menu"
+                className="h-11 w-11"
                 onClick={closeNavigation}
               >
                 <span aria-hidden="true">×</span>

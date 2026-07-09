@@ -2,12 +2,12 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
 const AUTH_COOKIE = 'auth-token'
-const PUBLIC_PATHS = ['/login', '/register', '/forgot-password']
+const PUBLIC_PATHS = ['/login', '/register', '/forgot-password', '/callback']
 
 type JwtClaims = {
   userId?: unknown
   tenantId?: unknown
-  role?: unknown
+  roles?: unknown
   exp?: unknown
 }
 
@@ -15,11 +15,14 @@ function isPublicPath(pathname: string): boolean {
   return PUBLIC_PATHS.includes(pathname)
 }
 
-function base64UrlToBytes(value: string): Uint8Array {
-  const base64 = value.replace(/-/g, '+').replace(/_/g, '/')
-  const padded = base64.padEnd(Math.ceil(base64.length / 4) * 4, '=')
-  const binary = atob(padded)
-  return Uint8Array.from(binary, (char) => char.charCodeAt(0))
+function base64UrlToBytes(str: string): Uint8Array {
+  const base64 = str.replace(/-/g, '+').replace(/_/g, '/')
+  const binary = atob(base64)
+  const bytes = new Uint8Array(binary.length)
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i)
+  }
+  return bytes
 }
 
 async function verifyJwt(token: string): Promise<boolean> {
@@ -31,35 +34,38 @@ async function verifyJwt(token: string): Promise<boolean> {
     if (parts.length !== 3) return false
 
     const [encodedHeader, encodedPayload, encodedSignature] = parts
+
+    const encoder = new TextEncoder()
     const key = await crypto.subtle.importKey(
       'raw',
-      new TextEncoder().encode(secret),
+      encoder.encode(secret),
       { name: 'HMAC', hash: 'SHA-256' },
       false,
       ['verify'],
     )
 
-    const isSignatureValid = await crypto.subtle.verify(
+    const signatureBytes = base64UrlToBytes(encodedSignature)
+    const isValid = await crypto.subtle.verify(
       'HMAC',
       key,
-      base64UrlToBytes(encodedSignature).buffer as ArrayBuffer,
-      new TextEncoder().encode(`${encodedHeader}.${encodedPayload}`).buffer as ArrayBuffer,
+      new Uint8Array(signatureBytes),
+      encoder.encode(`${encodedHeader}.${encodedPayload}`),
     )
 
-    if (!isSignatureValid) return false
+    if (!isValid) return false
 
-    const claims = JSON.parse(
-      new TextDecoder().decode(base64UrlToBytes(encodedPayload)),
-    ) as JwtClaims
+    const json = atob(encodedPayload.replace(/-/g, '+').replace(/_/g, '/'))
+    const claims = JSON.parse(json) as JwtClaims
     const nowSeconds = Math.floor(Date.now() / 1000)
     return (
       typeof claims.userId === 'string' &&
       typeof claims.tenantId === 'string' &&
-      typeof claims.role === 'string' &&
+      Array.isArray(claims.roles) &&
       typeof claims.exp === 'number' &&
       claims.exp > nowSeconds
     )
-  } catch {
+  } catch (err) {
+    console.error('[middleware] verifyJwt error:', err)
     return false
   }
 }
@@ -81,7 +87,7 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
   }
 
   if (isAuthenticated && (isPublicRoute || pathname === '/')) {
-    return NextResponse.redirect(new URL('/contacts', request.url))
+    return NextResponse.redirect(new URL('/dashboard', request.url))
   }
 
   const response = NextResponse.next()

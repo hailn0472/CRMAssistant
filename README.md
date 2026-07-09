@@ -50,7 +50,7 @@ cp .env.example .env.local
 # - VERTEX_AI_LOCATION=us-central1
 ```
 
-For Infisical-based development, see [Infisical Secret Management](docs/infisical-secret-management.md).
+For Infisical-based development, see [Infisical Secret Management](docs/operations/infisical-secret-management.md).
 
 ### Database Setup
 
@@ -65,6 +65,8 @@ pnpm prisma generate
 # (Optional) Seed database
 pnpm prisma db seed
 ```
+
+See [Database Migrations](docs/operations/database-migrations.md) for migration workflow, reset/re-seed instructions, and migration history.
 
 ### Redis Setup
 
@@ -155,7 +157,7 @@ CRMAssistant/
 ## Documentation
 
 - [Project Context](docs/project-context.md) - Complete project context và development rules
-- [Infisical Secret Management](docs/infisical-secret-management.md) - Non-secret environment inventory, local CLI workflow, CI/CD bootstrap, platform mapping, and migration plan
+- [Infisical Secret Management](docs/operations/infisical-secret-management.md) - Non-secret environment inventory, local CLI workflow, CI/CD bootstrap, platform mapping, and migration plan
 - [Implementation Rules](.claude/rules/) - Framework-specific implementation rules
 
 ## Development Workflow

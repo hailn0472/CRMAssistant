@@ -7,15 +7,36 @@ import RegisterPage from '../register/page'
 import toast from 'react-hot-toast'
 
 import { authService } from '@/services/auth.service'
+import { oauthService } from '@/services/oauth.service'
 import { useAuth } from '@/hooks/useAuth'
 
 jest.mock('@/hooks/useAuth', () => ({
   useAuth: jest.fn(),
 }))
 
-jest.mock('@/services/auth.service', () => ({
-  authService: {
-    forgotPassword: jest.fn(),
+jest.mock('next/navigation', () => ({
+  useRouter: jest.fn(() => ({ push: jest.fn() })),
+  useSearchParams: jest.fn(() => ({ get: jest.fn(() => null) })),
+}))
+
+jest.mock('@/services/auth.service', () => {
+  const mockLogin = jest.fn()
+  return {
+    authService: {
+      forgotPassword: jest.fn(),
+      login: mockLogin,
+      verify2FALogin: jest.fn(),
+      oauthLogin: jest.fn(),
+      register: jest.fn(),
+      logout: jest.fn(),
+    },
+  }
+})
+
+jest.mock('@/services/oauth.service', () => ({
+  oauthService: {
+    initiateGoogleOAuth: jest.fn(),
+    initiateMicrosoftOAuth: jest.fn(),
   },
 }))
 
@@ -29,9 +50,20 @@ jest.mock('react-hot-toast', () => ({
 
 const mockUseAuth = useAuth as jest.MockedFunction<typeof useAuth>
 const mockAuthService = authService as jest.Mocked<typeof authService>
+const mockOAuthService = oauthService as jest.Mocked<typeof oauthService>
 const mockToast = toast as jest.Mocked<typeof toast>
 
 describe('Auth pages', () => {
+  const defaultLoginResponse = {
+    accessToken: 'token',
+    userId: 'user-1',
+    tenantId: 'tenant-1',
+    roles: ['SALES_REP'],
+    email: 'user@example.com',
+    firstName: 'Test',
+    lastName: 'User',
+  }
+
   beforeEach(() => {
     jest.clearAllMocks()
     mockUseAuth.mockReturnValue({
@@ -39,8 +71,10 @@ describe('Auth pages', () => {
       isLoading: false,
       login: jest.fn(),
       register: jest.fn(),
+      oauthLogin: jest.fn(),
       logout: jest.fn(),
     })
+    mockAuthService.login.mockResolvedValue(defaultLoginResponse)
   })
 
   it('renders login with password recovery link and accessible fields', () => {
@@ -68,12 +102,22 @@ describe('Auth pages', () => {
 
   it('shows login success feedback while navigation is pending', async () => {
     const user = userEvent.setup()
-    const login = jest.fn().mockResolvedValue(undefined)
+    const successResponse = {
+      accessToken: 'token',
+      userId: '1',
+      tenantId: '1',
+      roles: [],
+      email: 'user@example.com',
+      firstName: 'User',
+      lastName: '',
+    }
+    mockAuthService.login.mockResolvedValueOnce(successResponse)
     mockUseAuth.mockReturnValue({
       user: null,
       isLoading: false,
-      login,
+      login: jest.fn(),
       register: jest.fn(),
+      oauthLogin: jest.fn(),
       logout: jest.fn(),
     })
     render(<LoginPage />)
@@ -91,12 +135,13 @@ describe('Auth pages', () => {
 
   it('shows login failure feedback when authentication fails', async () => {
     const user = userEvent.setup()
-    const login = jest.fn().mockRejectedValue(new Error('Invalid credentials'))
+    mockAuthService.login.mockRejectedValueOnce(new Error('Invalid credentials'))
     mockUseAuth.mockReturnValue({
       user: null,
       isLoading: false,
-      login,
+      login: jest.fn(),
       register: jest.fn(),
+      oauthLogin: jest.fn(),
       logout: jest.fn(),
     })
     render(<LoginPage />)
@@ -126,11 +171,13 @@ describe('Auth pages', () => {
       isLoading: false,
       login: jest.fn(),
       register,
+      oauthLogin: jest.fn(),
       logout: jest.fn(),
     })
     render(<RegisterPage />)
 
-    await user.type(screen.getByLabelText('Họ và tên'), 'Nguyen Van A')
+    await user.type(screen.getByLabelText('Tên'), 'Van')
+    await user.type(screen.getByLabelText('Họ'), 'Nguyen')
     await user.type(screen.getByLabelText('Tên công ty'), 'ACME')
     await user.type(screen.getByLabelText('Email'), 'user@example.com')
     await user.type(screen.getByLabelText('Mật khẩu'), 'Password123')
@@ -149,11 +196,13 @@ describe('Auth pages', () => {
       isLoading: false,
       login: jest.fn(),
       register,
+      oauthLogin: jest.fn(),
       logout: jest.fn(),
     })
     render(<RegisterPage />)
 
-    await user.type(screen.getByLabelText('Họ và tên'), 'Nguyen Van A')
+    await user.type(screen.getByLabelText('Tên'), 'Van')
+    await user.type(screen.getByLabelText('Họ'), 'Nguyen')
     await user.type(screen.getByLabelText('Tên công ty'), 'ACME')
     await user.type(screen.getByLabelText('Email'), 'user@example.com')
     await user.type(screen.getByLabelText('Mật khẩu'), 'Password123')
@@ -194,5 +243,43 @@ describe('Auth pages', () => {
     await user.click(screen.getByRole('button', { name: 'Gửi hướng dẫn khôi phục' }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Không thể gửi email lúc này')
+  })
+
+  describe('Google OAuth button', () => {
+    it('renders "Continue with Google" button on login page', () => {
+      render(<LoginPage />)
+      expect(screen.getByText('Tiếp tục với Google')).toBeInTheDocument()
+    })
+
+    it('renders "Continue with Google" button on register page', () => {
+      render(<RegisterPage />)
+      expect(screen.getByText('Tiếp tục với Google')).toBeInTheDocument()
+    })
+
+    it('calls initiateGoogleOAuth when Google button is clicked on login', async () => {
+      const user = userEvent.setup()
+      mockOAuthService.initiateGoogleOAuth.mockResolvedValue(undefined)
+      render(<LoginPage />)
+
+      await user.click(screen.getByText('Tiếp tục với Google'))
+
+      expect(mockOAuthService.initiateGoogleOAuth).toHaveBeenCalled()
+    })
+
+    it('shows toast error when OAuth initiation fails', async () => {
+      const user = userEvent.setup()
+      mockOAuthService.initiateGoogleOAuth.mockRejectedValue(
+        new Error('Không thể khởi tạo đăng nhập Google — vui lòng thử lại'),
+      )
+      render(<LoginPage />)
+
+      await user.click(screen.getByText('Tiếp tục với Google'))
+
+      await waitFor(() => {
+        expect(mockToast.error).toHaveBeenCalledWith(
+          'Không thể khởi tạo đăng nhập Google — vui lòng thử lại',
+        )
+      })
+    })
   })
 })
