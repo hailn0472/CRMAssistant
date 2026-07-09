@@ -37,9 +37,9 @@ const FAKE_JWT = 'signed.jwt.token'
 
 type MockPrisma = {
   $transaction: jest.Mock
-  user: { findFirst: jest.Mock; findMany: jest.Mock; update: jest.Mock }
+  user: { findFirst: jest.Mock; findMany: jest.Mock; update: jest.Mock; findUnique: jest.Mock }
   userRole: { findMany: jest.Mock; create: jest.Mock }
-  tenant: { create: jest.Mock }
+  tenant: { create: jest.Mock; findFirst: jest.Mock }
   role: { findFirst: jest.Mock; create: jest.Mock }
 }
 
@@ -50,6 +50,7 @@ function makePrisma(): MockPrisma {
       findFirst: jest.fn(),
       findMany: jest.fn(),
       update: jest.fn(),
+      findUnique: jest.fn(),
     },
     userRole: {
       findMany: jest.fn(),
@@ -57,6 +58,7 @@ function makePrisma(): MockPrisma {
     },
     tenant: {
       create: jest.fn(),
+      findFirst: jest.fn(),
     },
     role: {
       findFirst: jest.fn(),
@@ -91,6 +93,35 @@ function makeConfigService(overrides: Record<string, string> = {}): MockConfigSe
   }
 }
 
+function makeTwoFactorService(): Record<string, jest.Mock> {
+  return {
+    generateSecret: jest.fn().mockReturnValue('MOCK_SECRET'),
+    generateQrCodeDataUrl: jest.fn().mockResolvedValue('data:image/png;base64,mock'),
+    verifyTotp: jest.fn().mockResolvedValue(true),
+    generateBackupCodes: jest
+      .fn()
+      .mockReturnValue(Array.from({ length: 10 }, (_, i) => `CODE${i}`)),
+    hashBackupCodes: jest
+      .fn()
+      .mockImplementation((codes: string[]) => Promise.resolve(codes.map((c) => `hashed_${c}`))),
+    verifyBackupCode: jest.fn().mockImplementation((code: string) => {
+      const idx = [
+        'CODE0',
+        'CODE1',
+        'CODE2',
+        'CODE3',
+        'CODE4',
+        'CODE5',
+        'CODE6',
+        'CODE7',
+        'CODE8',
+        'CODE9',
+      ].indexOf(code)
+      return Promise.resolve(idx)
+    }),
+  }
+}
+
 describe('AuthService', () => {
   let service: AuthService
   let prisma: MockPrisma
@@ -103,12 +134,14 @@ describe('AuthService', () => {
     jwtService = makeJwtService()
     tokenRevocationService = new TokenRevocationService()
     const configService = makeConfigService()
+    const twoFactorService = makeTwoFactorService()
 
     service = new AuthService(
       prisma as unknown as ConstructorParameters<typeof AuthService>[0],
       jwtService as unknown as JwtService,
       configService as unknown as ConfigService,
       tokenRevocationService,
+      twoFactorService as never,
     )
   })
 
@@ -244,6 +277,8 @@ describe('AuthService', () => {
       firstName: FAKE_FIRST_NAME,
       lastName: FAKE_LAST_NAME,
       supabaseUserId: FAKE_SUPABASE_UID,
+      twoFactorEnabled: false,
+      tenant: { enforce2FA: false },
     }
 
     it('should log in a user and sign JWT with userId claim', async () => {
@@ -256,8 +291,11 @@ describe('AuthService', () => {
 
       const result = await service.login(dto)
 
-      expect(result.accessToken).toBe(FAKE_JWT)
-      expect(result.roles).toEqual(['SALES_REP'])
+      expect('accessToken' in result).toBe(true)
+      if ('accessToken' in result) {
+        expect(result.accessToken).toBe(FAKE_JWT)
+        expect(result.roles).toEqual(['SALES_REP'])
+      }
       expect(jwtService.sign).toHaveBeenCalledWith({
         sub: FAKE_USER_ID,
         userId: FAKE_USER_ID,
@@ -313,12 +351,86 @@ describe('AuthService', () => {
 
       const result = await service.login(dto)
 
-      expect(result.accessToken).toBe(FAKE_JWT)
+      expect('accessToken' in result).toBe(true)
+      if ('accessToken' in result) {
+        expect(result.accessToken).toBe(FAKE_JWT)
+      }
       expect(prisma.user.update).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({ supabaseUserId: 'new-supabase-uid' }),
         }),
       )
+    })
+
+    it('should return requires2FA when user has 2FA enabled', async () => {
+      const twoFAUser = { ...dbUser, twoFactorEnabled: true }
+      mockSignInWithPassword.mockResolvedValue({
+        data: { user: { id: FAKE_SUPABASE_UID } },
+        error: null,
+      })
+      prisma.user.findFirst.mockResolvedValue(twoFAUser)
+
+      const result = await service.login(dto)
+
+      expect('requires2FA' in result).toBe(true)
+    })
+
+    it('should return requires2FASetup when tenant enforces 2FA', async () => {
+      const enforceUser = { ...dbUser, tenant: { enforce2FA: true } }
+      mockSignInWithPassword.mockResolvedValue({
+        data: { user: { id: FAKE_SUPABASE_UID } },
+        error: null,
+      })
+      prisma.user.findFirst.mockResolvedValue(enforceUser)
+
+      const result = await service.login(dto)
+
+      expect('requires2FASetup' in result).toBe(true)
+    })
+
+    it('should throw UnauthorizedException when user account is deactivated', async () => {
+      mockSignInWithPassword.mockResolvedValue({
+        data: { user: { id: 'new-supabase-uid' } },
+        error: null,
+      })
+      prisma.user.findFirst
+        .mockResolvedValueOnce(null)
+      prisma.user.findMany.mockResolvedValue([])
+      prisma.user.findFirst
+        .mockResolvedValueOnce({ ...dbUser, isActive: false })
+
+      await expect(service.login(dto)).rejects.toThrow(UnauthorizedException)
+    })
+
+    it('should link user by email and return requires2FA when 2FA enabled', async () => {
+      const linkedWith2FA = { ...dbUser, supabaseUserId: null, twoFactorEnabled: true }
+      mockSignInWithPassword.mockResolvedValue({
+        data: { user: { id: 'new-supabase-uid' } },
+        error: null,
+      })
+      prisma.user.findFirst.mockResolvedValue(null)
+      prisma.user.findMany.mockResolvedValue([linkedWith2FA])
+      prisma.user.update.mockResolvedValue({ ...linkedWith2FA, supabaseUserId: 'new-supabase-uid' })
+
+      const result = await service.login(dto)
+
+      expect('requires2FA' in result).toBe(true)
+    })
+
+    it('should link user by email and return requires2FASetup when tenant enforces 2FA', async () => {
+      const linkedWith2FA = { ...dbUser, supabaseUserId: null, twoFactorEnabled: false }
+      mockSignInWithPassword.mockResolvedValue({
+        data: { user: { id: 'new-supabase-uid' } },
+        error: null,
+      })
+      prisma.user.findFirst.mockResolvedValue(null)
+      prisma.user.findMany.mockResolvedValue([linkedWith2FA])
+      prisma.user.update.mockResolvedValue({ ...linkedWith2FA, supabaseUserId: 'new-supabase-uid' })
+      prisma.tenant.findFirst.mockResolvedValue({ enforce2FA: true })
+
+      const result = await service.login(dto)
+
+      expect('requires2FASetup' in result).toBe(true)
     })
   })
 
@@ -340,6 +452,8 @@ describe('AuthService', () => {
       lastName: FAKE_LAST_NAME,
       supabaseUserId: FAKE_SUPABASE_UID,
       avatar: null,
+      ssoProvider: null,
+      ssoId: null,
     }
 
     it('should login existing user by supabaseUserId', async () => {
@@ -528,6 +642,206 @@ describe('AuthService', () => {
       })
 
       await expect(service.oauthLogin(dto)).rejects.toThrow(UnauthorizedException)
+    })
+  })
+
+  describe('oauthLogin enforce2FA', () => {
+    const dto: OAuthTokenDto = { accessToken: 'google-oauth-token' }
+    const supabaseUserWithGoogle = {
+      id: FAKE_SUPABASE_UID,
+      email: FAKE_EMAIL,
+      user_metadata: { full_name: 'Test User', avatar_url: 'https://example.com/avatar.jpg' },
+      app_metadata: { provider: 'google' },
+    }
+    const dbUserNo2FA = {
+      id: FAKE_USER_ID,
+      tenantId: FAKE_TENANT_ID,
+      email: FAKE_EMAIL,
+      firstName: FAKE_FIRST_NAME,
+      lastName: FAKE_LAST_NAME,
+      supabaseUserId: FAKE_SUPABASE_UID,
+      avatar: null,
+      ssoProvider: null,
+      ssoId: null,
+      twoFactorEnabled: false,
+    }
+
+    beforeEach(() => {
+      jest.clearAllMocks()
+      prisma = makePrisma()
+      jwtService = makeJwtService()
+      tokenRevocationService = new TokenRevocationService()
+    })
+
+    it('should throw UnauthorizedException when tenant enforces 2FA', async () => {
+      mockGetUser.mockResolvedValue({ data: { user: supabaseUserWithGoogle }, error: null })
+      prisma.user.findFirst
+        .mockResolvedValueOnce(dbUserNo2FA)
+        .mockResolvedValueOnce({ ...dbUserNo2FA, tenant: { enforce2FA: true } })
+      const configService = makeConfigService()
+      service = new AuthService(
+        prisma as unknown as ConstructorParameters<typeof AuthService>[0],
+        jwtService as unknown as JwtService,
+        configService as unknown as ConfigService,
+        tokenRevocationService,
+        makeTwoFactorService() as never,
+      )
+
+      await expect(service.oauthLogin(dto)).rejects.toThrow(UnauthorizedException)
+    })
+
+    it('should set ssoProvider on first SSO login for existing user', async () => {
+      mockGetUser.mockResolvedValue({ data: { user: supabaseUserWithGoogle }, error: null })
+      const existingUser = { ...dbUserNo2FA, twoFactorEnabled: false }
+      prisma.user.findFirst
+        .mockResolvedValueOnce(existingUser)
+        .mockResolvedValueOnce(null) // enforce2FA — not applicable
+      prisma.user.update.mockResolvedValue({ ...existingUser, ssoProvider: 'GOOGLE', ssoId: FAKE_SUPABASE_UID })
+      prisma.userRole.findMany.mockResolvedValue([{ role: { name: 'SALES_REP' } }])
+      const configService = makeConfigService()
+      service = new AuthService(
+        prisma as unknown as ConstructorParameters<typeof AuthService>[0],
+        jwtService as unknown as JwtService,
+        configService as unknown as ConfigService,
+        tokenRevocationService,
+        makeTwoFactorService() as never,
+      )
+
+      const result = await service.oauthLogin(dto)
+
+      expect(result.accessToken).toBe(FAKE_JWT)
+      expect(prisma.user.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ ssoProvider: 'GOOGLE', ssoId: FAKE_SUPABASE_UID }),
+        }),
+      )
+    })
+  })
+
+  describe('verify2FALogin()', () => {
+    const tempToken = 'valid-temp-token'
+    const userRecord = {
+      id: FAKE_USER_ID,
+      tenantId: FAKE_TENANT_ID,
+      email: FAKE_EMAIL,
+      firstName: FAKE_FIRST_NAME,
+      lastName: FAKE_LAST_NAME,
+      twoFactorEnabled: true,
+      twoFactorSecret: 'secret',
+      twoFactorBackupCodes: ['hashed_CODE0', 'hashed_CODE1'],
+    }
+    const jwtPayload = { userId: FAKE_USER_ID, tenantId: FAKE_TENANT_ID, purpose: '2fa_pending' }
+
+    beforeEach(() => {
+      const configService = makeConfigService()
+      tokenRevocationService = new TokenRevocationService()
+      service = new AuthService(
+        prisma as unknown as ConstructorParameters<typeof AuthService>[0],
+        jwtService as unknown as JwtService,
+        configService as unknown as ConfigService,
+        tokenRevocationService,
+        makeTwoFactorService() as never,
+      )
+    })
+
+    it('should return AuthTokenResponse on valid TOTP code', async () => {
+      jwtService.verify.mockReturnValue(jwtPayload)
+      prisma.user.findFirst.mockResolvedValue(userRecord)
+      prisma.user.update.mockResolvedValue(userRecord)
+      prisma.userRole.findMany.mockResolvedValue([{ role: { name: 'SALES_REP' } }])
+
+      const result = await service.verify2FALogin(tempToken, '123456')
+
+      expect(result.accessToken).toBe(FAKE_JWT)
+    })
+
+    it('should throw UnauthorizedException when tempToken is expired', async () => {
+      jwtService.verify.mockImplementation(() => { throw new Error('jwt expired') })
+
+      await expect(service.verify2FALogin(tempToken, '123456')).rejects.toThrow(UnauthorizedException)
+    })
+
+    it('should throw UnauthorizedException when purpose is not 2fa_pending', async () => {
+      jwtService.verify.mockReturnValue({ ...jwtPayload, purpose: '2fa_setup' })
+
+      await expect(service.verify2FALogin(tempToken, '123456')).rejects.toThrow(UnauthorizedException)
+    })
+
+    it('should throw UnauthorizedException when user has no 2FA', async () => {
+      jwtService.verify.mockReturnValue(jwtPayload)
+      prisma.user.findFirst.mockResolvedValue(null)
+
+      await expect(service.verify2FALogin(tempToken, '123456')).rejects.toThrow(UnauthorizedException)
+    })
+
+    it('should throw UnauthorizedException when both TOTP and backup code fail', async () => {
+      const twoFactorService = makeTwoFactorService()
+      twoFactorService.verifyTotp.mockResolvedValue(false)
+      twoFactorService.verifyBackupCode.mockResolvedValue(-1)
+      jwtService.verify.mockReturnValue(jwtPayload)
+      prisma.user.findFirst.mockResolvedValue(userRecord)
+      const configService = makeConfigService()
+      service = new AuthService(
+        prisma as unknown as ConstructorParameters<typeof AuthService>[0],
+        jwtService as unknown as JwtService,
+        configService as unknown as ConfigService,
+        tokenRevocationService,
+        twoFactorService as never,
+      )
+
+      await expect(service.verify2FALogin(tempToken, '000000')).rejects.toThrow(UnauthorizedException)
+    })
+
+    it('should return AuthTokenResponse on valid backup code with remaining count', async () => {
+      const twoFactorService = makeTwoFactorService()
+      twoFactorService.verifyTotp.mockResolvedValue(false)
+      twoFactorService.verifyBackupCode.mockResolvedValue(0)
+      jwtService.verify.mockReturnValue(jwtPayload)
+      const recordWithCodes = { ...userRecord, twoFactorBackupCodes: ['hashed_CODE0', 'hashed_CODE1'] }
+      prisma.user.findFirst.mockResolvedValue(recordWithCodes)
+      prisma.user.update.mockResolvedValue(recordWithCodes)
+      prisma.userRole.findMany.mockResolvedValue([{ role: { name: 'SALES_REP' } }])
+      const configService = makeConfigService()
+      service = new AuthService(
+        prisma as unknown as ConstructorParameters<typeof AuthService>[0],
+        jwtService as unknown as JwtService,
+        configService as unknown as ConfigService,
+        tokenRevocationService,
+        twoFactorService as never,
+      )
+
+      const result = await service.verify2FALogin(tempToken, 'CODE0')
+
+      expect(result.accessToken).toBe(FAKE_JWT)
+      expect(result).toHaveProperty('backupCodesRemaining', 1)
+    })
+  })
+
+  describe('verifyPassword()', () => {
+    it('should return true for correct password', async () => {
+      prisma.user.findUnique.mockResolvedValue({ email: FAKE_EMAIL })
+      mockSignInWithPassword.mockResolvedValue({ data: { user: { id: FAKE_SUPABASE_UID } }, error: null })
+
+      const result = await service.verifyPassword(FAKE_USER_ID, 'correct-password')
+
+      expect(result).toBe(true)
+    })
+
+    it('should return false for wrong password', async () => {
+      prisma.user.findUnique.mockResolvedValue({ email: FAKE_EMAIL })
+      mockSignInWithPassword.mockResolvedValue({ data: { user: null }, error: { message: 'Invalid credentials' } })
+
+      const result = await service.verifyPassword(FAKE_USER_ID, 'wrong-password')
+
+      expect(result).toBe(false)
+    })
+
+    it('should return false when user not found', async () => {
+      prisma.user.findUnique.mockResolvedValue(null)
+
+      const result = await service.verifyPassword(FAKE_USER_ID, 'password')
+
+      expect(result).toBe(false)
     })
   })
 

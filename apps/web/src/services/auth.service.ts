@@ -2,6 +2,7 @@ import type {
   AuthTokenResponse,
   ForgotPasswordData,
   LoginCredentials,
+  LoginResponse,
   RegisterData,
 } from '../types/auth.types'
 
@@ -34,7 +35,7 @@ export const authService = {
     return response.json() as Promise<AuthTokenResponse>
   },
 
-  async login(credentials: LoginCredentials): Promise<AuthTokenResponse> {
+  async login(credentials: LoginCredentials): Promise<LoginResponse> {
     const response = await fetch('/api/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -43,6 +44,20 @@ export const authService = {
 
     if (!response.ok) {
       throw new Error(await parseErrorMessage(response, 'Login failed'))
+    }
+
+    return response.json() as Promise<LoginResponse>
+  },
+
+  async verify2FALogin(tempToken: string, code: string): Promise<AuthTokenResponse> {
+    const response = await fetch('/api/auth/verify-2fa-login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tempToken, code }),
+    })
+
+    if (!response.ok) {
+      throw new Error(await parseErrorMessage(response, '2FA verification failed'))
     }
 
     return response.json() as Promise<AuthTokenResponse>

@@ -19,15 +19,24 @@ jest.mock('next/navigation', () => ({
   useSearchParams: jest.fn(() => ({ get: jest.fn(() => null) })),
 }))
 
-jest.mock('@/services/auth.service', () => ({
-  authService: {
-    forgotPassword: jest.fn(),
-  },
-}))
+jest.mock('@/services/auth.service', () => {
+  const mockLogin = jest.fn()
+  return {
+    authService: {
+      forgotPassword: jest.fn(),
+      login: mockLogin,
+      verify2FALogin: jest.fn(),
+      oauthLogin: jest.fn(),
+      register: jest.fn(),
+      logout: jest.fn(),
+    },
+  }
+})
 
 jest.mock('@/services/oauth.service', () => ({
   oauthService: {
     initiateGoogleOAuth: jest.fn(),
+    initiateMicrosoftOAuth: jest.fn(),
   },
 }))
 
@@ -45,6 +54,16 @@ const mockOAuthService = oauthService as jest.Mocked<typeof oauthService>
 const mockToast = toast as jest.Mocked<typeof toast>
 
 describe('Auth pages', () => {
+  const defaultLoginResponse = {
+    accessToken: 'token',
+    userId: 'user-1',
+    tenantId: 'tenant-1',
+    roles: ['SALES_REP'],
+    email: 'user@example.com',
+    firstName: 'Test',
+    lastName: 'User',
+  }
+
   beforeEach(() => {
     jest.clearAllMocks()
     mockUseAuth.mockReturnValue({
@@ -55,6 +74,7 @@ describe('Auth pages', () => {
       oauthLogin: jest.fn(),
       logout: jest.fn(),
     })
+    mockAuthService.login.mockResolvedValue(defaultLoginResponse)
   })
 
   it('renders login with password recovery link and accessible fields', () => {
@@ -82,11 +102,20 @@ describe('Auth pages', () => {
 
   it('shows login success feedback while navigation is pending', async () => {
     const user = userEvent.setup()
-    const login = jest.fn().mockResolvedValue(undefined)
+    const successResponse = {
+      accessToken: 'token',
+      userId: '1',
+      tenantId: '1',
+      roles: [],
+      email: 'user@example.com',
+      firstName: 'User',
+      lastName: '',
+    }
+    mockAuthService.login.mockResolvedValueOnce(successResponse)
     mockUseAuth.mockReturnValue({
       user: null,
       isLoading: false,
-      login,
+      login: jest.fn(),
       register: jest.fn(),
       oauthLogin: jest.fn(),
       logout: jest.fn(),
@@ -106,11 +135,11 @@ describe('Auth pages', () => {
 
   it('shows login failure feedback when authentication fails', async () => {
     const user = userEvent.setup()
-    const login = jest.fn().mockRejectedValue(new Error('Invalid credentials'))
+    mockAuthService.login.mockRejectedValueOnce(new Error('Invalid credentials'))
     mockUseAuth.mockReturnValue({
       user: null,
       isLoading: false,
-      login,
+      login: jest.fn(),
       register: jest.fn(),
       oauthLogin: jest.fn(),
       logout: jest.fn(),

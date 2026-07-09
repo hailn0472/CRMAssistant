@@ -22,6 +22,10 @@ const config: Config = {
   ],
   coverageDirectory: '../coverage',
   testEnvironment: 'node',
+  // Mock ESM-only otplib so tests that import auth.service.ts don't break
+  moduleNameMapper: {
+    '^otplib$': '<rootDir>/auth/__mocks__/otplib.ts',
+  },
   // Coverage thresholds - minimum 80% unit coverage
   coverageThreshold: {
     global: {
