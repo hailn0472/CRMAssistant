@@ -31,6 +31,9 @@ describe('ApiKeyGuard', () => {
       findMany: jest.Mock
       update: jest.Mock
     }
+    user: {
+      findUnique: jest.Mock
+    }
   }
 
   beforeEach(() => {
@@ -39,6 +42,9 @@ describe('ApiKeyGuard', () => {
       apiKey: {
         findMany: jest.fn(),
         update: jest.fn(),
+      },
+      user: {
+        findUnique: jest.fn(),
       },
     }
 
@@ -93,6 +99,7 @@ describe('ApiKeyGuard', () => {
       },
     ])
     mockCompareSync.mockReturnValue(false)
+    prisma.user.findUnique.mockResolvedValue({ isActive: true })
 
     await expect(guard.canActivate({} as never)).rejects.toThrow(UnauthorizedException)
   })
@@ -114,6 +121,7 @@ describe('ApiKeyGuard', () => {
       },
     ])
     mockCompareSync.mockReturnValue(true)
+    prisma.user.findUnique.mockResolvedValue({ isActive: true })
 
     await expect(guard.canActivate({} as never)).rejects.toThrow(UnauthorizedException)
   })
@@ -135,6 +143,7 @@ describe('ApiKeyGuard', () => {
     ])
     mockCompareSync.mockReturnValue(true)
     prisma.apiKey.update.mockResolvedValue({})
+    prisma.user.findUnique.mockResolvedValue({ isActive: true })
 
     const result = await guard.canActivate({} as never)
     expect(result).toBe(true)
