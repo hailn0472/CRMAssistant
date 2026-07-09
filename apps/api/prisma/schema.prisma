@@ -50,6 +50,7 @@ model Tenant {
   contacts    Contact[]
   roles       Role[]
   auditLogs   AuditLog[]
+  apiKeys     ApiKey[]
   teams       Team[]
   sharingRules SharingRule[]
 }
@@ -92,6 +93,7 @@ model User {
   managedTeam Team[]     @relation("TeamManager")
   userRoles   UserRole[]
   auditLogs   AuditLog[]
+  apiKeys     ApiKey[]
   ownedContacts Contact[] @relation("ContactOwner")
   sharedWithRules SharingRule[] @relation("SharedWithUser")
 
@@ -170,6 +172,7 @@ model UserRole {
 }
 
 /// Append-only audit log for tracking role assignments and other admin actions (Story 2.2).
+/// Extended in Story 2.7: added ipAddress, userAgent fields.
 /// No updates, no deletes. Indexed for efficient listing and lookup.
 model AuditLog {
   id        String   @id @default(uuid())
@@ -179,6 +182,8 @@ model AuditLog {
   entity    String
   entityId  String
   details   Json?
+  ipAddress String?
+  userAgent String?
   createdAt DateTime @default(now())
 
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -187,6 +192,30 @@ model AuditLog {
   @@index([tenantId, createdAt])
   @@index([entity, entityId])
   @@index([userId])
+}
+
+/// API key model for third-party integrations (Story 2.7).
+/// Key is bcrypt-hashed before storage — raw key is returned only at creation.
+model ApiKey {
+  id          String    @id @default(uuid())
+  tenantId    String
+  name        String
+  keyPrefix   String
+  keyHash     String
+  userId      String
+  permissions Json?
+  expiresAt   DateTime?
+  lastUsedAt  DateTime?
+  isRevoked   Boolean   @default(false)
+  revokedAt   DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([keyHash])
 }
 
 /// Global permission catalog (Story 2.3).

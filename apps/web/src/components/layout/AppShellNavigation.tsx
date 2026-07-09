@@ -73,6 +73,18 @@ const navigationSections: NavigationSection[] = [
         roles: ['ADMIN'],
         permission: { resource: 'ROLE', action: 'READ' },
       },
+      {
+        label: 'Audit Logs',
+        href: '/settings/audit-logs',
+        marker: 'AL',
+        roles: ['ADMIN'],
+      },
+      {
+        label: 'API Keys',
+        href: '/settings/api-keys',
+        marker: 'AK',
+        roles: ['ADMIN'],
+      },
       { label: 'Settings', href: '/settings', marker: 'SE' },
     ],
   },

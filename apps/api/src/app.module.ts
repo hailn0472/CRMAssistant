@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common'
+import { APP_INTERCEPTOR } from '@nestjs/core'
 import { ConfigModule } from '@nestjs/config'
 
 import { AuditModule } from './audit/audit.module'
@@ -12,6 +13,7 @@ import { AppGraphqlModule } from './graphql/graphql.module'
 import { HealthModule } from './health/health.module'
 import { PrismaModule } from './prisma/prisma.module'
 
+import { AuditInterceptor } from './common/interceptors/audit.interceptor'
 import { SharingModule } from './sharing/sharing.module'
 
 @Module({
@@ -31,6 +33,12 @@ import { SharingModule } from './sharing/sharing.module'
     TeamsModule,
     AuditModule,
     SharingModule,
+  ],
+  providers: [
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: AuditInterceptor,
+    },
   ],
 })
 export class AppModule {}
