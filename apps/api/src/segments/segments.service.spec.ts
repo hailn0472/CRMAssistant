@@ -119,6 +119,13 @@ describe('SegmentsService', () => {
         service.create(TENANT_ID, USER_ID, { name: 'A'.repeat(101), filters: {} }),
       ).rejects.toThrow(BadRequestException)
     })
+
+    it('rethrows unknown errors from create', async () => {
+      prisma.savedSegment.create.mockRejectedValue(new Error('unexpected'))
+      await expect(
+        service.create(TENANT_ID, USER_ID, { name: 'Test', filters: {} }),
+      ).rejects.toThrow('unexpected')
+    })
   })
 
   describe('findAll()', () => {
@@ -156,6 +163,42 @@ describe('SegmentsService', () => {
 
       await expect(service.update(TENANT_ID, SEGMENT_ID, { name: 'New Name' })).rejects.toThrow(
         NotFoundException,
+      )
+    })
+
+    it('updates a segment filters', async () => {
+      const updated = makeSegment({ filters: JSON.stringify({ tags: ['VIP'] }) })
+      prisma.savedSegment.findFirst.mockResolvedValue(makeSegment())
+      prisma.savedSegment.update.mockResolvedValue(updated)
+
+      const result = await service.update(TENANT_ID, SEGMENT_ID, {
+        filters: { tags: ['VIP'] },
+      })
+
+      expect(result.filters).toBe(JSON.stringify({ tags: ['VIP'] }))
+      expect(prisma.savedSegment.update).toHaveBeenCalled()
+    })
+
+    it('throws ConflictException on duplicate segment name during update', async () => {
+      prisma.savedSegment.findFirst.mockResolvedValue(makeSegment())
+      prisma.savedSegment.update.mockRejectedValue(
+        new PrismaClientKnownRequestError('Unique constraint failed', {
+          code: 'P2002',
+          clientVersion: '5.22.0',
+        }),
+      )
+
+      await expect(
+        service.update(TENANT_ID, SEGMENT_ID, { name: 'VIP Customers' }),
+      ).rejects.toThrow(ConflictException)
+    })
+
+    it('rethrows unknown errors from update', async () => {
+      prisma.savedSegment.findFirst.mockResolvedValue(makeSegment())
+      prisma.savedSegment.update.mockRejectedValue(new Error('db error'))
+
+      await expect(service.update(TENANT_ID, SEGMENT_ID, { name: 'Test' })).rejects.toThrow(
+        'db error',
       )
     })
   })
