@@ -9,6 +9,7 @@ export type Contact = {
   ownerId: string
   owner?: { id: string; firstName: string; lastName: string; email: string } | null
   sharedWithMe?: boolean
+  tags?: Array<{ id: string; name: string; color: string }>
   createdAt: string
   updatedAt: string
 }
@@ -29,29 +30,7 @@ export type ContactFormData = {
   jobTitle?: string | null
 }
 
-type GraphqlResponse<T> = {
-  data?: T
-  errors?: Array<{ message: string }>
-}
-
-async function graphqlRequest<T>(query: string, variables: Record<string, unknown>): Promise<T> {
-  const response = await fetch('/api/graphql', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ query, variables }),
-  })
-  const payload = (await response.json()) as GraphqlResponse<T>
-
-  if (!response.ok || payload.errors?.length) {
-    throw new Error(payload.errors?.[0]?.message ?? 'GraphQL request failed')
-  }
-
-  if (!payload.data) {
-    throw new Error('GraphQL response missing data')
-  }
-
-  return payload.data
-}
+import { graphqlRequest } from '@/lib/graphql-client'
 
 const CONTACT_FIELDS = `
   id
@@ -64,6 +43,7 @@ const CONTACT_FIELDS = `
   ownerId
   owner { id firstName lastName email }
   sharedWithMe
+  tags { id name color }
   createdAt
   updatedAt
 `
@@ -71,8 +51,23 @@ const CONTACT_FIELDS = `
 export async function getContacts(
   page: number,
   pageSize: number,
-  search?: string,
+  filter?: {
+    search?: string
+    company?: string
+    jobTitle?: string
+    tags?: string[]
+    createdAtFrom?: string
+    createdAtTo?: string
+  },
 ): Promise<ContactConnection> {
+  const hasFilter = Boolean(
+    filter?.search ||
+      filter?.company ||
+      filter?.jobTitle ||
+      (filter?.tags && filter.tags.length > 0) ||
+      filter?.createdAtFrom ||
+      filter?.createdAtTo,
+  )
   const data = await graphqlRequest<{ contacts: ContactConnection }>(
     `query Contacts($filter: ContactFilterInput, $pagination: ContactPaginationInput) {
       contacts(filter: $filter, pagination: $pagination) {
@@ -82,7 +77,10 @@ export async function getContacts(
         items { ${CONTACT_FIELDS} }
       }
     }`,
-    { filter: search ? { search } : undefined, pagination: { page, pageSize } },
+    {
+      filter: hasFilter ? filter : undefined,
+      pagination: { page, pageSize },
+    },
   )
 
   return data.contacts

@@ -97,4 +97,49 @@ describe('contact.service', () => {
 
     await expect(getContacts(1, 10)).rejects.toThrow('GraphQL response missing data')
   })
+
+  it('fetches contacts with search filter', async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: jest.fn().mockResolvedValue({
+        data: { contacts: { items: [], total: 0, page: 1, pageSize: 10 } },
+      }),
+    })
+
+    const result = await getContacts(1, 10, { search: 'Ada' })
+
+    expect(result).toEqual({ items: [], total: 0, page: 1, pageSize: 10 })
+    // Verify filter was included in the request body
+    const callBody = JSON.parse(mockFetch.mock.calls[0][1].body)
+    expect(callBody.variables.filter).toEqual({ search: 'Ada' })
+  })
+
+  it('fetches contacts with tag filter', async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: jest.fn().mockResolvedValue({
+        data: { contacts: { items: [], total: 0, page: 1, pageSize: 10 } },
+      }),
+    })
+
+    const result = await getContacts(1, 10, { tags: ['tag-1'] })
+
+    expect(result).toEqual({ items: [], total: 0, page: 1, pageSize: 10 })
+    const callBody = JSON.parse(mockFetch.mock.calls[0][1].body)
+    expect(callBody.variables.filter).toEqual({ tags: ['tag-1'] })
+  })
+
+  it('omits filter when all filter fields are empty', async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: jest.fn().mockResolvedValue({
+        data: { contacts: { items: [], total: 0, page: 1, pageSize: 10 } },
+      }),
+    })
+
+    await getContacts(1, 10, { search: '' })
+
+    const callBody = JSON.parse(mockFetch.mock.calls[0][1].body)
+    expect(callBody.variables.filter).toBeUndefined()
+  })
 })

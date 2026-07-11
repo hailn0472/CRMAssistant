@@ -29,6 +29,23 @@ UserRef.implement({
   }),
 })
 
+// Tag shape for Contact type
+type TagRefShape = {
+  id: string
+  name: string
+  color: string
+}
+
+const TagRef = builder.objectRef<TagRefShape>('ContactTagInfo')
+
+TagRef.implement({
+  fields: (t) => ({
+    id: t.exposeID('id'),
+    name: t.exposeString('name'),
+    color: t.exposeString('color'),
+  }),
+})
+
 ContactRef.implement({
   fields: (t) => ({
     id: t.exposeID('id'),
@@ -61,6 +78,15 @@ ContactRef.implement({
           return (contact as ContactListItemWithSharing).sharedWithMe
         }
         return false
+      },
+    }),
+    tags: t.field({
+      type: [TagRef],
+      resolve: (contact) => {
+        if ('tags' in contact && Array.isArray(contact.tags)) {
+          return (contact.tags as Array<{ tag: TagRefShape }>).map((ct) => ct.tag)
+        }
+        return []
       },
     }),
     createdAt: t.string({ resolve: (contact) => contact.createdAt.toISOString() }),
@@ -105,6 +131,10 @@ const ContactFilterInputRef = builder.inputType('ContactFilterInput', {
   fields: (t) => ({
     search: t.string(),
     company: t.string(),
+    jobTitle: t.string(),
+    tags: t.stringList(),
+    createdAtFrom: t.string(),
+    createdAtTo: t.string(),
   }),
 })
 
@@ -165,6 +195,10 @@ builder.queryFields((t) => ({
         {
           search: args.filter?.search ?? undefined,
           company: args.filter?.company ?? undefined,
+          jobTitle: args.filter?.jobTitle ?? undefined,
+          tags: args.filter?.tags ?? undefined,
+          createdAtFrom: args.filter?.createdAtFrom ?? undefined,
+          createdAtTo: args.filter?.createdAtTo ?? undefined,
         },
         {
           page: args.pagination?.page ?? undefined,

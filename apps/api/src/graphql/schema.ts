@@ -1,4 +1,6 @@
 import '../contacts/contacts.graphql'
+import '../tags/tags.graphql'
+import '../segments/segments.graphql'
 import '../users/users.graphql'
 import '../roles/roles.graphql'
 import '../permissions/permissions.graphql'

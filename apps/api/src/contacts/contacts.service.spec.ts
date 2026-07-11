@@ -38,10 +38,25 @@ type MockUserRoleDelegate = {
   findMany: jest.Mock
 }
 
+type MockContactTagDelegate = {
+  create: jest.Mock
+  delete: jest.Mock
+  findMany: jest.Mock
+}
+
+type MockTagDelegate = {
+  create: jest.Mock
+  findFirst: jest.Mock
+  findMany: jest.Mock
+  delete: jest.Mock
+}
+
 type MockPrisma = {
   contact: MockContactDelegate
   sharingRule: MockSharingRuleDelegate
   userRole: MockUserRoleDelegate
+  contactTag: MockContactTagDelegate
+  tag: MockTagDelegate
 }
 
 const NOW = new Date('2026-05-13T00:00:00.000Z')
@@ -84,6 +99,17 @@ function makePrisma(): MockPrisma {
     },
     userRole: {
       findMany: jest.fn(),
+    },
+    contactTag: {
+      create: jest.fn(),
+      delete: jest.fn(),
+      findMany: jest.fn(),
+    },
+    tag: {
+      create: jest.fn(),
+      findFirst: jest.fn(),
+      findMany: jest.fn(),
+      delete: jest.fn(),
     },
   }
 }
@@ -334,6 +360,7 @@ describe('ContactsService', () => {
           jobTitle: true,
           ownerId: true,
           owner: { select: { id: true, firstName: true, lastName: true, email: true } },
+          tags: { select: { tag: { select: { id: true, name: true, color: true } } } },
           createdAt: true,
           updatedAt: true,
         },
