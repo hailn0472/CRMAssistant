@@ -4,7 +4,6 @@ import {
   getContacts,
   updateContact,
   type ContactFormData,
-  type Contact,
 } from '../contact.service'
 
 const mockFetch = jest.fn()

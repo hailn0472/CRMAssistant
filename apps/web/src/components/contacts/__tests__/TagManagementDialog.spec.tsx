@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 
 import { TagManagementDialog } from '../TagManagementDialog'
-import { getTags, createTag, deleteTag, updateTag } from '@/services/tag.service'
+import { getTags, createTag, deleteTag } from '@/services/tag.service'
 
 jest.mock('@/services/tag.service', () => ({
   getTags: jest.fn(),
