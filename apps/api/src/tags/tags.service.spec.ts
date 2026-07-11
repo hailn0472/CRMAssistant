@@ -20,12 +20,14 @@ type MockContactTagDelegate = {
   create: jest.Mock
   delete: jest.Mock
   findMany: jest.Mock
+  count: jest.Mock
 }
 
 type MockPrisma = {
   tag: MockTagDelegate
   contact: MockContactDelegate
   contactTag: MockContactTagDelegate
+  $transaction: jest.Mock
 }
 
 const NOW = new Date('2026-07-09T00:00:00.000Z')
@@ -45,8 +47,23 @@ function makeTag(overrides: Partial<Tag> = {}): Tag {
   }
 }
 
-function makePrisma(): MockPrisma {
+type MockTx = {
+  tag: { findFirst: jest.Mock }
+  contact: { findFirst: jest.Mock }
+  contactTag: { create: jest.Mock; delete: jest.Mock }
+}
+
+function makeTx(): MockTx {
   return {
+    tag: { findFirst: jest.fn() },
+    contact: { findFirst: jest.fn() },
+    contactTag: { create: jest.fn(), delete: jest.fn() },
+  }
+}
+
+function makePrisma(tx: MockTx): MockPrisma {
+  return {
+    $transaction: jest.fn((cb: (t: MockTx) => unknown) => cb(tx)),
     tag: {
       create: jest.fn(),
       findFirst: jest.fn(),
@@ -61,6 +78,7 @@ function makePrisma(): MockPrisma {
       create: jest.fn(),
       delete: jest.fn(),
       findMany: jest.fn(),
+      count: jest.fn(),
     },
   }
 }
@@ -72,9 +90,11 @@ const mockAuditService = {
 describe('TagsService', () => {
   let service: TagsService
   let prisma: MockPrisma
+  let tx: MockTx
 
   beforeEach(() => {
-    prisma = makePrisma()
+    tx = makeTx()
+    prisma = makePrisma(tx)
     service = new TagsService(
       prisma as unknown as ConstructorParameters<typeof TagsService>[0],
       mockAuditService as never,
@@ -180,6 +200,7 @@ describe('TagsService', () => {
     it('deletes a tag that belongs to the tenant', async () => {
       prisma.tag.findFirst.mockResolvedValue(makeTag())
       prisma.tag.delete.mockResolvedValue(makeTag())
+      prisma.contactTag.count.mockResolvedValue(0)
 
       const result = await service.delete(TENANT_ID, TAG_ID)
 
@@ -202,13 +223,13 @@ describe('TagsService', () => {
 
   describe('addTagToContact()', () => {
     it('adds a tag to a contact', async () => {
-      prisma.tag.findFirst.mockResolvedValue(makeTag())
-      prisma.contact.findFirst.mockResolvedValue({
+      tx.tag.findFirst.mockResolvedValue(makeTag())
+      tx.contact.findFirst.mockResolvedValue({
         id: CONTACT_ID,
         tenantId: TENANT_ID,
         deletedAt: null,
       })
-      prisma.contactTag.create.mockResolvedValue({
+      tx.contactTag.create.mockResolvedValue({
         contactId: CONTACT_ID,
         tagId: TAG_ID,
         createdAt: NOW,
@@ -216,13 +237,13 @@ describe('TagsService', () => {
 
       await service.addTagToContact(TENANT_ID, CONTACT_ID, TAG_ID)
 
-      expect(prisma.contactTag.create).toHaveBeenCalledWith({
+      expect(tx.contactTag.create).toHaveBeenCalledWith({
         data: { contactId: CONTACT_ID, tagId: TAG_ID },
       })
     })
 
     it('throws NotFoundException when tag does not exist', async () => {
-      prisma.tag.findFirst.mockResolvedValue(null)
+      tx.tag.findFirst.mockResolvedValue(null)
 
       await expect(service.addTagToContact(TENANT_ID, CONTACT_ID, TAG_ID)).rejects.toThrow(
         NotFoundException,
@@ -230,8 +251,8 @@ describe('TagsService', () => {
     })
 
     it('throws NotFoundException when contact does not exist', async () => {
-      prisma.tag.findFirst.mockResolvedValue(makeTag())
-      prisma.contact.findFirst.mockResolvedValue(null)
+      tx.tag.findFirst.mockResolvedValue(makeTag())
+      tx.contact.findFirst.mockResolvedValue(null)
 
       await expect(service.addTagToContact(TENANT_ID, CONTACT_ID, TAG_ID)).rejects.toThrow(
         NotFoundException,
@@ -239,13 +260,13 @@ describe('TagsService', () => {
     })
 
     it('is idempotent when tag is already assigned', async () => {
-      prisma.tag.findFirst.mockResolvedValue(makeTag())
-      prisma.contact.findFirst.mockResolvedValue({
+      tx.tag.findFirst.mockResolvedValue(makeTag())
+      tx.contact.findFirst.mockResolvedValue({
         id: CONTACT_ID,
         tenantId: TENANT_ID,
         deletedAt: null,
       })
-      prisma.contactTag.create.mockRejectedValue(
+      tx.contactTag.create.mockRejectedValue(
         new PrismaClientKnownRequestError('Unique constraint failed', {
           code: 'P2002',
           clientVersion: '5.22.0',
@@ -258,13 +279,13 @@ describe('TagsService', () => {
 
   describe('removeTagFromContact()', () => {
     it('removes a tag from a contact', async () => {
-      prisma.tag.findFirst.mockResolvedValue(makeTag())
-      prisma.contact.findFirst.mockResolvedValue({
+      tx.tag.findFirst.mockResolvedValue(makeTag())
+      tx.contact.findFirst.mockResolvedValue({
         id: CONTACT_ID,
         tenantId: TENANT_ID,
         deletedAt: null,
       })
-      prisma.contactTag.delete.mockResolvedValue({
+      tx.contactTag.delete.mockResolvedValue({
         contactId: CONTACT_ID,
         tagId: TAG_ID,
         createdAt: NOW,
@@ -272,19 +293,19 @@ describe('TagsService', () => {
 
       await service.removeTagFromContact(TENANT_ID, CONTACT_ID, TAG_ID)
 
-      expect(prisma.contactTag.delete).toHaveBeenCalledWith({
+      expect(tx.contactTag.delete).toHaveBeenCalledWith({
         where: { contactId_tagId: { contactId: CONTACT_ID, tagId: TAG_ID } },
       })
     })
 
     it('throws NotFoundException when tag is not assigned to contact', async () => {
-      prisma.tag.findFirst.mockResolvedValue(makeTag())
-      prisma.contact.findFirst.mockResolvedValue({
+      tx.tag.findFirst.mockResolvedValue(makeTag())
+      tx.contact.findFirst.mockResolvedValue({
         id: CONTACT_ID,
         tenantId: TENANT_ID,
         deletedAt: null,
       })
-      prisma.contactTag.delete.mockRejectedValue(
+      tx.contactTag.delete.mockRejectedValue(
         new PrismaClientKnownRequestError('Record not found', {
           code: 'P2025',
           clientVersion: '5.22.0',
