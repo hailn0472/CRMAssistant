@@ -11,15 +11,49 @@ import { ErrorState } from '@/components/shared/ErrorState'
 import { ResponsiveTableWrapper } from '@/components/shared/ResponsiveTableWrapper'
 import { TableSkeleton } from '@/components/shared/LoadingSkeleton'
 import { SharedBadge } from '@/components/sharing/SharedBadge'
+import { TagBadge } from '@/components/contacts/TagBadge'
+import { SegmentBuilder } from '@/components/contacts/SegmentBuilder'
 import { getContacts } from '@/services/contact.service'
+import type { SegmentFilters } from '@/components/contacts/SegmentBuilder'
 
 const PAGE_SIZE = 10
 
 export function ContactsTable(): React.JSX.Element {
   const [page, setPage] = useState(1)
+  const [filterTags, setFilterTags] = useState<Array<{ id: string; name: string; color: string }>>(
+    [],
+  )
+  const [filterCompany, setFilterCompany] = useState('')
+  const [filterJobTitle, setFilterJobTitle] = useState('')
+  const [filterCreatedAtFrom, setFilterCreatedAtFrom] = useState('')
+  const [filterCreatedAtTo, setFilterCreatedAtTo] = useState('')
+
+  const segmentFilters: SegmentFilters = {
+    tags: filterTags,
+    company: filterCompany,
+    jobTitle: filterJobTitle,
+    createdAtFrom: filterCreatedAtFrom,
+    createdAtTo: filterCreatedAtTo,
+  }
+
   const { data, error, isLoading, refetch } = useQuery({
-    queryKey: ['contacts', page],
-    queryFn: () => getContacts(page, PAGE_SIZE),
+    queryKey: [
+      'contacts',
+      page,
+      filterTags.map((t) => t.name),
+      filterCompany,
+      filterJobTitle,
+      filterCreatedAtFrom,
+      filterCreatedAtTo,
+    ],
+    queryFn: () =>
+      getContacts(page, PAGE_SIZE, {
+        tags: filterTags.length > 0 ? filterTags.map((t) => t.name) : undefined,
+        company: filterCompany || undefined,
+        jobTitle: filterJobTitle || undefined,
+        createdAtFrom: filterCreatedAtFrom || undefined,
+        createdAtTo: filterCreatedAtTo || undefined,
+      }),
   })
 
   if (isLoading) {
@@ -51,10 +85,25 @@ export function ContactsTable(): React.JSX.Element {
   return (
     <Card className="border-slate-200 bg-white text-slate-950 shadow-sm">
       <CardHeader className="flex-row items-center justify-between space-y-0">
-        <CardTitle className="text-lg">Contacts</CardTitle>
-        <Button asChild className="bg-slate-950 text-white hover:bg-slate-800">
-          <Link href="/contacts/new">Create contact</Link>
-        </Button>
+        <div className="flex flex-col gap-2">
+          <CardTitle className="text-lg">Contacts</CardTitle>
+          <SegmentBuilder
+            filters={segmentFilters}
+            onFiltersChange={(f) => {
+              setFilterTags(f.tags)
+              setFilterCompany(f.company)
+              setFilterJobTitle(f.jobTitle)
+              setFilterCreatedAtFrom(f.createdAtFrom)
+              setFilterCreatedAtTo(f.createdAtTo)
+              setPage(1)
+            }}
+          />
+        </div>
+        <div className="flex items-center gap-2">
+          <Button asChild className="bg-slate-950 text-white hover:bg-slate-800">
+            <Link href="/contacts/new">Create contact</Link>
+          </Button>
+        </div>
       </CardHeader>
       <CardContent>
         <ResponsiveTableWrapper>
@@ -66,7 +115,7 @@ export function ContactsTable(): React.JSX.Element {
                 </th>
                 <th className="py-3 pr-4 font-medium">Email</th>
                 <th className="py-3 pr-4 font-medium">Company</th>
-                <th className="py-3 pr-4 font-medium">Job title</th>
+                <th className="py-3 pr-4 font-medium">Tags</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -83,7 +132,11 @@ export function ContactsTable(): React.JSX.Element {
                   </td>
                   <td className="py-3 pr-4 text-slate-600">{contact.email}</td>
                   <td className="py-3 pr-4 text-slate-600">{contact.company ?? '-'}</td>
-                  <td className="py-3 pr-4 text-slate-600">{contact.jobTitle ?? '-'}</td>
+                  <td className="py-3 pr-4">
+                    <div className="flex flex-wrap gap-1">
+                      {contact.tags?.map((t) => <TagBadge key={t.id} tag={t} />) ?? '-'}
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>

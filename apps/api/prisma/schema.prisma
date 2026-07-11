@@ -46,12 +46,14 @@ model Tenant {
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
-  users       User[]
-  contacts    Contact[]
-  roles       Role[]
-  auditLogs   AuditLog[]
-  apiKeys     ApiKey[]
-  teams       Team[]
+  users        User[]
+  contacts     Contact[]
+  tags         Tag[]
+  savedSegments SavedSegment[]
+  roles        Role[]
+  auditLogs    AuditLog[]
+  apiKeys      ApiKey[]
+  teams        Team[]
   sharingRules SharingRule[]
 }
 
@@ -267,10 +269,57 @@ model Contact {
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   owner  User   @relation("ContactOwner", fields: [ownerId], references: [id], onDelete: Cascade)
 
+  tags ContactTag[]
+
   @@unique([tenantId, email])
   @@index([tenantId])
   @@index([tenantId, ownerId])
   @@index([tenantId, createdAt])
+}
+
+/// Tenant-scoped tag model for contact tagging and segmentation.
+model Tag {
+  id        String   @id @default(uuid())
+  tenantId  String
+  name      String
+  color     String   @default("#3B82F6")
+  createdAt DateTime @default(now())
+
+  tenant   Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  contacts ContactTag[]
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
+}
+
+/// Junction table for many-to-many relationship between contacts and tags.
+model ContactTag {
+  contactId String
+  tagId     String
+  createdAt DateTime @default(now())
+
+  contact Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  tag     Tag     @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([contactId, tagId])
+  @@index([tagId])
+}
+
+/// Saved dynamic segments for reusable contact filtering.
+model SavedSegment {
+  id        String    @id @default(uuid())
+  tenantId  String
+  name      String
+  filters   Json
+  createdBy String    @default("system")
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
 }
 
 /// Sharing rules for cross-team collaboration (Story 2.5).

@@ -3,17 +3,18 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
+import { useRef, useState } from 'react'
 import { z } from 'zod'
 
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
-import {
-  createContact,
-  updateContact,
-  type Contact,
-  type ContactFormData,
-} from '@/services/contact.service'
+import { TagSelector } from '@/components/contacts/TagSelector'
+import { createContact, updateContact } from '@/services/contact.service'
+import { addTagToContact } from '@/services/tag.service'
+import type { Contact, ContactFormData } from '@/services/contact.service'
+
+type TagShape = { id: string; name: string; color: string }
 
 const contactSchema = z.object({
   email: z.string().trim().email('Enter a valid email'),
@@ -39,6 +40,9 @@ type ContactFormProps = {
 
 export function ContactForm({ contact }: ContactFormProps): React.JSX.Element {
   const router = useRouter()
+  const [selectedTags, setSelectedTags] = useState<TagShape[]>(contact?.tags ?? [])
+  const [contactId, setContactId] = useState<string | null>(contact?.id ?? null)
+  const pendingTagsRef = useRef<TagShape[]>([])
   const {
     register,
     handleSubmit,
@@ -69,6 +73,12 @@ export function ContactForm({ contact }: ContactFormProps): React.JSX.Element {
       const savedContact = contact
         ? await updateContact(contact.id, payload)
         : await createContact(payload)
+      // If this was a new contact, assign any pending tags
+      if (!contact && pendingTagsRef.current.length > 0) {
+        await Promise.all(
+          pendingTagsRef.current.map((tag) => addTagToContact(savedContact.id, tag.id)),
+        )
+      }
       router.push(`/contacts/${savedContact.id}`)
       router.refresh()
     } catch (error) {
@@ -103,6 +113,20 @@ export function ContactForm({ contact }: ContactFormProps): React.JSX.Element {
           <Field label="Job title" error={errors.jobTitle?.message}>
             <Input {...register('jobTitle')} aria-invalid={Boolean(errors.jobTitle)} />
           </Field>
+
+          <div className="md:col-span-2">
+            <label className="grid gap-2 text-sm font-medium text-slate-700">
+              Tags
+              <TagSelector
+                contactId={contactId}
+                selectedTags={selectedTags}
+                onTagsChange={(tags) => {
+                  setSelectedTags(tags)
+                  pendingTagsRef.current = tags
+                }}
+              />
+            </label>
+          </div>
 
           {errors.root?.message ? (
             <p

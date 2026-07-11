@@ -35,6 +35,7 @@ async function loadContact(id: string): Promise<Contact> {
           phone
           company
           jobTitle
+          tags { id name color }
           createdAt
           updatedAt
         }
