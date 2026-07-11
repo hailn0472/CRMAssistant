@@ -65,13 +65,20 @@ function makePrisma(): MockPrisma {
   }
 }
 
+const mockAuditService = {
+  log: jest.fn(),
+}
+
 describe('TagsService', () => {
   let service: TagsService
   let prisma: MockPrisma
 
   beforeEach(() => {
     prisma = makePrisma()
-    service = new TagsService(prisma as unknown as ConstructorParameters<typeof TagsService>[0])
+    service = new TagsService(
+      prisma as unknown as ConstructorParameters<typeof TagsService>[0],
+      mockAuditService as never,
+    )
   })
 
   describe('create()', () => {

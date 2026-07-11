@@ -45,6 +45,10 @@ function makePrisma(): MockPrisma {
   }
 }
 
+const mockAuditService = {
+  log: jest.fn(),
+}
+
 describe('SegmentsService', () => {
   let service: SegmentsService
   let prisma: MockPrisma
@@ -53,6 +57,7 @@ describe('SegmentsService', () => {
     prisma = makePrisma()
     service = new SegmentsService(
       prisma as unknown as ConstructorParameters<typeof SegmentsService>[0],
+      mockAuditService as never,
     )
   })
 
