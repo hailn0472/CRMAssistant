@@ -9,6 +9,7 @@ type MockTagDelegate = {
   findFirst: jest.Mock
   findMany: jest.Mock
   delete: jest.Mock
+  update: jest.Mock
 }
 
 type MockContactDelegate = {
@@ -69,6 +70,7 @@ function makePrisma(tx: MockTx): MockPrisma {
       findFirst: jest.fn(),
       findMany: jest.fn(),
       delete: jest.fn(),
+      update: jest.fn(),
     },
     contact: {
       findFirst: jest.fn(),
@@ -196,6 +198,56 @@ describe('TagsService', () => {
     })
   })
 
+  describe('update()', () => {
+    it('updates a tag name', async () => {
+      prisma.tag.findFirst.mockResolvedValue(makeTag())
+      prisma.tag.update.mockResolvedValue(makeTag({ name: 'Updated' }))
+
+      const result = await service.update(TENANT_ID, TAG_ID, { name: 'Updated' })
+
+      expect(result.name).toBe('Updated')
+      expect(prisma.tag.update).toHaveBeenCalled()
+    })
+
+    it('updates a tag color', async () => {
+      prisma.tag.findFirst.mockResolvedValue(makeTag())
+      prisma.tag.update.mockResolvedValue(makeTag({ color: '#10B981' }))
+
+      const result = await service.update(TENANT_ID, TAG_ID, { color: '#10B981' })
+
+      expect(result.color).toBe('#10B981')
+    })
+
+    it('throws NotFoundException when tag does not exist', async () => {
+      prisma.tag.findFirst.mockResolvedValue(null)
+
+      await expect(service.update(TENANT_ID, TAG_ID, { name: 'X' })).rejects.toThrow(
+        NotFoundException,
+      )
+    })
+
+    it('throws ConflictException on duplicate name', async () => {
+      prisma.tag.findFirst.mockResolvedValue(makeTag())
+      prisma.tag.update.mockRejectedValue(
+        new PrismaClientKnownRequestError('Unique constraint failed', {
+          code: 'P2002',
+          clientVersion: '5.22.0',
+        }),
+      )
+
+      await expect(service.update(TENANT_ID, TAG_ID, { name: 'VIP' })).rejects.toThrow(
+        ConflictException,
+      )
+    })
+
+    it('rethrows unknown errors from update', async () => {
+      prisma.tag.findFirst.mockResolvedValue(makeTag())
+      prisma.tag.update.mockRejectedValue(new Error('db error'))
+
+      await expect(service.update(TENANT_ID, TAG_ID, { name: 'Test' })).rejects.toThrow('db error')
+    })
+  })
+
   describe('delete()', () => {
     it('deletes a tag that belongs to the tenant', async () => {
       prisma.tag.findFirst.mockResolvedValue(makeTag())
@@ -204,7 +256,7 @@ describe('TagsService', () => {
 
       const result = await service.delete(TENANT_ID, TAG_ID)
 
-      expect(result).toBe(true)
+      expect(result).toEqual({ success: true, affectedContacts: 0 })
       expect(prisma.tag.delete).toHaveBeenCalledWith({ where: { id: TAG_ID } })
     })
 
@@ -274,6 +326,20 @@ describe('TagsService', () => {
       )
 
       await expect(service.addTagToContact(TENANT_ID, CONTACT_ID, TAG_ID)).resolves.toBeUndefined()
+    })
+
+    it('rethrows non-P2002 errors from addTagToContact', async () => {
+      tx.tag.findFirst.mockResolvedValue(makeTag())
+      tx.contact.findFirst.mockResolvedValue({
+        id: CONTACT_ID,
+        tenantId: TENANT_ID,
+        deletedAt: null,
+      })
+      tx.contactTag.create.mockRejectedValue(new Error('unexpected error'))
+
+      await expect(service.addTagToContact(TENANT_ID, CONTACT_ID, TAG_ID)).rejects.toThrow(
+        'unexpected error',
+      )
     })
   })
 
