@@ -88,4 +88,35 @@ describe('ResponsiveTableWrapper', () => {
     const region = screen.getByRole('region', { name: 'Scrollable table' })
     expect(region).toHaveAttribute('tabIndex', '0')
   })
+
+  it('sets up ResizeObserver to detect overflow', () => {
+    const observeMock = jest.fn()
+    const disconnectMock = jest.fn()
+    const origResizeObserver = global.ResizeObserver
+
+    global.ResizeObserver = class {
+      observe = observeMock
+      unobserve = jest.fn()
+      disconnect = disconnectMock
+    } as unknown as typeof ResizeObserver
+
+    const { unmount } = render(
+      <ResponsiveTableWrapper>
+        <table>
+          <tbody>
+            <tr>
+              <td>Data</td>
+            </tr>
+          </tbody>
+        </table>
+      </ResponsiveTableWrapper>,
+    )
+
+    expect(observeMock).toHaveBeenCalled()
+
+    unmount()
+    expect(disconnectMock).toHaveBeenCalled()
+
+    global.ResizeObserver = origResizeObserver
+  })
 })

@@ -119,4 +119,66 @@ describe('ContactsTable', () => {
 
     expect(await screen.findByText('Ada Lovelace')).toBeInTheDocument()
   })
+
+  it('renders pagination when contacts exceed page size', async () => {
+    const items = Array.from({ length: 10 }, (_, i) => ({
+      id: `contact-${i + 1}`,
+      email: `user${i + 1}@example.com`,
+      firstName: `First${i + 1}`,
+      lastName: `Last${i + 1}`,
+      company: 'Acme',
+      jobTitle: 'Engineer',
+    }))
+    ;(getContacts as jest.Mock).mockResolvedValue({
+      total: 25,
+      page: 1,
+      pageSize: 10,
+      items,
+    })
+
+    renderWithQueryClient(<ContactsTable />)
+
+    expect(await screen.findByText('Page 1 of 3 · 25 contacts')).toBeInTheDocument()
+    expect(screen.getByText('Next')).toBeInTheDocument()
+    expect(screen.getByText('Previous')).toBeDisabled()
+  })
+
+  it('navigates to next page', async () => {
+    ;(getContacts as jest.Mock)
+      .mockResolvedValueOnce({
+        total: 25,
+        page: 1,
+        pageSize: 10,
+        items: Array.from({ length: 10 }, (_, i) => ({
+          id: `contact-${i + 1}`,
+          email: `user${i + 1}@example.com`,
+          firstName: `First${i + 1}`,
+          lastName: `Last${i + 1}`,
+          company: 'Acme',
+          jobTitle: 'Engineer',
+        })),
+      })
+      .mockResolvedValueOnce({
+        total: 25,
+        page: 2,
+        pageSize: 10,
+        items: Array.from({ length: 10 }, (_, i) => ({
+          id: `contact-${i + 11}`,
+          email: `user${i + 11}@example.com`,
+          firstName: `First${i + 11}`,
+          lastName: `Last${i + 11}`,
+          company: 'Acme',
+          jobTitle: 'Engineer',
+        })),
+      })
+
+    renderWithQueryClient(<ContactsTable />)
+
+    await screen.findByText('Page 1 of 3 · 25 contacts')
+
+    fireEvent.click(screen.getByText('Next'))
+
+    await screen.findByText('Page 2 of 3 · 25 contacts')
+    expect(screen.getByText('Previous')).not.toBeDisabled()
+  })
 })
