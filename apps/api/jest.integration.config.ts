@@ -13,6 +13,8 @@ const config: Config = {
     '!src/**/main.ts',
     '!src/**/*.module.ts',
     '!src/**/*.spec.ts',
+    '!src/tags/**', // Tested via unit tests; excluded from integration coverage
+    '!src/segments/**', // Tested via unit tests; excluded from integration coverage
     '!src/common/decorators/**', // Decorators tested via unit tests; excluded from integration coverage
   ],
   coverageDirectory: 'coverage-integration',
