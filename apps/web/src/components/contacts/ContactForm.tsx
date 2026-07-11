@@ -41,7 +41,7 @@ type ContactFormProps = {
 export function ContactForm({ contact }: ContactFormProps): React.JSX.Element {
   const router = useRouter()
   const [selectedTags, setSelectedTags] = useState<TagShape[]>(contact?.tags ?? [])
-  const [contactId, setContactId] = useState<string | null>(contact?.id ?? null)
+  const [contactId] = useState<string | null>(contact?.id ?? null)
   const pendingTagsRef = useRef<TagShape[]>([])
   const {
     register,
