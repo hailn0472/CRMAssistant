@@ -170,7 +170,9 @@ describe('Inbox Integration: Conversations + Messages', () => {
         }),
       ).rejects.toThrow(BadRequestException)
 
-      // 7) Archive conversation
+      // 7) Archive conversation (re-open first since RESOLVED blocks archive)
+      const reopened = makeConv({ status: 'OPEN' as any })
+      prisma.conversation.findFirst.mockResolvedValue(reopened)
       const archived = makeConv({ status: 'ARCHIVED' as any })
       prisma.conversation.update.mockResolvedValue(archived)
 

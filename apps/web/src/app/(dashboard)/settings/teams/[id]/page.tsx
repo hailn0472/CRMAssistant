@@ -22,12 +22,7 @@ export default function TeamDetailPage(): React.JSX.Element {
 }
 
 function TeamDetailContent({ teamId }: { teamId: string }): React.JSX.Element {
-  const {
-    data: team,
-    error,
-    isLoading,
-    refetch,
-  } = useQuery({
+  const { error, refetch } = useQuery({
     queryKey: ['team', teamId],
     queryFn: () => getTeam(teamId),
   })
@@ -39,7 +34,7 @@ function TeamDetailContent({ teamId }: { teamId: string }): React.JSX.Element {
 
   return (
     <>
-<Card className="border-slate-200 bg-white text-slate-950 shadow-sm">
+      <Card className="border-slate-200 bg-white text-slate-950 shadow-sm">
         <CardHeader>
           <CardTitle className="text-lg">Members</CardTitle>
         </CardHeader>
