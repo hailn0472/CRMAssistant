@@ -56,7 +56,8 @@ const ConversationRef = builder.objectRef<ConversationShape>('Conversation').imp
   fields: (t) => ({
     id: t.exposeID('id'),
     tenantId: t.exposeString('tenantId'),
-    contactId: t.exposeString('contactId'),
+    contactId: t.exposeString('contactId', { nullable: true }),
+    title: t.exposeString('title', { nullable: true }),
     channel: t.exposeString('channel'),
     status: t.exposeString('status'),
     assignedTo: t.exposeString('assignedTo', { nullable: true }),
@@ -69,14 +70,8 @@ const ConversationRef = builder.objectRef<ConversationShape>('Conversation').imp
       resolve: async (conv) => {
         // Use pre-fetched value if available
         if (conv.lastMessagePreview !== undefined) return conv.lastMessagePreview
-        // Lazy fallback — fetch from DB
-        const prisma = getConversationsService()['prisma'] as import('@prisma/client').PrismaClient
-        const msg = await prisma.message.findFirst({
-          where: { conversationId: conv.id },
-          orderBy: { createdAt: 'desc' },
-          select: { content: true },
-        })
-        return msg?.content ?? null
+        // Use service method instead of accessing private PrismaClient
+        return getConversationsService().getLastMessageContent(conv.id)
       },
     }),
     contact: t.field({

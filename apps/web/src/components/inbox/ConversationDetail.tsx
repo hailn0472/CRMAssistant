@@ -127,7 +127,7 @@ export function ConversationDetail({
 
     // Optimistic update — add message to UI immediately
     const optimisticMsg: Message = {
-      id: `optimistic-${Date.now()}`,
+      id: `optimistic-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
       conversationId,
       senderId: user.userId,
       senderType: 'AGENT',

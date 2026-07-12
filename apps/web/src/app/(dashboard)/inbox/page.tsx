@@ -15,7 +15,7 @@ import { getConversation } from '@/services/inbox.service'
 import { WorkspacePanel } from '@/components/layout/AppShell'
 
 const MESSAGE_FIELDS = `
-  id conversationId senderId senderType content messageType metadata
+  id conversationId senderId senderType content messageType metadata internalNote
   sentAt deliveredAt readAt createdAt
 `
 
@@ -127,7 +127,7 @@ export default function InboxPage(): React.JSX.Element {
               contactName={
                 selectedConv.contact
                   ? `${selectedConv.contact.firstName} ${selectedConv.contact.lastName}`
-                  : 'Unknown contact'
+                  : selectedConv.title || 'Internal chat'
               }
               status={selectedConv.status}
               className="flex-1"

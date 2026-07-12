@@ -38,6 +38,7 @@ function makeConversation(overrides: Partial<Conversation> = {}): Conversation {
     id: CONVERSATION_ID,
     tenantId: TENANT_ID,
     contactId: CONTACT_ID,
+    title: null,
     channel: 'INTERNAL' as any,
     status: 'OPEN' as any,
     assignedTo: null,
@@ -361,6 +362,7 @@ describe('ConversationsService', () => {
           data: expect.objectContaining({
             tenantId: TENANT_ID,
             contactId: null,
+            title: 'Chat about deal',
             channel: 'INTERNAL',
           }),
         }),

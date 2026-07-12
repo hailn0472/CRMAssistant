@@ -2,6 +2,7 @@ export type Conversation = {
   id: string
   tenantId: string
   contactId?: string | null
+  title?: string | null
   channel: string
   status: string
   assignedTo?: string | null
