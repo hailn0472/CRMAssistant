@@ -22,6 +22,7 @@ function makeConv(overrides: Partial<Conversation> = {}): Conversation {
     id: CONV_ID,
     tenantId: TENANT_A,
     contactId: CONTACT_ID,
+    title: null,
     channel: 'INTERNAL' as any,
     status: 'OPEN' as any,
     assignedTo: null,
