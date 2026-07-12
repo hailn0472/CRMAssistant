@@ -46,15 +46,16 @@ model Tenant {
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
-  users        User[]
-  contacts     Contact[]
-  tags         Tag[]
+  users         User[]
+  contacts      Contact[]
+  tags          Tag[]
   savedSegments SavedSegment[]
-  roles        Role[]
-  auditLogs    AuditLog[]
-  apiKeys      ApiKey[]
-  teams        Team[]
-  sharingRules SharingRule[]
+  roles         Role[]
+  auditLogs     AuditLog[]
+  apiKeys       ApiKey[]
+  teams         Team[]
+  sharingRules  SharingRule[]
+  conversations Conversation[]
 }
 
 /// Tenant-scoped user model with authentication support.
@@ -66,38 +67,40 @@ model Tenant {
 /// Extended in Story 2.6: added 2FA fields (twoFactorEnabled, twoFactorSecret, twoFactorBackupCodes),
 /// SSO fields (ssoProvider, ssoId), and @@unique([tenantId, ssoProvider, ssoId]).
 model User {
-  id                  String    @id @default(uuid())
-  tenantId            String
-  email               String
-  firstName           String    @default("")
-  lastName            String
-  avatar              String?
-  phone               String?
-  jobTitle            String?
-  department          String?
-  isActive            Boolean   @default(true)
-  supabaseUserId      String?   @unique // Link to Supabase Auth user — null until first login
-  teamId              String?   // FK to Team — null means not assigned to any team
-  lastLoginAt         DateTime?
-  twoFactorEnabled    Boolean   @default(false)
-  twoFactorSecret     String?
-  twoFactorBackupCodes Json?   // string[] — bcrypt-hashed backup codes
-  ssoProvider         String?   // 'GOOGLE' | 'AZURE_AD'
-  ssoId               String?   // Provider-specific user ID
-  createdAt           DateTime  @default(now())
-  updatedAt           DateTime  @updatedAt
-  createdBy           String    @default("system")
-  updatedBy           String    @default("system")
-  deletedAt           DateTime? // soft delete — null means active
+  id                   String    @id @default(uuid())
+  tenantId             String
+  email                String
+  firstName            String    @default("")
+  lastName             String
+  avatar               String?
+  phone                String?
+  jobTitle             String?
+  department           String?
+  isActive             Boolean   @default(true)
+  supabaseUserId       String?   @unique // Link to Supabase Auth user — null until first login
+  teamId               String? // FK to Team — null means not assigned to any team
+  lastLoginAt          DateTime?
+  twoFactorEnabled     Boolean   @default(false)
+  twoFactorSecret      String?
+  twoFactorBackupCodes Json? // string[] — bcrypt-hashed backup codes
+  ssoProvider          String? // 'GOOGLE' | 'AZURE_AD'
+  ssoId                String? // Provider-specific user ID
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+  createdBy            String    @default("system")
+  updatedBy            String    @default("system")
+  deletedAt            DateTime? // soft delete — null means active
 
-  tenant      Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  team        Team?      @relation(fields: [teamId], references: [id], onDelete: SetNull)
-  managedTeam Team[]     @relation("TeamManager")
-  userRoles   UserRole[]
-  auditLogs   AuditLog[]
-  apiKeys     ApiKey[]
-  ownedContacts Contact[] @relation("ContactOwner")
-  sharedWithRules SharingRule[] @relation("SharedWithUser")
+  tenant                Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  team                  Team?                @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  managedTeam           Team[]               @relation("TeamManager")
+  userRoles             UserRole[]
+  auditLogs             AuditLog[]
+  apiKeys               ApiKey[]
+  ownedContacts         Contact[]            @relation("ContactOwner")
+  assignedConversations Conversation[]       @relation("ConversationAssignee")
+  sharedWithRules       SharingRule[]        @relation("SharedWithUser")
+  MessageReadReceipt    MessageReadReceipt[]
 
   // Email is unique per tenant, NOT globally unique
   @@unique([tenantId, email])
@@ -128,7 +131,7 @@ model Role {
   updatedBy      String         @default("system")
   deletedAt      DateTime?
 
-  tenant          Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant          Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   userRoles       UserRole[]
   rolePermissions RolePermission[]
 
@@ -148,9 +151,9 @@ model Team {
   updatedBy String    @default("system")
   deletedAt DateTime?
 
-  tenant         Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  manager        User?          @relation("TeamManager", fields: [managerId], references: [id], onDelete: SetNull)
-  members        User[]         // users with this teamId
+  tenant          Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  manager         User?         @relation("TeamManager", fields: [managerId], references: [id], onDelete: SetNull)
+  members         User[] // users with this teamId
   sharedWithRules SharingRule[] @relation("SharedWithTeam")
 
   @@unique([tenantId, name])
@@ -269,7 +272,8 @@ model Contact {
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   owner  User   @relation("ContactOwner", fields: [ownerId], references: [id], onDelete: Cascade)
 
-  tags ContactTag[]
+  tags          ContactTag[]
+  conversations Conversation[]
 
   @@unique([tenantId, email])
   @@index([tenantId])
@@ -325,19 +329,19 @@ model SavedSegment {
 /// Sharing rules for cross-team collaboration (Story 2.5).
 /// Exactly one of sharedWithUserId or sharedWithTeamId must be set (enforced at application layer).
 model SharingRule {
-  id              String       @id @default(uuid())
-  tenantId        String
-  resourceType    ResourceType
-  resourceId      String       // UUID of the shared record
-  sharedWithUserId String?     // null if shared with team
-  sharedWithTeamId String?     // null if shared with user
-  accessLevel     AccessLevel
-  sharedBy        String       // userId who created the share
-  createdAt       DateTime     @default(now())
-  updatedAt       DateTime     @updatedAt
-  deletedAt       DateTime?
+  id               String       @id @default(uuid())
+  tenantId         String
+  resourceType     ResourceType
+  resourceId       String // UUID of the shared record
+  sharedWithUserId String? // null if shared with team
+  sharedWithTeamId String? // null if shared with user
+  accessLevel      AccessLevel
+  sharedBy         String // userId who created the share
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+  deletedAt        DateTime?
 
-  tenant        Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant         Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   sharedWithUser User?  @relation("SharedWithUser", fields: [sharedWithUserId], references: [id], onDelete: Cascade)
   sharedWithTeam Team?  @relation("SharedWithTeam", fields: [sharedWithTeamId], references: [id], onDelete: SetNull)
 
@@ -347,4 +351,98 @@ model SharingRule {
   @@index([tenantId, sharedWithUserId])
   @@index([tenantId, sharedWithTeamId])
   @@index([tenantId, resourceType, sharedWithUserId])
+}
+
+// =============================================================================
+// OMNICHANNEL COMMUNICATION MODELS (Story 8A.1)
+// =============================================================================
+
+enum Channel {
+  INTERNAL
+}
+
+enum ConversationStatus {
+  OPEN
+  PENDING
+  RESOLVED
+  ARCHIVED
+}
+
+enum MessageType {
+  TEXT
+  IMAGE
+  VIDEO
+  AUDIO
+  FILE
+  LOCATION
+  TEMPLATE
+}
+
+enum SenderType {
+  AGENT
+  CONTACT
+  SYSTEM
+}
+
+model Conversation {
+  id            String             @id @default(uuid())
+  tenantId      String
+  contactId     String
+  channel       Channel            @default(INTERNAL)
+  status        ConversationStatus @default(OPEN)
+  assignedTo    String?
+  lastMessageAt DateTime?
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+  createdBy     String             @default("system")
+  updatedBy     String             @default("system")
+  deletedAt     DateTime?
+
+  tenant         Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  contact        Contact   @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  assignedToUser User?     @relation("ConversationAssignee", fields: [assignedTo], references: [id], onDelete: SetNull)
+  messages       Message[]
+
+  @@index([tenantId])
+  @@index([tenantId, status])
+  @@index([tenantId, channel])
+  @@index([tenantId, assignedTo])
+  @@index([tenantId, contactId])
+}
+
+model Message {
+  id             String      @id @default(uuid())
+  conversationId String
+  senderId       String
+  senderType     SenderType
+  content        String
+  messageType    MessageType @default(TEXT)
+  metadata       Json?
+  sentAt         DateTime    @default(now())
+  deliveredAt    DateTime?
+  readAt         DateTime?
+  createdAt      DateTime    @default(now())
+  createdBy      String      @default("system")
+
+  conversation Conversation         @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  receipts     MessageReadReceipt[]
+
+  @@index([conversationId])
+  @@index([conversationId, createdAt])
+}
+
+model MessageReadReceipt {
+  id          String    @id @default(uuid())
+  messageId   String
+  userId      String
+  readAt      DateTime?
+  deliveredAt DateTime?
+  createdAt   DateTime  @default(now())
+
+  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, userId])
+  @@index([messageId])
+  @@index([userId])
 }

@@ -17,6 +17,7 @@ import { PrismaModule } from './prisma/prisma.module'
 
 import { AuditInterceptor } from './common/interceptors/audit.interceptor'
 import { SharingModule } from './sharing/sharing.module'
+import { InboxModule } from './inbox/inbox.module'
 
 @Module({
   imports: [
@@ -37,6 +38,7 @@ import { SharingModule } from './sharing/sharing.module'
     TeamsModule,
     AuditModule,
     SharingModule,
+    InboxModule,
   ],
   providers: [
     {
