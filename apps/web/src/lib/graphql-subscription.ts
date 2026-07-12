@@ -1,3 +1,20 @@
+// Lazy-loaded auth store reference — initialized once on first call to avoid
+// circular dependency at module load time
+let _getAccessToken: (() => string | null) | null = null
+
+function getAccessToken(): string | null {
+  if (!_getAccessToken) {
+    try {
+      // dynamic import to avoid circular deps at module load time
+      const { useAuthStore } = require('../stores/auth.store')
+      _getAccessToken = () => useAuthStore.getState().accessToken ?? null
+    } catch {
+      _getAccessToken = () => null
+    }
+  }
+  return _getAccessToken()
+}
+
 export type SubscriptionOptions<T> = {
   query: string
   variables: Record<string, unknown>
@@ -19,7 +36,21 @@ export class GraphqlSubscriptionClient {
   private pendingSubs: Array<{ subId: string; query: string; variables: Record<string, unknown> }> =
     []
 
-  constructor(private url: string = '/api/graphql') {}
+  private wsUrl: string
+
+  constructor(url?: string) {
+    if (url) {
+      this.wsUrl = url.startsWith('ws')
+        ? url
+        : `${url.startsWith('http') ? url.replace(/^http/, 'ws') : `${typeof window !== 'undefined' && window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}${url}`}/graphql`
+    } else {
+      const apiUrl =
+        (typeof window !== 'undefined'
+          ? (window as any).__NEXT_DATA__?.props?.pageProps?.API_URL
+          : undefined) ?? 'http://localhost:4000'
+      this.wsUrl = apiUrl.replace(/^http/, 'ws') + '/graphql'
+    }
+  }
 
   async connect(): Promise<void> {
     // Avoid duplicate connection attempts
@@ -33,11 +64,7 @@ export class GraphqlSubscriptionClient {
     }
 
     return new Promise((resolve) => {
-      const wsUrl = this.url.startsWith('ws')
-        ? this.url
-        : `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}${this.url}`
-
-      this.ws = new WebSocket(wsUrl, 'graphql-transport-ws')
+      this.ws = new WebSocket(this.wsUrl, 'graphql-transport-ws')
 
       this.ws.onopen = () => {
         this.sendMessage({ type: 'connection_init', payload: { Authorization: `Bearer ${token}` } })
@@ -164,14 +191,17 @@ export class GraphqlSubscriptionClient {
   }
 
   private getAuthToken(): string | null {
-    // Try to get from cookie or localStorage; adjust based on your auth setup
-    const token =
-      localStorage.getItem('auth-token') ??
-      document.cookie
-        .split('; ')
-        .find((c) => c.startsWith('auth-token='))
-        ?.split('=')[1]
-    return token ?? null
+    // Try Zustand auth store first (in-memory token)
+    const storeToken = getAccessToken()
+    if (storeToken) return storeToken
+
+    // Fallback: try httpOnly auth-token cookie set by Next.js login route
+    // (httpOnly means JS can't read it, but this is best-effort fallback)
+    const cookieToken = document.cookie
+      .split('; ')
+      .find((c) => c.trim().startsWith('auth-token='))
+      ?.split('=')[1]
+    return cookieToken ?? null
   }
 
   private scheduleReconnect(): void {

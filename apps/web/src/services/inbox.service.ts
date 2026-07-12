@@ -1,11 +1,12 @@
 export type Conversation = {
   id: string
   tenantId: string
-  contactId: string
+  contactId?: string | null
   channel: string
   status: string
   assignedTo?: string | null
   lastMessageAt?: string | null
+  lastMessagePreview?: string | null
   contact?: { id: string; firstName: string; lastName: string; email: string } | null
   assignedToUser?: { id: string; firstName: string; lastName: string; email: string } | null
   unreadCount?: number | null
@@ -26,12 +27,31 @@ export type Message = {
   senderId: string
   senderType: 'AGENT' | 'CONTACT' | 'SYSTEM'
   content: string
-  messageType: 'TEXT' | 'IMAGE' | 'VIDEO' | 'AUDIO' | 'FILE' | 'LOCATION' | 'TEMPLATE'
+  messageType:
+    | 'TEXT'
+    | 'IMAGE'
+    | 'VIDEO'
+    | 'AUDIO'
+    | 'FILE'
+    | 'LOCATION'
+    | 'TEMPLATE'
+    | 'INTERNAL_NOTE'
+  internalNote: boolean
   metadata?: string | null
   sentAt: string
   deliveredAt?: string | null
   readAt?: string | null
   createdAt: string
+}
+
+export type AgentInfo = {
+  id: string
+  firstName: string
+  lastName: string
+  email: string
+  jobTitle: string | null
+  isOnline: boolean
+  roleName: string
 }
 
 export type MessageConnection = {
@@ -52,7 +72,15 @@ export type SendMessageInput = {
   senderId: string
   senderType: 'AGENT' | 'CONTACT' | 'SYSTEM'
   content: string
-  messageType?: 'TEXT' | 'IMAGE' | 'VIDEO' | 'AUDIO' | 'FILE' | 'LOCATION' | 'TEMPLATE'
+  messageType?:
+    | 'TEXT'
+    | 'IMAGE'
+    | 'VIDEO'
+    | 'AUDIO'
+    | 'FILE'
+    | 'LOCATION'
+    | 'TEMPLATE'
+    | 'INTERNAL_NOTE'
   metadata?: string
 }
 
@@ -71,6 +99,7 @@ const CONVERSATION_FIELDS = `
   status
   assignedTo
   lastMessageAt
+  lastMessagePreview
   contact { id firstName lastName email }
   assignedToUser { id firstName lastName email }
   unreadCount
@@ -85,11 +114,22 @@ const MESSAGE_FIELDS = `
   senderType
   content
   messageType
+  internalNote
   metadata
   sentAt
   deliveredAt
   readAt
   createdAt
+`
+
+const AGENT_INFO_FIELDS = `
+  id
+  firstName
+  lastName
+  email
+  jobTitle
+  isOnline
+  roleName
 `
 
 export async function getConversations(
@@ -192,4 +232,27 @@ export async function archiveConversation(id: string): Promise<Conversation> {
     { id },
   )
   return assertData(data.archiveConversation, 'archiveConversation')
+}
+
+export async function getInternalAgents(tenantId: string): Promise<AgentInfo[]> {
+  const data = await graphqlRequest<{ internalAgents: AgentInfo[] }>(
+    `query InternalAgents($tenantId: String!) {
+      internalAgents(tenantId: $tenantId) { ${AGENT_INFO_FIELDS} }
+    }`,
+    { tenantId },
+  )
+  return assertData(data.internalAgents, 'internalAgents')
+}
+
+export async function createInternalConversation(
+  participantIds: string[],
+  title?: string,
+): Promise<Conversation> {
+  const data = await graphqlRequest<{ createInternalConversation: Conversation }>(
+    `mutation CreateInternalConversation($participantIds: [ID!]!, $title: String) {
+      createInternalConversation(participantIds: $participantIds, title: $title) { ${CONVERSATION_FIELDS} }
+    }`,
+    { participantIds, title: title ?? undefined },
+  )
+  return assertData(data.createInternalConversation, 'createInternalConversation')
 }

@@ -49,6 +49,7 @@ type ConversationShape = Conversation & {
   contact?: { id: string; firstName: string; lastName: string; email: string } | null
   assignedToUser?: { id: string; firstName: string; lastName: string; email: string } | null
   _count?: { messages: number } | null
+  lastMessagePreview?: string | null
 }
 
 const ConversationRef = builder.objectRef<ConversationShape>('Conversation').implement({
@@ -62,6 +63,21 @@ const ConversationRef = builder.objectRef<ConversationShape>('Conversation').imp
     lastMessageAt: t.string({
       nullable: true,
       resolve: (conv) => conv.lastMessageAt?.toISOString() ?? null,
+    }),
+    lastMessagePreview: t.string({
+      nullable: true,
+      resolve: async (conv) => {
+        // Use pre-fetched value if available
+        if (conv.lastMessagePreview !== undefined) return conv.lastMessagePreview
+        // Lazy fallback — fetch from DB
+        const prisma = getConversationsService()['prisma'] as import('@prisma/client').PrismaClient
+        const msg = await prisma.message.findFirst({
+          where: { conversationId: conv.id },
+          orderBy: { createdAt: 'desc' },
+          select: { content: true },
+        })
+        return msg?.content ?? null
+      },
     }),
     contact: t.field({
       type: ContactSummaryRef,
@@ -102,6 +118,7 @@ const MessageRef = builder.objectRef<MessageShape>('Message').implement({
     senderType: t.exposeString('senderType'),
     content: t.exposeString('content'),
     messageType: t.exposeString('messageType'),
+    internalNote: t.exposeBoolean('internalNote'),
     metadata: t.string({
       nullable: true,
       resolve: (msg) => (msg.metadata ? JSON.stringify(msg.metadata) : null),
@@ -150,6 +167,32 @@ const MessageConnectionRef = builder
   })
 
 // ──────────────────────────────────────────────
+// Agent Info Type
+// ──────────────────────────────────────────────
+
+const AgentInfoRef = builder
+  .objectRef<{
+    id: string
+    firstName: string
+    lastName: string
+    email: string
+    jobTitle: string | null
+    isOnline: boolean
+    roleName: string
+  }>('AgentInfo')
+  .implement({
+    fields: (t) => ({
+      id: t.exposeID('id'),
+      firstName: t.exposeString('firstName'),
+      lastName: t.exposeString('lastName'),
+      email: t.exposeString('email'),
+      jobTitle: t.exposeString('jobTitle', { nullable: true }),
+      isOnline: t.exposeBoolean('isOnline'),
+      roleName: t.exposeString('roleName'),
+    }),
+  })
+
+// ──────────────────────────────────────────────
 // Input Types
 // ──────────────────────────────────────────────
 
@@ -158,7 +201,16 @@ const SENDER_TYPE = builder.enumType('SenderTypeEnum', {
 })
 
 const MESSAGE_TYPE = builder.enumType('MessageTypeEnum', {
-  values: ['TEXT', 'IMAGE', 'VIDEO', 'AUDIO', 'FILE', 'LOCATION', 'TEMPLATE'] as const,
+  values: [
+    'TEXT',
+    'IMAGE',
+    'VIDEO',
+    'AUDIO',
+    'FILE',
+    'LOCATION',
+    'TEMPLATE',
+    'INTERNAL_NOTE',
+  ] as const,
 })
 
 const SendMessageInputRef = builder.inputType('SendMessageInput', {
@@ -268,6 +320,7 @@ builder.queryFields((t) => ({
           page: args.pagination?.page ?? undefined,
           pageSize: args.pagination?.pageSize ?? undefined,
         },
+        user.userId,
       )
     },
   }),
@@ -284,6 +337,18 @@ builder.queryFields((t) => ({
         cursor: args.pagination?.cursor ?? undefined,
         limit: args.pagination?.limit ?? undefined,
       })
+    },
+  }),
+  internalAgents: t.field({
+    type: [AgentInfoRef],
+    args: { tenantId: t.arg.string({ required: true }) },
+    resolve: async (_parent, args, context) => {
+      const user = requireUser(context)
+      await requirePermission(context, 'INBOX', 'READ')
+      if (user.tenantId !== args.tenantId) {
+        throw new UnauthorizedException('Cannot access agents from another tenant')
+      }
+      return getConversationsService().findInternalAgents(args.tenantId)
     },
   }),
 }))
@@ -366,6 +431,23 @@ builder.mutationFields((t) => ({
       return getConversationsService().archiveConversation(
         user.tenantId,
         String(args.id),
+        user.userId,
+      )
+    },
+  }),
+  createInternalConversation: t.field({
+    type: ConversationRef,
+    args: {
+      participantIds: t.arg.idList({ required: true }),
+      title: t.arg.string(),
+    },
+    resolve: async (_parent, args, context) => {
+      const user = requireUser(context)
+      await requirePermission(context, 'INBOX', 'WRITE')
+      return getConversationsService().createInternalConversation(
+        user.tenantId,
+        args.participantIds?.map(String) ?? [],
+        args.title ?? undefined,
         user.userId,
       )
     },

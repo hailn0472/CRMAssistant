@@ -10,6 +10,7 @@ import { ConversationList } from '@/components/inbox/ConversationList'
 import { ConversationDetail } from '@/components/inbox/ConversationDetail'
 import { InboxSkeleton } from '@/components/inbox/InboxSkeleton'
 import { ContactSidebar } from '@/components/inbox/ContactSidebar'
+import { StartInternalChat } from '@/components/inbox/StartInternalChat'
 import { getConversation } from '@/services/inbox.service'
 import { WorkspacePanel } from '@/components/layout/AppShell'
 
@@ -21,7 +22,8 @@ const MESSAGE_FIELDS = `
 export default function InboxPage(): React.JSX.Element {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [showDetail, setShowDetail] = useState(false)
-  const refreshTriggerRef = useRef(0)
+  const [showInternalChat, setShowInternalChat] = useState(false)
+  const [refreshKey, setRefreshKey] = useState(0)
   const subClientRef = useRef<GraphqlSubscriptionClient | null>(null)
   const subscribedRef = useRef(false)
 
@@ -42,6 +44,11 @@ export default function InboxPage(): React.JSX.Element {
 
   const handleBack = useCallback(() => {
     setShowDetail(false)
+  }, [])
+
+  const handleInternalChatCreated = useCallback((conversationId: string) => {
+    setSelectedId(conversationId)
+    setShowDetail(true)
   }, [])
 
   // Connect subscription client — create fresh on mount, full cleanup on unmount
@@ -69,7 +76,7 @@ export default function InboxPage(): React.JSX.Element {
       variables: { conversationId: selectedId },
       onData: () => {
         refetchConv()
-        refreshTriggerRef.current++
+        setRefreshKey((k) => k + 1)
       },
     })
 
@@ -77,7 +84,7 @@ export default function InboxPage(): React.JSX.Element {
       query: `subscription OnConversationUpdated { onConversationUpdated { id } }`,
       variables: {},
       onData: () => {
-        refreshTriggerRef.current++
+        setRefreshKey((k) => k + 1)
       },
     })
 
@@ -102,7 +109,8 @@ export default function InboxPage(): React.JSX.Element {
             selectedId={selectedId}
             onSelect={handleSelect}
             className="flex-1"
-            refreshKey={refreshTriggerRef.current}
+            refreshKey={refreshKey}
+            onStartInternalChat={() => setShowInternalChat(true)}
           />
         </div>
 
@@ -124,6 +132,7 @@ export default function InboxPage(): React.JSX.Element {
               status={selectedConv.status}
               className="flex-1"
               onBack={handleBack}
+              refreshKey={refreshKey}
             />
           ) : convLoading ? (
             <div className="p-4">
@@ -155,6 +164,12 @@ export default function InboxPage(): React.JSX.Element {
           </div>
         )}
       </WorkspacePanel>
+
+      <StartInternalChat
+        open={showInternalChat}
+        onOpenChange={setShowInternalChat}
+        onConversationCreated={handleInternalChatCreated}
+      />
     </>
   )
 }

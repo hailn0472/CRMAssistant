@@ -68,6 +68,7 @@ export class ConversationsService {
     tenantId: string,
     filter: ConversationFilterInput = {},
     pagination: ConversationPaginationInput = {},
+    userId?: string,
   ): Promise<ConversationConnection> {
     const page = Math.max(pagination.page ?? DEFAULT_PAGE, 1)
     const pageSize = Math.min(Math.max(pagination.pageSize ?? DEFAULT_PAGE_SIZE, 1), MAX_PAGE_SIZE)
@@ -91,10 +92,11 @@ export class ConversationsService {
       where.assignedTo = filter.assignedTo
     }
 
+    // Unread filter: count messages NOT sent by current user that haven't been read
     if (filter.unreadOnly) {
       where.messages = {
         some: {
-          senderType: 'CONTACT',
+          ...(userId ? { senderId: { not: userId } } : { senderType: 'CONTACT' }),
           readAt: null,
         },
       }
@@ -116,22 +118,38 @@ export class ConversationsService {
           _count: {
             select: {
               messages: {
-                where: { senderType: 'CONTACT', readAt: null },
+                where: userId
+                  ? { senderId: { not: userId }, readAt: null }
+                  : { senderType: 'CONTACT', readAt: null },
               },
             },
+          },
+          messages: {
+            orderBy: { createdAt: 'desc' },
+            take: 1,
+            select: { content: true },
           },
         },
       }),
       this.prisma.conversation.count({ where }),
     ])
 
-    return { items, total, page, pageSize }
+    // Attach lastMessagePreview from the included messages
+    const enrichedItems = items.map((item) => {
+      const { messages: msgs, ...rest } = item
+      return {
+        ...rest,
+        lastMessagePreview: msgs?.[0]?.content ?? null,
+      }
+    })
+
+    return { items: enrichedItems, total, page, pageSize }
   }
 
   async createConversation(
     tenantId: string,
-    contactId: string,
-    channel: 'INTERNAL' = 'INTERNAL',
+    contactId?: string,
+    channel: 'INTERNAL' | 'LIVE_CHAT' = 'INTERNAL',
     createdBy: string = 'system',
   ): Promise<Conversation> {
     try {
@@ -160,8 +178,8 @@ export class ConversationsService {
 
   async findOrCreateConversation(
     tenantId: string,
-    contactId: string,
-    channel: 'INTERNAL' = 'INTERNAL',
+    contactId?: string,
+    channel: 'INTERNAL' | 'LIVE_CHAT' = 'INTERNAL',
     createdBy: string = 'system',
   ): Promise<Conversation> {
     const existing = await this.prisma.conversation.findFirst({
@@ -180,6 +198,127 @@ export class ConversationsService {
     }
 
     return this.createConversation(tenantId, contactId, channel, createdBy)
+  }
+
+  async createInternalConversation(
+    tenantId: string,
+    participantIds: string[],
+    title?: string,
+    createdBy: string = 'system',
+  ): Promise<Conversation> {
+    // Verify all participants belong to the same tenant
+    if (participantIds.length > 0) {
+      const participants = await this.prisma.user.findMany({
+        where: { id: { in: participantIds }, tenantId, deletedAt: null },
+        select: { id: true },
+      })
+
+      if (participants.length !== participantIds.length) {
+        throw new BadRequestException('One or more participants not found in this tenant')
+      }
+    }
+
+    try {
+      const conversation = await this.prisma.conversation.create({
+        data: {
+          tenantId,
+          contactId: null,
+          channel: 'INTERNAL',
+          status: 'OPEN',
+          createdBy,
+          updatedBy: createdBy,
+        },
+      })
+
+      this.auditService.log({
+        tenantId,
+        userId: createdBy,
+        action: 'CREATE',
+        entity: 'Conversation',
+        entityId: conversation.id,
+        details: { type: 'INTERNAL', participantIds, title },
+      })
+
+      return conversation
+    } catch (error) {
+      if (error instanceof PrismaClientKnownRequestError && error.code === 'P2003') {
+        throw new BadRequestException('Invalid tenant or user reference')
+      }
+      throw error
+    }
+  }
+
+  async findInternalAgents(tenantId: string): Promise<
+    Array<{
+      id: string
+      firstName: string
+      lastName: string
+      email: string
+      jobTitle: string | null
+      isOnline: boolean
+      roleName: string
+    }>
+  > {
+    const agentRoleNames = ['SALES_REP', 'SALES_MANAGER', 'SUPPORT_AGENT']
+
+    const users = await this.prisma.user.findMany({
+      where: {
+        tenantId,
+        deletedAt: null,
+        isActive: true,
+        userRoles: {
+          some: {
+            role: {
+              name: { in: agentRoleNames },
+              deletedAt: null,
+            },
+          },
+        },
+      },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        email: true,
+        jobTitle: true,
+        userRoles: {
+          select: {
+            role: { select: { name: true } },
+          },
+        },
+      },
+    })
+
+    return users.map((u) => ({
+      id: u.id,
+      firstName: u.firstName,
+      lastName: u.lastName,
+      email: u.email,
+      jobTitle: u.jobTitle,
+      isOnline: false, // placeholder — real presence tracking in future story
+      roleName: u.userRoles[0]?.role?.name ?? 'UNKNOWN',
+    }))
+  }
+
+  async getAgentAvailability(
+    tenantId: string,
+    agentId: string,
+  ): Promise<{ isOnline: boolean; lastSeenAt: string | null }> {
+    const user = await this.prisma.user.findFirst({
+      where: { id: agentId, tenantId, deletedAt: null },
+      select: { lastLoginAt: true },
+    })
+
+    if (!user) {
+      throw new NotFoundException('Agent not found')
+    }
+
+    // Placeholder: return offline with last login time
+    // Real presence tracking will be implemented in a future story
+    return {
+      isOnline: false,
+      lastSeenAt: user.lastLoginAt?.toISOString() ?? null,
+    }
   }
 
   async assignConversation(
@@ -291,11 +430,11 @@ export class ConversationsService {
 
     if (!conversation) return 0
 
-    // Count CONTACT-sent messages without a read receipt from this user
+    // Count messages NOT sent by this user that haven't been read by this user
     return this.prisma.message.count({
       where: {
         conversationId,
-        senderType: 'CONTACT',
+        senderId: { not: userId },
         receipts: { none: { userId, readAt: { not: null } } },
       },
     })
