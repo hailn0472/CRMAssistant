@@ -390,6 +390,7 @@ model Conversation {
   id            String             @id @default(uuid())
   tenantId      String
   contactId     String?
+  title         String?
   channel       Channel            @default(INTERNAL)
   status        ConversationStatus @default(OPEN)
   assignedTo    String?

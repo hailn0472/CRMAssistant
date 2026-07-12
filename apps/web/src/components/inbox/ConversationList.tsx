@@ -266,7 +266,7 @@ export function ConversationList({
               const isUnread = conv.unreadCount && conv.unreadCount > 0
               const contactName = conv.contact
                 ? `${conv.contact.firstName} ${conv.contact.lastName}`
-                : 'Unknown contact'
+                : conv.title || 'Internal chat'
               const init = initials(conv.contact?.firstName, conv.contact?.lastName)
               const colorClass = getRandomColor(contactName)
               const ChannelIcon = CHANNEL_ICONS[conv.channel] || Hash

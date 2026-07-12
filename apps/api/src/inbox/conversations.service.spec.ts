@@ -361,6 +361,7 @@ describe('ConversationsService', () => {
           data: expect.objectContaining({
             tenantId: TENANT_ID,
             contactId: null,
+            title: 'Chat about deal',
             channel: 'INTERNAL',
           }),
         }),

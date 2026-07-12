@@ -200,6 +200,15 @@ export class ConversationsService {
     return this.createConversation(tenantId, contactId, channel, createdBy)
   }
 
+  async getLastMessageContent(conversationId: string): Promise<string | null> {
+    const msg = await this.prisma.message.findFirst({
+      where: { conversationId },
+      orderBy: { createdAt: 'desc' },
+      select: { content: true },
+    })
+    return msg?.content ?? null
+  }
+
   async createInternalConversation(
     tenantId: string,
     participantIds: string[],
@@ -224,6 +233,7 @@ export class ConversationsService {
           tenantId,
           contactId: null,
           channel: 'INTERNAL',
+          title,
           status: 'OPEN',
           createdBy,
           updatedBy: createdBy,
@@ -238,6 +248,8 @@ export class ConversationsService {
         entityId: conversation.id,
         details: { type: 'INTERNAL', participantIds, title },
       })
+
+      this.pubSub.publish(`${PUBSUB_CONVERSATION_UPDATED}:${tenantId}`, conversation)
 
       return conversation
     } catch (error) {
@@ -285,6 +297,7 @@ export class ConversationsService {
           select: {
             role: { select: { name: true } },
           },
+          orderBy: { assignedAt: 'asc' },
         },
       },
     })

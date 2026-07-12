@@ -844,6 +844,8 @@ async function main(): Promise<void> {
         internalNote: isInternalNote,
         senderType: msg.senderType,
         sentAt: msg.sentAt,
+        deliveredAt: msg.deliveredAt ?? null,
+        readAt: msg.readAt ?? null,
         createdAt: msg.createdAt,
       },
       create: {
@@ -855,6 +857,8 @@ async function main(): Promise<void> {
         messageType: msg.messageType,
         internalNote: isInternalNote,
         sentAt: msg.sentAt,
+        deliveredAt: msg.deliveredAt ?? null,
+        readAt: msg.readAt ?? null,
         createdAt: msg.createdAt,
         createdBy: msg.createdBy,
       },
