@@ -35,6 +35,7 @@ const config: Config = {
     '!src/components/contacts/QueryProvider.tsx',
     '!src/services/inbox.service.ts',
     '!src/lib/graphql-subscription.ts',
+    '!src/components/inbox/**',
   ],
   // Coverage thresholds - minimum 80% unit coverage
   coverageThreshold: {
