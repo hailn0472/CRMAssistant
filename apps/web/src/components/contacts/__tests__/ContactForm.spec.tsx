@@ -1,5 +1,6 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 
 import { ContactForm } from '../ContactForm'
 import { createContact, updateContact } from '@/services/contact.service'
@@ -13,6 +14,17 @@ jest.mock('@/services/contact.service', () => ({
   updateContact: jest.fn(),
 }))
 
+jest.mock('@/services/tag.service', () => ({
+  getTags: jest.fn().mockResolvedValue([]),
+  addTagToContact: jest.fn(),
+  removeTagFromContact: jest.fn(),
+}))
+
+function renderWithQuery(ui: React.ReactElement): ReturnType<typeof render> {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  return render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>)
+}
+
 describe('ContactForm', () => {
   beforeEach(() => {
     jest.clearAllMocks()
@@ -20,7 +32,7 @@ describe('ContactForm', () => {
 
   it('shows inline validation errors for required fields', async () => {
     const user = userEvent.setup()
-    render(<ContactForm />)
+    renderWithQuery(<ContactForm />)
 
     await user.click(screen.getByRole('button', { name: /save contact/i }))
 
@@ -32,7 +44,7 @@ describe('ContactForm', () => {
   it('submits valid create contact values', async () => {
     const user = userEvent.setup()
     ;(createContact as jest.Mock).mockResolvedValue({ id: 'contact-1' })
-    render(<ContactForm />)
+    renderWithQuery(<ContactForm />)
 
     await user.type(screen.getByLabelText(/email/i), 'ada@example.com')
     await user.type(screen.getByLabelText(/first name/i), 'Ada')
@@ -49,7 +61,7 @@ describe('ContactForm', () => {
   it('submits valid edit contact values', async () => {
     const user = userEvent.setup()
     ;(updateContact as jest.Mock).mockResolvedValue({ id: 'contact-1' })
-    render(
+    renderWithQuery(
       <ContactForm
         contact={{
           id: 'contact-1',
@@ -78,7 +90,7 @@ describe('ContactForm', () => {
   it('shows server errors inline', async () => {
     const user = userEvent.setup()
     ;(createContact as jest.Mock).mockRejectedValue(new Error('Duplicate email'))
-    render(<ContactForm />)
+    renderWithQuery(<ContactForm />)
 
     await user.type(screen.getByLabelText(/email/i), 'ada@example.com')
     await user.type(screen.getByLabelText(/first name/i), 'Ada')

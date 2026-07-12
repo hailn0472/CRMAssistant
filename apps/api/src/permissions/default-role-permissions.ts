@@ -27,6 +27,8 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, { resource: string; action
     { resource: 'REPORT', action: 'READ' },
     { resource: 'REPORT', action: 'EXPORT' },
     { resource: 'USER', action: 'READ' },
+    { resource: 'INBOX', action: 'READ' },
+    { resource: 'INBOX', action: 'WRITE' },
   ],
   SALES_REP: [
     { resource: 'CONTACT', action: 'CREATE' },
@@ -42,6 +44,8 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, { resource: string; action
     { resource: 'TASK', action: 'UPDATE' },
     { resource: 'TASK', action: 'DELETE' },
     { resource: 'REPORT', action: 'READ' },
+    { resource: 'INBOX', action: 'READ' },
+    { resource: 'INBOX', action: 'WRITE' },
   ],
   SUPPORT_AGENT: [
     { resource: 'CONTACT', action: 'READ' },
@@ -49,6 +53,8 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, { resource: string; action
     ...ACTIONS.map((a) => ({ resource: 'TICKET', action: a })),
     { resource: 'TASK', action: 'READ' },
     { resource: 'TASK', action: 'UPDATE' },
+    { resource: 'INBOX', action: 'READ' },
+    { resource: 'INBOX', action: 'WRITE' },
   ],
   MARKETING_USER: [
     { resource: 'CONTACT', action: 'READ' },

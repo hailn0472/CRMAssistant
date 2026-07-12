@@ -6,6 +6,8 @@ import { AuditModule } from './audit/audit.module'
 import { AuthModule } from './auth/auth.module'
 import { ContactsModule } from './contacts/contacts.module'
 import { RolesModule } from './roles/roles.module'
+import { SegmentsModule } from './segments/segments.module'
+import { TagsModule } from './tags/tags.module'
 import { PermissionsModule } from './permissions/permissions.module'
 import { TeamsModule } from './teams/teams.module'
 import { UsersModule } from './users/users.module'
@@ -15,6 +17,7 @@ import { PrismaModule } from './prisma/prisma.module'
 
 import { AuditInterceptor } from './common/interceptors/audit.interceptor'
 import { SharingModule } from './sharing/sharing.module'
+import { InboxModule } from './inbox/inbox.module'
 
 @Module({
   imports: [
@@ -27,12 +30,15 @@ import { SharingModule } from './sharing/sharing.module'
     AuthModule,
     AppGraphqlModule,
     ContactsModule,
+    TagsModule,
+    SegmentsModule,
     UsersModule,
     RolesModule,
     PermissionsModule,
     TeamsModule,
     AuditModule,
     SharingModule,
+    InboxModule,
   ],
   providers: [
     {

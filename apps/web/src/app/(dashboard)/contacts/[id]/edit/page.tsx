@@ -2,7 +2,6 @@ import { cookies } from 'next/headers'
 import { notFound, redirect } from 'next/navigation'
 
 import { ContactForm } from '@/components/contacts/ContactForm'
-import { WorkspaceHeader } from '@/components/layout/AppShell'
 import type { Contact } from '@/services/contact.service'
 
 const API_URL = process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:4000'
@@ -35,6 +34,7 @@ async function loadContact(id: string): Promise<Contact> {
           phone
           company
           jobTitle
+          tags { id name color }
           createdAt
           updatedAt
         }
@@ -70,8 +70,7 @@ export default async function EditContactPage({
 
   return (
     <main className="space-y-6 p-6 text-slate-950">
-      <WorkspaceHeader eyebrow="Edit contact" title={`${contact.firstName} ${contact.lastName}`} />
-      <ContactForm contact={contact} />
+<ContactForm contact={contact} />
     </main>
   )
 }

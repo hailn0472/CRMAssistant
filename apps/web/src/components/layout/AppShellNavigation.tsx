@@ -43,6 +43,12 @@ const navigationSections: NavigationSection[] = [
       { label: 'Deals', marker: 'DE' },
       { label: 'Activities', marker: 'AC' },
       { label: 'Reports', marker: 'RE' },
+      {
+        label: 'Inbox',
+        href: '/inbox',
+        marker: 'IN',
+        permission: { resource: 'INBOX', action: 'READ' },
+      },
     ],
   },
   {

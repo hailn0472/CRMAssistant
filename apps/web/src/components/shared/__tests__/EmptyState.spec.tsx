@@ -35,4 +35,22 @@ describe('EmptyState', () => {
     expect(screen.queryByRole('button')).not.toBeInTheDocument()
     expect(screen.queryByRole('link')).not.toBeInTheDocument()
   })
+
+  it('renders icon when icon prop is provided', () => {
+    render(
+      <EmptyState
+        title="Empty"
+        description="No items"
+        icon={<span data-testid="test-icon">Icon</span>}
+      />,
+    )
+
+    expect(screen.getByTestId('test-icon')).toBeInTheDocument()
+  })
+
+  it('does not render icon container when icon prop is omitted', () => {
+    const { container } = render(<EmptyState title="Empty" description="No items" />)
+
+    expect(container.querySelector('.rounded-full.bg-slate-100')).not.toBeInTheDocument()
+  })
 })

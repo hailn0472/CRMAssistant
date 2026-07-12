@@ -9,7 +9,6 @@ import { z } from 'zod'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { WorkspaceHeader } from '@/components/layout/AppShell'
 import { TwoFactorSetup } from '@/components/settings/TwoFactorSetup'
 import { BackupCodesDisplay } from '@/components/settings/BackupCodesDisplay'
 import { twoFactorService } from '@/services/two-factor.service'
@@ -119,13 +118,7 @@ export default function SettingsPage(): React.JSX.Element {
 
   return (
     <div className="space-y-6">
-      <WorkspaceHeader
-        eyebrow="Workspace"
-        title="Cài đặt"
-        description="Quản lý cài đặt hệ thống, bảo mật tài khoản và xác thực hai yếu tố."
-      />
-
-      {/* Two-Factor Authentication Section */}
+{/* Two-Factor Authentication Section */}
       <Card>
         <CardHeader>
           <CardTitle>Xác thực hai yếu tố (2FA)</CardTitle>

@@ -31,4 +31,14 @@ describe('BackupCodesDisplay', () => {
     fireEvent.click(screen.getByText('Tôi đã lưu các mã này'))
     expect(onConfirmed).toHaveBeenCalled()
   })
+
+  it('copies codes to clipboard when copy button is clicked', async () => {
+    const writeText = jest.fn().mockResolvedValue(undefined)
+    Object.assign(navigator, { clipboard: { writeText } })
+
+    render(<BackupCodesDisplay codes={codes} />)
+
+    fireEvent.click(screen.getByText('Sao chép tất cả'))
+    expect(writeText).toHaveBeenCalledWith(codes.join('\n'))
+  })
 })

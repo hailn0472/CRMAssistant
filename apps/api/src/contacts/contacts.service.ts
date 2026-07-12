@@ -33,6 +33,10 @@ export type UpdateContactInput = {
 export type ContactFilterInput = {
   search?: string
   company?: string
+  jobTitle?: string
+  tags?: string[]
+  createdAtFrom?: string
+  createdAtTo?: string
 }
 
 export type ContactPaginationInput = {
@@ -54,6 +58,11 @@ const contactListSelect = {
   jobTitle: true,
   ownerId: true,
   owner: { select: { id: true, firstName: true, lastName: true, email: true } },
+  tags: {
+    select: {
+      tag: { select: { id: true, name: true, color: true } },
+    },
+  },
   createdAt: true,
   updatedAt: true,
 } as const
@@ -269,6 +278,7 @@ export class ContactsService {
     const pageSize = Math.min(Math.max(pagination.pageSize ?? DEFAULT_PAGE_SIZE, 1), MAX_PAGE_SIZE)
     const search = filter.search?.trim()
     const company = filter.company?.trim()
+    const jobTitle = filter.jobTitle?.trim()
     const visibilityFilter = await resolveVisibilityFilter(userId, tenantId)
     const sharedIds = await resolveSharedRecordIds(userId, tenantId, 'CONTACT')
 
@@ -286,11 +296,31 @@ export class ContactsService {
     const where: Prisma.ContactWhereInput = {
       tenantId,
       deletedAt: null,
-      ...(company ? { company: { contains: company, mode: 'insensitive' } } : {}),
     }
 
     // Build AND conditions array to avoid OR key conflicts
     const andConditions: Prisma.ContactWhereInput[] = []
+
+    if (company) {
+      andConditions.push({ company: { contains: company, mode: 'insensitive' } })
+    }
+
+    if (jobTitle) {
+      andConditions.push({ jobTitle: { contains: jobTitle, mode: 'insensitive' } })
+    }
+
+    if (filter.createdAtFrom || filter.createdAtTo) {
+      const createdAtFilter: Prisma.DateTimeFilter = {}
+      if (filter.createdAtFrom) {
+        createdAtFilter.gte = new Date(filter.createdAtFrom)
+      }
+      if (filter.createdAtTo) {
+        const endDate = new Date(filter.createdAtTo)
+        endDate.setHours(23, 59, 59, 999)
+        createdAtFilter.lte = endDate
+      }
+      andConditions.push({ createdAt: createdAtFilter })
+    }
 
     if (search) {
       andConditions.push({
@@ -305,6 +335,17 @@ export class ContactsService {
 
     if (ownerConditions.length > 0) {
       andConditions.push({ OR: ownerConditions })
+    }
+
+    if (filter.tags && filter.tags.length > 0) {
+      const validTags = filter.tags.filter(Boolean)
+      if (validTags.length > 0) {
+        andConditions.push({
+          AND: validTags.map((tagName) => ({
+            tags: { some: { tag: { name: tagName } } },
+          })),
+        })
+      }
     }
 
     if (andConditions.length > 0) {

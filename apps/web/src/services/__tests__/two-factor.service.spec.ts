@@ -12,7 +12,10 @@ describe('twoFactorService', () => {
   it('enable2FA sends correct GraphQL mutation', async () => {
     mockFetch.mockResolvedValue({
       ok: true,
-      json: () => Promise.resolve({ data: { enable2FA: { secret: 'S', qrCodeDataUrl: 'Q', backupCodes: ['C'] } } }),
+      json: () =>
+        Promise.resolve({
+          data: { enable2FA: { secret: 'S', qrCodeDataUrl: 'Q', backupCodes: ['C'] } },
+        }),
     })
     localStorage.setItem('accessToken', 'test-token')
 
@@ -65,5 +68,33 @@ describe('twoFactorService', () => {
     const result = await twoFactorService.updateTenantSettings(true)
 
     expect(result.enforce2FA).toBe(true)
+  })
+
+  it('getCurrentUser fetches user with ssoProvider', async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ data: { me: { ssoProvider: 'google' } } }),
+    })
+
+    const result = await twoFactorService.getCurrentUser()
+
+    expect(result.ssoProvider).toBe('google')
+  })
+
+  it('throws GraphQL error message on error response', async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ errors: [{ message: '2FA not enabled' }] }),
+    })
+
+    await expect(twoFactorService.enable2FA()).rejects.toThrow('2FA not enabled')
+  })
+
+  it('throws when response is not ok', async () => {
+    mockFetch.mockResolvedValue({
+      ok: false,
+    })
+
+    await expect(twoFactorService.enable2FA()).rejects.toThrow('GraphQL request failed')
   })
 })

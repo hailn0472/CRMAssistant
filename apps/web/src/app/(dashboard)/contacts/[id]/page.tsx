@@ -1,11 +1,8 @@
-import Link from 'next/link'
 import { cookies } from 'next/headers'
 import { notFound, redirect } from 'next/navigation'
 
-import { Button } from '@/components/ui/button'
-import { QueryProvider } from '@/components/contacts/QueryProvider'
-import { WorkspaceHeader, WorkspacePanel } from '@/components/layout/AppShell'
-import { ShareSection } from '@/components/sharing/ShareSection'
+import { TagBadge } from '@/components/contacts/TagBadge'
+import { WorkspacePanel } from '@/components/layout/AppShell'
 import type { Contact } from '@/services/contact.service'
 
 const API_URL = process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:4000'
@@ -40,6 +37,7 @@ async function loadContact(id: string): Promise<Contact> {
           jobTitle
           ownerId
           owner { id firstName lastName email }
+          tags { id name color }
           createdAt
           updatedAt
         }
@@ -75,26 +73,22 @@ export default async function ContactDetailPage({
 
   return (
     <main className="space-y-6 p-6 text-slate-950">
-      <WorkspaceHeader
-        eyebrow="Contact detail"
-        title={`${contact.firstName} ${contact.lastName}`}
-        actions={
-          <>
-            <QueryProvider>
-              <ShareSection resourceType="CONTACT" resourceId={contact.id} />
-            </QueryProvider>
-            <Button asChild variant="outline">
-              <Link href={`/contacts/${contact.id}/edit`}>Edit</Link>
-            </Button>
-          </>
-        }
-      />
-      <WorkspacePanel className="p-6">
+<WorkspacePanel className="p-6">
         <div className="grid gap-4 md:grid-cols-2">
           <Detail label="Email" value={contact.email} />
           <Detail label="Phone" value={contact.phone ?? '—'} />
           <Detail label="Company" value={contact.company ?? '—'} />
           <Detail label="Job title" value={contact.jobTitle ?? '—'} />
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Tags</p>
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {contact.tags && contact.tags.length > 0 ? (
+                contact.tags.map((t) => <TagBadge key={t.id} tag={t} />)
+              ) : (
+                <p className="text-sm font-medium text-slate-400">—</p>
+              )}
+            </div>
+          </div>
           <Detail label="Created" value={new Date(contact.createdAt).toLocaleString()} />
           <Detail label="Updated" value={new Date(contact.updatedAt).toLocaleString()} />
         </div>
