@@ -6,3 +6,4 @@ export const builder = new SchemaBuilder<{ Context: GraphqlContext }>({})
 
 builder.queryType({})
 builder.mutationType({})
+builder.subscriptionType({})

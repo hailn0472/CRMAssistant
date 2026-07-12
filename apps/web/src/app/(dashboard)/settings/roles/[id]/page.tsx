@@ -5,7 +5,6 @@ import { useQuery } from '@tanstack/react-query'
 import { useParams } from 'next/navigation'
 
 import { Button } from '@/components/ui/button'
-import { WorkspaceHeader } from '@/components/layout/AppShell'
 import { ErrorState } from '@/components/shared/ErrorState'
 import { TableSkeleton } from '@/components/shared/LoadingSkeleton'
 import { QueryProvider } from '@/components/contacts/QueryProvider'
@@ -128,16 +127,7 @@ function RoleDetailContent(): React.JSX.Element {
 export default function RoleDetailPage(): React.JSX.Element {
   return (
     <main className="space-y-6 p-6 text-slate-950">
-      <WorkspaceHeader
-        eyebrow="Role detail"
-        title="Role"
-        actions={
-          <Button asChild variant="outline">
-            <Link href="/settings/roles">Back to roles</Link>
-          </Button>
-        }
-      />
-      <QueryProvider>
+<QueryProvider>
         <RoleDetailContent />
       </QueryProvider>
     </main>

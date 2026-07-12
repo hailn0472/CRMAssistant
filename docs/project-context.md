@@ -12,7 +12,7 @@ sections_completed:
     'framework_specific_rules',
   ]
 existing_patterns_found: 0
-last_updated: '2026-05-05T16:17:29Z'
+last_updated: '2026-07-12T01:00:00Z'
 reviewed_by: ['Winston', 'John', 'Amelia', 'Murat']
 status: 'complete'
 version: '1.0.0'
@@ -28,8 +28,8 @@ _This file contains critical rules and patterns that AI agents must follow when 
 
 ### Project Structure
 
-- **Architecture**: Monorepo (Turborepo)
-- **Package Manager**: pnpm 8.0+ (workspaces enabled)
+- **Architecture**: Monorepo (Turborepo ^2.0.0)
+- **Package Manager**: pnpm 8.15+ (workspaces enabled)
 - **Workspace Structure**:
   - `apps/web` - Next.js frontend
   - `apps/api` - NestJS backend
@@ -39,7 +39,7 @@ _This file contains critical rules and patterns that AI agents must follow when 
 ### Frontend (`apps/web`)
 
 - **Framework**: Next.js 14.2.x (App Router) - pinned minor version to avoid breaking changes
-- **Language**: TypeScript 5.0+
+- **Language**: TypeScript 5.4+
 - **Styling**: Tailwind CSS 3.4+
 - **UI Components**: shadcn/ui (latest)
 - **State Management**:
@@ -53,7 +53,7 @@ _This file contains critical rules and patterns that AI agents must follow when 
 ### Backend (`apps/api`)
 
 - **Framework**: NestJS 10+
-- **Language**: TypeScript 5.0+
+- **Language**: TypeScript 5.4+
 - **Runtime**: Node.js 20+ LTS
 - **API Architecture**:
   - **GraphQL** (Code-first with Pothos) - CRUD operations (contacts, deals, pipeline)
@@ -62,7 +62,7 @@ _This file contains critical rules and patterns that AI agents must follow when 
   - `@pothos/core` + `@pothos/plugin-prisma` for type-safe schema generation
   - Single source of truth: Prisma schema → GraphQL types
   - Wrapped in NestJS providers for DI and ecosystem integration
-- **ORM**: Prisma 5.0+
+- **ORM**: Prisma 5.22+
 - **Validation**: class-validator + class-transformer + zod-prisma-types
 
 ### Database & Caching
@@ -149,11 +149,11 @@ _This file contains critical rules and patterns that AI agents must follow when 
 
 ### Critical Version Constraints
 
-- **Node.js 20+ LTS** required for optimal performance and security
-- **pnpm 8.0+** required for workspace protocol and performance
-- **TypeScript 5.0+** required for modern type features and decorators
+- **Node.js 20+ LTS** required (ưu tiên v22.x để tương thích Prisma 5)
+- **pnpm 8.15+** required for workspace protocol and performance
+- **TypeScript 5.4+** required for modern type features and decorators
 - **Next.js 14.2.x** pinned to avoid breaking changes in App Router
-- **Prisma 5.0+** required for improved TypeScript types and performance
+- **Prisma 5.22+** required for improved TypeScript types and performance
 - **PostgreSQL 15+** required for JSONB improvements and Row-Level Security
 - **Socket.io 4.0+** required for TypeScript support and performance
 - **TanStack Query v5+** required for modern React 18+ features

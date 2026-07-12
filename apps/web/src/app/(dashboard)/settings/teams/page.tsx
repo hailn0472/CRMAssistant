@@ -5,7 +5,6 @@ import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query'
 import { useState } from 'react'
 
 import { Button } from '@/components/ui/button'
-import { WorkspaceHeader } from '@/components/layout/AppShell'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { ErrorState } from '@/components/shared/ErrorState'
 import { TableSkeleton } from '@/components/shared/LoadingSkeleton'
@@ -26,13 +25,7 @@ export default function TeamsPage(): React.JSX.Element {
 function TeamsPageContent(): React.JSX.Element {
   return (
     <main className="space-y-6 p-6 text-slate-950">
-      <WorkspaceHeader
-        eyebrow="Settings"
-        title="Teams"
-        description="Manage teams for data visibility and organization."
-        actions={<CreateTeamButton />}
-      />
-      <TeamsTable />
+<TeamsTable />
     </main>
   )
 }
@@ -113,6 +106,7 @@ function TeamsTable(): React.JSX.Element {
       <Card className="border-slate-200 bg-white text-slate-950 shadow-sm">
         <CardHeader className="flex-row items-center justify-between space-y-0">
           <CardTitle className="text-lg">All Teams</CardTitle>
+          <CreateTeamButton />
         </CardHeader>
         <CardContent>
           <ResponsiveTableWrapper>

@@ -1,9 +1,7 @@
-import Link from 'next/link'
 import { cookies } from 'next/headers'
 import { notFound, redirect } from 'next/navigation'
 
-import { Button } from '@/components/ui/button'
-import { WorkspaceHeader, WorkspacePanel } from '@/components/layout/AppShell'
+import { WorkspacePanel } from '@/components/layout/AppShell'
 import { UserRoleAssignment } from '@/components/users/UserRoleAssignment'
 import { QueryProvider } from '@/components/contacts/QueryProvider'
 import type { User } from '@/services/user.service'
@@ -78,16 +76,7 @@ export default async function UserDetailPage({
 
   return (
     <main className="space-y-6 p-6 text-slate-950">
-      <WorkspaceHeader
-        eyebrow="User detail"
-        title={`${user.firstName} ${user.lastName}`}
-        actions={
-          <Button asChild variant="outline">
-            <Link href={`/users/${user.id}/edit`}>Edit</Link>
-          </Button>
-        }
-      />
-      <WorkspacePanel className="p-6">
+<WorkspacePanel className="p-6">
         <div className="grid gap-4 md:grid-cols-2">
           <Detail label="Email" value={user.email} />
           <Detail label="Phone" value={user.phone ?? '—'} />

@@ -9,7 +9,6 @@ import { EmptyState } from '@/components/shared/EmptyState'
 import { ErrorState } from '@/components/shared/ErrorState'
 import { TableSkeleton } from '@/components/shared/LoadingSkeleton'
 import { TagManagementDialog } from '@/components/contacts/TagManagementDialog'
-import { WorkspaceHeader } from '@/components/layout/AppShell'
 import { getTags, deleteTag } from '@/services/tag.service'
 
 export default function TagsManagementPage(): React.JSX.Element {
@@ -50,12 +49,7 @@ export default function TagsManagementPage(): React.JSX.Element {
 
   return (
     <>
-      <WorkspaceHeader
-        eyebrow="Contacts"
-        title="Tag management"
-        description="Create and manage tags for organizing contacts."
-      />
-      <Card className="border-slate-200 bg-white text-slate-950 shadow-sm">
+<Card className="border-slate-200 bg-white text-slate-950 shadow-sm">
         <CardHeader className="flex-row items-center justify-between space-y-0">
           <CardTitle className="text-lg">Tags</CardTitle>
           <TagManagementDialog

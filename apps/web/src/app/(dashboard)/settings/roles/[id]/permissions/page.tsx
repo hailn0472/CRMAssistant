@@ -1,11 +1,8 @@
 'use client'
 
-import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 
-import { Button } from '@/components/ui/button'
-import { WorkspaceHeader } from '@/components/layout/AppShell'
 import { ErrorState } from '@/components/shared/ErrorState'
 import { QueryProvider } from '@/components/contacts/QueryProvider'
 import { PermissionMatrix, PermissionMatrixSkeleton } from '@/components/roles/PermissionMatrix'
@@ -115,17 +112,7 @@ function PermissionMatrixContent(): React.JSX.Element {
 export default function PermissionMatrixPage(): React.JSX.Element {
   return (
     <main className="space-y-6 p-6 text-slate-950">
-      <WorkspaceHeader
-        eyebrow="Role permissions"
-        title="Permission matrix"
-        description="Configure granular permissions for this role. Changes take effect immediately."
-        actions={
-          <Button asChild variant="outline">
-            <Link href="/settings/roles">Back to roles</Link>
-          </Button>
-        }
-      />
-      <QueryProvider>
+<QueryProvider>
         <PermissionMatrixContent />
       </QueryProvider>
     </main>

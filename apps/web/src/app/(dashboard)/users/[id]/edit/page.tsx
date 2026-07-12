@@ -2,7 +2,6 @@ import { cookies } from 'next/headers'
 import { notFound, redirect } from 'next/navigation'
 
 import { UserForm } from '@/components/users/UserForm'
-import { WorkspaceHeader } from '@/components/layout/AppShell'
 import type { User } from '@/services/user.service'
 
 const API_URL = process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:4000'
@@ -72,8 +71,7 @@ export default async function EditUserPage({
 
   return (
     <main className="space-y-6 p-6 text-slate-950">
-      <WorkspaceHeader eyebrow="Edit user" title={`${user.firstName} ${user.lastName}`} />
-      <UserForm user={user} />
+<UserForm user={user} />
     </main>
   )
 }

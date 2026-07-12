@@ -4,12 +4,10 @@ import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import Link from 'next/link'
 
-import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
-import { WorkspaceHeader } from '@/components/layout/AppShell'
+import { Button } from '@/components/ui/button'
 import { createRole } from '@/services/role.service'
 
 const roleSchema = z.object({
@@ -52,17 +50,7 @@ export default function NewRolePage(): React.JSX.Element {
 
   return (
     <main className="space-y-6 p-6 text-slate-950">
-      <WorkspaceHeader
-        eyebrow="Create role"
-        title="New role"
-        description="Custom roles can be assigned to users with specific permissions."
-        actions={
-          <Button asChild variant="outline">
-            <Link href="/settings/roles">Back to roles</Link>
-          </Button>
-        }
-      />
-      <Card className="border-slate-200 bg-white text-slate-950 shadow-sm">
+<Card className="border-slate-200 bg-white text-slate-950 shadow-sm">
         <CardHeader className="border-b border-slate-100">
           <CardTitle className="text-lg">Role details</CardTitle>
         </CardHeader>

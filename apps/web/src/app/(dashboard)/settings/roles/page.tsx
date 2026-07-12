@@ -4,7 +4,6 @@ import Link from 'next/link'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { Button } from '@/components/ui/button'
-import { WorkspaceHeader } from '@/components/layout/AppShell'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { ErrorState } from '@/components/shared/ErrorState'
 import { TableSkeleton } from '@/components/shared/LoadingSkeleton'
@@ -16,17 +15,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 export default function RolesPage(): React.JSX.Element {
   return (
     <main className="space-y-6 p-6 text-slate-950">
-      <WorkspaceHeader
-        eyebrow="Settings"
-        title="Roles"
-        description="Manage roles and permissions for your team."
-        actions={
-          <Button asChild className="bg-slate-950 text-white hover:bg-slate-800">
-            <Link href="/settings/roles/new">Create role</Link>
-          </Button>
-        }
-      />
-      <QueryProvider>
+<QueryProvider>
         <RolesTable />
       </QueryProvider>
     </main>
