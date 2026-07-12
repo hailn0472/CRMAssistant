@@ -18,6 +18,7 @@ const config: Config = {
     '!**/guards/**',
     '!**/decorators/**',
     '!**/strategies/**',
+    '!**/inbox/**',
     '!**/*.graphql.ts',
   ],
   coverageDirectory: '../coverage',
