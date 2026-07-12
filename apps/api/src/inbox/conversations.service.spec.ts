@@ -16,6 +16,10 @@ type MockConversationDelegate = {
 
 type MockPrisma = {
   conversation: MockConversationDelegate
+  user: {
+    findMany: jest.Mock
+    findFirst: jest.Mock
+  }
 }
 
 type MockAuditService = {
@@ -55,6 +59,10 @@ function makePrisma(): MockPrisma {
       findMany: jest.fn(),
       count: jest.fn(),
       update: jest.fn(),
+    },
+    user: {
+      findMany: jest.fn(),
+      findFirst: jest.fn(),
     },
   }
 }
@@ -108,8 +116,14 @@ describe('ConversationsService', () => {
 
   describe('findMany()', () => {
     const items = [
-      makeConversation({ id: 'conv-1', lastMessageAt: new Date('2026-07-12T10:00:00Z') }),
-      makeConversation({ id: 'conv-2', lastMessageAt: new Date('2026-07-12T09:00:00Z') }),
+      {
+        ...makeConversation({ id: 'conv-1', lastMessageAt: new Date('2026-07-12T10:00:00Z') }),
+        messages: [{ content: 'Hello' }],
+      },
+      {
+        ...makeConversation({ id: 'conv-2', lastMessageAt: new Date('2026-07-12T09:00:00Z') }),
+        messages: [],
+      },
     ]
 
     beforeEach(() => {
@@ -120,7 +134,9 @@ describe('ConversationsService', () => {
     it('returns paginated conversations for tenant with default pagination', async () => {
       const result = await service.findMany(TENANT_ID)
 
-      expect(result.items).toEqual(items)
+      expect(result.items).toHaveLength(2)
+      expect(result.items[0]).toMatchObject({ id: 'conv-1', lastMessagePreview: 'Hello' })
+      expect(result.items[1]).toMatchObject({ id: 'conv-2', lastMessagePreview: null })
       expect(result.total).toBe(2)
       expect(result.page).toBe(1)
       expect(result.pageSize).toBe(20)
@@ -322,6 +338,139 @@ describe('ConversationsService', () => {
         expect.objectContaining({
           details: { status: 'ARCHIVED' },
         }),
+      )
+    })
+  })
+
+  describe('createInternalConversation()', () => {
+    it('creates an internal conversation without contactId', async () => {
+      const conv = makeConversation({ contactId: null as any })
+      prisma.user.findMany.mockResolvedValue([{ id: USER_ID }])
+      prisma.conversation.create.mockResolvedValue(conv)
+
+      const result = await service.createInternalConversation(
+        TENANT_ID,
+        [USER_ID],
+        'Chat about deal',
+        USER_ID,
+      )
+
+      expect(result).toBe(conv)
+      expect(prisma.conversation.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            tenantId: TENANT_ID,
+            contactId: null,
+            channel: 'INTERNAL',
+          }),
+        }),
+      )
+      expect(auditService.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: 'CREATE',
+          entity: 'Conversation',
+          details: expect.objectContaining({ type: 'INTERNAL', participantIds: [USER_ID] }),
+        }),
+      )
+    })
+
+    it('creates internal conversation without participants list', async () => {
+      const conv = makeConversation({ contactId: null as any })
+      prisma.conversation.create.mockResolvedValue(conv)
+
+      const result = await service.createInternalConversation(TENANT_ID, [])
+
+      expect(result).toBe(conv)
+      expect(prisma.conversation.create).toHaveBeenCalled()
+    })
+
+    it('throws BadRequestException when participant not found in tenant', async () => {
+      prisma.user.findMany.mockResolvedValue([{ id: USER_ID }]) // Only one of two found
+
+      await expect(
+        service.createInternalConversation(TENANT_ID, [USER_ID, 'other-user']),
+      ).rejects.toThrow(BadRequestException)
+    })
+  })
+
+  describe('findInternalAgents()', () => {
+    it('returns agents with SALES_REP, SALES_MANAGER, SUPPORT_AGENT roles', async () => {
+      const agents = [
+        {
+          id: 'agent-1',
+          firstName: 'Alice',
+          lastName: 'Agent',
+          email: 'alice@example.com',
+          jobTitle: 'Sales Rep',
+          userRoles: [{ role: { name: 'SALES_REP' } }],
+        },
+        {
+          id: 'agent-2',
+          firstName: 'Bob',
+          lastName: 'Manager',
+          email: 'bob@example.com',
+          jobTitle: 'Sales Manager',
+          userRoles: [{ role: { name: 'SALES_MANAGER' } }],
+        },
+      ]
+      prisma.user.findMany.mockResolvedValue(agents)
+
+      const result = await service.findInternalAgents(TENANT_ID)
+
+      expect(result).toHaveLength(2)
+      expect(result[0].roleName).toBe('SALES_REP')
+      expect(result[1].roleName).toBe('SALES_MANAGER')
+      expect(result[0].isOnline).toBe(false)
+      expect(prisma.user.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            tenantId: TENANT_ID,
+            deletedAt: null,
+            isActive: true,
+          }),
+        }),
+      )
+    })
+
+    it('returns empty array when no agents found', async () => {
+      prisma.user.findMany.mockResolvedValue([])
+
+      const result = await service.findInternalAgents(TENANT_ID)
+
+      expect(result).toEqual([])
+    })
+
+    it('filters by tenantId', async () => {
+      prisma.user.findMany.mockResolvedValue([])
+
+      await service.findInternalAgents(TENANT_ID)
+
+      expect(prisma.user.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ tenantId: TENANT_ID }),
+        }),
+      )
+    })
+  })
+
+  describe('getAgentAvailability()', () => {
+    it('returns offline status with lastSeenAt', async () => {
+      prisma.user.findFirst.mockResolvedValue({
+        id: USER_ID,
+        lastLoginAt: new Date('2026-07-12T08:00:00Z'),
+      })
+
+      const result = await service.getAgentAvailability(TENANT_ID, USER_ID)
+
+      expect(result.isOnline).toBe(false)
+      expect(result.lastSeenAt).toBe('2026-07-12T08:00:00.000Z')
+    })
+
+    it('throws NotFoundException for unknown agent', async () => {
+      prisma.user.findFirst.mockResolvedValue(null)
+
+      await expect(service.getAgentAvailability(TENANT_ID, 'unknown')).rejects.toThrow(
+        NotFoundException,
       )
     })
   })

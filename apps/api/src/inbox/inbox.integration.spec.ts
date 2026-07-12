@@ -43,6 +43,7 @@ function makeMsg(overrides: Partial<Message> = {}): Message {
     senderType: 'AGENT' as any,
     content: 'Hello',
     messageType: 'TEXT' as any,
+    internalNote: false,
     metadata: null,
     sentAt: NOW,
     deliveredAt: null,

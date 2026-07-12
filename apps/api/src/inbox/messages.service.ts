@@ -20,7 +20,15 @@ export type SendMessageInput = {
   senderId: string
   senderType: 'AGENT' | 'CONTACT' | 'SYSTEM'
   content: string
-  messageType?: 'TEXT' | 'IMAGE' | 'VIDEO' | 'AUDIO' | 'FILE' | 'LOCATION' | 'TEMPLATE'
+  messageType?:
+    | 'TEXT'
+    | 'IMAGE'
+    | 'VIDEO'
+    | 'AUDIO'
+    | 'FILE'
+    | 'LOCATION'
+    | 'TEMPLATE'
+    | 'INTERNAL_NOTE'
   metadata?: Record<string, unknown> | string
 }
 
@@ -76,6 +84,7 @@ export class MessagesService {
           senderType: input.senderType,
           content: input.content,
           messageType: input.messageType ?? 'TEXT',
+          internalNote: input.messageType === 'INTERNAL_NOTE',
           metadata,
           createdBy: input.senderId,
         },
@@ -192,6 +201,15 @@ export class MessagesService {
         }),
       ),
     )
+
+    // Also set deliveredAt for messages that don't have it yet
+    await this.prisma.message.updateMany({
+      where: {
+        id: { in: unreadMessages.map((m) => m.id) },
+        deliveredAt: null,
+      },
+      data: { deliveredAt: new Date() },
+    })
 
     // Also update readAt on Message model for GraphQL field backward compat
     await this.prisma.message.updateMany({

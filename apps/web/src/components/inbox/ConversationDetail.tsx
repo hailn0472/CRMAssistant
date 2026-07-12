@@ -1,14 +1,17 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ChevronLeft, MoreVertical, RefreshCcw } from 'lucide-react'
+import { ChevronLeft, MoreVertical, RefreshCcw, StickyNote } from 'lucide-react'
 
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth.store'
 import type { Message } from '@/services/inbox.service'
-import { getMessages, sendMessage as apiSendMessage } from '@/services/inbox.service'
+import { getMessages, sendMessage as apiSendMessage, markAsRead } from '@/services/inbox.service'
 import { MessageBubble } from './MessageBubble'
 import { MessageComposer } from './MessageComposer'
+import { InternalNoteBadge } from './InternalNoteBadge'
+
+const POLL_INTERVAL_MS = 3000
 
 type ConversationDetailProps = {
   conversationId: string
@@ -16,6 +19,7 @@ type ConversationDetailProps = {
   status: string
   className?: string
   onBack?: () => void
+  refreshKey?: number
 }
 
 export function ConversationDetail({
@@ -24,6 +28,7 @@ export function ConversationDetail({
   status,
   className,
   onBack,
+  refreshKey = 0,
 }: ConversationDetailProps): React.JSX.Element {
   const [messages, setMessages] = useState<Message[]>([])
   const [loading, setLoading] = useState(true)
@@ -31,9 +36,12 @@ export function ConversationDetail({
   const [hasMore, setHasMore] = useState(false)
   const [nextCursor, setNextCursor] = useState<string | null>(null)
   const [loadingMore, setLoadingMore] = useState(false)
+  const [internalNoteMode, setInternalNoteMode] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
   const initializedRef = useRef(false)
+  const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const currentUser = useAuthStore((s) => s.user)
 
   const fetchMessages = useCallback(
     async (showLoading = true) => {
@@ -62,12 +70,41 @@ export function ConversationDetail({
       initializedRef.current = true
     }
     fetchMessages(true)
+  }, [fetchMessages, refreshKey])
+
+  // Polling for real-time updates
+  useEffect(() => {
+    // Start polling after initial load
+    pollTimerRef.current = setInterval(() => {
+      fetchMessages(false)
+    }, POLL_INTERVAL_MS)
+
+    return () => {
+      if (pollTimerRef.current) {
+        clearInterval(pollTimerRef.current)
+        pollTimerRef.current = null
+      }
+    }
   }, [fetchMessages])
 
   // Auto-scroll to bottom on new messages
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages.length])
+
+  // Auto-mark messages from others as read (enables Đã xem status)
+  useEffect(() => {
+    if (!currentUser || messages.length === 0) return
+    const unreadFromOthers = messages.filter(
+      (m) => m.senderId !== currentUser.userId && !m.readAt && !m.id.startsWith('optimistic-'),
+    )
+    if (unreadFromOthers.length > 0) {
+      markAsRead(
+        conversationId,
+        unreadFromOthers.map((m) => m.id),
+      ).catch(() => {})
+    }
+  }, [messages, conversationId, currentUser])
 
   async function loadMore(): Promise<void> {
     if (!nextCursor || loadingMore) return
@@ -85,17 +122,47 @@ export function ConversationDetail({
   }
 
   async function handleSend(content: string): Promise<void> {
-    const currentUser = useAuthStore.getState().user
-    if (!currentUser) throw new Error('Not authenticated')
+    const user = useAuthStore.getState().user
+    if (!user) throw new Error('Not authenticated')
 
-    await apiSendMessage({
+    // Optimistic update — add message to UI immediately
+    const optimisticMsg: Message = {
+      id: `optimistic-${Date.now()}`,
       conversationId,
-      senderId: currentUser.userId,
+      senderId: user.userId,
       senderType: 'AGENT',
       content,
-    })
-    // Refresh messages after send without showing the full screen loading skeleton
-    await fetchMessages(false)
+      messageType: internalNoteMode ? 'INTERNAL_NOTE' : 'TEXT',
+      internalNote: internalNoteMode,
+      metadata: null,
+      sentAt: new Date().toISOString(),
+      deliveredAt: null,
+      readAt: null,
+      createdAt: new Date().toISOString(),
+    }
+    setMessages((prev) => [...prev, optimisticMsg])
+
+    try {
+      const serverMsg = await apiSendMessage({
+        conversationId,
+        senderId: user.userId,
+        senderType: 'AGENT',
+        content,
+        messageType: internalNoteMode ? 'INTERNAL_NOTE' : 'TEXT',
+      })
+
+      // Immediately replace optimistic message with real server message (Sending → Sent)
+      setMessages((prev) => prev.map((m) => (m.id === optimisticMsg.id ? serverMsg : m)))
+
+      if (internalNoteMode) {
+        setInternalNoteMode(false)
+      }
+      // Background refresh to get final delivery state
+      fetchMessages(false)
+    } catch {
+      // Remove optimistic message on failure
+      setMessages((prev) => prev.filter((m) => m.id !== optimisticMsg.id))
+    }
   }
 
   const initials = contactName
@@ -253,9 +320,41 @@ export function ConversationDetail({
               {messages.map((msg, index, arr) => {
                 const prevMsg = index > 0 ? arr[index - 1] : null
                 const isDifferentSender = prevMsg && prevMsg.senderId !== msg.senderId
+                // Find the last message sent by the current user
+                const isMine = currentUser
+                  ? msg.senderId === currentUser.userId
+                  : msg.senderType === 'AGENT'
+                const isLastFromMe =
+                  isMine &&
+                  !arr
+                    .slice(index + 1)
+                    .some((m) =>
+                      currentUser ? m.senderId === currentUser.userId : m.senderType === 'AGENT',
+                    )
+
+                // Messenger-style seen avatar: show under the last of "my" messages that has readAt
+                const showSeenAvatar =
+                  isMine &&
+                  !!msg.readAt &&
+                  // Only on the LAST read message from me (no later read message from me)
+                  !arr
+                    .slice(index + 1)
+                    .some(
+                      (m) =>
+                        (currentUser
+                          ? m.senderId === currentUser.userId
+                          : m.senderType === 'AGENT') && m.readAt,
+                    )
+
                 return (
                   <div key={msg.id} className={cn(isDifferentSender ? 'mt-4' : '')}>
-                    <MessageBubble message={msg} />
+                    <MessageBubble
+                      message={msg}
+                      currentUserId={currentUser?.userId}
+                      isLastFromMe={isLastFromMe}
+                      showSeenAvatar={showSeenAvatar}
+                      seenByName={contactName}
+                    />
                   </div>
                 )
               })}
@@ -267,6 +366,24 @@ export function ConversationDetail({
 
       {/* Composer */}
       <div className="shrink-0 z-10 relative bg-white">
+        {/* Internal note toggle */}
+        <div className="flex items-center justify-between px-4 pt-2 pb-1">
+          <div className="flex items-center gap-2">{internalNoteMode && <InternalNoteBadge />}</div>
+          <button
+            type="button"
+            onClick={() => setInternalNoteMode((v) => !v)}
+            className={cn(
+              'flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-semibold transition-colors',
+              internalNoteMode
+                ? 'bg-amber-100 text-amber-700 border border-amber-200'
+                : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50',
+            )}
+            title="Toggle internal note"
+          >
+            <StickyNote className="h-3.5 w-3.5" />
+            {internalNoteMode ? 'Note active' : 'Internal note'}
+          </button>
+        </div>
         <MessageComposer
           onSend={handleSend}
           disabled={status === 'ARCHIVED' || status === 'RESOLVED'}

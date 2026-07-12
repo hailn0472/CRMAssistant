@@ -8,11 +8,14 @@ import type { Conversation, ConversationFilter } from '@/services/inbox.service'
 import { getConversations } from '@/services/inbox.service'
 import { InboxSkeleton } from './InboxSkeleton'
 
+const LIST_POLL_INTERVAL_MS = 5000
+
 type ConversationListProps = {
   selectedId: string | null
   onSelect: (id: string) => void
   className?: string
   refreshKey?: number
+  onStartInternalChat?: () => void
 }
 
 const CHANNEL_ICONS: Record<string, React.ElementType> = {
@@ -66,6 +69,7 @@ export function ConversationList({
   onSelect,
   className,
   refreshKey = 0,
+  onStartInternalChat,
 }: ConversationListProps): React.JSX.Element {
   const [conversations, setConversations] = useState<Conversation[]>([])
   const [loading, setLoading] = useState(true)
@@ -117,6 +121,39 @@ export function ConversationList({
     fetchConversations()
   }, [fetchConversations, refreshKey])
 
+  // Polling for real-time list updates
+  useEffect(() => {
+    const timer = setInterval(() => {
+      // Silent refresh — don't show loading skeleton
+      getConversations(
+        { page, pageSize: PAGE_SIZE },
+        {
+          ...(statusFilter ? { status: statusFilter } : {}),
+          ...(channelFilter ? { channel: channelFilter } : {}),
+          ...(unreadOnly ? { unreadOnly: true } : {}),
+          ...(assigneeFilter ? { assignedTo: assigneeFilter } : {}),
+        },
+      )
+        .then((result) => {
+          let items = result.items
+          if (searchQuery) {
+            items = items.filter((c) => {
+              const name =
+                `${c.contact?.firstName || ''} ${c.contact?.lastName || ''}`.toLowerCase()
+              return name.includes(searchQuery.toLowerCase())
+            })
+          }
+          setConversations(items)
+          setTotal(result.total)
+        })
+        .catch(() => {
+          // Silently ignore poll errors
+        })
+    }, LIST_POLL_INTERVAL_MS)
+
+    return () => clearInterval(timer)
+  }, [statusFilter, channelFilter, unreadOnly, assigneeFilter, page, searchQuery])
+
   useEffect(() => {
     setPage(1)
   }, [statusFilter, channelFilter, unreadOnly, assigneeFilter, searchQuery])
@@ -127,6 +164,18 @@ export function ConversationList({
     <div className={cn('flex flex-col bg-white', className)}>
       {/* Filters & Search */}
       <div className="flex flex-col gap-3 border-b border-slate-100 p-4">
+        {/* Internal chat button */}
+        {onStartInternalChat && (
+          <button
+            type="button"
+            onClick={onStartInternalChat}
+            className="flex items-center gap-2 rounded-full bg-indigo-600 px-4 py-2 text-[13px] font-semibold text-white shadow-sm hover:bg-indigo-700 transition-all hover:shadow-md"
+          >
+            <MessageCircle className="h-4 w-4" />
+            New Internal Chat
+          </button>
+        )}
+
         <div className="relative">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
           <input
@@ -277,7 +326,11 @@ export function ConversationList({
                             isUnread ? 'font-medium text-slate-800' : 'text-slate-500',
                           )}
                         >
-                          {truncate(conv.lastMessageAt ? 'Last message...' : 'No messages yet', 80)}
+                          {truncate(
+                            conv.lastMessagePreview ||
+                              (conv.lastMessageAt ? 'Sent a message' : 'No messages yet'),
+                            80,
+                          )}
                         </span>
                         {isUnread ? (
                           <span className="flex h-5 min-w-[20px] shrink-0 items-center justify-center rounded-full bg-blue-600 px-1.5 text-[11px] font-bold text-white shadow-sm">

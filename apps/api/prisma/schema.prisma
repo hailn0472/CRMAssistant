@@ -359,6 +359,7 @@ model SharingRule {
 
 enum Channel {
   INTERNAL
+  LIVE_CHAT
 }
 
 enum ConversationStatus {
@@ -376,6 +377,7 @@ enum MessageType {
   FILE
   LOCATION
   TEMPLATE
+  INTERNAL_NOTE
 }
 
 enum SenderType {
@@ -387,7 +389,7 @@ enum SenderType {
 model Conversation {
   id            String             @id @default(uuid())
   tenantId      String
-  contactId     String
+  contactId     String?
   channel       Channel            @default(INTERNAL)
   status        ConversationStatus @default(OPEN)
   assignedTo    String?
@@ -399,7 +401,7 @@ model Conversation {
   deletedAt     DateTime?
 
   tenant         Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  contact        Contact   @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  contact        Contact?  @relation(fields: [contactId], references: [id], onDelete: SetNull)
   assignedToUser User?     @relation("ConversationAssignee", fields: [assignedTo], references: [id], onDelete: SetNull)
   messages       Message[]
 
@@ -417,6 +419,7 @@ model Message {
   senderType     SenderType
   content        String
   messageType    MessageType @default(TEXT)
+  internalNote   Boolean     @default(false)
   metadata       Json?
   sentAt         DateTime    @default(now())
   deliveredAt    DateTime?
