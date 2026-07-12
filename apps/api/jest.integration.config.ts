@@ -16,6 +16,7 @@ const config: Config = {
     '!src/tags/**', // Tested via unit tests; excluded from integration coverage
     '!src/segments/**', // Tested via unit tests; excluded from integration coverage
     '!src/common/decorators/**', // Decorators tested via unit tests; excluded from integration coverage
+    '!src/inbox/**', // Tested via unit tests; excluded from integration coverage
   ],
   coverageDirectory: 'coverage-integration',
   testEnvironment: 'node',
