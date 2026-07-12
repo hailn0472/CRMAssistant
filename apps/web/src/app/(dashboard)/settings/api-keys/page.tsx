@@ -4,7 +4,6 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 
 import { Button } from '@/components/ui/button'
-import { WorkspaceHeader } from '@/components/layout/AppShell'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { ErrorState } from '@/components/shared/ErrorState'
 import { TableSkeleton } from '@/components/shared/LoadingSkeleton'
@@ -91,21 +90,7 @@ function ApiKeysContent(): React.JSX.Element {
 
   return (
     <main className="space-y-6 p-6 text-slate-950">
-      <WorkspaceHeader
-        eyebrow="Settings"
-        title="API Keys"
-        description="Manage API keys for third-party integrations."
-        actions={
-          <Button
-            className="bg-slate-950 text-white hover:bg-slate-800"
-            onClick={() => setCreateOpen(true)}
-          >
-            Create API Key
-          </Button>
-        }
-      />
-
-      {/* Rotate result dialog */}
+{/* Rotate result dialog */}
       {rotateResult && (
         <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
           <h3 className="mb-2 font-semibold text-amber-800">Key Rotated — New Key Shown Once</h3>

@@ -1,12 +1,8 @@
-import Link from 'next/link'
 import { cookies } from 'next/headers'
 import { notFound, redirect } from 'next/navigation'
 
-import { Button } from '@/components/ui/button'
-import { QueryProvider } from '@/components/contacts/QueryProvider'
 import { TagBadge } from '@/components/contacts/TagBadge'
-import { WorkspaceHeader, WorkspacePanel } from '@/components/layout/AppShell'
-import { ShareSection } from '@/components/sharing/ShareSection'
+import { WorkspacePanel } from '@/components/layout/AppShell'
 import type { Contact } from '@/services/contact.service'
 
 const API_URL = process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:4000'
@@ -77,21 +73,7 @@ export default async function ContactDetailPage({
 
   return (
     <main className="space-y-6 p-6 text-slate-950">
-      <WorkspaceHeader
-        eyebrow="Contact detail"
-        title={`${contact.firstName} ${contact.lastName}`}
-        actions={
-          <>
-            <QueryProvider>
-              <ShareSection resourceType="CONTACT" resourceId={contact.id} />
-            </QueryProvider>
-            <Button asChild variant="outline">
-              <Link href={`/contacts/${contact.id}/edit`}>Edit</Link>
-            </Button>
-          </>
-        }
-      />
-      <WorkspacePanel className="p-6">
+<WorkspacePanel className="p-6">
         <div className="grid gap-4 md:grid-cols-2">
           <Detail label="Email" value={contact.email} />
           <Detail label="Phone" value={contact.phone ?? '—'} />

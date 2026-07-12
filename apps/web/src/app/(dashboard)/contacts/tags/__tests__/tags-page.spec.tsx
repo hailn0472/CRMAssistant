@@ -8,9 +8,7 @@ jest.mock('@/services/tag.service', () => ({
   deleteTag: jest.fn(),
 }))
 
-jest.mock('@/components/layout/AppShell', () => ({
-  WorkspaceHeader: ({ title }: { title: string }) => <div>{title}</div>,
-}))
+jest.mock('@/components/layout/AppShell', () => ({}))
 
 function renderWithQuery(ui: React.ReactElement): ReturnType<typeof render> {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })

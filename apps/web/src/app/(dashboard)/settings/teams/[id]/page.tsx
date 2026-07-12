@@ -3,7 +3,6 @@
 import { useParams } from 'next/navigation'
 import { useQuery } from '@tanstack/react-query'
 
-import { WorkspaceHeader } from '@/components/layout/AppShell'
 import { ErrorState } from '@/components/shared/ErrorState'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { QueryProvider } from '@/components/contacts/QueryProvider'
@@ -38,20 +37,9 @@ function TeamDetailContent({ teamId }: { teamId: string }): React.JSX.Element {
     return <ErrorState message={errorMessage} onRetry={() => refetch()} />
   }
 
-  const teamName = team?.name ?? (isLoading ? 'Loading...' : 'Team')
-
   return (
     <>
-      <WorkspaceHeader
-        eyebrow="Teams"
-        title={teamName}
-        description={
-          team
-            ? `Manager: ${team.manager ? `${team.manager.firstName} ${team.manager.lastName}` : 'None'}`
-            : ''
-        }
-      />
-      <Card className="border-slate-200 bg-white text-slate-950 shadow-sm">
+<Card className="border-slate-200 bg-white text-slate-950 shadow-sm">
         <CardHeader>
           <CardTitle className="text-lg">Members</CardTitle>
         </CardHeader>

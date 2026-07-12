@@ -4,7 +4,6 @@ import { useQuery } from '@tanstack/react-query'
 import { useState, useCallback } from 'react'
 
 import { Button } from '@/components/ui/button'
-import { WorkspaceHeader } from '@/components/layout/AppShell'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { ErrorState } from '@/components/shared/ErrorState'
 import { TableSkeleton } from '@/components/shared/LoadingSkeleton'
@@ -150,13 +149,7 @@ function AuditLogsContent(): React.JSX.Element {
 
   return (
     <main className="space-y-6 p-6 text-slate-950">
-      <WorkspaceHeader
-        eyebrow="Settings"
-        title="Audit Logs"
-        description="Track all sensitive actions across your workspace."
-      />
-
-      {/* Filter toolbar */}
+{/* Filter toolbar */}
       <div className="flex flex-wrap items-end gap-3 rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
         <div className="flex flex-col gap-1.5">
           <label className="text-xs font-medium text-slate-500" htmlFor="action-filter">
