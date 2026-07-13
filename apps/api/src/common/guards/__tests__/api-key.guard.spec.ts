@@ -21,8 +21,8 @@ jest.mock('@nestjs/graphql', () => ({
   },
 }))
 
-import { registerApiKeyGuard, ApiKeyGuard } from './api-key.guard'
-import type { PrismaService } from '../../prisma/prisma.service'
+import { registerApiKeyGuard, ApiKeyGuard } from '../api-key.guard'
+import type { PrismaService } from '../../../prisma/prisma.service'
 
 describe('ApiKeyGuard', () => {
   let guard: ApiKeyGuard

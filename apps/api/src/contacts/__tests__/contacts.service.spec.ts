@@ -6,21 +6,21 @@ import {
 } from '@nestjs/common'
 import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library'
 
-import { ContactsService } from './contacts.service'
+import { ContactsService } from '../contacts.service'
 import type { Contact } from '@prisma/client'
 
-jest.mock('../common/guards/visibility-check', () => ({
+jest.mock('../../common/guards/visibility-check', () => ({
   resolveVisibilityFilter: jest.fn(),
   registerVisibilityService: jest.fn(),
 }))
 
-jest.mock('../common/guards/sharing-check', () => ({
+jest.mock('../../common/guards/sharing-check', () => ({
   resolveSharedRecordIds: jest.fn(),
   registerSharingCheck: jest.fn(),
 }))
 
-import { resolveVisibilityFilter } from '../common/guards/visibility-check'
-import { resolveSharedRecordIds } from '../common/guards/sharing-check'
+import { resolveVisibilityFilter } from '../../common/guards/visibility-check'
+import { resolveSharedRecordIds } from '../../common/guards/sharing-check'
 
 type MockContactDelegate = {
   create: jest.Mock

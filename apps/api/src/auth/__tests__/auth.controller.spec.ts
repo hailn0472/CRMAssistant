@@ -1,10 +1,13 @@
-import { AuthController } from './auth.controller'
-import { AuthService } from './auth.service'
-import type { LoginDto } from './dto/login.dto'
-import type { OAuthTokenDto } from './dto/oauth-token.dto'
-import type { RegisterDto } from './dto/register.dto'
+import { AuthController } from '../auth.controller'
+import { AuthService } from '../auth.service'
+import type { LoginDto } from '../dto/login.dto'
+import type { OAuthTokenDto } from '../dto/oauth-token.dto'
+import type { RegisterDto } from '../dto/register.dto'
 
-function makeAuthService(): Pick<AuthService, 'register' | 'login' | 'oauthLogin' | 'logout' | 'verify2FALogin'> {
+function makeAuthService(): Pick<
+  AuthService,
+  'register' | 'login' | 'oauthLogin' | 'logout' | 'verify2FALogin'
+> {
   return {
     register: jest.fn(),
     login: jest.fn(),
@@ -16,7 +19,10 @@ function makeAuthService(): Pick<AuthService, 'register' | 'login' | 'oauthLogin
 
 describe('AuthController', () => {
   let controller: AuthController
-  let authService: Pick<AuthService, 'register' | 'login' | 'oauthLogin' | 'logout' | 'verify2FALogin'>
+  let authService: Pick<
+    AuthService,
+    'register' | 'login' | 'oauthLogin' | 'logout' | 'verify2FALogin'
+  >
 
   beforeEach(() => {
     authService = makeAuthService()

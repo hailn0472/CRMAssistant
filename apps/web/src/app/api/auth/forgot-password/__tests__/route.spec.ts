@@ -1,6 +1,6 @@
 /** @jest-environment node */
 
-import { POST } from './route'
+import { POST } from '../route'
 
 const mockFetch = jest.fn()
 global.fetch = mockFetch

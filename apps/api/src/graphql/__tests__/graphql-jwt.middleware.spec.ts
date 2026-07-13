@@ -2,10 +2,10 @@ import { UnauthorizedException } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 import { JwtService } from '@nestjs/jwt'
 
-import { GraphqlJwtMiddleware } from './graphql-jwt.middleware'
+import { GraphqlJwtMiddleware } from '../graphql-jwt.middleware'
 
 import type { NextFunction, Request, Response } from 'express'
-import type { JwtPayload } from '../auth/strategies/jwt.strategy'
+import type { JwtPayload } from '../../auth/strategies/jwt.strategy'
 
 type GraphqlRequest = Request & { user?: JwtPayload }
 

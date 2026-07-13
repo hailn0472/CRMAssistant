@@ -1,7 +1,7 @@
 import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common'
 import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library'
 
-import { SegmentsService } from './segments.service'
+import { SegmentsService } from '../segments.service'
 import type { SavedSegment } from '@prisma/client'
 
 type MockSavedSegmentDelegate = {

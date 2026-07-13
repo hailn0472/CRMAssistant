@@ -1,7 +1,7 @@
 import { ForbiddenException, UnauthorizedException } from '@nestjs/common'
-import { requirePermission, registerPermissionService } from './permission-check'
-import type { PrismaService } from '../../prisma/prisma.service'
-import type { GraphqlContext } from '../../graphql/graphql-context'
+import { requirePermission, registerPermissionService } from '../permission-check'
+import type { PrismaService } from '../../../prisma/prisma.service'
+import type { GraphqlContext } from '../../../graphql/graphql-context'
 
 type MockPrisma = {
   rolePermission: {

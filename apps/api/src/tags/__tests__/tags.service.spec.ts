@@ -1,7 +1,7 @@
 import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common'
 import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library'
 
-import { TagsService } from './tags.service'
+import { TagsService } from '../tags.service'
 import type { Tag } from '@prisma/client'
 
 type MockTagDelegate = {

@@ -17,7 +17,7 @@ jest.mock('otplib', () => {
 })
 
 import { Test, type TestingModule } from '@nestjs/testing'
-import { TwoFactorService } from './two-factor.service'
+import { TwoFactorService } from '../two-factor.service'
 
 describe('TwoFactorService', () => {
   let service: TwoFactorService

@@ -1,7 +1,7 @@
 import { of } from 'rxjs'
 import type { CallHandler } from '@nestjs/common'
-import { AuditInterceptor } from './audit.interceptor'
-import type { AuditService } from '../../audit/audit.service'
+import { AuditInterceptor } from '../audit.interceptor'
+import type { AuditService } from '../../../audit/audit.service'
 
 // Mock GqlExecutionContext
 const mockGqlCtx = {

@@ -1,8 +1,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/ban-types, @typescript-eslint/explicit-function-return-type */
 import { BadRequestException, NotFoundException } from '@nestjs/common'
 
-import { MessagesService } from './messages.service'
-import { InboxPubSubService } from './pubsub.service'
+import { MessagesService } from '../messages.service'
+import { InboxPubSubService } from '../pubsub.service'
 import type { Conversation, Message } from '@prisma/client'
 
 type MockMessageDelegate = {

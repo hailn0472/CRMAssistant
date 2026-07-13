@@ -1,7 +1,12 @@
-import { BadRequestException, ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common'
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common'
 import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library'
 
-import { UsersService } from './users.service'
+import { UsersService } from '../users.service'
 import type { User } from '@prisma/client'
 
 type MockUserDelegate = {
@@ -662,14 +667,18 @@ describe('UsersService', () => {
       const user = makeUser({ id: USER_ID, tenantId: TENANT_ID, twoFactorEnabled: true })
       prisma.user.findFirst.mockResolvedValue(user)
 
-      await expect(service.verify2FA(TENANT_ID, USER_ID, '123456')).rejects.toThrow(BadRequestException)
+      await expect(service.verify2FA(TENANT_ID, USER_ID, '123456')).rejects.toThrow(
+        BadRequestException,
+      )
     })
 
     it('throws BadRequestException if verify2FA called without enable2FA first', async () => {
       const user = makeUser({ id: USER_ID, tenantId: TENANT_ID, twoFactorSecret: null })
       prisma.user.findFirst.mockResolvedValue(user)
 
-      await expect(service.verify2FA(TENANT_ID, USER_ID, '123456')).rejects.toThrow(BadRequestException)
+      await expect(service.verify2FA(TENANT_ID, USER_ID, '123456')).rejects.toThrow(
+        BadRequestException,
+      )
     })
 
     it('throws BadRequestException for invalid TOTP code', async () => {
@@ -677,7 +686,9 @@ describe('UsersService', () => {
       const user = makeUser({ id: USER_ID, tenantId: TENANT_ID, twoFactorSecret: 'secret' })
       prisma.user.findFirst.mockResolvedValue(user)
 
-      await expect(service.verify2FA(TENANT_ID, USER_ID, '000000')).rejects.toThrow(BadRequestException)
+      await expect(service.verify2FA(TENANT_ID, USER_ID, '000000')).rejects.toThrow(
+        BadRequestException,
+      )
     })
   })
 
@@ -712,9 +723,9 @@ describe('UsersService', () => {
     it('throws UnauthorizedException when password is wrong', async () => {
       authService.verifyPassword.mockResolvedValue(false)
 
-      await expect(
-        service.disable2FA(TENANT_ID, USER_ID, 'wrong'),
-      ).rejects.toThrow('Mật khẩu không đúng')
+      await expect(service.disable2FA(TENANT_ID, USER_ID, 'wrong')).rejects.toThrow(
+        'Mật khẩu không đúng',
+      )
     })
   })
 
@@ -754,9 +765,9 @@ describe('UsersService', () => {
     it('throws UnauthorizedException when password is wrong', async () => {
       authService.verifyPassword.mockResolvedValue(false)
 
-      await expect(
-        service.regenerateBackupCodes(TENANT_ID, USER_ID, 'wrong'),
-      ).rejects.toThrow('Mật khẩu không đúng')
+      await expect(service.regenerateBackupCodes(TENANT_ID, USER_ID, 'wrong')).rejects.toThrow(
+        'Mật khẩu không đúng',
+      )
     })
   })
 

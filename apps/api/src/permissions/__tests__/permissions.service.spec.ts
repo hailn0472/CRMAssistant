@@ -1,7 +1,7 @@
 import { NotFoundException, ForbiddenException } from '@nestjs/common'
 import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library'
-import { PermissionsService } from './permissions.service'
-import { AuditService } from '../audit/audit.service'
+import { PermissionsService } from '../permissions.service'
+import { AuditService } from '../../audit/audit.service'
 
 type MockPrisma = {
   permission: {

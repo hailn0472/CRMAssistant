@@ -1,5 +1,5 @@
-import { AuditService } from './audit.service'
-import { PrismaService } from '../prisma/prisma.service'
+import { AuditService } from '../audit.service'
+import { PrismaService } from '../../prisma/prisma.service'
 
 describe('AuditService', () => {
   let service: AuditService

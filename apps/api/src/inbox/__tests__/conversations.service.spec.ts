@@ -2,8 +2,8 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common'
 import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library'
 
-import { ConversationsService } from './conversations.service'
-import { InboxPubSubService } from './pubsub.service'
+import { ConversationsService } from '../conversations.service'
+import { InboxPubSubService } from '../pubsub.service'
 import type { Conversation } from '@prisma/client'
 
 type MockConversationDelegate = {

@@ -1,10 +1,10 @@
 import { UnauthorizedException } from '@nestjs/common'
 
-import { registerContactGraphql } from './contacts.graphql'
-import { schema } from '../graphql/schema'
-import { builder } from '../graphql/schema.builder'
-import type { ContactsService } from './contacts.service'
-import type { JwtPayload } from '../auth/strategies/jwt.strategy'
+import { registerContactGraphql } from '../contacts.graphql'
+import { schema } from '../../graphql/schema'
+import { builder } from '../../graphql/schema.builder'
+import type { ContactsService } from '../contacts.service'
+import type { JwtPayload } from '../../auth/strategies/jwt.strategy'
 
 const mockContact = {
   id: 'contact-1',

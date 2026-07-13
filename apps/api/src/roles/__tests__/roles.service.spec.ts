@@ -1,7 +1,7 @@
 import { BadRequestException, ConflictException, ForbiddenException } from '@nestjs/common'
 import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library'
-import { RolesService } from './roles.service'
-import { AuditService } from '../audit/audit.service'
+import { RolesService } from '../roles.service'
+import { AuditService } from '../../audit/audit.service'
 
 type MockPrisma = {
   role: {
