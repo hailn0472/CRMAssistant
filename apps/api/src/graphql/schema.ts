@@ -9,6 +9,7 @@ import '../sharing/sharing.graphql'
 import '../audit/audit.graphql'
 import '../auth/api-key.graphql'
 import '../inbox/inbox.graphql'
+import '../facebook/facebook.graphql'
 import { builder } from './schema.builder'
 
 export const schema = builder.toSchema({})

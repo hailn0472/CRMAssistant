@@ -6,6 +6,10 @@ import { AppShell } from '../AppShell'
 const mockPush = jest.fn()
 const mockUsePathname = jest.fn(() => '/contacts')
 
+global.fetch = jest.fn(() =>
+  Promise.resolve({ json: () => Promise.resolve({ wsToken: null }) } as Response),
+) as jest.Mock
+
 jest.mock('next/navigation', () => ({
   useRouter: (): { push: jest.Mock } => ({
     push: mockPush,
@@ -57,11 +61,13 @@ jest.mock('@tanstack/react-query', () => {
 })
 
 const mockSetUser = jest.fn()
+const mockSetAccessToken = jest.fn()
 const mockSetLoading = jest.fn()
 
 const mockAuthState = {
   user: { roles: ['ADMIN'] } as { roles: string[] } | null,
   setUser: mockSetUser,
+  setAccessToken: mockSetAccessToken,
   setLoading: mockSetLoading,
   isLoading: true,
 }

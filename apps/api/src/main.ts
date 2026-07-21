@@ -1,11 +1,15 @@
 import { ValidationPipe } from '@nestjs/common'
 import { NestFactory } from '@nestjs/core'
 import { ConfigService } from '@nestjs/config'
+import type { NestExpressApplication } from '@nestjs/platform-express'
 
 import { AppModule } from './app.module'
 
 async function bootstrap(): Promise<void> {
-  const app = await NestFactory.create(AppModule)
+  // `rawBody: true` preserves the raw request Buffer on `req.rawBody` so the
+  // Facebook webhook controller can verify `X-Hub-Signature-256` against the
+  // exact bytes Facebook signed (JSON.stringify(req.body) would not match).
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, { rawBody: true })
   const configService = app.get(ConfigService)
   const port = configService.get<number>('PORT') ?? 4000
 

@@ -1,10 +1,11 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ChevronLeft, MoreVertical, RefreshCcw, StickyNote } from 'lucide-react'
+import { ChevronLeft, Facebook, MoreVertical, RefreshCcw, StickyNote } from 'lucide-react'
 
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth.store'
+import type { GraphqlSubscriptionClient } from '@/lib/graphql-subscription'
 import type { Message } from '@/services/inbox.service'
 import { getMessages, sendMessage as apiSendMessage, markAsRead } from '@/services/inbox.service'
 import { MessageBubble } from './MessageBubble'
@@ -13,22 +14,31 @@ import { InternalNoteBadge } from './InternalNoteBadge'
 
 const POLL_INTERVAL_MS = 3000
 
+const MESSAGE_FIELDS = `
+  id conversationId senderId senderType content messageType metadata internalNote
+  sentAt deliveredAt readAt createdAt
+`
+
 type ConversationDetailProps = {
   conversationId: string
   contactName: string
   status: string
+  channel?: string
   className?: string
   onBack?: () => void
-  refreshKey?: number
+  /** Shared subscription client from the inbox page — used to deliver new
+   * messages instantly via WebSocket instead of waiting for the poll. */
+  wsClient?: GraphqlSubscriptionClient | null
 }
 
 export function ConversationDetail({
   conversationId,
   contactName,
   status,
+  channel,
   className,
   onBack,
-  refreshKey = 0,
+  wsClient,
 }: ConversationDetailProps): React.JSX.Element {
   const [messages, setMessages] = useState<Message[]>([])
   const [loading, setLoading] = useState(true)
@@ -70,9 +80,10 @@ export function ConversationDetail({
       initializedRef.current = true
     }
     fetchMessages(true)
-  }, [fetchMessages, refreshKey])
+  }, [fetchMessages])
 
-  // Polling for real-time updates
+  // Polling for real-time updates (fallback/reconciliation — WS subscription
+  // below is the primary delivery path when connected)
   useEffect(() => {
     // Start polling after initial load
     pollTimerRef.current = setInterval(() => {
@@ -86,6 +97,29 @@ export function ConversationDetail({
       }
     }
   }, [fetchMessages])
+
+  // Real-time message delivery via WebSocket — append directly instead of
+  // refetching the whole thread, so an incoming message doesn't flash/reload
+  // the message list.
+  useEffect(() => {
+    if (!wsClient) return
+
+    const unsubscribe = wsClient.subscribe(`messages:${conversationId}`, {
+      query: `subscription OnNewMessage($conversationId: ID!) {
+        onNewMessage(conversationId: $conversationId) { ${MESSAGE_FIELDS} }
+      }`,
+      variables: { conversationId },
+      onData: (data: { onNewMessage: Message }) => {
+        const incoming = data.onNewMessage
+        setMessages((prev) => {
+          if (prev.some((m) => m.id === incoming.id)) return prev
+          return [...prev, incoming]
+        })
+      },
+    })
+
+    return unsubscribe
+  }, [wsClient, conversationId])
 
   // Auto-scroll to bottom on new messages
   useEffect(() => {
@@ -121,9 +155,23 @@ export function ConversationDetail({
     }
   }
 
-  async function handleSend(content: string): Promise<void> {
+  async function handleSend(
+    content: string,
+    options?: { metadata?: Record<string, unknown> },
+  ): Promise<void> {
     const user = useAuthStore.getState().user
     if (!user) throw new Error('Not authenticated')
+
+    const metadataString = options?.metadata ? JSON.stringify(options.metadata) : undefined
+
+    // AC #8: a composer-built Facebook template must actually be delivered as
+    // a template attachment, not silently sent as plain text — the mapper's
+    // TEMPLATE case only fires when messageType is 'TEMPLATE'.
+    const messageType = internalNoteMode
+      ? 'INTERNAL_NOTE'
+      : options?.metadata?.['template']
+        ? 'TEMPLATE'
+        : 'TEXT'
 
     // Optimistic update — add message to UI immediately
     const optimisticMsg: Message = {
@@ -132,9 +180,9 @@ export function ConversationDetail({
       senderId: user.userId,
       senderType: 'AGENT',
       content,
-      messageType: internalNoteMode ? 'INTERNAL_NOTE' : 'TEXT',
+      messageType,
       internalNote: internalNoteMode,
-      metadata: null,
+      metadata: metadataString ?? null,
       sentAt: new Date().toISOString(),
       deliveredAt: null,
       readAt: null,
@@ -148,7 +196,8 @@ export function ConversationDetail({
         senderId: user.userId,
         senderType: 'AGENT',
         content,
-        messageType: internalNoteMode ? 'INTERNAL_NOTE' : 'TEXT',
+        messageType,
+        metadata: metadataString,
       })
 
       // Immediately replace optimistic message with real server message (Sending → Sent)
@@ -195,8 +244,14 @@ export function ConversationDetail({
             <div className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border-2 border-white bg-emerald-500" />
           </div>
 
-          <h2 className="text-[15px] font-bold text-slate-900 tracking-tight leading-none ml-1">
+          <h2 className="flex items-center gap-1.5 text-[15px] font-bold text-slate-900 tracking-tight leading-none ml-1">
             {contactName}
+            {channel === 'FACEBOOK' && (
+              <Facebook
+                aria-label="Facebook Messenger conversation"
+                className="h-3.5 w-3.5 text-blue-600"
+              />
+            )}
           </h2>
         </div>
 
@@ -387,6 +442,7 @@ export function ConversationDetail({
         <MessageComposer
           onSend={handleSend}
           disabled={status === 'ARCHIVED' || status === 'RESOLVED'}
+          channel={channel}
         />
       </div>
     </div>

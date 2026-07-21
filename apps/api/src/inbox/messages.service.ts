@@ -1,8 +1,15 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common'
+import {
+  BadRequestException,
+  Inject,
+  Injectable,
+  NotFoundException,
+  Optional,
+} from '@nestjs/common'
 import type { Message, Prisma } from '@prisma/client'
 
 import { PrismaService } from '../prisma/prisma.service'
 import { InboxPubSubService } from './pubsub.service'
+import { CHANNEL_DISPATCHER, type ChannelDispatcher } from './channel-dispatcher'
 
 export type MessagePaginationInput = {
   cursor?: string
@@ -43,6 +50,7 @@ export class MessagesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly pubSub: InboxPubSubService,
+    @Optional() @Inject(CHANNEL_DISPATCHER) private readonly dispatcher?: ChannelDispatcher,
   ) {}
 
   async sendMessage(tenantId: string, input: SendMessageInput): Promise<Message> {
@@ -101,6 +109,16 @@ export class MessagesService {
     // Publish after transaction commits
     this.pubSub.publish(`${PUBSUB_NEW_MESSAGE}:${input.conversationId}`, message)
     this.pubSub.publish(`${PUBSUB_CONVERSATION_UPDATED}:${tenantId}`, conversation)
+
+    // Best-effort outbound channel delivery (e.g. Facebook). Never let a
+    // delivery failure undo or fail the already-persisted message.
+    if (this.dispatcher) {
+      try {
+        await this.dispatcher.dispatch(message, conversation)
+      } catch (error) {
+        console.warn('[MessagesService] Channel dispatch failed', error)
+      }
+    }
 
     return message
   }

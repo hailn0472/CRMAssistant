@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Search, MessageCircle, Hash } from 'lucide-react'
+import { Search, MessageCircle, Hash, Facebook } from 'lucide-react'
 
 import { cn } from '@/lib/utils'
 import type { Conversation, ConversationFilter } from '@/services/inbox.service'
@@ -20,6 +20,7 @@ type ConversationListProps = {
 
 const CHANNEL_ICONS: Record<string, React.ElementType> = {
   INTERNAL: Hash,
+  FACEBOOK: Facebook,
 }
 
 function timeAgo(dateStr: string | null | undefined): string {
@@ -87,72 +88,65 @@ export function ConversationList({
   const PAGE_SIZE = 20
   const initialized = useRef(false)
 
-  const fetchConversations = useCallback(async () => {
-    setLoading(true)
-    setError(null)
-    try {
-      const filter: ConversationFilter = {}
-      if (statusFilter) filter.status = statusFilter
-      if (channelFilter) filter.channel = channelFilter
-      if (unreadOnly) filter.unreadOnly = true
-      if (assigneeFilter) filter.assignedTo = assigneeFilter
+  const fetchConversations = useCallback(
+    async (showLoading = true) => {
+      if (showLoading) setLoading(true)
+      if (showLoading) setError(null)
+      try {
+        const filter: ConversationFilter = {}
+        if (statusFilter) filter.status = statusFilter
+        if (channelFilter) filter.channel = channelFilter
+        if (unreadOnly) filter.unreadOnly = true
+        if (assigneeFilter) filter.assignedTo = assigneeFilter
 
-      const result = await getConversations({ page, pageSize: PAGE_SIZE }, filter)
-      let items = result.items
-      if (searchQuery) {
-        items = items.filter((c) => {
-          const name = `${c.contact?.firstName || ''} ${c.contact?.lastName || ''}`.toLowerCase()
-          return name.includes(searchQuery.toLowerCase())
-        })
+        const result = await getConversations({ page, pageSize: PAGE_SIZE }, filter)
+        let items = result.items
+        if (searchQuery) {
+          items = items.filter((c) => {
+            const name = `${c.contact?.firstName || ''} ${c.contact?.lastName || ''}`.toLowerCase()
+            return name.includes(searchQuery.toLowerCase())
+          })
+        }
+        setConversations(items)
+        setTotal(result.total)
+      } catch {
+        // Background refreshes (polling / real-time) fail silently — only
+        // surface an error state for the user-visible initial/filtered load.
+        if (showLoading) setError('Failed to load conversations')
+      } finally {
+        if (showLoading) setLoading(false)
       }
-      setConversations(items)
-      setTotal(result.total)
-    } catch {
-      setError('Failed to load conversations')
-    } finally {
-      setLoading(false)
-    }
-  }, [statusFilter, channelFilter, unreadOnly, assigneeFilter, page, searchQuery])
+    },
+    [statusFilter, channelFilter, unreadOnly, assigneeFilter, page, searchQuery],
+  )
 
+  // Initial load + reload when filters/page/search change (shows loading state)
   useEffect(() => {
     if (!initialized.current) {
       initialized.current = true
     }
-    fetchConversations()
-  }, [fetchConversations, refreshKey])
+    fetchConversations(true)
+  }, [fetchConversations])
 
-  // Polling for real-time list updates
+  // Real-time refresh trigger (from onConversationUpdated subscription) —
+  // silent, no loading skeleton, so an update doesn't flash the whole list.
+  const skipNextRefreshKey = useRef(true)
+  useEffect(() => {
+    if (skipNextRefreshKey.current) {
+      skipNextRefreshKey.current = false
+      return
+    }
+    fetchConversations(false)
+  }, [refreshKey, fetchConversations])
+
+  // Polling for real-time list updates (fallback/reconciliation — silent)
   useEffect(() => {
     const timer = setInterval(() => {
-      // Silent refresh — don't show loading skeleton
-      getConversations(
-        { page, pageSize: PAGE_SIZE },
-        {
-          ...(statusFilter ? { status: statusFilter } : {}),
-          ...(channelFilter ? { channel: channelFilter } : {}),
-          ...(unreadOnly ? { unreadOnly: true } : {}),
-          ...(assigneeFilter ? { assignedTo: assigneeFilter } : {}),
-        },
-      )
-        .then((result) => {
-          let items = result.items
-          if (searchQuery) {
-            items = items.filter((c) => {
-              const name =
-                `${c.contact?.firstName || ''} ${c.contact?.lastName || ''}`.toLowerCase()
-              return name.includes(searchQuery.toLowerCase())
-            })
-          }
-          setConversations(items)
-          setTotal(result.total)
-        })
-        .catch(() => {
-          // Silently ignore poll errors
-        })
+      fetchConversations(false)
     }, LIST_POLL_INTERVAL_MS)
 
     return () => clearInterval(timer)
-  }, [statusFilter, channelFilter, unreadOnly, assigneeFilter, page, searchQuery])
+  }, [fetchConversations])
 
   useEffect(() => {
     setPage(1)
@@ -241,7 +235,7 @@ export function ConversationList({
             <p className="text-xs text-slate-500">{error}</p>
             <button
               type="button"
-              onClick={fetchConversations}
+              onClick={() => fetchConversations(true)}
               className="mt-2 rounded-full bg-slate-900 px-5 py-2 text-xs font-medium text-white shadow-sm hover:bg-slate-800 transition-transform hover:scale-105 active:scale-95"
             >
               Try Again

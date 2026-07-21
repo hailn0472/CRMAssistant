@@ -46,16 +46,18 @@ model Tenant {
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
-  users         User[]
-  contacts      Contact[]
-  tags          Tag[]
-  savedSegments SavedSegment[]
-  roles         Role[]
-  auditLogs     AuditLog[]
-  apiKeys       ApiKey[]
-  teams         Team[]
-  sharingRules  SharingRule[]
-  conversations Conversation[]
+  users                    User[]
+  contacts                 Contact[]
+  tags                     Tag[]
+  savedSegments            SavedSegment[]
+  roles                    Role[]
+  auditLogs                AuditLog[]
+  apiKeys                  ApiKey[]
+  teams                    Team[]
+  sharingRules             SharingRule[]
+  conversations            Conversation[]
+  channelConnections       ChannelConnection[]
+  contactChannelIdentities ContactChannelIdentity[]
 }
 
 /// Tenant-scoped user model with authentication support.
@@ -272,8 +274,9 @@ model Contact {
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   owner  User   @relation("ContactOwner", fields: [ownerId], references: [id], onDelete: Cascade)
 
-  tags          ContactTag[]
-  conversations Conversation[]
+  tags              ContactTag[]
+  conversations     Conversation[]
+  channelIdentities ContactChannelIdentity[]
 
   @@unique([tenantId, email])
   @@index([tenantId])
@@ -360,6 +363,7 @@ model SharingRule {
 enum Channel {
   INTERNAL
   LIVE_CHAT
+  FACEBOOK
 }
 
 enum ConversationStatus {
@@ -449,4 +453,59 @@ model MessageReadReceipt {
   @@unique([messageId, userId])
   @@index([messageId])
   @@index([userId])
+}
+
+// =============================================================================
+// OMNICHANNEL THIRD-PARTY CHANNEL MODELS (Story 8A.3)
+// =============================================================================
+
+/// Tenant-scoped per-tenant channel page/account connection (Facebook page now,
+/// reusable for other 8B channels later). Access tokens are stored encrypted at
+/// rest — never in plaintext (see common/crypto/token-crypto.ts).
+model ChannelConnection {
+  id                   String    @id @default(uuid())
+  tenantId             String
+  channel              Channel
+  externalId           String // Facebook pageId (or equivalent external account id)
+  accessTokenEncrypted String
+  displayName          String?
+  status               String    @default("ACTIVE") // ACTIVE | DISCONNECTED
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+  createdBy            String    @default("system")
+  updatedBy            String    @default("system")
+  deletedAt            DateTime?
+
+  tenant            Tenant                   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  contactIdentities ContactChannelIdentity[]
+
+  @@unique([tenantId, channel, externalId])
+  @@index([tenantId])
+  @@index([tenantId, channel])
+}
+
+/// Maps an external channel identity (e.g. Facebook PSID) to a Contact, so we
+/// don't have to abuse the required Contact.email for channel-only contacts.
+model ContactChannelIdentity {
+  id                  String   @id @default(uuid())
+  tenantId            String
+  contactId           String
+  channel             Channel
+  externalId          String // Facebook page-scoped user id (PSID)
+  // Which ChannelConnection (page) this identity was first seen on — a PSID is
+  // scoped to a single Facebook page, so this lets outbound dispatch pick the
+  // correct page/token when a tenant has more than one connected (review fix,
+  // Story 8A.3). Nullable so identities created before this field existed
+  // still work (dispatch falls back to the tenant's oldest active connection).
+  channelConnectionId String?
+  createdAt           DateTime @default(now())
+
+  tenant            Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  contact           Contact            @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  channelConnection ChannelConnection? @relation(fields: [channelConnectionId], references: [id], onDelete: SetNull)
+
+  @@unique([tenantId, channel, externalId])
+  @@index([tenantId])
+  @@index([contactId])
+  @@index([channelConnectionId])
 }

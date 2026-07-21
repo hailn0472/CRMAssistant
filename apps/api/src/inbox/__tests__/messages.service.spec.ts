@@ -301,4 +301,48 @@ describe('MessagesService', () => {
       expect(prisma.messageReadReceipt.upsert).toHaveBeenCalledTimes(2)
     })
   })
+
+  describe('optional channel dispatcher', () => {
+    it('invokes the dispatcher after the message transaction commits', async () => {
+      const conv = makeConversation({ channel: 'FACEBOOK' as any })
+      const msg = makeMessage()
+      prisma.conversation.findFirst.mockResolvedValue(conv)
+      prisma.$transaction.mockImplementation(async (cb: Function) => cb(prisma))
+      prisma.message.create.mockResolvedValue(msg)
+      prisma.conversation.update.mockResolvedValue(conv)
+
+      const dispatcher = { dispatch: jest.fn().mockResolvedValue(undefined) }
+      const dispatchingService = new MessagesService(prisma as any, pubSub, dispatcher as any)
+
+      await dispatchingService.sendMessage(TENANT_ID, {
+        conversationId: CONVERSATION_ID,
+        senderId: USER_ID,
+        senderType: 'AGENT',
+        content: 'Hello from agent',
+      })
+
+      expect(dispatcher.dispatch).toHaveBeenCalledWith(msg, conv)
+    })
+
+    it('does not fail sendMessage when the dispatcher throws', async () => {
+      const conv = makeConversation({ channel: 'FACEBOOK' as any })
+      const msg = makeMessage()
+      prisma.conversation.findFirst.mockResolvedValue(conv)
+      prisma.$transaction.mockImplementation(async (cb: Function) => cb(prisma))
+      prisma.message.create.mockResolvedValue(msg)
+      prisma.conversation.update.mockResolvedValue(conv)
+
+      const dispatcher = { dispatch: jest.fn().mockRejectedValue(new Error('graph api down')) }
+      const dispatchingService = new MessagesService(prisma as any, pubSub, dispatcher as any)
+
+      await expect(
+        dispatchingService.sendMessage(TENANT_ID, {
+          conversationId: CONVERSATION_ID,
+          senderId: USER_ID,
+          senderType: 'AGENT',
+          content: 'Hello from agent',
+        }),
+      ).resolves.toBe(msg)
+    })
+  })
 })
