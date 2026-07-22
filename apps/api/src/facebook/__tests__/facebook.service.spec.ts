@@ -100,8 +100,11 @@ describe('FacebookService', () => {
       contact: { create: jest.fn() },
       userRole: { findFirst: jest.fn() },
       user: { findFirst: jest.fn() },
-      conversation: { update: jest.fn() },
-      message: { findFirst: jest.fn().mockResolvedValue(null) },
+      conversation: { update: jest.fn(), findFirst: jest.fn() },
+      message: {
+        findFirst: jest.fn().mockResolvedValue(null),
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+      },
       $transaction: jest.fn().mockImplementation((fn: (tx: unknown) => unknown) => fn(prisma)),
     }
     audit = { log: jest.fn() }
@@ -320,16 +323,6 @@ describe('FacebookService', () => {
       expect(conversationsService.findOrCreateConversation).not.toHaveBeenCalled()
     })
 
-    it('ignores message_echo events (our own outbound send echoed back)', async () => {
-      await service.handleInboundMessagingEvent(PAGE_ID, {
-        sender: { id: PSID },
-        message: { text: 'Hi there', is_echo: true },
-      })
-
-      expect(prisma.channelConnection.findFirst).not.toHaveBeenCalled()
-      expect(conversationsService.findOrCreateConversation).not.toHaveBeenCalled()
-    })
-
     it('resolves the contact, finds/creates the conversation, and persists the message', async () => {
       prisma.channelConnection.findFirst.mockResolvedValue(makeConnection())
       prisma.contactChannelIdentity.findUnique.mockResolvedValue({ contactId: CONTACT_ID })
@@ -391,6 +384,187 @@ describe('FacebookService', () => {
         data: { status: 'OPEN', updatedBy: 'system' },
       })
       expect(messagesService.sendMessage).toHaveBeenCalled()
+    })
+
+    it('attaches referral info to the first message when the customer arrived via an m.me link/ad', async () => {
+      prisma.channelConnection.findFirst.mockResolvedValue(makeConnection())
+      prisma.contactChannelIdentity.findUnique.mockResolvedValue({ contactId: CONTACT_ID })
+      conversationsService.findOrCreateConversation.mockResolvedValue(makeConversation())
+      messagesService.sendMessage.mockResolvedValue({})
+
+      await service.handleInboundMessagingEvent(PAGE_ID, {
+        sender: { id: PSID },
+        message: {
+          mid: 'mid.1',
+          text: 'Hi there',
+          referral: { ref: 'summer-sale', source: 'ADS' },
+        },
+      })
+
+      expect(messagesService.sendMessage).toHaveBeenCalledWith(
+        TENANT_ID,
+        expect.objectContaining({
+          metadata: expect.objectContaining({
+            referral: { ref: 'summer-sale', source: 'ADS' },
+          }),
+        }),
+      )
+    })
+  })
+
+  describe('handleInboundMessagingEvent() — message_deliveries', () => {
+    it('sets deliveredAt on messages matching the delivered mids', async () => {
+      prisma.channelConnection.findFirst.mockResolvedValue(makeConnection())
+      prisma.contactChannelIdentity.findUnique.mockResolvedValue({ contactId: CONTACT_ID })
+      prisma.conversation.findFirst.mockResolvedValue({ id: CONV_ID })
+
+      await service.handleInboundMessagingEvent(PAGE_ID, {
+        sender: { id: PSID },
+        delivery: { mids: ['mid.1', 'mid.2'], watermark: 1700000000000 },
+      })
+
+      expect(prisma.message.updateMany).toHaveBeenCalledTimes(2)
+      expect(prisma.message.updateMany).toHaveBeenCalledWith({
+        where: {
+          conversationId: CONV_ID,
+          metadata: { path: ['mid'], equals: 'mid.1' },
+          deliveredAt: null,
+        },
+        data: { deliveredAt: new Date(1700000000000) },
+      })
+    })
+
+    it('does nothing when the contact/conversation is not known yet', async () => {
+      prisma.channelConnection.findFirst.mockResolvedValue(makeConnection())
+      prisma.contactChannelIdentity.findUnique.mockResolvedValue(null)
+
+      await service.handleInboundMessagingEvent(PAGE_ID, {
+        sender: { id: PSID },
+        delivery: { mids: ['mid.1'], watermark: 1700000000000 },
+      })
+
+      expect(prisma.message.updateMany).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('handleInboundMessagingEvent() — message_reads', () => {
+    it('sets readAt (and deliveredAt) on AGENT messages sent before the watermark', async () => {
+      prisma.channelConnection.findFirst.mockResolvedValue(makeConnection())
+      prisma.contactChannelIdentity.findUnique.mockResolvedValue({ contactId: CONTACT_ID })
+      prisma.conversation.findFirst.mockResolvedValue({ id: CONV_ID })
+
+      await service.handleInboundMessagingEvent(PAGE_ID, {
+        sender: { id: PSID },
+        read: { watermark: 1700000000000 },
+      })
+
+      expect(prisma.message.updateMany).toHaveBeenCalledWith({
+        where: {
+          conversationId: CONV_ID,
+          senderType: 'AGENT',
+          sentAt: { lte: new Date(1700000000000) },
+          readAt: null,
+        },
+        data: { readAt: new Date(1700000000000), deliveredAt: new Date(1700000000000) },
+      })
+    })
+  })
+
+  describe('handleInboundMessagingEvent() — message_echoes', () => {
+    it('syncs an echoed page-sent message into the conversation with skipDispatch', async () => {
+      prisma.channelConnection.findFirst.mockResolvedValue(makeConnection())
+      prisma.contactChannelIdentity.findUnique.mockResolvedValue({ contactId: CONTACT_ID })
+      prisma.conversation.findFirst.mockResolvedValue({ id: CONV_ID })
+      prisma.message.findFirst.mockResolvedValue(null)
+      messagesService.sendMessage.mockResolvedValue({})
+
+      await service.handleInboundMessagingEvent(PAGE_ID, {
+        recipient: { id: PSID },
+        message: { mid: 'mid.echo1', text: 'Replied from the Page Inbox', is_echo: true },
+      })
+
+      expect(messagesService.sendMessage).toHaveBeenCalledWith(
+        TENANT_ID,
+        expect.objectContaining({
+          conversationId: CONV_ID,
+          senderId: 'conn-1',
+          senderType: 'AGENT',
+          content: 'Replied from the Page Inbox',
+          skipDispatch: true,
+          metadata: expect.objectContaining({ mid: 'mid.echo1', source: 'facebook_echo' }),
+        }),
+      )
+    })
+
+    it('skips an echo whose mid was already persisted (e.g. the CRM already dispatched it)', async () => {
+      prisma.channelConnection.findFirst.mockResolvedValue(makeConnection())
+      prisma.contactChannelIdentity.findUnique.mockResolvedValue({ contactId: CONTACT_ID })
+      prisma.conversation.findFirst.mockResolvedValue({ id: CONV_ID })
+      prisma.message.findFirst.mockResolvedValue({ id: 'already-persisted' })
+
+      await service.handleInboundMessagingEvent(PAGE_ID, {
+        recipient: { id: PSID },
+        message: { mid: 'mid.echo1', text: 'Sent from CRM', is_echo: true },
+      })
+
+      expect(messagesService.sendMessage).not.toHaveBeenCalled()
+    })
+
+    it('skips an echo when there is no known contact/conversation for the recipient PSID yet', async () => {
+      prisma.channelConnection.findFirst.mockResolvedValue(makeConnection())
+      prisma.contactChannelIdentity.findUnique.mockResolvedValue(null)
+
+      await service.handleInboundMessagingEvent(PAGE_ID, {
+        recipient: { id: PSID },
+        message: { mid: 'mid.echo1', text: 'Proactive message', is_echo: true },
+      })
+
+      expect(messagesService.sendMessage).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('handleInboundMessagingEvent() — messaging_postbacks', () => {
+    it('persists the postback title as a CONTACT message', async () => {
+      prisma.channelConnection.findFirst.mockResolvedValue(makeConnection())
+      prisma.contactChannelIdentity.findUnique.mockResolvedValue({ contactId: CONTACT_ID })
+      conversationsService.findOrCreateConversation.mockResolvedValue(makeConversation())
+      messagesService.sendMessage.mockResolvedValue({})
+
+      await service.handleInboundMessagingEvent(PAGE_ID, {
+        sender: { id: PSID },
+        timestamp: 1700000000000,
+        postback: { title: 'Xem bảng giá', payload: 'VIEW_PRICING' },
+      })
+
+      expect(messagesService.sendMessage).toHaveBeenCalledWith(
+        TENANT_ID,
+        expect.objectContaining({
+          conversationId: CONV_ID,
+          senderId: CONTACT_ID,
+          senderType: 'CONTACT',
+          content: 'Xem bảng giá',
+          metadata: {
+            postback: true,
+            payload: 'VIEW_PRICING',
+            dedupeKey: 'postback:1700000000000:VIEW_PRICING',
+          },
+        }),
+      )
+    })
+
+    it('dedupes a redelivered postback event', async () => {
+      prisma.channelConnection.findFirst.mockResolvedValue(makeConnection())
+      prisma.contactChannelIdentity.findUnique.mockResolvedValue({ contactId: CONTACT_ID })
+      conversationsService.findOrCreateConversation.mockResolvedValue(makeConversation())
+      prisma.message.findFirst.mockResolvedValue({ id: 'already-persisted' })
+
+      await service.handleInboundMessagingEvent(PAGE_ID, {
+        sender: { id: PSID },
+        timestamp: 1700000000000,
+        postback: { title: 'Xem bảng giá', payload: 'VIEW_PRICING' },
+      })
+
+      expect(messagesService.sendMessage).not.toHaveBeenCalled()
     })
   })
 })

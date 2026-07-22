@@ -264,16 +264,14 @@ export class FacebookService {
   // ── Inbound message handling (AC #2, #4, #5) ──────────────────────────
 
   async handleInboundMessagingEvent(pageId: string, event: FacebookMessagingEvent): Promise<void> {
+    if (event.delivery) return this.handleDeliveryEvent(pageId, event)
+    if (event.read) return this.handleReadEvent(pageId, event)
+    if (event.message?.is_echo) return this.handleEchoEvent(pageId, event)
+    if (event.postback) return this.handlePostbackEvent(pageId, event)
+
     const psid = event.sender?.id
     if (!psid || !event.message) {
-      // Not a user message (e.g. delivery/read receipt, postback) — nothing to persist yet.
-      return
-    }
-
-    if (event.message.is_echo) {
-      // Echo of our own outbound send on this page — not a genuine inbound
-      // customer message. Ignoring it prevents bogus contacts/conversations
-      // being created from our own agent replies being echoed back.
+      // Nothing left to do with this event shape.
       return
     }
 
@@ -316,6 +314,8 @@ export class FacebookService {
     }
 
     const { content, messageType, metadata } = mapInboundFacebookMessage(event.message)
+    const referral = event.message.referral ?? event.referral
+    const finalMetadata = referral ? { ...metadata, referral } : metadata
 
     await this.messagesService.sendMessage(tenantId, {
       conversationId: conversation.id,
@@ -323,7 +323,166 @@ export class FacebookService {
       senderType: 'CONTACT',
       content,
       messageType,
-      metadata,
+      metadata: finalMetadata,
+    })
+  }
+
+  /** Resolves an existing contact + conversation for a PSID, WITHOUT creating
+   * either. Used by delivery/read/echo handlers, which should only update
+   * state that already exists — a delivery receipt or an echo for a
+   * conversation we've never heard of gives us no safe context to act on. */
+  private async resolveExistingConversationForPsid(
+    pageId: string,
+    psid: string,
+  ): Promise<{ tenantId: string; connection: ChannelConnection; conversationId: string } | null> {
+    const resolved = await this.resolveActiveConnectionByPageId(pageId)
+    if (!resolved) return null
+    const { tenantId, connection } = resolved
+
+    const identity = await this.prisma.contactChannelIdentity.findUnique({
+      where: {
+        tenantId_channel_externalId: { tenantId, channel: FACEBOOK_CHANNEL, externalId: psid },
+      },
+      select: { contactId: true },
+    })
+    if (!identity) return null
+
+    const conversation = await this.prisma.conversation.findFirst({
+      where: {
+        tenantId,
+        contactId: identity.contactId,
+        channel: FACEBOOK_CHANNEL,
+        deletedAt: null,
+      },
+      select: { id: true },
+    })
+    if (!conversation) return null
+
+    return { tenantId, connection, conversationId: conversation.id }
+  }
+
+  // ── Delivery / read receipts (message_deliveries, message_reads) ──────
+
+  private async handleDeliveryEvent(pageId: string, event: FacebookMessagingEvent): Promise<void> {
+    const psid = event.sender?.id
+    const mids = event.delivery?.mids ?? []
+    if (!psid || mids.length === 0) return
+
+    const resolved = await this.resolveExistingConversationForPsid(pageId, psid)
+    if (!resolved) return
+
+    const deliveredAt = event.delivery?.watermark ? new Date(event.delivery.watermark) : new Date()
+
+    for (const mid of mids) {
+      await this.prisma.message.updateMany({
+        where: {
+          conversationId: resolved.conversationId,
+          metadata: { path: ['mid'], equals: mid },
+          deliveredAt: null,
+        },
+        data: { deliveredAt },
+      })
+    }
+  }
+
+  private async handleReadEvent(pageId: string, event: FacebookMessagingEvent): Promise<void> {
+    const psid = event.sender?.id
+    const watermark = event.read?.watermark
+    if (!psid || !watermark) return
+
+    const resolved = await this.resolveExistingConversationForPsid(pageId, psid)
+    if (!resolved) return
+
+    const readAt = new Date(watermark)
+
+    await this.prisma.message.updateMany({
+      where: {
+        conversationId: resolved.conversationId,
+        senderType: 'AGENT',
+        sentAt: { lte: readAt },
+        readAt: null,
+      },
+      data: { readAt, deliveredAt: readAt },
+    })
+    // deliveredAt above unconditionally overwrites an earlier real delivery
+    // timestamp for already-delivered messages too — acceptable, read implies
+    // delivered and we only care about "delivered by no later than X" here.
+  }
+
+  // ── Echo sync (message_echoes) ─────────────────────────────────────────
+
+  private async handleEchoEvent(pageId: string, event: FacebookMessagingEvent): Promise<void> {
+    // For echoes, the page is the sender and the customer PSID is the recipient.
+    const psid = event.recipient?.id
+    const mid = event.message?.mid
+    if (!psid || !mid) return
+
+    const resolved = await this.resolveExistingConversationForPsid(pageId, psid)
+    if (!resolved) return
+
+    const duplicate = await this.prisma.message.findFirst({
+      where: { conversationId: resolved.conversationId, metadata: { path: ['mid'], equals: mid } },
+      select: { id: true },
+    })
+    if (duplicate) return
+
+    const { content, messageType, metadata } = mapInboundFacebookMessage(event.message!)
+
+    await this.messagesService.sendMessage(resolved.tenantId, {
+      conversationId: resolved.conversationId,
+      senderId: resolved.connection.id,
+      senderType: 'AGENT',
+      content,
+      messageType,
+      metadata: { ...metadata, source: 'facebook_echo' },
+      skipDispatch: true,
+    })
+  }
+
+  // ── Postbacks (messaging_postbacks) ────────────────────────────────────
+
+  private async handlePostbackEvent(pageId: string, event: FacebookMessagingEvent): Promise<void> {
+    const psid = event.sender?.id
+    if (!psid || !event.postback) return
+
+    const resolved = await this.resolveActiveConnectionByPageId(pageId)
+    if (!resolved) return
+    const { tenantId, connection } = resolved
+
+    const contactId = await this.resolveOrCreateContactForPsid(tenantId, psid, connection.id)
+
+    let conversation = await this.conversationsService.findOrCreateConversation(
+      tenantId,
+      contactId,
+      FACEBOOK_CHANNEL,
+      SYSTEM_ACTOR,
+    )
+    if (conversation.status === 'RESOLVED') {
+      conversation = await this.prisma.conversation.update({
+        where: { id: conversation.id },
+        data: { status: 'OPEN', updatedBy: SYSTEM_ACTOR },
+      })
+    }
+
+    const dedupeKey = `postback:${event.timestamp ?? ''}:${event.postback.payload ?? ''}`
+    const duplicate = await this.prisma.message.findFirst({
+      where: {
+        conversationId: conversation.id,
+        metadata: { path: ['dedupeKey'], equals: dedupeKey },
+      },
+      select: { id: true },
+    })
+    if (duplicate) return
+
+    const content = event.postback.title || event.postback.payload || '[Button clicked]'
+
+    await this.messagesService.sendMessage(tenantId, {
+      conversationId: conversation.id,
+      senderId: contactId,
+      senderType: 'CONTACT',
+      content,
+      messageType: 'TEXT',
+      metadata: { postback: true, payload: event.postback.payload, dedupeKey },
     })
   }
 }

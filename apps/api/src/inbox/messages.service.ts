@@ -37,6 +37,11 @@ export type SendMessageInput = {
     | 'TEMPLATE'
     | 'INTERNAL_NOTE'
   metadata?: Record<string, unknown> | string
+  // Skip outbound channel delivery (e.g. Facebook). Used when persisting a
+  // message that was already delivered outside the CRM (e.g. syncing a
+  // Facebook `message_echoes` event) — dispatching it again would re-send it
+  // to the customer and loop (send -> echo -> send -> echo -> ...).
+  skipDispatch?: boolean
 }
 
 const PUBSUB_NEW_MESSAGE = 'NEW_MESSAGE'
@@ -112,7 +117,7 @@ export class MessagesService {
 
     // Best-effort outbound channel delivery (e.g. Facebook). Never let a
     // delivery failure undo or fail the already-persisted message.
-    if (this.dispatcher) {
+    if (this.dispatcher && !input.skipDispatch) {
       try {
         await this.dispatcher.dispatch(message, conversation)
       } catch (error) {

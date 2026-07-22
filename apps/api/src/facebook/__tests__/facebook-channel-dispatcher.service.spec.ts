@@ -186,7 +186,32 @@ describe('FacebookChannelDispatcherService', () => {
     })
     expect(prisma.message.update).toHaveBeenCalledWith({
       where: { id: 'msg-1' },
-      data: { metadata: { facebookDispatch: { success: true, result: { message_id: 'mid.99' } } } },
+      data: {
+        metadata: {
+          mid: 'mid.99',
+          facebookDispatch: { success: true, result: { message_id: 'mid.99' } },
+        },
+      },
+    })
+  })
+
+  it('records success without a mid when the Graph API response has none', async () => {
+    process.env['ENCRYPTION_KEY'] = randomBytes(32).toString('hex')
+    prisma.channelConnection.findFirst.mockResolvedValue({
+      accessTokenEncrypted: encryptToken('page-token'),
+    })
+    prisma.contactChannelIdentity.findFirst.mockResolvedValue({ externalId: 'psid-1' })
+    graphClient.sendMessage.mockResolvedValue({ recipient_id: 'psid-1' })
+
+    await dispatcher.dispatch(makeMessage(), makeConversation())
+
+    expect(prisma.message.update).toHaveBeenCalledWith({
+      where: { id: 'msg-1' },
+      data: {
+        metadata: {
+          facebookDispatch: { success: true, result: { recipient_id: 'psid-1' } },
+        },
+      },
     })
   })
 

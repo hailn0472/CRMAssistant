@@ -87,7 +87,15 @@ export class FacebookChannelDispatcherService implements ChannelDispatcher {
         identity.externalId,
         payload,
       )
-      await this.mergeMetadata(message.id, { facebookDispatch: { success: true, result } })
+      // Store the returned Facebook message id under the same `mid` key that
+      // inbound messages use (`mapInboundFacebookMessage`), so a later
+      // `message_echoes` event for this same send can be deduped against it
+      // instead of being persisted as a duplicate Message.
+      const fbMessageId = result['message_id']
+      await this.mergeMetadata(message.id, {
+        ...(typeof fbMessageId === 'string' ? { mid: fbMessageId } : {}),
+        facebookDispatch: { success: true, result },
+      })
     } catch (error) {
       await this.recordDispatchError(
         message.id,
