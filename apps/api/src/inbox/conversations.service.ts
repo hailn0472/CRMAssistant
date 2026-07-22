@@ -79,7 +79,7 @@ export class ConversationsService {
     }
 
     if (filter.channel) {
-      where.channel = filter.channel as 'INTERNAL'
+      where.channel = filter.channel as 'INTERNAL' | 'LIVE_CHAT' | 'FACEBOOK'
     }
 
     if (filter.status) {
@@ -149,7 +149,7 @@ export class ConversationsService {
   async createConversation(
     tenantId: string,
     contactId?: string,
-    channel: 'INTERNAL' | 'LIVE_CHAT' = 'INTERNAL',
+    channel: 'INTERNAL' | 'LIVE_CHAT' | 'FACEBOOK' = 'INTERNAL',
     createdBy: string = 'system',
   ): Promise<Conversation> {
     try {
@@ -179,7 +179,7 @@ export class ConversationsService {
   async findOrCreateConversation(
     tenantId: string,
     contactId?: string,
-    channel: 'INTERNAL' | 'LIVE_CHAT' = 'INTERNAL',
+    channel: 'INTERNAL' | 'LIVE_CHAT' | 'FACEBOOK' = 'INTERNAL',
     createdBy: string = 'system',
   ): Promise<Conversation> {
     const existing = await this.prisma.conversation.findFirst({

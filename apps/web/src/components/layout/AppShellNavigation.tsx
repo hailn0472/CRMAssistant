@@ -91,6 +91,12 @@ const navigationSections: NavigationSection[] = [
         marker: 'AK',
         roles: ['ADMIN'],
       },
+      {
+        label: 'Channels',
+        href: '/settings/channels',
+        marker: 'CH',
+        permission: { resource: 'INBOX', action: 'WRITE' },
+      },
       { label: 'Settings', href: '/settings', marker: 'SE' },
     ],
   },

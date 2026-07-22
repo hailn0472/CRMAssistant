@@ -19,11 +19,25 @@ interface AppShellProps {
 export function AppShell({ children }: AppShellProps): React.JSX.Element {
   const [commandOpen, setCommandOpen] = useState(false)
   const [commandQuery, setCommandQuery] = useState('')
-  const { user, setUser, setLoading, isLoading } = useAuthStore()
+  const { user, setUser, setAccessToken, setLoading, isLoading } = useAuthStore()
 
   useEffect(() => {
     let active = true
     if (!user && (isLoading ?? true) && setUser && setLoading) {
+      // Restore a one-time WS handshake token (minted server-side from the
+      // httpOnly cookie, never the real JWT itself) so the WebSocket
+      // subscription client — which can't read httpOnly cookies directly —
+      // has something to authenticate with after a full page reload.
+      fetch('/api/auth/session')
+        .then((res) => res.json())
+        .then((data: { wsToken: string | null }) => {
+          if (!active) return
+          if (data.wsToken) setAccessToken(data.wsToken)
+        })
+        .catch(() => {
+          // Non-fatal — real-time subscriptions just won't connect until next login.
+        })
+
       getMe()
         .then((me) => {
           if (!active) return
@@ -51,7 +65,7 @@ export function AppShell({ children }: AppShellProps): React.JSX.Element {
     return () => {
       active = false
     }
-  }, [user, setUser, setLoading, isLoading])
+  }, [user, setUser, setAccessToken, setLoading, isLoading])
 
   function openCommand(): void {
     setCommandOpen(true)

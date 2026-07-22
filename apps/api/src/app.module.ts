@@ -18,6 +18,8 @@ import { PrismaModule } from './prisma/prisma.module'
 import { AuditInterceptor } from './common/interceptors/audit.interceptor'
 import { SharingModule } from './sharing/sharing.module'
 import { InboxModule } from './inbox/inbox.module'
+import { FacebookModule } from './facebook/facebook.module'
+import { ChannelDispatcherBindingModule } from './facebook/channel-dispatcher-binding.module'
 
 @Module({
   imports: [
@@ -39,6 +41,8 @@ import { InboxModule } from './inbox/inbox.module'
     AuditModule,
     SharingModule,
     InboxModule,
+    FacebookModule,
+    ChannelDispatcherBindingModule,
   ],
   providers: [
     {

@@ -100,4 +100,23 @@ describe('AuthController', () => {
     await expect(controller.logout(undefined as unknown as string)).resolves.toBeUndefined()
     expect(authService.logout).toHaveBeenCalledWith('')
   })
+
+  it('should mint a one-time ws token for the authenticated user without exposing the real JWT', () => {
+    const req = {
+      user: {
+        sub: 'user-1',
+        userId: 'user-1',
+        tenantId: 'tenant-1',
+        roles: ['SALES_REP'],
+        email: 'user@example.com',
+      },
+    } as unknown as import('express').Request & {
+      user: import('../strategies/jwt.strategy').JwtPayload
+    }
+
+    const result = controller.wsToken(req)
+
+    expect(result.wsToken).toEqual(expect.any(String))
+    expect(result.wsToken.length).toBeGreaterThan(20)
+  })
 })

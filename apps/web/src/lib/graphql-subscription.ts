@@ -191,17 +191,11 @@ export class GraphqlSubscriptionClient {
   }
 
   private getAuthToken(): string | null {
-    // Try Zustand auth store first (in-memory token)
-    const storeToken = getAccessToken()
-    if (storeToken) return storeToken
-
-    // Fallback: try httpOnly auth-token cookie set by Next.js login route
-    // (httpOnly means JS can't read it, but this is best-effort fallback)
-    const cookieToken = document.cookie
-      .split('; ')
-      .find((c) => c.trim().startsWith('auth-token='))
-      ?.split('=')[1]
-    return cookieToken ?? null
+    // The Zustand store is populated either right after interactive login,
+    // or on page load by AppShell fetching /api/auth/session (which reads
+    // the httpOnly auth-token cookie server-side — client JS can never read
+    // an httpOnly cookie directly via `document.cookie`).
+    return getAccessToken()
   }
 
   private scheduleReconnect(): void {

@@ -14,18 +14,13 @@ import { StartInternalChat } from '@/components/inbox/StartInternalChat'
 import { getConversation } from '@/services/inbox.service'
 import { WorkspacePanel } from '@/components/layout/AppShell'
 
-const MESSAGE_FIELDS = `
-  id conversationId senderId senderType content messageType metadata internalNote
-  sentAt deliveredAt readAt createdAt
-`
-
 export default function InboxPage(): React.JSX.Element {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [showDetail, setShowDetail] = useState(false)
   const [showInternalChat, setShowInternalChat] = useState(false)
   const [refreshKey, setRefreshKey] = useState(0)
+  const [wsClient, setWsClient] = useState<GraphqlSubscriptionClient | null>(null)
   const subClientRef = useRef<GraphqlSubscriptionClient | null>(null)
-  const subscribedRef = useRef(false)
 
   const {
     data: selectedConv,
@@ -51,49 +46,41 @@ export default function InboxPage(): React.JSX.Element {
     setShowDetail(true)
   }, [])
 
-  // Connect subscription client — create fresh on mount, full cleanup on unmount
+  // Connect subscription client — create fresh on mount, full cleanup on unmount.
+  // Stored in state (not just the ref) so it can be passed down as a prop and
+  // trigger a re-render of ConversationDetail once it's available.
   useEffect(() => {
     const client = new GraphqlSubscriptionClient()
     subClientRef.current = client
+    setWsClient(client)
     client.connect().catch(() => {})
     return () => {
       client.disconnect()
       subClientRef.current = null
+      setWsClient(null)
     }
   }, [])
 
-  // Subscribe to real-time updates (once per selectedId)
+  // Conversation-list-level real-time updates (unread counts, last message
+  // preview, new conversations appearing). Per-conversation message delivery
+  // is handled directly inside ConversationDetail (see `wsClient` prop) so an
+  // update to one conversation doesn't force-reload an unrelated open thread.
   useEffect(() => {
-    if (!selectedId || subscribedRef.current) return
-    const client = subClientRef.current
-    if (!client) return
-    subscribedRef.current = true
+    if (!wsClient) return
 
-    const unsubMessages = client.subscribe(`messages:${selectedId}`, {
-      query: `subscription OnNewMessage($conversationId: ID!) {
-        onNewMessage(conversationId: $conversationId) { ${MESSAGE_FIELDS} }
-      }`,
-      variables: { conversationId: selectedId },
+    const unsubUpdates = wsClient.subscribe('conversations:updates', {
+      query: `subscription OnConversationUpdated { onConversationUpdated { id } }`,
+      variables: {},
       onData: () => {
         refetchConv()
         setRefreshKey((k) => k + 1)
       },
     })
 
-    const unsubUpdates = client.subscribe('conversations:updates', {
-      query: `subscription OnConversationUpdated { onConversationUpdated { id } }`,
-      variables: {},
-      onData: () => {
-        setRefreshKey((k) => k + 1)
-      },
-    })
-
     return () => {
-      unsubMessages()
       unsubUpdates()
-      subscribedRef.current = false
     }
-  }, [selectedId, refetchConv])
+  }, [wsClient, refetchConv])
 
   return (
     <>
@@ -130,9 +117,10 @@ export default function InboxPage(): React.JSX.Element {
                   : selectedConv.title || 'Internal chat'
               }
               status={selectedConv.status}
+              channel={selectedConv.channel}
               className="flex-1"
               onBack={handleBack}
-              refreshKey={refreshKey}
+              wsClient={wsClient}
             />
           ) : convLoading ? (
             <div className="p-4">

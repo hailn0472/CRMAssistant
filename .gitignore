@@ -76,4 +76,3 @@ pnpm-debug.log*
 *.pem
 .vercel
 supabase/.temp/
-.env*
