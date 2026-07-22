@@ -29,6 +29,10 @@ interface NavigationSection {
   items: NavigationItem[]
 }
 
+// Team/Role/Audit-log/API-key/Channel management live under `/settings/*` and
+// are surfaced via the Settings sub-navigation (see settings/layout.tsx) rather
+// than crowding the top-level sidebar. Not-yet-built areas (Deals, Activities,
+// Reports, AI Query) are intentionally omitted until they have real routes.
 const navigationSections: NavigationSection[] = [
   {
     title: 'Workspace',
@@ -40,9 +44,6 @@ const navigationSections: NavigationSection[] = [
         marker: 'CO',
         permission: { resource: 'CONTACT', action: 'READ' },
       },
-      { label: 'Deals', marker: 'DE' },
-      { label: 'Activities', marker: 'AC' },
-      { label: 'Reports', marker: 'RE' },
       {
         label: 'Inbox',
         href: '/inbox',
@@ -50,10 +51,6 @@ const navigationSections: NavigationSection[] = [
         permission: { resource: 'INBOX', action: 'READ' },
       },
     ],
-  },
-  {
-    title: 'AI Assistant',
-    items: [{ label: 'AI Query', marker: 'AI', isAi: true }],
   },
   {
     title: 'Administration',
@@ -64,38 +61,6 @@ const navigationSections: NavigationSection[] = [
         marker: 'US',
         roles: ['ADMIN', 'SALES_MANAGER'],
         permission: { resource: 'USER', action: 'READ' },
-      },
-      {
-        label: 'Teams',
-        href: '/settings/teams',
-        marker: 'TM',
-        roles: ['ADMIN'],
-        permission: { resource: 'ROLE', action: 'READ' },
-      },
-      {
-        label: 'Roles',
-        href: '/settings/roles',
-        marker: 'RL',
-        roles: ['ADMIN'],
-        permission: { resource: 'ROLE', action: 'READ' },
-      },
-      {
-        label: 'Audit Logs',
-        href: '/settings/audit-logs',
-        marker: 'AL',
-        roles: ['ADMIN'],
-      },
-      {
-        label: 'API Keys',
-        href: '/settings/api-keys',
-        marker: 'AK',
-        roles: ['ADMIN'],
-      },
-      {
-        label: 'Channels',
-        href: '/settings/channels',
-        marker: 'CH',
-        permission: { resource: 'INBOX', action: 'WRITE' },
       },
       { label: 'Settings', href: '/settings', marker: 'SE' },
     ],

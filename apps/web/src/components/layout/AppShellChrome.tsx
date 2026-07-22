@@ -1,4 +1,5 @@
 import { cn } from '@/lib/utils'
+import { Breadcrumbs } from './Breadcrumbs'
 
 interface AppShellChromeProps {
   sidebarSlot: React.ReactNode
@@ -93,7 +94,10 @@ export function AppShellChrome({
       <div className="md:pl-[56px] lg:pl-60">
         <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/95" role="banner">
           <div className="flex h-16 items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
-            <div className="flex items-center shrink-0">{mobileNavSlot}</div>
+            <div className="flex min-w-0 items-center gap-3">
+              {mobileNavSlot}
+              <Breadcrumbs className="hidden lg:flex" />
+            </div>
             <div className="flex flex-1 items-center justify-center min-w-0">{searchSlot}</div>
             <div className="flex items-center justify-end gap-2 shrink-0">{topbarActionsSlot}</div>
           </div>

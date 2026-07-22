@@ -43,13 +43,22 @@ jest.mock('@tanstack/react-query', () => {
           return { data: undefined, isLoading: false, isError: false }
         }
         return {
-          data: ['CONTACT', 'DEAL', 'TASK', 'TICKET', 'REPORT', 'USER', 'ROLE', 'SETTINGS'].flatMap(
-            (r) =>
-              ['CREATE', 'READ', 'UPDATE', 'DELETE', 'EXPORT', 'IMPORT', 'ASSIGN'].map((a) => ({
-                resource: r,
-                action: a,
-                granted: true,
-              })),
+          data: [
+            'CONTACT',
+            'DEAL',
+            'TASK',
+            'TICKET',
+            'REPORT',
+            'USER',
+            'ROLE',
+            'SETTINGS',
+            'INBOX',
+          ].flatMap((r) =>
+            ['CREATE', 'READ', 'UPDATE', 'DELETE', 'EXPORT', 'IMPORT', 'ASSIGN'].map((a) => ({
+              resource: r,
+              action: a,
+              granted: true,
+            })),
           ),
           isLoading: false,
           isError: false,
@@ -133,10 +142,10 @@ describe('AppShell', () => {
       'href',
       '/contacts',
     )
-    expect(within(desktopLinks).getByText('Deals')).toBeInTheDocument()
-    expect(within(desktopLinks).getByText('Activities')).toBeInTheDocument()
-    expect(within(desktopLinks).getByText('Reports')).toBeInTheDocument()
-    expect(within(desktopLinks).getByText('AI Query')).toBeInTheDocument()
+    expect(within(desktopLinks).getByRole('link', { name: 'Inbox' })).toHaveAttribute(
+      'href',
+      '/inbox',
+    )
     expect(within(desktopLinks).getByText('Users')).toBeInTheDocument()
     expect(within(desktopLinks).getByText('Settings')).toBeInTheDocument()
   })
@@ -259,10 +268,7 @@ describe('AppShell', () => {
       // Tablet rail shows compact navigation items with aria-labels (no visible text)
       expect(within(tabletNav).getByRole('link', { name: 'Command Center' })).toBeInTheDocument()
       expect(within(tabletNav).getByRole('link', { name: 'Contacts' })).toBeInTheDocument()
-      expect(within(tabletNav).getByLabelText('Deals coming soon')).toBeInTheDocument()
-      expect(within(tabletNav).getByLabelText('Activities coming soon')).toBeInTheDocument()
-      expect(within(tabletNav).getByLabelText('Reports coming soon')).toBeInTheDocument()
-      expect(within(tabletNav).getByLabelText('AI Query coming soon')).toBeInTheDocument()
+      expect(within(tabletNav).getByRole('link', { name: 'Inbox' })).toBeInTheDocument()
       expect(within(tabletNav).getByRole('link', { name: 'Users' })).toBeInTheDocument()
       expect(within(tabletNav).getByRole('link', { name: 'Settings' })).toBeInTheDocument()
     })
