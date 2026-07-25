@@ -20,6 +20,7 @@ function makeConversation(overrides: Partial<Conversation> = {}): Conversation {
     status: 'OPEN' as any,
     assignedTo: null,
     lastMessageAt: null,
+    lastSyncedAt: null,
     createdAt: NOW,
     updatedAt: NOW,
     createdBy: 'system',

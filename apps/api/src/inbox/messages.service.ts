@@ -42,6 +42,12 @@ export type SendMessageInput = {
   // Facebook `message_echoes` event) — dispatching it again would re-send it
   // to the customer and loop (send -> echo -> send -> echo -> ...).
   skipDispatch?: boolean
+  // Original creation time for backfilled/historical messages (e.g. Facebook
+  // history sync). When set, the message's `sentAt`/`createdAt` are stamped
+  // with it instead of `now()` so history keeps true chronological order.
+  // `lastMessageAt` only advances (never moves backward) so backfilling old
+  // messages doesn't resurface a stale thread to the top of the inbox.
+  sentAt?: Date
 }
 
 const PUBSUB_NEW_MESSAGE = 'NEW_MESSAGE'
@@ -72,7 +78,7 @@ export class MessagesService {
       // Re-check conversation status inside the transaction to avoid TOCTOU
       const current = await tx.conversation.findFirst({
         where: { id: input.conversationId, tenantId, deletedAt: null },
-        select: { status: true },
+        select: { status: true, lastMessageAt: true },
       })
 
       if (!current) {
@@ -100,12 +106,23 @@ export class MessagesService {
           internalNote: input.messageType === 'INTERNAL_NOTE',
           metadata,
           createdBy: input.senderId,
+          // Backfilled messages carry their original timestamp so history
+          // renders in true chronological order (default is now()).
+          ...(input.sentAt ? { sentAt: input.sentAt, createdAt: input.sentAt } : {}),
         },
       })
 
+      // Only advance lastMessageAt — never move it backward. Backfilling an old
+      // message must not resurface a thread whose newest activity is more recent.
+      const messageTime = input.sentAt ?? new Date()
+      const nextLastMessageAt =
+        current.lastMessageAt && current.lastMessageAt > messageTime
+          ? current.lastMessageAt
+          : messageTime
+
       await tx.conversation.update({
         where: { id: input.conversationId },
-        data: { lastMessageAt: new Date() },
+        data: { lastMessageAt: nextLastMessageAt },
       })
 
       return [msg]

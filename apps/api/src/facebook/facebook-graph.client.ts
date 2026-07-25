@@ -1,5 +1,7 @@
 import { Injectable, Optional } from '@nestjs/common'
 
+import type { FacebookConversationsResponse } from './facebook-message.types'
+
 export type FacebookMessagePayload = Record<string, unknown>
 
 export const DEFAULT_GRAPH_API_VERSION = 'v21.0'
@@ -141,6 +143,36 @@ export class FacebookGraphClient {
     recipientPsid: string,
     message: FacebookMessagePayload,
   ): Promise<Record<string, unknown>> {
+    const requestBody = {
+      recipient: { id: recipientPsid },
+      messaging_type: 'RESPONSE',
+      message,
+    }
+
+    return this.executeWithResilience(() => this.postMessages(pageAccessToken, requestBody))
+  }
+
+  /** Paginated read of `GET /me/conversations` (history sync, Story 8A.4).
+   * Shares the same rate limiter/circuit breaker as `sendMessage` — Facebook's
+   * 600 req/hour budget is per-app, not per-endpoint. */
+  async getConversations(
+    pageAccessToken: string,
+    opts?: { after?: string },
+  ): Promise<FacebookConversationsResponse> {
+    return this.executeWithResilience(() => this.fetchConversations(pageAccessToken, opts))
+  }
+
+  /** Follows an absolute `paging.next` URL (used to drain a conversation's
+   * nested `messages` pagination). Appends the access token only if the URL
+   * doesn't already carry one — Graph API `paging.next` URLs are normally
+   * pre-signed with it. */
+  async getPageByUrl<T>(nextUrl: string, pageAccessToken?: string): Promise<T> {
+    return this.executeWithResilience(() => this.fetchPageByUrl<T>(nextUrl, pageAccessToken))
+  }
+
+  /** Shared limiter/breaker/retry wrapper for every outbound Graph API call
+   * (sends and reads alike — AC #7 requires them to share the 600/hr budget). */
+  private async executeWithResilience<T>(fn: () => Promise<T>): Promise<T> {
     if (!this.circuitBreaker.canAttempt()) {
       throw new FacebookCircuitOpenError()
     }
@@ -149,17 +181,11 @@ export class FacebookGraphClient {
       throw new FacebookRateLimitError()
     }
 
-    const requestBody = {
-      recipient: { id: recipientPsid },
-      messaging_type: 'RESPONSE',
-      message,
-    }
-
     let lastError: unknown
 
     for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
       try {
-        const result = await this.postMessages(pageAccessToken, requestBody)
+        const result = await fn()
         this.circuitBreaker.recordSuccess()
         return result
       } catch (error) {
@@ -194,6 +220,34 @@ export class FacebookGraphClient {
       },
     )
 
+    return this.parseJsonResponse<Record<string, unknown>>(response)
+  }
+
+  private async fetchConversations(
+    pageAccessToken: string,
+    opts?: { after?: string },
+  ): Promise<FacebookConversationsResponse> {
+    const fields = encodeURIComponent('participants,messages{message,from,to,created_time,id}')
+    let url = `${this.baseUrl}/me/conversations?fields=${fields}&access_token=${encodeURIComponent(pageAccessToken)}`
+    if (opts?.after) {
+      url += `&after=${encodeURIComponent(opts.after)}`
+    }
+
+    const response = await fetch(url, { signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) })
+    return this.parseJsonResponse<FacebookConversationsResponse>(response)
+  }
+
+  private async fetchPageByUrl<T>(nextUrl: string, pageAccessToken?: string): Promise<T> {
+    const url =
+      !pageAccessToken || nextUrl.includes('access_token=')
+        ? nextUrl
+        : `${nextUrl}${nextUrl.includes('?') ? '&' : '?'}access_token=${encodeURIComponent(pageAccessToken)}`
+
+    const response = await fetch(url, { signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) })
+    return this.parseJsonResponse<T>(response)
+  }
+
+  private async parseJsonResponse<T>(response: Response): Promise<T> {
     if (!response.ok) {
       const errorBody = await response.text().catch(() => '')
       throw new FacebookGraphApiError(
@@ -202,7 +256,7 @@ export class FacebookGraphClient {
       )
     }
 
-    return (await response.json()) as Record<string, unknown>
+    return (await response.json()) as T
   }
 
   getCircuitState(): CircuitState {
