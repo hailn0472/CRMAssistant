@@ -419,4 +419,336 @@ describe('FacebookHistorySyncService', () => {
       expect(prisma.channelConnection.update).not.toHaveBeenCalled()
     })
   })
+
+  describe('syncConnection() — connection guards', () => {
+    it('is a no-op when the connection is missing', async () => {
+      prisma.channelConnection.findUnique.mockResolvedValue(null)
+
+      await service.syncConnection(CONN_ID)
+
+      expect(graphClient.getConversations).not.toHaveBeenCalled()
+      expect(prisma.channelConnection.update).not.toHaveBeenCalled()
+    })
+
+    it('is a no-op when the connection is not a Facebook channel', async () => {
+      prisma.channelConnection.findUnique.mockResolvedValue(
+        makeConnection({ channel: 'ZALO' as any }),
+      )
+
+      await service.syncConnection(CONN_ID)
+
+      expect(graphClient.getConversations).not.toHaveBeenCalled()
+    })
+
+    it('is a no-op when the connection is not ACTIVE', async () => {
+      prisma.channelConnection.findUnique.mockResolvedValue(
+        makeConnection({ status: 'REVOKED' as any }),
+      )
+
+      await service.syncConnection(CONN_ID)
+
+      expect(graphClient.getConversations).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('syncConnection() — error propagation & isolation', () => {
+    it('rethrows a non-pause error from getConversations', async () => {
+      prisma.channelConnection.findUnique.mockResolvedValue(makeConnection())
+      graphClient.getConversations.mockRejectedValue(new Error('network down'))
+
+      await expect(service.syncConnection(CONN_ID)).rejects.toThrow('network down')
+      expect(prisma.channelConnection.update).not.toHaveBeenCalled()
+    })
+
+    it('isolates a per-conversation failure and continues syncing the rest', async () => {
+      prisma.channelConnection.findUnique.mockResolvedValue(makeConnection())
+      facebookService.resolveOrCreateContactForPsid
+        .mockRejectedValueOnce(new Error('contact boom'))
+        .mockResolvedValueOnce(CONTACT_ID)
+      graphClient.getConversations.mockResolvedValue({
+        data: [
+          conversationWithMessages(
+            [
+              {
+                id: 'mid.a',
+                message: 'a',
+                created_time: '2026-07-24T13:00:00+0000',
+                from: { id: 'psid-abc', name: 'Jane Doe' },
+              },
+            ],
+            'fb-conv-1',
+          ),
+          conversationWithMessages(
+            [
+              {
+                id: 'mid.b',
+                message: 'b',
+                created_time: '2026-07-24T13:00:00+0000',
+                from: { id: 'psid-abc', name: 'Jane Doe' },
+              },
+            ],
+            'fb-conv-2',
+          ),
+        ],
+        paging: {},
+      })
+
+      await service.syncConnection(CONN_ID)
+
+      expect(messagesService.sendMessage).toHaveBeenCalledTimes(1)
+      expect(prisma.channelConnection.update).toHaveBeenCalled()
+    })
+
+    it('isolates a non-pause error thrown while draining nested pages', async () => {
+      prisma.channelConnection.findUnique.mockResolvedValue(makeConnection())
+      graphClient.getConversations.mockResolvedValue({
+        data: [
+          {
+            id: 'fb-conv-1',
+            participants: { data: [{ id: PAGE_ID }, { id: 'psid-abc', name: 'Jane Doe' }] },
+            messages: {
+              data: [
+                {
+                  id: 'mid.1',
+                  message: 'm',
+                  created_time: '2026-07-24T13:00:00+0000',
+                  from: { id: 'psid-abc', name: 'Jane Doe' },
+                },
+              ],
+              paging: { next: 'https://graph.facebook.com/next-page' },
+            },
+          },
+        ],
+        paging: {},
+      })
+      graphClient.getPageByUrl.mockRejectedValue(new Error('network down'))
+
+      await service.syncConnection(CONN_ID)
+
+      // Error is isolated: the outer pass still completes and advances the marker,
+      // but the conversation watermark is not advanced (it threw mid-drain).
+      expect(prisma.channelConnection.update).toHaveBeenCalled()
+      expect(prisma.conversation.update).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('syncConnection() — pause mid-conversation', () => {
+    it('stops the pass and advances no watermark when a conversation pauses mid-drain', async () => {
+      prisma.channelConnection.findUnique.mockResolvedValue(makeConnection())
+      graphClient.getConversations.mockResolvedValue({
+        data: [
+          {
+            id: 'fb-conv-1',
+            participants: { data: [{ id: PAGE_ID }, { id: 'psid-abc', name: 'Jane Doe' }] },
+            messages: {
+              data: [
+                {
+                  id: 'mid.1',
+                  message: 'm',
+                  created_time: '2026-07-24T13:00:00+0000',
+                  from: { id: 'psid-abc', name: 'Jane Doe' },
+                },
+              ],
+              paging: { next: 'https://graph.facebook.com/next-page' },
+            },
+          },
+        ],
+        paging: {},
+      })
+      graphClient.getPageByUrl.mockRejectedValue(new FacebookRateLimitError())
+
+      await service.syncConnection(CONN_ID)
+
+      expect(prisma.channelConnection.update).not.toHaveBeenCalled()
+      expect(prisma.conversation.update).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('syncConnection() — pagination loop guards', () => {
+    it('stops outer pagination when the same cursor repeats', async () => {
+      prisma.channelConnection.findUnique.mockResolvedValue(makeConnection())
+      graphClient.getConversations.mockResolvedValue({
+        data: [conversationWithMessages([], 'fb-conv-1')],
+        paging: { cursors: { after: 'same-cursor' } },
+      })
+
+      await service.syncConnection(CONN_ID)
+
+      expect(graphClient.getConversations).toHaveBeenCalledTimes(2)
+    })
+
+    it('stops nested pagination when the same page URL repeats', async () => {
+      prisma.channelConnection.findUnique.mockResolvedValue(makeConnection())
+      graphClient.getConversations.mockResolvedValue({
+        data: [
+          {
+            id: 'fb-conv-1',
+            participants: { data: [{ id: PAGE_ID }, { id: 'psid-abc', name: 'Jane Doe' }] },
+            messages: {
+              data: [
+                {
+                  id: 'mid.1',
+                  message: 'm1',
+                  created_time: '2026-07-24T13:00:00+0000',
+                  from: { id: 'psid-abc', name: 'Jane Doe' },
+                },
+              ],
+              paging: { next: 'https://graph.facebook.com/loop' },
+            },
+          },
+        ],
+        paging: {},
+      })
+      graphClient.getPageByUrl.mockResolvedValue({
+        data: [
+          {
+            id: 'mid.2',
+            message: 'm2',
+            created_time: '2026-07-24T12:59:00+0000',
+            from: { id: 'psid-abc', name: 'Jane Doe' },
+          },
+        ],
+        paging: { next: 'https://graph.facebook.com/loop' },
+      })
+
+      await service.syncConnection(CONN_ID)
+
+      expect(graphClient.getPageByUrl).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  describe('syncConnection() — customer PSID resolution', () => {
+    it('warns and skips a conversation whose customer PSID cannot be resolved', async () => {
+      prisma.channelConnection.findUnique.mockResolvedValue(makeConnection())
+      graphClient.getConversations.mockResolvedValue({
+        data: [
+          {
+            id: 'fb-conv-1',
+            participants: { data: [{ id: PAGE_ID }] },
+            messages: { data: [] },
+          },
+        ],
+        paging: {},
+      })
+
+      await service.syncConnection(CONN_ID)
+
+      expect(facebookService.resolveOrCreateContactForPsid).not.toHaveBeenCalled()
+      expect(messagesService.sendMessage).not.toHaveBeenCalled()
+    })
+
+    it('derives the customer PSID from a message sender when participants are absent', async () => {
+      prisma.channelConnection.findUnique.mockResolvedValue(makeConnection())
+      graphClient.getConversations.mockResolvedValue({
+        data: [
+          {
+            id: 'fb-conv-1',
+            messages: {
+              data: [
+                {
+                  id: 'mid.1',
+                  message: 'hi',
+                  created_time: '2026-07-24T13:00:00+0000',
+                  from: { id: 'psid-xyz' },
+                },
+              ],
+            },
+          },
+        ],
+        paging: {},
+      })
+
+      await service.syncConnection(CONN_ID)
+
+      expect(facebookService.resolveOrCreateContactForPsid).toHaveBeenCalledWith(
+        TENANT_ID,
+        'psid-xyz',
+        CONN_ID,
+        undefined,
+      )
+    })
+
+    it('derives the customer PSID from a message recipient when the sender is the page', async () => {
+      prisma.channelConnection.findUnique.mockResolvedValue(makeConnection())
+      graphClient.getConversations.mockResolvedValue({
+        data: [
+          {
+            id: 'fb-conv-1',
+            messages: {
+              data: [
+                {
+                  id: 'mid.1',
+                  message: 'hi',
+                  created_time: '2026-07-24T13:00:00+0000',
+                  from: { id: PAGE_ID },
+                  to: { data: [{ id: 'psid-recip' }] },
+                },
+              ],
+            },
+          },
+        ],
+        paging: {},
+      })
+
+      await service.syncConnection(CONN_ID)
+
+      expect(facebookService.resolveOrCreateContactForPsid).toHaveBeenCalledWith(
+        TENANT_ID,
+        'psid-recip',
+        CONN_ID,
+        undefined,
+      )
+    })
+  })
+
+  describe('syncConnection() — persist failure & reopen', () => {
+    it('does not advance the conversation watermark when a message fails to persist', async () => {
+      prisma.channelConnection.findUnique.mockResolvedValue(makeConnection())
+      messagesService.sendMessage.mockRejectedValue(new Error('persist boom'))
+      graphClient.getConversations.mockResolvedValue({
+        data: [
+          conversationWithMessages([
+            {
+              id: 'mid.1',
+              message: 'm',
+              created_time: '2026-07-24T13:00:00+0000',
+              from: { id: 'psid-abc', name: 'Jane Doe' },
+            },
+          ]),
+        ],
+        paging: {},
+      })
+
+      await service.syncConnection(CONN_ID)
+
+      expect(prisma.conversation.update).not.toHaveBeenCalled()
+    })
+
+    it('reopens a RESOLVED conversation when a genuinely new message arrives', async () => {
+      prisma.channelConnection.findUnique.mockResolvedValue(makeConnection())
+      conversationsService.findOrCreateConversation.mockResolvedValue(
+        makeConversation({ status: 'RESOLVED' as any }),
+      )
+      graphClient.getConversations.mockResolvedValue({
+        data: [
+          conversationWithMessages([
+            {
+              id: 'mid.1',
+              message: 'm',
+              created_time: '2026-07-24T13:00:00+0000',
+              from: { id: 'psid-abc', name: 'Jane Doe' },
+            },
+          ]),
+        ],
+        paging: {},
+      })
+
+      await service.syncConnection(CONN_ID)
+
+      expect(prisma.conversation.update).toHaveBeenCalledWith({
+        where: { id: CONV_ID },
+        data: { status: 'OPEN', updatedBy: 'system' },
+      })
+    })
+  })
 })
