@@ -399,6 +399,12 @@ model Conversation {
   status        ConversationStatus @default(OPEN)
   assignedTo    String?
   lastMessageAt DateTime?
+  // Per-conversation watermark for the pull-based Facebook history sync
+  // (Story 8A.4). Null = never synced. Only messages with created_time >
+  // lastSyncedAt are persisted on subsequent passes. Per-conversation (rather
+  // than per-connection) so one failing thread never advances past — and thus
+  // permanently skips — another thread's unsynced messages.
+  lastSyncedAt  DateTime?
   createdAt     DateTime           @default(now())
   updatedAt     DateTime           @updatedAt
   createdBy     String             @default("system")
@@ -470,6 +476,10 @@ model ChannelConnection {
   accessTokenEncrypted String
   displayName          String?
   status               String    @default("ACTIVE") // ACTIVE | DISCONNECTED
+  // Watermark for the pull-based history sync (Story 8A.4). Null = never
+  // synced (first pass pulls everything the Graph API returns). Only messages
+  // with created_time > lastSyncedAt are persisted on subsequent passes.
+  lastSyncedAt         DateTime?
   createdAt            DateTime  @default(now())
   updatedAt            DateTime  @updatedAt
   createdBy            String    @default("system")

@@ -149,6 +149,7 @@ export class FacebookService {
       externalId: connection.externalId,
       displayName: connection.displayName,
       status: connection.status,
+      lastSyncedAt: connection.lastSyncedAt,
       createdAt: connection.createdAt,
       updatedAt: connection.updatedAt,
       createdBy: connection.createdBy,
@@ -172,6 +173,19 @@ export class FacebookService {
     })
     if (!connection) return null
     return { tenantId: connection.tenantId, connection }
+  }
+
+  /** Finds a `FACEBOOK` `ChannelConnection` by id, scoped to a tenant. Used by
+   * the `syncFacebookHistory` manual-trigger mutation to reject cross-tenant
+   * access before syncing (Story 8A.4, AC #9) — never trust a bare
+   * `connectionId` from the caller without this check. */
+  async findTenantConnectionById(
+    tenantId: string,
+    connectionId: string,
+  ): Promise<ChannelConnection | null> {
+    return this.prisma.channelConnection.findFirst({
+      where: { id: connectionId, tenantId, channel: FACEBOOK_CHANNEL, deletedAt: null },
+    })
   }
 
   // ── Contact identity resolution (AC #5) ───────────────────────────────
@@ -261,6 +275,20 @@ export class FacebookService {
     }
   }
 
+  /** True when a Message with this Facebook `mid` already exists in the
+   * conversation. Facebook delivers webhook events at-least-once (a slow/
+   * non-200 response triggers redelivery), and history sync (Story 8A.4)
+   * re-pulls overlapping messages by design (watermark uses pass-start time)
+   * — both paths must dedupe identically, so this is the single source of
+   * truth for both. */
+  async isDuplicateByMid(conversationId: string, mid: string): Promise<boolean> {
+    const duplicate = await this.prisma.message.findFirst({
+      where: { conversationId, metadata: { path: ['mid'], equals: mid } },
+      select: { id: true },
+    })
+    return !!duplicate
+  }
+
   // ── Inbound message handling (AC #2, #4, #5) ──────────────────────────
 
   async handleInboundMessagingEvent(pageId: string, event: FacebookMessagingEvent): Promise<void> {
@@ -302,15 +330,8 @@ export class FacebookService {
     }
 
     const mid = event.message.mid
-    if (mid) {
-      // Facebook delivers webhook events at-least-once — a slow/non-200
-      // response causes a redelivery of the same event. Skip if we've already
-      // persisted a message for this Facebook message id in this conversation.
-      const duplicate = await this.prisma.message.findFirst({
-        where: { conversationId: conversation.id, metadata: { path: ['mid'], equals: mid } },
-        select: { id: true },
-      })
-      if (duplicate) return
+    if (mid && (await this.isDuplicateByMid(conversation.id, mid))) {
+      return
     }
 
     const { content, messageType, metadata } = mapInboundFacebookMessage(event.message)
@@ -420,11 +441,7 @@ export class FacebookService {
     const resolved = await this.resolveExistingConversationForPsid(pageId, psid)
     if (!resolved) return
 
-    const duplicate = await this.prisma.message.findFirst({
-      where: { conversationId: resolved.conversationId, metadata: { path: ['mid'], equals: mid } },
-      select: { id: true },
-    })
-    if (duplicate) return
+    if (await this.isDuplicateByMid(resolved.conversationId, mid)) return
 
     const { content, messageType, metadata } = mapInboundFacebookMessage(event.message!)
 

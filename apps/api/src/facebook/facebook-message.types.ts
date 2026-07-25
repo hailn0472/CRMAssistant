@@ -48,3 +48,25 @@ export type FacebookWebhookBody = {
   object?: string
   entry?: FacebookWebhookEntry[]
 }
+
+// ── Graph API `GET /me/conversations` (history sync, Story 8A.4) ──────────
+// `id` on a Graph history message IS the `mid` used for dedup elsewhere.
+
+export type FacebookHistoryMessage = {
+  id: string
+  message?: string
+  created_time: string
+  from?: { id: string; name?: string }
+  to?: { data: Array<{ id: string }> }
+}
+
+export type FacebookConversation = {
+  id: string
+  participants?: { data: Array<{ id: string; name?: string }> }
+  messages?: { data: FacebookHistoryMessage[]; paging?: { next?: string } }
+}
+
+export type FacebookConversationsResponse = {
+  data: FacebookConversation[]
+  paging?: { cursors?: { after?: string }; next?: string }
+}
