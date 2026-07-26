@@ -13,6 +13,7 @@ import { TableSkeleton } from '@/components/shared/LoadingSkeleton'
 import { SharedBadge } from '@/components/sharing/SharedBadge'
 import { TagBadge } from '@/components/contacts/TagBadge'
 import { SegmentBuilder } from '@/components/contacts/SegmentBuilder'
+import { ExportButton } from '@/components/contacts/ExportButton'
 import { getContacts } from '@/services/contact.service'
 import type { SegmentFilters } from '@/components/contacts/SegmentBuilder'
 
@@ -100,6 +101,15 @@ export function ContactsTable(): React.JSX.Element {
           />
         </div>
         <div className="flex items-center gap-2">
+          <Button asChild variant="outline">
+            <Link href="/contacts/import">Import</Link>
+          </Button>
+          <ExportButton
+            filters={{
+              tags: filterTags.length > 0 ? filterTags.map((t) => t.name) : undefined,
+              company: filterCompany || undefined,
+            }}
+          />
           <Button asChild className="bg-slate-950 text-white hover:bg-slate-800">
             <Link href="/contacts/new">Create contact</Link>
           </Button>
