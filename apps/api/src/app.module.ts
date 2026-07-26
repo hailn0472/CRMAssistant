@@ -20,6 +20,7 @@ import { SharingModule } from './sharing/sharing.module'
 import { InboxModule } from './inbox/inbox.module'
 import { FacebookModule } from './facebook/facebook.module'
 import { ChannelDispatcherBindingModule } from './facebook/channel-dispatcher-binding.module'
+import { ImportExportModule } from './import-export/import-export.module'
 
 @Module({
   imports: [
@@ -43,6 +44,7 @@ import { ChannelDispatcherBindingModule } from './facebook/channel-dispatcher-bi
     InboxModule,
     FacebookModule,
     ChannelDispatcherBindingModule,
+    ImportExportModule,
   ],
   providers: [
     {
