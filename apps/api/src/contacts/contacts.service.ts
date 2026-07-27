@@ -8,6 +8,7 @@ import {
 import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library'
 
 import { PrismaService } from '../prisma/prisma.service'
+import { ActivityService } from '../activities/activities.service'
 import { resolveVisibilityFilter } from '../common/guards/visibility-check'
 import { resolveSharedRecordIds } from '../common/guards/sharing-check'
 import type { Contact, Prisma } from '@prisma/client'
@@ -155,13 +156,16 @@ function normalizeUpdateInput(input: UpdateContactInput): UpdateContactInput {
 
 @Injectable()
 export class ContactsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly activityService: ActivityService,
+  ) {}
 
   async create(tenantId: string, userId: string, input: CreateContactInput): Promise<Contact> {
     const normalizedInput = normalizeCreateInput(input)
 
     try {
-      return await this.prisma.contact.create({
+      const contact = await this.prisma.contact.create({
         data: {
           tenantId,
           email: normalizedInput.email,
@@ -175,6 +179,18 @@ export class ContactsService {
           updatedBy: userId,
         },
       })
+
+      // Auto-log CONTACT_CREATED (non-blocking)
+      await this.activityService.logSafe({
+        tenantId,
+        contactId: contact.id,
+        type: 'CONTACT_CREATED',
+        title: 'Contact created',
+        description: `${contact.firstName} ${contact.lastName} (${contact.email})`,
+        createdBy: userId,
+      })
+
+      return contact
     } catch (error) {
       if (error instanceof PrismaClientKnownRequestError && error.code === 'P2002') {
         throw new ConflictException('Contact email already exists')
@@ -398,7 +414,26 @@ export class ContactsService {
         throw new NotFoundException('Contact not found')
       }
 
-      return await this.findOne(tenantId, userId, id)
+      const updatedContact = await this.findOne(tenantId, userId, id)
+
+      // Detect changed fields and auto-log CONTACT_UPDATED (non-blocking)
+      const changedFields = this.activityService.detectChangedFields(
+        contact as unknown as Record<string, unknown>,
+        updatedContact as unknown as Record<string, unknown>,
+      )
+
+      if (changedFields.length > 0) {
+        await this.activityService.logSafe({
+          tenantId,
+          contactId: updatedContact.id,
+          type: 'CONTACT_UPDATED',
+          title: 'Contact updated',
+          description: `Updated fields: ${changedFields.join(', ')}`,
+          createdBy: userId,
+        })
+      }
+
+      return updatedContact
     } catch (error) {
       if (error instanceof PrismaClientKnownRequestError && error.code === 'P2002') {
         throw new ConflictException('Contact email already exists')

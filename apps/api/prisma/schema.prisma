@@ -7,6 +7,16 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum ActivityType {
+  EMAIL_SENT
+  CALL_MADE
+  MEETING_SCHEDULED
+  NOTE_ADDED
+  DEAL_CREATED
+  CONTACT_CREATED
+  CONTACT_UPDATED
+}
+
 // =============================================================================
 // MULTI-TENANCY FOUNDATION MODELS
 // =============================================================================
@@ -58,6 +68,7 @@ model Tenant {
   conversations            Conversation[]
   channelConnections       ChannelConnection[]
   contactChannelIdentities ContactChannelIdentity[]
+  activities               Activity[]
 }
 
 /// Tenant-scoped user model with authentication support.
@@ -277,11 +288,33 @@ model Contact {
   tags              ContactTag[]
   conversations     Conversation[]
   channelIdentities ContactChannelIdentity[]
+  activities        Activity[]
 
   @@unique([tenantId, email])
   @@index([tenantId])
   @@index([tenantId, ownerId])
   @@index([tenantId, createdAt])
+}
+
+/// Immutable activity log for contact timeline (Story 5.4).
+/// Append-only — no updates, no deletes, no soft delete.
+model Activity {
+  id          String       @id @default(uuid())
+  tenantId    String
+  contactId   String
+  type        ActivityType
+  title       String
+  description String?
+  createdAt   DateTime     @default(now())
+  createdBy   String       @default("system")
+
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  contact Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([tenantId, contactId])
+  @@index([tenantId, contactId, createdAt(sort: Desc)])
+  @@index([tenantId, createdBy])
 }
 
 /// Tenant-scoped tag model for contact tagging and segmentation.

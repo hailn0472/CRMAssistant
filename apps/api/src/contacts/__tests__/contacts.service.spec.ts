@@ -22,6 +22,14 @@ jest.mock('../../common/guards/sharing-check', () => ({
 import { resolveVisibilityFilter } from '../../common/guards/visibility-check'
 import { resolveSharedRecordIds } from '../../common/guards/sharing-check'
 
+type MockActivityService = {
+  log: jest.Mock
+  logSafe: jest.Mock
+  detectChangedFields: jest.Mock
+  findByContact: jest.Mock
+  countByContact: jest.Mock
+}
+
 type MockContactDelegate = {
   create: jest.Mock
   findFirst: jest.Mock
@@ -114,14 +122,28 @@ function makePrisma(): MockPrisma {
   }
 }
 
+function makeActivityService(): MockActivityService {
+  return {
+    log: jest.fn(),
+    logSafe: jest.fn(),
+    detectChangedFields: jest.fn(),
+    findByContact: jest.fn(),
+    countByContact: jest.fn(),
+  }
+}
+
 describe('ContactsService', () => {
   let service: ContactsService
   let prisma: MockPrisma
+  let activityService: MockActivityService
 
   beforeEach(() => {
     prisma = makePrisma()
+    activityService = makeActivityService()
+    ;(activityService.detectChangedFields as jest.Mock).mockReturnValue([])
     service = new ContactsService(
       prisma as unknown as ConstructorParameters<typeof ContactsService>[0],
+      activityService as unknown as ConstructorParameters<typeof ContactsService>[1],
     )
     ;(resolveVisibilityFilter as jest.Mock).mockResolvedValue(undefined)
     ;(resolveSharedRecordIds as jest.Mock).mockResolvedValue([])
@@ -241,6 +263,41 @@ describe('ContactsService', () => {
           company: 'A'.repeat(201),
         }),
       ).rejects.toThrow(BadRequestException)
+    })
+
+    it('auto-logs CONTACT_CREATED activity after creating a contact (UT-B-26)', async () => {
+      const contact = makeContact()
+      prisma.contact.create.mockResolvedValue(contact)
+      ;(activityService.logSafe as jest.Mock).mockResolvedValue(contact)
+
+      await service.create(TENANT_ID, USER_ID, {
+        email: 'ada@example.com',
+        firstName: 'Ada',
+        lastName: 'Lovelace',
+      })
+
+      expect(activityService.logSafe).toHaveBeenCalledWith({
+        tenantId: TENANT_ID,
+        contactId: contact.id,
+        type: 'CONTACT_CREATED',
+        title: 'Contact created',
+        description: 'Ada Lovelace (ada@example.com)',
+        createdBy: USER_ID,
+      })
+    })
+
+    it('contact creation succeeds even if auto-logging fails (non-blocking)', async () => {
+      const contact = makeContact()
+      prisma.contact.create.mockResolvedValue(contact)
+      ;(activityService.logSafe as jest.Mock).mockResolvedValue(null)
+
+      const result = await service.create(TENANT_ID, USER_ID, {
+        email: 'ada@example.com',
+        firstName: 'Ada',
+        lastName: 'Lovelace',
+      })
+
+      expect(result).toBe(contact)
     })
   })
 
@@ -512,6 +569,44 @@ describe('ContactsService', () => {
       await expect(
         service.update(TENANT_ID, USER_ID, CONTACT_ID, { company: 'Acme' }),
       ).rejects.toThrow(ForbiddenException)
+    })
+
+    it('auto-logs CONTACT_UPDATED when meaningful fields change (UT-B-27)', async () => {
+      const oldContact = makeContact({ company: null, phone: null })
+      const newContact = makeContact({ company: 'Acme Corp', phone: '555-0100' })
+      prisma.contact.findFirst.mockResolvedValueOnce(oldContact)
+      prisma.contact.updateMany.mockResolvedValue({ count: 1 })
+      prisma.contact.findFirst.mockResolvedValueOnce(newContact)
+      ;(activityService.detectChangedFields as jest.Mock).mockReturnValue(['company', 'phone'])
+      ;(activityService.logSafe as jest.Mock).mockResolvedValue(newContact)
+
+      const result = await service.update(TENANT_ID, USER_ID, CONTACT_ID, {
+        company: 'Acme Corp',
+        phone: '555-0100',
+      })
+
+      expect(result).toBe(newContact)
+      expect(activityService.logSafe).toHaveBeenCalledWith({
+        tenantId: TENANT_ID,
+        contactId: CONTACT_ID,
+        type: 'CONTACT_UPDATED',
+        title: 'Contact updated',
+        description: 'Updated fields: company, phone',
+        createdBy: USER_ID,
+      })
+    })
+
+    it('does NOT auto-log when no meaningful fields change (UT-B-28)', async () => {
+      const contact = makeContact()
+      prisma.contact.findFirst.mockResolvedValueOnce(contact)
+      prisma.contact.updateMany.mockResolvedValue({ count: 1 })
+      // Returning the same contact so detectChangedFields returns []
+      prisma.contact.findFirst.mockResolvedValueOnce(contact)
+      ;(activityService.detectChangedFields as jest.Mock).mockReturnValue([])
+
+      await service.update(TENANT_ID, USER_ID, CONTACT_ID, { company: 'Acme Corp' })
+
+      expect(activityService.logSafe).not.toHaveBeenCalled()
     })
   })
 

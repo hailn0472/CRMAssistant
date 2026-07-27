@@ -2,6 +2,7 @@ import { cookies } from 'next/headers'
 import { notFound, redirect } from 'next/navigation'
 
 import { TagBadge } from '@/components/contacts/TagBadge'
+import { ContactTimeline } from '@/components/contacts/ContactTimeline'
 import { WorkspacePanel } from '@/components/layout/AppShell'
 import type { Contact } from '@/services/contact.service'
 
@@ -73,7 +74,7 @@ export default async function ContactDetailPage({
 
   return (
     <main className="space-y-6 p-6 text-slate-950">
-<WorkspacePanel className="p-6">
+      <WorkspacePanel className="p-6">
         <div className="grid gap-4 md:grid-cols-2">
           <Detail label="Email" value={contact.email} />
           <Detail label="Phone" value={contact.phone ?? '—'} />
@@ -92,6 +93,11 @@ export default async function ContactDetailPage({
           <Detail label="Created" value={new Date(contact.createdAt).toLocaleString()} />
           <Detail label="Updated" value={new Date(contact.updatedAt).toLocaleString()} />
         </div>
+      </WorkspacePanel>
+
+      {/* Activity Timeline Section */}
+      <WorkspacePanel className="p-6">
+        <ContactTimeline contactId={params.id} />
       </WorkspacePanel>
     </main>
   )

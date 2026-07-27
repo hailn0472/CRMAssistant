@@ -20,6 +20,25 @@ global.ResizeObserver = class ResizeObserver {
   disconnect(): void {}
 }
 
+// jsdom does not implement IntersectionObserver, used by ContactTimeline for
+// infinite scroll. Provide a minimal stub.
+global.IntersectionObserver = class IntersectionObserver {
+  readonly root: Element | Document | null = null
+  readonly rootMargin: string = ''
+  readonly thresholds: ReadonlyArray<number> = []
+
+  constructor(
+    _callback: IntersectionObserverCallback,
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    _options?: IntersectionObserverInit,
+  ) {}
+
+  observe(): void {}
+  unobserve(): void {}
+  disconnect(): void {}
+  takeRecords(): IntersectionObserverEntry[] { return [] }
+}
+
 // jsdom does not implement scrollIntoView, which is used by cmdk during
 // keyboard navigation of command items. Provide a minimal stub.
 if (typeof Element !== 'undefined') {
