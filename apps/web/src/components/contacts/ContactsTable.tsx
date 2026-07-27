@@ -16,6 +16,7 @@ import { SegmentBuilder } from '@/components/contacts/SegmentBuilder'
 import { ExportButton } from '@/components/contacts/ExportButton'
 import { getContacts } from '@/services/contact.service'
 import type { SegmentFilters } from '@/components/contacts/SegmentBuilder'
+import type { ExportFilters } from '@/types/import-export.types'
 
 const PAGE_SIZE = 10
 
@@ -36,6 +37,28 @@ export function ContactsTable(): React.JSX.Element {
     createdAtFrom: filterCreatedAtFrom,
     createdAtTo: filterCreatedAtTo,
   }
+
+  // Export must narrow to exactly what the table is showing, so every active
+  // filter is forwarded — not just tags and company.
+  const exportFilters: ExportFilters = {
+    tags: filterTags.length > 0 ? filterTags.map((t) => t.name) : undefined,
+    company: filterCompany || undefined,
+    jobTitle: filterJobTitle || undefined,
+    createdAtFrom: filterCreatedAtFrom || undefined,
+    createdAtTo: filterCreatedAtTo || undefined,
+  }
+
+  const toolbarActions = (
+    <div className="flex items-center gap-2">
+      <Button asChild variant="outline">
+        <Link href="/contacts/import">Import</Link>
+      </Button>
+      <ExportButton filters={exportFilters} />
+      <Button asChild className="bg-slate-950 text-white hover:bg-slate-800">
+        <Link href="/contacts/new">Create contact</Link>
+      </Button>
+    </div>
+  )
 
   const { data, error, isLoading, refetch } = useQuery({
     queryKey: [
@@ -68,14 +91,21 @@ export function ContactsTable(): React.JSX.Element {
   }
 
   if (!data || data.items.length === 0) {
+    // A brand-new tenant is exactly who needs bulk import, so the empty state
+    // must still offer it rather than only "Create contact".
     return (
       <EmptyState
         title="No contacts yet"
-        description="Create your first contact to build the customer source of truth."
+        description="Create your first contact, or import them in bulk from a CSV file."
         action={
-          <Button asChild className="bg-slate-950 text-white hover:bg-slate-800">
-            <Link href="/contacts/new">Create contact</Link>
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button asChild variant="outline">
+              <Link href="/contacts/import">Import CSV</Link>
+            </Button>
+            <Button asChild className="bg-slate-950 text-white hover:bg-slate-800">
+              <Link href="/contacts/new">Create contact</Link>
+            </Button>
+          </div>
         }
       />
     )
@@ -100,20 +130,7 @@ export function ContactsTable(): React.JSX.Element {
             }}
           />
         </div>
-        <div className="flex items-center gap-2">
-          <Button asChild variant="outline">
-            <Link href="/contacts/import">Import</Link>
-          </Button>
-          <ExportButton
-            filters={{
-              tags: filterTags.length > 0 ? filterTags.map((t) => t.name) : undefined,
-              company: filterCompany || undefined,
-            }}
-          />
-          <Button asChild className="bg-slate-950 text-white hover:bg-slate-800">
-            <Link href="/contacts/new">Create contact</Link>
-          </Button>
-        </div>
+        {toolbarActions}
       </CardHeader>
       <CardContent>
         <ResponsiveTableWrapper>

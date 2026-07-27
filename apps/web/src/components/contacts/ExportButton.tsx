@@ -1,59 +1,55 @@
 'use client'
 
-import { useState } from 'react'
-
-import { Button } from '@/components/ui/button'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'react-hot-toast'
 
+import { Button } from '@/components/ui/button'
+import type { ExportFilters } from '@/types/import-export.types'
+
 export type ExportButtonProps = {
-  filters?: {
-    tags?: string[]
-    company?: string
-    search?: string
-  }
+  filters?: ExportFilters
 }
 
 export function ExportButton({ filters }: ExportButtonProps): React.JSX.Element {
   const [isExporting, setIsExporting] = useState(false)
+  const abortRef = useRef<AbortController | null>(null)
 
-  const handleExport = async (): Promise<void> => {
+  // Abort an in-flight export if the user navigates away mid-download.
+  useEffect(() => {
+    return () => abortRef.current?.abort()
+  }, [])
+
+  const handleExport = useCallback(async (): Promise<void> => {
+    abortRef.current?.abort()
+    const controller = new AbortController()
+    abortRef.current = controller
+
     setIsExporting(true)
 
+    let url: string | null = null
     try {
-      // Build filter params for the export service
-      const params: Record<string, string> = {}
-      if (filters?.tags && filters.tags.length > 0) {
-        params.tags = filters.tags.join(',')
-      }
-      if (filters?.company) {
-        params.company = filters.company
-      }
-      if (filters?.search) {
-        params.search = filters.search
-      }
-
-      // Use dynamic import to avoid bundling issues
       const { exportContacts } = await import('@/services/import-export.service')
-      const blob = await exportContacts(params)
+      const blob = await exportContacts(filters, controller.signal)
+      if (controller.signal.aborted) return
 
       // Trigger browser download
-      const url = window.URL.createObjectURL(blob)
+      url = window.URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
       a.download = `contacts-${new Date().toISOString().split('T')[0]}.csv`
       document.body.appendChild(a)
       a.click()
       document.body.removeChild(a)
-      window.URL.revokeObjectURL(url)
 
       toast.success('Contacts exported successfully')
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Export failed'
-      toast.error(message)
+      if (error instanceof DOMException && error.name === 'AbortError') return
+      toast.error(error instanceof Error ? error.message : 'Export failed')
     } finally {
-      setIsExporting(false)
+      if (url) window.URL.revokeObjectURL(url)
+      if (!controller.signal.aborted) setIsExporting(false)
     }
-  }
+  }, [filters])
 
   return (
     <Button

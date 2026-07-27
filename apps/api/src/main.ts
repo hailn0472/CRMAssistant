@@ -1,9 +1,9 @@
-import { ValidationPipe } from '@nestjs/common'
 import { NestFactory } from '@nestjs/core'
 import { ConfigService } from '@nestjs/config'
 import type { NestExpressApplication } from '@nestjs/platform-express'
 
 import { AppModule } from './app.module'
+import { createValidationPipe } from './common/validation'
 
 async function bootstrap(): Promise<void> {
   // `rawBody: true` preserves the raw request Buffer on `req.rawBody` so the
@@ -14,13 +14,7 @@ async function bootstrap(): Promise<void> {
   const port = configService.get<number>('PORT') ?? 4000
 
   // Global validation pipe — strips unknown properties and transforms payloads
-  app.useGlobalPipes(
-    new ValidationPipe({
-      whitelist: true,
-      forbidNonWhitelisted: true,
-      transform: true,
-    }),
-  )
+  app.useGlobalPipes(createValidationPipe())
 
   // CORS — allow frontend origin
   const frontendUrl = configService.get<string>('FRONTEND_URL') ?? 'http://localhost:3000'

@@ -92,4 +92,43 @@ describe('ImportPreview', () => {
     render(<ImportPreview {...defaultProps} isLoading={true} />)
     expect(screen.getByText('Importing...')).toBeDisabled()
   })
+
+  describe('duplicate and invalid details', () => {
+    it('shows the existing contact for a duplicate row so the user can compare', () => {
+      // AC 8: without this the user picks a resolution strategy blind.
+      render(<ImportPreview {...defaultProps} />)
+
+      expect(screen.getByText('Existing User')).toBeInTheDocument()
+      expect(screen.getByText(/<dup@example\.com>/)).toBeInTheDocument()
+    })
+
+    it('shows the rejection reason for an invalid row', () => {
+      render(<ImportPreview {...defaultProps} />)
+
+      expect(screen.getByText('Empty email')).toBeInTheDocument()
+    })
+
+    it('reports how many of the total rows are being shown', () => {
+      render(<ImportPreview {...defaultProps} />)
+
+      expect(screen.getByText('Preview (3 of 100 rows)')).toBeInTheDocument()
+      expect(
+        screen.getByText(/Showing the first 3 rows in file order\. All 100 rows will be processed/),
+      ).toBeInTheDocument()
+    })
+
+    it('renders at most ten rows', () => {
+      const many: PreviewRow[] = Array.from({ length: 25 }, (_, i) => ({
+        rowNumber: i + 2,
+        email: `u${i}@example.com`,
+        firstName: 'A',
+        lastName: 'B',
+        status: 'new' as const,
+      }))
+
+      render(<ImportPreview {...defaultProps} previewRows={many} />)
+
+      expect(screen.getAllByText('New')).toHaveLength(11) // 10 badges + summary label
+    })
+  })
 })

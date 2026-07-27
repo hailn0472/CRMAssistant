@@ -1,4 +1,8 @@
-import { CsvParserService } from './csv-parser.service'
+import { BadRequestException } from '@nestjs/common'
+
+import { CsvParserService, MAX_IMPORT_ROWS } from './csv-parser.service'
+
+const HEADER = 'email,firstName,lastName,phone,company,jobTitle,tags'
 
 describe('CsvParserService', () => {
   let service: CsvParserService
@@ -8,104 +12,159 @@ describe('CsvParserService', () => {
   })
 
   describe('parse()', () => {
-    it('parses valid CSV with all columns into typed row objects', () => {
-      const csv = `email,firstName,lastName,phone,company,jobTitle,tags
-john@example.com,John,Doe,+123456789,Acme Corp,CTO,"VIP,Enterprise"
-jane@example.com,Jane,Smith,+987654321,,Sales Manager,Lead`
+    it('parses a well-formed CSV into typed rows', () => {
+      const { rows } = service.parse(
+        `${HEADER}\njohn@example.com,John,Doe,+84123456789,Acme Corp,CTO,"VIP,Enterprise"`,
+      )
 
-      const result = service.parse(csv)
-      expect(result).toHaveLength(2)
-      expect(result[0]!).toEqual({
+      expect(rows).toHaveLength(1)
+      expect(rows[0]).toEqual({
         email: 'john@example.com',
         firstName: 'John',
         lastName: 'Doe',
-        phone: '+123456789',
+        phone: '+84123456789',
         company: 'Acme Corp',
         jobTitle: 'CTO',
         tags: 'VIP,Enterprise',
       })
-      expect(result[1]!).toEqual({
-        email: 'jane@example.com',
-        firstName: 'Jane',
-        lastName: 'Smith',
-        phone: '+987654321',
+    })
+
+    it('returns nothing for empty content', () => {
+      expect(service.parse('')).toEqual({ rows: [], presentColumns: new Set() })
+      expect(service.parse('   \n  ')).toEqual({ rows: [], presentColumns: new Set() })
+    })
+
+    it('strips a UTF-8 BOM before reading the header', () => {
+      const { rows } = service.parse(`﻿email,firstName,lastName\na@b.com,A,B`)
+
+      expect(rows).toHaveLength(1)
+      expect(rows[0]!.email).toBe('a@b.com')
+    })
+
+    it.each([
+      ['LF', '\n'],
+      ['CRLF', '\r\n'],
+      ['CR', '\r'],
+    ])('handles %s line endings', (_label, eol) => {
+      const { rows } = service.parse(`email,firstName,lastName${eol}a@b.com,A,B${eol}c@d.com,C,D`)
+
+      expect(rows.map((r) => r.email)).toEqual(['a@b.com', 'c@d.com'])
+    })
+
+    it('unescapes RFC 4180 doubled quotes so an exported file can be re-imported', () => {
+      // ExportService writes `""` for a literal quote; the previous hand-rolled
+      // parser deleted them, making every export -> import round-trip lossy.
+      const { rows } = service.parse(
+        `email,firstName,lastName,company\na@b.com,A,B,"Acme ""The Best"" Inc"`,
+      )
+
+      expect(rows[0]!.company).toBe('Acme "The Best" Inc')
+    })
+
+    it('keeps commas inside quoted fields', () => {
+      const { rows } = service.parse(`email,firstName,lastName,company\na@b.com,A,B,"Acme, Inc"`)
+
+      expect(rows[0]!.company).toBe('Acme, Inc')
+      expect(rows[0]!.lastName).toBe('B')
+    })
+
+    it('keeps newlines inside quoted fields', () => {
+      const { rows } = service.parse(
+        `email,firstName,lastName,company\na@b.com,A,B,"Line one\nLine two"`,
+      )
+
+      expect(rows).toHaveLength(1)
+      expect(rows[0]!.company).toBe('Line one\nLine two')
+    })
+
+    it('auto-detects tab-separated files', () => {
+      const { rows } = service.parse(`email\tfirstName\tlastName\na@b.com\tJohn\tDoe`)
+
+      expect(rows[0]).toMatchObject({ email: 'a@b.com', firstName: 'John', lastName: 'Doe' })
+    })
+
+    it('accepts headers in any case and trims surrounding whitespace', () => {
+      const { rows } = service.parse(`Email,FirstName,LastName\na@b.com,A,B`)
+
+      expect(rows[0]).toMatchObject({ email: 'a@b.com', firstName: 'A', lastName: 'B' })
+    })
+
+    it('reports only the columns the file actually contained', () => {
+      const { presentColumns } = service.parse(`email,firstName,lastName\na@b.com,A,B`)
+
+      expect(presentColumns).toEqual(new Set(['email', 'firstName', 'lastName']))
+      expect(presentColumns.has('phone')).toBe(false)
+      expect(presentColumns.has('company')).toBe(false)
+      expect(presentColumns.has('jobTitle')).toBe(false)
+    })
+
+    it('includes optional columns in presentColumns when they are supplied', () => {
+      const { presentColumns } = service.parse(`${HEADER}\na@b.com,A,B,1,Acme,CTO,VIP`)
+
+      expect(presentColumns).toEqual(
+        new Set(['email', 'firstName', 'lastName', 'phone', 'company', 'jobTitle', 'tags']),
+      )
+    })
+
+    it.each(['email', 'firstName', 'lastName'])(
+      'rejects a file missing the required %s column',
+      (missing) => {
+        const headers = ['email', 'firstName', 'lastName'].filter((h) => h !== missing)
+        const csv = `${headers.join(',')}\nx,y`
+
+        expect(() => service.parse(csv)).toThrow(BadRequestException)
+        expect(() => service.parse(csv)).toThrow(`missing required column "${missing}"`)
+      },
+    )
+
+    it('rejects duplicate header names instead of silently overwriting one', () => {
+      expect(() => service.parse(`email,firstName,lastName,email\na@b.com,A,B,c@d.com`)).toThrow(
+        BadRequestException,
+      )
+    })
+
+    it('rejects a row with more columns than the header rather than truncating it', () => {
+      // An unescaped comma used to shift every later value one column left.
+      expect(() =>
+        service.parse(`email,firstName,lastName,company\na@b.com,A,B,Acme, Inc,extra`),
+      ).toThrow(BadRequestException)
+    })
+
+    it('rejects an unterminated quote instead of swallowing the rest of the file', () => {
+      expect(() => service.parse(`email,firstName,lastName\na@b.com,A,"B\nc@d.com,C,D`)).toThrow(
+        BadRequestException,
+      )
+    })
+
+    it('rejects a file exceeding the row cap', () => {
+      const rows = Array.from(
+        { length: MAX_IMPORT_ROWS + 1 },
+        (_, i) => `user${i}@example.com,A,B`,
+      ).join('\n')
+
+      expect(() => service.parse(`email,firstName,lastName\n${rows}`)).toThrow(
+        `the maximum is ${MAX_IMPORT_ROWS}`,
+      )
+    })
+
+    it('skips blank lines between records', () => {
+      const { rows } = service.parse(`email,firstName,lastName\na@b.com,A,B\n\nc@d.com,C,D\n`)
+
+      expect(rows.map((r) => r.email)).toEqual(['a@b.com', 'c@d.com'])
+    })
+
+    it('defaults absent optional fields to empty strings', () => {
+      const { rows } = service.parse(`email,firstName,lastName\na@b.com,A,B`)
+
+      expect(rows[0]).toEqual({
+        email: 'a@b.com',
+        firstName: 'A',
+        lastName: 'B',
+        phone: '',
         company: '',
-        jobTitle: 'Sales Manager',
-        tags: 'Lead',
+        jobTitle: '',
+        tags: '',
       })
-    })
-
-    it('throws error when CSV has missing required column (email)', () => {
-      const csv = `firstName,lastName
-John,Doe`
-
-      expect(() => service.parse(csv)).toThrow('Invalid CSV: missing required column "email"')
-    })
-
-    it('throws error when CSV has missing required column (firstName)', () => {
-      const csv = `email,lastName
-john@example.com,Doe`
-
-      expect(() => service.parse(csv)).toThrow('Invalid CSV: missing required column "firstName"')
-    })
-
-    it('throws error when CSV has missing required column (lastName)', () => {
-      const csv = `email,firstName
-john@example.com,John`
-
-      expect(() => service.parse(csv)).toThrow('Invalid CSV: missing required column "lastName"')
-    })
-
-    it('strips BOM from UTF-8 CSV', () => {
-      const csv = '\uFEFFemail,firstName,lastName\njohn@example.com,John,Doe'
-      const result = service.parse(csv)
-      expect(result).toHaveLength(1)
-      expect(result[0]!.email).toBe('john@example.com')
-    })
-
-    it('handles CRLF and LF line endings', () => {
-      const csv =
-        'email,firstName,lastName\r\njohn@example.com,John,Doe\r\njane@example.com,Jane,Smith'
-      const result = service.parse(csv)
-      expect(result).toHaveLength(2)
-      expect(result[0]!.email).toBe('john@example.com')
-      expect(result[1]!.email).toBe('jane@example.com')
-    })
-
-    it('parses quoted fields containing commas', () => {
-      const csv =
-        'email,firstName,lastName,company\njohn@example.com,"Doe, John",Smith,"Acme, Inc."'
-      const result = service.parse(csv)
-      expect(result[0]!.firstName).toBe('Doe, John')
-      expect(result[0]!.company).toBe('Acme, Inc.')
-    })
-
-    it('returns empty array for CSV with headers only (no data rows)', () => {
-      const csv = 'email,firstName,lastName,phone,company,jobTitle,tags'
-      const result = service.parse(csv)
-      expect(result).toEqual([])
-    })
-
-    it('trims whitespace from field values', () => {
-      const csv = 'email,firstName,lastName\n  john@example.com ,  John  ,  Doe  '
-      const result = service.parse(csv)
-      expect(result[0]!.email).toBe('john@example.com')
-      expect(result[0]!.firstName).toBe('John')
-      expect(result[0]!.lastName).toBe('Doe')
-    })
-
-    it('accepts TSV (tab-separated values)', () => {
-      const csv = 'email\tfirstName\tlastName\njohn@example.com\tJohn\tDoe'
-      const result = service.parse(csv)
-      expect(result).toHaveLength(1)
-      expect(result[0]!.email).toBe('john@example.com')
-    })
-
-    it('handles quoted values containing newlines', () => {
-      const csv = 'email,firstName,lastName,notes\njohn@example.com,John,Doe,"Line1\nLine2\nLine3"'
-      const result = service.parse(csv)
-      expect(result).toHaveLength(1)
-      expect(result[0]!.email).toBe('john@example.com')
     })
   })
 })

@@ -1,440 +1,619 @@
-import type { CsvRow, DuplicateCheckResult } from './dto/import-result.dto'
-import { ImportService } from './import.service'
+import { AuditService } from '../audit/audit.service'
 import { DuplicateDetectionService } from './duplicate-detection.service'
-import type { Tag } from '@prisma/client'
+import { ImportProgressStore } from './import-progress.store'
+import { ImportService } from './import.service'
+import type { CsvRow, DuplicateCheckResult, ParsedCsv } from './dto/import-result.dto'
 
 type MockPrisma = {
   contact: {
     createMany: jest.Mock
     updateMany: jest.Mock
     findMany: jest.Mock
-    findFirst: jest.Mock
-    count: jest.Mock
   }
-  tag: {
-    findFirst: jest.Mock
-    create: jest.Mock
-  }
-  contactTag: {
-    createMany: jest.Mock
-  }
+  tag: { upsert: jest.Mock }
+  contactTag: { createMany: jest.Mock }
+  sharingRule: { findMany: jest.Mock }
+  userRole: { count: jest.Mock }
   $transaction: jest.Mock
 }
+
+const ALL_COLUMNS = new Set([
+  'email',
+  'firstName',
+  'lastName',
+  'phone',
+  'company',
+  'jobTitle',
+  'tags',
+])
 
 function makePrisma(): MockPrisma {
   return {
     contact: {
-      createMany: jest.fn(),
-      updateMany: jest.fn(),
-      findMany: jest.fn(),
-      findFirst: jest.fn(),
-      count: jest.fn(),
+      createMany: jest.fn().mockResolvedValue({ count: 0 }),
+      updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      findMany: jest.fn().mockResolvedValue([]),
     },
-    tag: {
-      findFirst: jest.fn(),
-      create: jest.fn(),
-    },
-    contactTag: {
-      createMany: jest.fn(),
-    },
+    tag: { upsert: jest.fn() },
+    contactTag: { createMany: jest.fn().mockResolvedValue({ count: 0 }) },
+    sharingRule: { findMany: jest.fn().mockResolvedValue([]) },
+    userRole: { count: jest.fn().mockResolvedValue(0) },
     $transaction: jest.fn(),
   }
+}
+
+function row(email: string, overrides: Partial<CsvRow> = {}): CsvRow {
+  return {
+    email,
+    firstName: 'First',
+    lastName: 'Last',
+    phone: '',
+    company: '',
+    jobTitle: '',
+    tags: '',
+    ...overrides,
+  }
+}
+
+function parsed(rows: CsvRow[], presentColumns: Set<string> = ALL_COLUMNS): ParsedCsv {
+  return { rows, presentColumns }
 }
 
 describe('ImportService', () => {
   let service: ImportService
   let prisma: MockPrisma
-  let duplicateDetectionService: jest.Mocked<DuplicateDetectionService>
+  let duplicateDetection: jest.Mocked<DuplicateDetectionService>
+  let progressStore: ImportProgressStore
+  let auditService: { log: jest.Mock }
 
   const TENANT_ID = 'tenant-1'
   const USER_ID = 'user-1'
 
+  /**
+   * Classifies rows the way the real service does, keyed off a set of emails
+   * that already exist, so tests describe database state rather than internals.
+   */
+  function withExisting(existingEmails: string[] = []): void {
+    duplicateDetection.detectDuplicates.mockImplementation(
+      async (_tenantId: string, rows: CsvRow[]): Promise<DuplicateCheckResult> => {
+        const result: DuplicateCheckResult = { newRows: [], duplicateRows: [], invalidRows: [] }
+
+        rows.forEach((r, index) => {
+          const rowNumber = (r as CsvRow & { rowNumber?: number }).rowNumber ?? index
+          const email = r.email.trim().toLowerCase()
+
+          if (!email) {
+            result.invalidRows.push({ ...r, rowNumber, reason: 'Empty email' })
+          } else if (existingEmails.includes(email)) {
+            result.duplicateRows.push({
+              ...r,
+              rowNumber,
+              existingContact: {
+                id: `existing-${email}`,
+                email,
+                firstName: 'Existing',
+                lastName: 'Person',
+              },
+            })
+          } else {
+            result.newRows.push({ ...r, rowNumber })
+          }
+        })
+
+        return result
+      },
+    )
+  }
+
   beforeEach(() => {
     prisma = makePrisma()
-    duplicateDetectionService = {
+    duplicateDetection = {
       detectDuplicates: jest.fn(),
     } as unknown as jest.Mocked<DuplicateDetectionService>
+    progressStore = new ImportProgressStore()
+    auditService = { log: jest.fn().mockResolvedValue(undefined) }
 
     service = new ImportService(
       prisma as unknown as ConstructorParameters<typeof ImportService>[0],
-      duplicateDetectionService,
+      duplicateDetection,
+      progressStore,
+      auditService as unknown as AuditService,
     )
 
-    // By default, $transaction invokes the callback with the mock prisma object
-    // so that tx.contact.createMany = prisma.contact.createMany, etc.
+    // Each batch runs in its own transaction; the callback receives the mock.
     prisma.$transaction.mockImplementation((cb: (tx: unknown) => unknown) => cb(prisma))
+    withExisting([])
   })
 
-  function makeNewRows(emails: string[]): CsvRow[] {
-    return emails.map((email) => ({
-      email,
-      firstName: 'First',
-      lastName: 'Last',
-    }))
-  }
-
-  function makeDetectResult(overrides: Partial<DuplicateCheckResult> = {}): DuplicateCheckResult {
-    return {
-      newRows: [],
-      duplicateRows: [],
-      invalidRows: [],
-      ...overrides,
-    }
-  }
-
   describe('previewImport()', () => {
-    it('returns preview with correct counts for mixed data', async () => {
-      const rows: CsvRow[] = [
-        { email: 'new@example.com', firstName: 'First', lastName: 'Last' },
-        { email: 'dup@example.com', firstName: 'Dup', lastName: 'User' },
-        { email: '', firstName: 'No', lastName: 'Email' },
-      ]
+    it('summarises the three categories', async () => {
+      withExisting(['dup@example.com'])
 
-      duplicateDetectionService.detectDuplicates.mockResolvedValue(
-        makeDetectResult({
-          newRows: [
-            { email: 'new@example.com', firstName: 'First', lastName: 'Last', rowNumber: 0 },
-          ],
-          duplicateRows: [
-            {
-              email: 'dup@example.com',
-              firstName: 'Dup',
-              lastName: 'User',
-              rowNumber: 1,
-              existingContact: {
-                id: 'c1',
-                email: 'dup@example.com',
-                firstName: 'Existing',
-                lastName: 'User',
-              },
-            },
-          ],
-          invalidRows: [
-            {
-              email: '',
-              firstName: 'No',
-              lastName: 'Email',
-              rowNumber: 2,
-              reason: 'Empty email',
-            },
-          ],
-        }),
-      )
+      const result = await service.previewImport(TENANT_ID, USER_ID, [
+        row('new@example.com'),
+        row('dup@example.com'),
+        row(''),
+      ])
+
+      expect(result).toMatchObject({
+        preview: true,
+        totalRows: 3,
+        newRows: 1,
+        duplicateRows: 1,
+        invalidRows: 1,
+      })
+    })
+
+    it('returns preview rows in file order rather than grouped by status', async () => {
+      // Grouping by category used to hide every duplicate behind the first ten
+      // new rows — exactly the rows the user opened the preview to inspect.
+      withExisting(['dup@example.com'])
+
+      const result = await service.previewImport(TENANT_ID, USER_ID, [
+        row('a@example.com'),
+        row('dup@example.com'),
+        row('b@example.com'),
+      ])
+
+      expect(result.previewRows.map((r) => r.status)).toEqual(['new', 'duplicate', 'new'])
+    })
+
+    it('numbers rows by their line in the file, counting the header', async () => {
+      const result = await service.previewImport(TENANT_ID, USER_ID, [
+        row('a@example.com'),
+        row('b@example.com'),
+      ])
+
+      // First data row is line 2 because line 1 is the header.
+      expect(result.previewRows.map((r) => r.rowNumber)).toEqual([2, 3])
+    })
+
+    it('caps the payload instead of returning every row of a large file', async () => {
+      const rows = Array.from({ length: 500 }, (_, i) => row(`u${i}@example.com`))
 
       const result = await service.previewImport(TENANT_ID, USER_ID, rows)
 
-      expect(result.preview).toBe(true)
-      expect(result.totalRows).toBe(3)
-      expect(result.newRows).toBe(1)
-      expect(result.duplicateRows).toBe(1)
-      expect(result.invalidRows).toBe(1)
-      expect(result.previewRows).toHaveLength(3)
+      expect(result.totalRows).toBe(500)
+      expect(result.previewRows.length).toBeLessThanOrEqual(20)
+    })
+
+    it('carries the existing contact through for duplicates', async () => {
+      withExisting(['dup@example.com'])
+
+      const result = await service.previewImport(TENANT_ID, USER_ID, [row('dup@example.com')])
+
+      expect(result.previewRows[0]!.existingContact).toMatchObject({
+        id: 'existing-dup@example.com',
+        email: 'dup@example.com',
+      })
+    })
+
+    it('carries the rejection reason through for invalid rows', async () => {
+      const result = await service.previewImport(TENANT_ID, USER_ID, [row('')])
+
+      expect(result.previewRows[0]).toMatchObject({ status: 'invalid', reason: 'Empty email' })
+    })
+
+    it('does not write anything', async () => {
+      await service.previewImport(TENANT_ID, USER_ID, [row('a@example.com')])
+
+      expect(prisma.contact.createMany).not.toHaveBeenCalled()
+      expect(prisma.contact.updateMany).not.toHaveBeenCalled()
     })
   })
 
-  describe('confirmImport()', () => {
-    it('successfully imports valid CSV data with strategy=skip', async () => {
-      const rows = makeNewRows(['new1@example.com', 'new2@example.com'])
-
-      duplicateDetectionService.detectDuplicates.mockResolvedValue(
-        makeDetectResult({
-          newRows: [
-            { email: 'new1@example.com', firstName: 'First', lastName: 'Last', rowNumber: 0 },
-            { email: 'new2@example.com', firstName: 'First', lastName: 'Last', rowNumber: 1 },
-          ],
-        }),
-      )
-
-      prisma.contact.createMany.mockResolvedValue({ count: 2 })
-
-      const result = await service.confirmImport(TENANT_ID, USER_ID, rows, 'skip')
-
-      expect(result.imported).toBe(2)
-      expect(result.skipped).toBe(0)
-      expect(result.updated).toBe(0)
-      expect(result.failed).toBe(0)
-      expect(result.totalRows).toBe(2)
-      expect(result.duration).toBeGreaterThanOrEqual(0)
-    })
-
-    it('skips duplicate rows when strategy is skip', async () => {
-      const rows = makeNewRows(['new@example.com', 'dup@example.com'])
-
-      duplicateDetectionService.detectDuplicates.mockResolvedValue(
-        makeDetectResult({
-          newRows: [
-            { email: 'new@example.com', firstName: 'First', lastName: 'Last', rowNumber: 0 },
-          ],
-          duplicateRows: [
-            {
-              email: 'dup@example.com',
-              firstName: 'Dup',
-              lastName: 'User',
-              rowNumber: 1,
-              existingContact: {
-                id: 'c1',
-                email: 'dup@example.com',
-                firstName: 'Dup',
-                lastName: 'User',
-              },
-            },
-          ],
-        }),
-      )
-
+  describe('executeImport() — skip strategy', () => {
+    it('creates new contacts and counts duplicates as skipped', async () => {
+      withExisting(['dup@example.com'])
       prisma.contact.createMany.mockResolvedValue({ count: 1 })
 
-      const result = await service.confirmImport(TENANT_ID, USER_ID, rows, 'skip')
-
-      expect(result.imported).toBe(1)
-      expect(result.skipped).toBe(1)
-      expect(result.updated).toBe(0)
-    })
-
-    it('updates duplicate rows when strategy is update', async () => {
-      const rows: CsvRow[] = [
-        {
-          email: 'new@example.com',
-          firstName: 'First',
-          lastName: 'Last',
-          phone: '+123',
-          company: 'Acme',
-          jobTitle: 'CTO',
-        },
-        {
-          email: 'dup@example.com',
-          firstName: 'Updated',
-          lastName: 'User',
-          phone: '+456',
-          company: 'Corp',
-          jobTitle: 'CEO',
-        },
-      ]
-
-      duplicateDetectionService.detectDuplicates.mockResolvedValue(
-        makeDetectResult({
-          newRows: [
-            { email: 'new@example.com', firstName: 'First', lastName: 'Last', rowNumber: 0 },
-          ],
-          duplicateRows: [
-            {
-              email: 'dup@example.com',
-              firstName: 'Updated',
-              lastName: 'User',
-              rowNumber: 1,
-              existingContact: {
-                id: 'c1',
-                email: 'dup@example.com',
-                firstName: 'Old',
-                lastName: 'User',
-              },
-            },
-          ],
-        }),
+      const result = await service.executeImport(
+        TENANT_ID,
+        USER_ID,
+        parsed([row('new@example.com'), row('dup@example.com')]),
+        'skip',
       )
 
-      prisma.contact.createMany.mockResolvedValue({ count: 1 })
-      prisma.contact.updateMany.mockResolvedValue({ count: 1 })
-
-      const result = await service.confirmImport(TENANT_ID, USER_ID, rows, 'update')
-
-      expect(result.imported).toBe(1)
-      expect(result.updated).toBe(1)
-      expect(result.skipped).toBe(0)
-      expect(prisma.contact.updateMany).toHaveBeenCalled()
+      expect(result).toMatchObject({ imported: 1, skipped: 1, updated: 0, failed: 0 })
+      expect(prisma.contact.updateMany).not.toHaveBeenCalled()
     })
 
-    it('creates all rows including duplicates when strategy is create_new', async () => {
-      const rows = makeNewRows(['new@example.com', 'dup@example.com'])
-
-      // For create_new, detectDuplicates should NOT be called
-      prisma.contact.createMany.mockResolvedValue({ count: 2 })
-
-      const result = await service.confirmImport(TENANT_ID, USER_ID, rows, 'create_new')
-
-      expect(result.imported).toBe(2)
-      expect(result.skipped).toBe(0)
-      expect(result.updated).toBe(0)
-
-      // Verify detectDuplicates was NOT called for create_new strategy
-      expect(duplicateDetectionService.detectDuplicates).not.toHaveBeenCalled()
-      // Verify createMany was called with skipDuplicates: true
-      expect(prisma.contact.createMany).toHaveBeenCalledWith(
-        expect.objectContaining({ skipDuplicates: true }),
-      )
-    })
-
-    it('deduplicates rows by email within CSV for create_new strategy', async () => {
-      const rows: CsvRow[] = [
-        { email: 'dup@example.com', firstName: 'First', lastName: 'One' },
-        { email: 'dup@example.com', firstName: 'First', lastName: 'Two' },
-        { email: 'unique@example.com', firstName: 'Unique', lastName: 'User' },
-      ]
-
-      prisma.contact.createMany.mockResolvedValue({ count: 2 })
-
-      const result = await service.confirmImport(TENANT_ID, USER_ID, rows, 'create_new')
-
-      // Should have created 2 (deduped from 3), skipped 0 because create_new doesn't track skip
-      expect(result.imported).toBe(2)
-      // The last occurrence should be kept - lastName 'Two'
-      expect(prisma.contact.createMany).toHaveBeenCalledTimes(1)
-      const callData = (prisma.contact.createMany as jest.Mock).mock.calls[0]![0]!.data
-      const emails = callData.map((d: { email: string }) => d.email)
-      expect(emails).toContain('dup@example.com')
-      expect(emails).toContain('unique@example.com')
-      expect(emails).toHaveLength(2)
-
-      // detectDuplicates should NOT be called
-      expect(duplicateDetectionService.detectDuplicates).not.toHaveBeenCalled()
-    })
-
-    it('tracks invalid rows (empty email) as errors for create_new strategy', async () => {
-      const rows: CsvRow[] = [
-        { email: '', firstName: 'No', lastName: 'Email' },
-        { email: 'valid@example.com', firstName: 'Valid', lastName: 'User' },
-      ]
-
+    it('stores emails lowercased so duplicate detection stays reliable', async () => {
       prisma.contact.createMany.mockResolvedValue({ count: 1 })
 
-      const result = await service.confirmImport(TENANT_ID, USER_ID, rows, 'create_new')
+      await service.executeImport(TENANT_ID, USER_ID, parsed([row('John@Example.COM')]), 'skip')
 
-      expect(result.imported).toBe(1)
-      expect(result.failed).toBe(1)
-      expect(result.errors[0]!.reason).toBe('Empty email')
+      expect(prisma.contact.createMany.mock.calls[0]![0].data[0].email).toBe('john@example.com')
     })
 
-    it('batches creates in chunks of 100', async () => {
-      const rows = makeNewRows(Array.from({ length: 250 }, (_, i) => `user${i}@example.com`))
+    it('stamps ownership and audit fields on created contacts', async () => {
+      prisma.contact.createMany.mockResolvedValue({ count: 1 })
 
-      duplicateDetectionService.detectDuplicates.mockResolvedValue(
-        makeDetectResult({
-          newRows: rows.map((r, i) => ({ ...r, rowNumber: i })),
-        }),
-      )
+      await service.executeImport(TENANT_ID, USER_ID, parsed([row('a@example.com')]), 'skip')
 
-      prisma.contact.createMany.mockResolvedValue({ count: 100 })
-
-      const result = await service.confirmImport(TENANT_ID, USER_ID, rows, 'skip')
-
-      expect(result.imported).toBe(250)
-      expect(prisma.contact.createMany).toHaveBeenCalledTimes(3)
-    })
-
-    it('reports per-row failures without blocking valid rows', async () => {
-      const rows: CsvRow[] = [
-        { email: 'valid1@example.com', firstName: 'Valid', lastName: 'One' },
-        { email: 'valid2@example.com', firstName: '', lastName: 'EmptyFirst' },
-        { email: 'valid3@example.com', firstName: 'Valid', lastName: 'Three' },
-      ]
-
-      duplicateDetectionService.detectDuplicates.mockResolvedValue(
-        makeDetectResult({
-          newRows: [
-            { email: 'valid1@example.com', firstName: 'Valid', lastName: 'One', rowNumber: 0 },
-            { email: 'valid2@example.com', firstName: '', lastName: 'EmptyFirst', rowNumber: 1 },
-            { email: 'valid3@example.com', firstName: 'Valid', lastName: 'Three', rowNumber: 2 },
-          ],
-        }),
-      )
-
-      prisma.contact.createMany.mockRejectedValue(new Error('DB error'))
-
-      const result = await service.confirmImport(TENANT_ID, USER_ID, rows, 'skip')
-
-      expect(result.failed).toBe(3)
-      expect(result.imported).toBe(0)
-    })
-
-    it('resolves tags during import', async () => {
-      const rows: CsvRow[] = [
-        {
-          email: 'tagged@example.com',
-          firstName: 'Tagged',
-          lastName: 'User',
-          tags: 'VIP,Enterprise',
-        },
-      ]
-
-      duplicateDetectionService.detectDuplicates.mockResolvedValue(
-        makeDetectResult({
-          newRows: [
-            {
-              email: 'tagged@example.com',
-              firstName: 'Tagged',
-              lastName: 'User',
-              rowNumber: 0,
-              tags: 'VIP,Enterprise',
-            },
-          ],
-        }),
-      )
-
-      prisma.tag.findFirst
-        .mockResolvedValueOnce({
-          id: 'tag-1',
-          tenantId: TENANT_ID,
-          name: 'VIP',
-          color: '#3B82F6',
-          createdAt: new Date(),
-        } as Tag)
-        .mockResolvedValueOnce(null)
-      prisma.tag.create.mockResolvedValue({
-        id: 'tag-2',
+      expect(prisma.contact.createMany.mock.calls[0]![0].data[0]).toMatchObject({
         tenantId: TENANT_ID,
-        name: 'Enterprise',
-        color: '#3B82F6',
-        createdAt: new Date(),
-      } as Tag)
-
-      prisma.contact.createMany.mockResolvedValue({ count: 1 })
-      prisma.contact.findFirst.mockResolvedValue({ id: 'contact-new' })
-
-      const result = await service.confirmImport(TENANT_ID, USER_ID, rows, 'skip')
-
-      expect(result.imported).toBe(1)
-      expect(prisma.tag.findFirst).toHaveBeenCalledTimes(2)
-      expect(prisma.tag.create).toHaveBeenCalledTimes(1)
-      expect(prisma.contactTag.createMany).toHaveBeenCalled()
+        ownerId: USER_ID,
+        createdBy: USER_ID,
+        updatedBy: USER_ID,
+      })
     })
 
-    it('handles invalid tag names gracefully — tags silently skipped', async () => {
-      const rows: CsvRow[] = [
-        { email: 'user@example.com', firstName: 'User', lastName: 'Test', tags: '' },
-      ]
-
-      duplicateDetectionService.detectDuplicates.mockResolvedValue(
-        makeDetectResult({
-          newRows: [
-            { email: 'user@example.com', firstName: 'User', lastName: 'Test', rowNumber: 0 },
-          ],
-        }),
+    it('reports invalid rows as failures against their file line', async () => {
+      const result = await service.executeImport(
+        TENANT_ID,
+        USER_ID,
+        parsed([row('a@example.com'), row('')]),
+        'skip',
       )
 
-      prisma.contact.createMany.mockResolvedValue({ count: 1 })
+      expect(result.failed).toBe(1)
+      expect(result.errors).toContainEqual({ row: 3, reason: 'Empty email' })
+    })
+  })
 
-      const result = await service.confirmImport(TENANT_ID, USER_ID, rows, 'skip')
+  describe('executeImport() — counting', () => {
+    it('counts what createMany actually inserted, not the batch size', async () => {
+      // skipDuplicates means the database can insert fewer rows than requested;
+      // reporting batch.length would overstate the import.
+      prisma.contact.createMany.mockResolvedValue({ count: 2 })
+      prisma.contact.findMany.mockResolvedValue([])
 
-      expect(result.imported).toBe(1)
-      expect(prisma.tag.findFirst).not.toHaveBeenCalled()
+      const result = await service.executeImport(
+        TENANT_ID,
+        USER_ID,
+        parsed([row('a@example.com'), row('b@example.com'), row('c@example.com')]),
+        'skip',
+      )
+
+      expect(result.imported).toBe(2)
     })
 
-    it('defaults to skip strategy when not specified', async () => {
-      const rows = makeNewRows(['new@example.com'])
-
-      duplicateDetectionService.detectDuplicates.mockResolvedValue(
-        makeDetectResult({
-          newRows: [
-            { email: 'new@example.com', firstName: 'First', lastName: 'Last', rowNumber: 0 },
-          ],
-        }),
-      )
-
+    it('deduplicates repeated emails within the file and reports the drop', async () => {
       prisma.contact.createMany.mockResolvedValue({ count: 1 })
 
-      const result = await service.confirmImport(TENANT_ID, USER_ID, rows)
+      const result = await service.executeImport(
+        TENANT_ID,
+        USER_ID,
+        parsed([row('same@example.com'), row('SAME@example.com')]),
+        'skip',
+      )
+
+      expect(prisma.contact.createMany.mock.calls[0]![0].data).toHaveLength(1)
+      expect(result.totalRows).toBe(2)
+      expect(result.errors.some((e) => e.reason.includes('duplicate row'))).toBe(true)
+    })
+
+    it('processes large files in batches of 100', async () => {
+      prisma.contact.createMany.mockResolvedValue({ count: 100 })
+      const rows = Array.from({ length: 250 }, (_, i) => row(`u${i}@example.com`))
+
+      await service.executeImport(TENANT_ID, USER_ID, parsed(rows), 'skip')
+
+      expect(prisma.$transaction).toHaveBeenCalledTimes(3)
+      expect(prisma.contact.createMany.mock.calls[0]![0].data).toHaveLength(100)
+      expect(prisma.contact.createMany.mock.calls[2]![0].data).toHaveLength(50)
+    })
+
+    it('gives each batch transaction an explicit timeout', async () => {
+      await service.executeImport(TENANT_ID, USER_ID, parsed([row('a@example.com')]), 'skip')
+
+      // Prisma's 5s default would abort any non-trivial import.
+      expect(prisma.$transaction.mock.calls[0]![1]).toMatchObject({ timeout: 30_000 })
+    })
+  })
+
+  describe('executeImport() — update strategy', () => {
+    beforeEach(() => {
+      withExisting(['dup@example.com'])
+      prisma.userRole.count.mockResolvedValue(1) // ADMIN
+    })
+
+    it('updates the matched contact and counts it as updated', async () => {
+      const result = await service.executeImport(
+        TENANT_ID,
+        USER_ID,
+        parsed([row('dup@example.com', { company: 'Acme' })]),
+        'update',
+      )
+
+      expect(result).toMatchObject({ imported: 0, updated: 1, skipped: 0 })
+      expect(prisma.contact.updateMany).toHaveBeenCalledWith({
+        where: { id: 'existing-dup@example.com', tenantId: TENANT_ID },
+        data: expect.objectContaining({ company: 'Acme', updatedBy: USER_ID }),
+      })
+    })
+
+    it('only writes the columns the CSV actually contained', async () => {
+      // A three-column file must not wipe phone/company/jobTitle.
+      const result = await service.executeImport(
+        TENANT_ID,
+        USER_ID,
+        parsed([row('dup@example.com')], new Set(['email', 'firstName', 'lastName'])),
+        'update',
+      )
+
+      const data = prisma.contact.updateMany.mock.calls[0]![0].data
+      expect(data).toEqual({ updatedBy: USER_ID, firstName: 'First', lastName: 'Last' })
+      expect(data).not.toHaveProperty('phone')
+      expect(data).not.toHaveProperty('company')
+      expect(data).not.toHaveProperty('jobTitle')
+      expect(result.updated).toBe(1)
+    })
+
+    it('clears a column that is present but empty', async () => {
+      await service.executeImport(
+        TENANT_ID,
+        USER_ID,
+        parsed([row('dup@example.com', { phone: '' })], new Set(['email', 'phone'])),
+        'update',
+      )
+
+      expect(prisma.contact.updateMany.mock.calls[0]![0].data.phone).toBeNull()
+    })
+
+    it('refuses to update a contact the user may not edit', async () => {
+      prisma.userRole.count.mockResolvedValue(0) // not an admin
+      prisma.contact.findMany.mockResolvedValue([]) // owns nothing
+      prisma.sharingRule.findMany.mockResolvedValue([]) // no sharing rule
+
+      const result = await service.executeImport(
+        TENANT_ID,
+        USER_ID,
+        parsed([row('dup@example.com')]),
+        'update',
+      )
+
+      expect(prisma.contact.updateMany).not.toHaveBeenCalled()
+      expect(result.updated).toBe(0)
+      expect(result.errors).toContainEqual({
+        row: 2,
+        reason: 'Insufficient permissions to update this contact',
+      })
+    })
+
+    it('allows the record owner to update without a sharing rule', async () => {
+      prisma.userRole.count.mockResolvedValue(0)
+      prisma.contact.findMany.mockResolvedValue([
+        { id: 'existing-dup@example.com', email: 'dup@example.com', createdAt: new Date() },
+      ])
+
+      const result = await service.executeImport(
+        TENANT_ID,
+        USER_ID,
+        parsed([row('dup@example.com')]),
+        'update',
+      )
+
+      expect(result.updated).toBe(1)
+      expect(prisma.sharingRule.findMany).not.toHaveBeenCalled()
+    })
+
+    it('allows a user holding an EDIT sharing rule', async () => {
+      prisma.userRole.count.mockResolvedValue(0)
+      prisma.contact.findMany.mockResolvedValue([])
+      prisma.sharingRule.findMany.mockResolvedValue([{ resourceId: 'existing-dup@example.com' }])
+
+      const result = await service.executeImport(
+        TENANT_ID,
+        USER_ID,
+        parsed([row('dup@example.com')]),
+        'update',
+      )
+
+      expect(result.updated).toBe(1)
+      expect(prisma.sharingRule.findMany.mock.calls[0]![0].where).toMatchObject({
+        tenantId: TENANT_ID,
+        resourceType: 'CONTACT',
+        accessLevel: { in: ['EDIT', 'FULL'] },
+      })
+    })
+  })
+
+  describe('executeImport() — create_new strategy', () => {
+    it('reports rows whose email already exists as failed instead of silently dropping them', async () => {
+      // The tenant-scoped unique index makes a second contact impossible, so the
+      // honest outcome is a reported failure, not a phantom "imported" count.
+      withExisting(['dup@example.com'])
+      prisma.contact.createMany.mockResolvedValue({ count: 1 })
+
+      const result = await service.executeImport(
+        TENANT_ID,
+        USER_ID,
+        parsed([row('new@example.com'), row('dup@example.com')]),
+        'create_new',
+      )
+
+      expect(result).toMatchObject({ imported: 1, skipped: 0, failed: 1 })
+      expect(result.errors).toContainEqual({ row: 3, reason: 'Email already exists' })
+    })
+  })
+
+  describe('executeImport() — failure handling', () => {
+    it('does not report rolled-back rows as imported', async () => {
+      prisma.$transaction.mockRejectedValue(new Error('deadlock detected'))
+
+      const result = await service.executeImport(
+        TENANT_ID,
+        USER_ID,
+        parsed([row('a@example.com'), row('b@example.com')]),
+        'skip',
+      )
+
+      expect(result.imported).toBe(0)
+      expect(result.updated).toBe(0)
+      expect(result.failed).toBe(2)
+      expect(result.errors).toEqual([
+        { row: 2, reason: 'deadlock detected' },
+        { row: 3, reason: 'deadlock detected' },
+      ])
+    })
+
+    it('keeps committed batches when a later batch fails', async () => {
+      prisma.contact.createMany.mockResolvedValue({ count: 100 })
+      let call = 0
+      prisma.$transaction.mockImplementation((cb: (tx: unknown) => unknown) => {
+        call++
+        if (call === 2) return Promise.reject(new Error('constraint violation'))
+        return cb(prisma)
+      })
+
+      const rows = Array.from({ length: 200 }, (_, i) => row(`u${i}@example.com`))
+      const result = await service.executeImport(TENANT_ID, USER_ID, parsed(rows), 'skip')
+
+      expect(result.imported).toBe(100)
+      expect(result.failed).toBe(100)
+    })
+
+    it('numbers failure rows monotonically against the file', async () => {
+      // The old catch block advanced row numbers by two per iteration.
+      prisma.$transaction.mockRejectedValue(new Error('boom'))
+
+      const rows = Array.from({ length: 4 }, (_, i) => row(`u${i}@example.com`))
+      const result = await service.executeImport(TENANT_ID, USER_ID, parsed(rows), 'skip')
+
+      expect(result.errors.map((e) => e.row)).toEqual([2, 3, 4, 5])
+    })
+  })
+
+  describe('executeImport() — tags', () => {
+    beforeEach(() => {
+      prisma.contact.createMany.mockResolvedValue({ count: 1 })
+      prisma.contact.findMany.mockResolvedValue([
+        { id: 'contact-1', email: 'a@example.com', createdAt: new Date() },
+      ])
+      prisma.tag.upsert.mockImplementation(
+        ({ where }: { where: { tenantId_name: { name: string } } }) =>
+          Promise.resolve({ id: `tag-${where.tenantId_name.name}` }),
+      )
+    })
+
+    it('resolves tags with an upsert scoped to the tenant', async () => {
+      await service.executeImport(
+        TENANT_ID,
+        USER_ID,
+        parsed([row('a@example.com', { tags: 'VIP' })]),
+        'skip',
+      )
+
+      // upsert cannot raise the P2002 whose swallowed error used to poison the
+      // whole transaction.
+      expect(prisma.tag.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { tenantId_name: { tenantId: TENANT_ID, name: 'VIP' } },
+          create: { tenantId: TENANT_ID, name: 'VIP' },
+        }),
+      )
+    })
+
+    it('splits tags on commas and semicolons and upserts each name once', async () => {
+      await service.executeImport(
+        TENANT_ID,
+        USER_ID,
+        parsed([row('a@example.com', { tags: 'VIP, Enterprise; VIP' })]),
+        'skip',
+      )
+
+      expect(prisma.tag.upsert).toHaveBeenCalledTimes(2)
+      expect(prisma.contactTag.createMany).toHaveBeenCalledWith({
+        data: [
+          { contactId: 'contact-1', tagId: 'tag-VIP' },
+          { contactId: 'contact-1', tagId: 'tag-Enterprise' },
+        ],
+        skipDuplicates: true,
+      })
+    })
+
+    it('links tags to the contact resolved from the write, not a stray email match', async () => {
+      prisma.contact.findMany.mockResolvedValue([
+        { id: 'the-right-one', email: 'a@example.com', createdAt: new Date() },
+      ])
+
+      await service.executeImport(
+        TENANT_ID,
+        USER_ID,
+        parsed([row('a@example.com', { tags: 'VIP' })]),
+        'skip',
+      )
+
+      expect(prisma.contactTag.createMany.mock.calls[0]![0].data[0].contactId).toBe('the-right-one')
+    })
+
+    it('does not touch tag tables when no row carries tags', async () => {
+      await service.executeImport(TENANT_ID, USER_ID, parsed([row('a@example.com')]), 'skip')
+
+      expect(prisma.tag.upsert).not.toHaveBeenCalled()
+      expect(prisma.contactTag.createMany).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('executeImport() — audit and progress', () => {
+    it('writes an audit entry describing the import', async () => {
+      prisma.contact.createMany.mockResolvedValue({ count: 1 })
+
+      await service.executeImport(TENANT_ID, USER_ID, parsed([row('a@example.com')]), 'skip')
+
+      expect(auditService.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          tenantId: TENANT_ID,
+          userId: USER_ID,
+          action: 'CONTACT_IMPORTED',
+          entity: 'Contact',
+          details: expect.objectContaining({ strategy: 'skip', imported: 1 }),
+        }),
+      )
+    })
+
+    it('does not discard a committed import when audit logging fails', async () => {
+      prisma.contact.createMany.mockResolvedValue({ count: 1 })
+      auditService.log.mockRejectedValue(new Error('audit table offline'))
+
+      const result = await service.executeImport(
+        TENANT_ID,
+        USER_ID,
+        parsed([row('a@example.com')]),
+        'skip',
+      )
 
       expect(result.imported).toBe(1)
+    })
+
+    it('publishes progress that a poller can read', async () => {
+      prisma.contact.createMany.mockResolvedValue({ count: 1 })
+      progressStore.start('import-1', TENANT_ID, 1, 1)
+
+      await service.executeImport(
+        TENANT_ID,
+        USER_ID,
+        parsed([row('a@example.com')]),
+        'skip',
+        'import-1',
+      )
+
+      const status = progressStore.get('import-1', TENANT_ID)
+      expect(status).toMatchObject({ status: 'completed', progress: { imported: 1 } })
+      expect(status!.result).toMatchObject({ imported: 1 })
+    })
+  })
+
+  describe('startImport()', () => {
+    it('returns an import id immediately without waiting for the work', () => {
+      const started = service.startImport(
+        TENANT_ID,
+        USER_ID,
+        parsed([row('a@example.com'), row('b@example.com')]),
+        'skip',
+      )
+
+      expect(started.importId).toEqual(expect.any(String))
+      expect(started.totalRows).toBe(2)
+      expect(progressStore.get(started.importId, TENANT_ID)).toMatchObject({ status: 'running' })
+    })
+
+    it('scopes status lookups to the owning tenant', () => {
+      const started = service.startImport(TENANT_ID, USER_ID, parsed([row('a@example.com')]))
+
+      expect(service.getStatus(started.importId, 'other-tenant')).toBeNull()
     })
   })
 })

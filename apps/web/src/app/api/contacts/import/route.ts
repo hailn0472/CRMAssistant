@@ -1,8 +1,10 @@
 import { cookies } from 'next/headers'
 import { NextRequest, NextResponse } from 'next/server'
 
-const API_URL = process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:4000'
-const AUTH_COOKIE = 'auth-token'
+import { API_URL, AUTH_COOKIE, forwardJson } from '../_lib/proxy'
+
+/** Uploads can be up to 10MB, so allow generous time before giving up. */
+const UPLOAD_TIMEOUT_MS = 120_000
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
   const realToken = cookies().get(AUTH_COOKIE)?.value
@@ -10,23 +12,22 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ message: 'Authentication required' }, { status: 401 })
   }
 
-  const formData = await request.formData()
-  const searchParams = request.nextUrl.searchParams
-
-  const url = `${API_URL}/api/contacts/import${searchParams.toString() ? `?${searchParams.toString()}` : ''}`
-
+  let formData: FormData
   try {
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${realToken}`,
-      },
-      body: formData,
-    })
-
-    const data = await response.json()
-    return NextResponse.json(data, { status: response.status })
+    // A malformed multipart body or a client that aborts mid-upload rejects
+    // here; that is a bad request, not an unhandled server crash.
+    formData = await request.formData()
   } catch {
-    return NextResponse.json({ message: 'Backend request failed' }, { status: 502 })
+    return NextResponse.json({ message: 'Invalid or incomplete upload' }, { status: 400 })
   }
+
+  const searchParams = request.nextUrl.searchParams.toString()
+  const url = `${API_URL}/api/contacts/import${searchParams ? `?${searchParams}` : ''}`
+
+  return forwardJson(url, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${realToken}` },
+    body: formData,
+    timeoutMs: UPLOAD_TIMEOUT_MS,
+  })
 }

@@ -1,4 +1,21 @@
+import { resolveSharedRecordIds } from '../common/guards/sharing-check'
+import { resolveVisibilityFilter } from '../common/guards/visibility-check'
 import { ExportService } from './export.service'
+import type { Prisma } from '@prisma/client'
+
+jest.mock('../common/guards/visibility-check', () => ({
+  resolveVisibilityFilter: jest.fn(),
+}))
+jest.mock('../common/guards/sharing-check', () => ({
+  resolveSharedRecordIds: jest.fn(),
+}))
+
+const mockResolveVisibilityFilter = resolveVisibilityFilter as jest.MockedFunction<
+  typeof resolveVisibilityFilter
+>
+const mockResolveSharedRecordIds = resolveSharedRecordIds as jest.MockedFunction<
+  typeof resolveSharedRecordIds
+>
 
 type MockContactWithTags = {
   id: string
@@ -10,25 +27,15 @@ type MockContactWithTags = {
   jobTitle: string | null
   createdAt: Date
   updatedAt: Date
-  deletedAt: Date | null
-  tenantId: string
   tags: Array<{ tag: { name: string } }>
 }
 
 type MockPrisma = {
-  contact: {
-    findMany: jest.Mock
-    count: jest.Mock
-  }
+  contact: { findMany: jest.Mock }
 }
 
 function makePrisma(): MockPrisma {
-  return {
-    contact: {
-      findMany: jest.fn(),
-      count: jest.fn(),
-    },
-  }
+  return { contact: { findMany: jest.fn().mockResolvedValue([]) } }
 }
 
 function makeContact(overrides: Partial<MockContactWithTags> = {}): MockContactWithTags {
@@ -42,11 +49,20 @@ function makeContact(overrides: Partial<MockContactWithTags> = {}): MockContactW
     jobTitle: 'CTO',
     createdAt: new Date('2026-01-01T00:00:00Z'),
     updatedAt: new Date('2026-06-01T00:00:00Z'),
-    deletedAt: null,
-    tenantId: 'tenant-1',
     tags: [],
     ...overrides,
   }
+}
+
+async function readStream(stream: NodeJS.ReadableStream): Promise<string> {
+  let out = ''
+  for await (const chunk of stream) out += chunk.toString()
+  return out
+}
+
+/** Flattens the nested AND conditions the service builds, for precise assertions. */
+function andConditions(where: Prisma.ContactWhereInput): Prisma.ContactWhereInput[] {
+  return (where.AND as Prisma.ContactWhereInput[] | undefined) ?? []
 }
 
 describe('ExportService', () => {
@@ -54,155 +70,266 @@ describe('ExportService', () => {
   let prisma: MockPrisma
 
   const TENANT_ID = 'tenant-1'
-  const OTHER_TENANT_ID = 'tenant-2'
+  const USER_ID = 'user-1'
+  const HEADER = 'id,email,firstName,lastName,phone,company,jobTitle,tags,createdAt,updatedAt'
 
   beforeEach(() => {
+    jest.clearAllMocks()
     prisma = makePrisma()
+    // Default: an unrestricted user (ADMIN / VIEW_ALL_DATA bypass)
+    mockResolveVisibilityFilter.mockResolvedValue(undefined)
+    mockResolveSharedRecordIds.mockResolvedValue([])
     service = new ExportService(prisma as unknown as ConstructorParameters<typeof ExportService>[0])
   })
 
-  describe('exportContacts()', () => {
-    it('generates CSV with correct headers including all fields + tags', async () => {
-      prisma.contact.findMany.mockResolvedValue([])
-      prisma.contact.count.mockResolvedValue(0)
+  async function exportCsv(
+    filters?: Parameters<ExportService['exportContacts']>[2],
+  ): Promise<string> {
+    const stream = await service.exportContacts(TENANT_ID, USER_ID, filters)
+    return readStream(stream)
+  }
 
-      const result = await service.exportContacts(TENANT_ID, 'user-1')
+  function lastWhere(): Prisma.ContactWhereInput {
+    const calls = prisma.contact.findMany.mock.calls
+    return calls[calls.length - 1]![0].where as Prisma.ContactWhereInput
+  }
 
-      const csv = await streamToString(result)
-      const lines = csv.trim().split('\n')
-      const headers = lines[0]!
+  describe('CSV generation', () => {
+    it('emits headers only when the tenant has no contacts', async () => {
+      const csv = await exportCsv()
 
-      expect(headers).toBe(
-        'id,email,firstName,lastName,phone,company,jobTitle,tags,createdAt,updatedAt',
+      expect(csv).toBe(`${HEADER}\n`)
+    })
+
+    it('writes every contact field in the documented column order', async () => {
+      prisma.contact.findMany.mockResolvedValueOnce([makeContact()])
+
+      const csv = await exportCsv()
+
+      expect(csv.split('\n')[1]).toBe(
+        'contact-1,john@example.com,John,Doe,+123456789,Acme Corp,CTO,,2026-01-01T00:00:00.000Z,2026-06-01T00:00:00.000Z',
       )
     })
 
-    it('formats CSV rows with proper escaping for commas in values', async () => {
-      const contacts = [makeContact({ firstName: 'John, Jr.', company: 'Acme, Inc.' })]
-      prisma.contact.findMany.mockResolvedValue(contacts)
-      prisma.contact.count.mockResolvedValue(1)
+    it('joins multiple tags with semicolons', async () => {
+      prisma.contact.findMany.mockResolvedValueOnce([
+        makeContact({ tags: [{ tag: { name: 'VIP' } }, { tag: { name: 'Enterprise' } }] }),
+      ])
 
-      const result = await service.exportContacts(TENANT_ID, 'user-1')
+      const csv = await exportCsv()
 
-      const csv = await streamToString(result)
-      const lines = csv.trim().split('\n')
-
-      expect(lines).toHaveLength(2)
-      // The name with comma should be quoted
-      expect(lines[1]!).toContain('"John, Jr."')
-      expect(lines[1]!).toContain('"Acme, Inc."')
-    })
-
-    it('returns headers only when there are no contacts', async () => {
-      prisma.contact.findMany.mockResolvedValue([])
-      prisma.contact.count.mockResolvedValue(0)
-
-      const result = await service.exportContacts(TENANT_ID, 'user-1')
-
-      const csv = await streamToString(result)
-      const lines = csv.trim().split('\n')
-
-      expect(lines).toHaveLength(1)
-      expect(lines[0]!).toBe(
-        'id,email,firstName,lastName,phone,company,jobTitle,tags,createdAt,updatedAt',
-      )
-    })
-
-    it('includes tags column with semicolon-separated tag names', async () => {
-      const contacts = [
-        makeContact({
-          tags: [{ tag: { name: 'VIP' } }, { tag: { name: 'Enterprise' } }],
-        }),
-      ]
-      prisma.contact.findMany.mockResolvedValue(contacts)
-      prisma.contact.count.mockResolvedValue(1)
-
-      const result = await service.exportContacts(TENANT_ID, 'user-1')
-
-      const csv = await streamToString(result)
       expect(csv).toContain('VIP;Enterprise')
     })
 
-    it('excludes deleted contacts (deletedAt is not null)', async () => {
-      const active = makeContact()
-      // Only set up mock to return active contact (deleted filtered out by query)
-      prisma.contact.findMany.mockResolvedValue([active])
-      prisma.contact.count.mockResolvedValue(1)
+    it('renders null optional fields as empty columns', async () => {
+      prisma.contact.findMany.mockResolvedValueOnce([
+        makeContact({ phone: null, company: null, jobTitle: null }),
+      ])
 
-      const result = await service.exportContacts(TENANT_ID, 'user-1')
+      const csv = await exportCsv()
 
-      const csv = await streamToString(result)
-      expect(csv).toContain('john@example.com')
-      expect(csv).not.toContain('deleted@example.com')
-
-      // Verify the query filters out deleted contacts
-      expect(prisma.contact.findMany).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: expect.objectContaining({
-            deletedAt: null,
-          }),
-        }),
-      )
+      expect(csv.split('\n')[1]).toContain('John,Doe,,,,')
     })
 
-    it('enforces tenant isolation — only current tenant contacts exported', async () => {
-      const tenantAContacts = [makeContact()]
-      prisma.contact.findMany.mockResolvedValue(tenantAContacts)
-      prisma.contact.count.mockResolvedValue(1)
+    it.each([
+      ['a comma', 'Acme, Inc', '"Acme, Inc"'],
+      ['a double quote', 'Acme "Best" Inc', '"Acme ""Best"" Inc"'],
+      ['a newline', 'Line one\nLine two', '"Line one\nLine two"'],
+    ])('escapes %s in a field', async (_label, company, expected) => {
+      prisma.contact.findMany.mockResolvedValueOnce([makeContact({ company })])
 
-      const resultA = await service.exportContacts(TENANT_ID, 'user-1')
-      const csvA = await streamToString(resultA)
+      const csv = await exportCsv()
 
-      expect(csvA).toContain('john@example.com')
-
-      // Tenant B should have no contacts
-      prisma.contact.findMany.mockResolvedValue([])
-      prisma.contact.count.mockResolvedValue(0)
-
-      const resultB = await service.exportContacts(OTHER_TENANT_ID, 'user-2')
-      const csvB = await streamToString(resultB)
-
-      expect(csvB.trim().split('\n')).toHaveLength(1)
+      expect(csv).toContain(expected)
     })
 
-    it('respects filter params (tags, company, search) in the query', async () => {
-      prisma.contact.findMany.mockResolvedValue([])
-      prisma.contact.count.mockResolvedValue(0)
+    it.each(['+1+1', '-2+3', '@SUM(A1)', '=1+1'])(
+      'neutralises the spreadsheet formula %s',
+      async (value) => {
+        prisma.contact.findMany.mockResolvedValueOnce([makeContact({ company: value })])
 
-      await service.exportContacts(TENANT_ID, 'user-1', {
-        tags: 'VIP,Enterprise',
-        company: 'Acme',
-        search: 'john',
+        const csv = await exportCsv()
+        const company = csv.split('\n')[1]!.split(',')[5]
+
+        // A leading apostrophe stops Excel/Sheets evaluating the cell.
+        expect(company).toBe(`'${value.split(',')[0]}`)
+      },
+    )
+
+    it('neutralises a formula that also needs quoting', async () => {
+      prisma.contact.findMany.mockResolvedValueOnce([
+        makeContact({ company: '=HYPERLINK("http://evil","click")' }),
+      ])
+
+      const csv = await exportCsv()
+
+      expect(csv).toContain(`"'=HYPERLINK(""http://evil"",""click"")"`)
+    })
+
+    it('leaves an international phone number untouched', async () => {
+      // "+84..." trips the formula heuristic but carries no expression syntax;
+      // prefixing it would corrupt every contact's phone column.
+      prisma.contact.findMany.mockResolvedValueOnce([makeContact({ phone: '+84123456789' })])
+
+      const csv = await exportCsv()
+
+      expect(csv).toContain(',+84123456789,')
+      expect(csv).not.toContain("'+84123456789")
+    })
+  })
+
+  describe('tenant and visibility scoping', () => {
+    it('always filters by tenant and excludes soft-deleted contacts', async () => {
+      await exportCsv()
+
+      const where = lastWhere()
+      expect(where.tenantId).toBe(TENANT_ID)
+      expect(where.deletedAt).toBeNull()
+    })
+
+    it('applies no owner restriction for a user with full visibility', async () => {
+      mockResolveVisibilityFilter.mockResolvedValue(undefined)
+      mockResolveSharedRecordIds.mockResolvedValue(['shared-1'])
+
+      await exportCsv()
+
+      // An unrestricted user sees everything, so no OR block is added at all.
+      expect(andConditions(lastWhere())).toHaveLength(0)
+    })
+
+    it('restricts to owned records for a user with OWN visibility', async () => {
+      mockResolveVisibilityFilter.mockResolvedValue(USER_ID)
+      mockResolveSharedRecordIds.mockResolvedValue([])
+
+      await exportCsv()
+
+      expect(andConditions(lastWhere())).toContainEqual({ OR: [{ ownerId: USER_ID }] })
+    })
+
+    it('restricts to team members for a user with TEAM visibility', async () => {
+      mockResolveVisibilityFilter.mockResolvedValue({ in: ['user-1', 'user-2'] })
+      mockResolveSharedRecordIds.mockResolvedValue([])
+
+      await exportCsv()
+
+      expect(andConditions(lastWhere())).toContainEqual({
+        OR: [{ ownerId: { in: ['user-1', 'user-2'] } }],
       })
-
-      const callArgs = prisma.contact.findMany.mock.calls[0]![0]
-      const where = callArgs.where
-
-      expect(where).toBeDefined()
-      // Should have AND conditions for filters
-      expect(where.AND).toBeDefined()
     })
 
-    it('handles empty tags field for contacts without tags', async () => {
-      const contacts = [makeContact({ tags: [] })]
-      prisma.contact.findMany.mockResolvedValue(contacts)
-      prisma.contact.count.mockResolvedValue(1)
+    it('includes explicitly shared records alongside the visibility filter', async () => {
+      mockResolveVisibilityFilter.mockResolvedValue(USER_ID)
+      mockResolveSharedRecordIds.mockResolvedValue(['shared-1', 'shared-2'])
 
-      const result = await service.exportContacts(TENANT_ID, 'user-1')
+      await exportCsv()
 
-      const csv = await streamToString(result)
-      const lines = csv.trim().split('\n')
-      const fields = lines[1]!.split(',')
-      const tagsIndex = 7 // 0-indexed position of 'tags' column
-      expect(fields[tagsIndex]).toBe('')
+      expect(andConditions(lastWhere())).toContainEqual({
+        OR: [{ ownerId: USER_ID }, { id: { in: ['shared-1', 'shared-2'] } }],
+      })
+    })
+
+    it('resolves visibility for the calling user, not the tenant at large', async () => {
+      await exportCsv()
+
+      expect(mockResolveVisibilityFilter).toHaveBeenCalledWith(USER_ID, TENANT_ID)
+      expect(mockResolveSharedRecordIds).toHaveBeenCalledWith(USER_ID, TENANT_ID, 'CONTACT')
+    })
+  })
+
+  describe('filters', () => {
+    it('applies a case-insensitive company filter', async () => {
+      await exportCsv({ company: 'Acme' })
+
+      expect(andConditions(lastWhere())).toContainEqual({
+        company: { contains: 'Acme', mode: 'insensitive' },
+      })
+    })
+
+    it('applies a case-insensitive jobTitle filter', async () => {
+      await exportCsv({ jobTitle: 'CTO' })
+
+      expect(andConditions(lastWhere())).toContainEqual({
+        jobTitle: { contains: 'CTO', mode: 'insensitive' },
+      })
+    })
+
+    it('applies a createdAt range that includes the whole end day', async () => {
+      await exportCsv({ createdAtFrom: '2026-01-01', createdAtTo: '2026-01-31' })
+
+      const createdAt = andConditions(lastWhere()).find((c) => 'createdAt' in c)
+        ?.createdAt as Prisma.DateTimeFilter
+
+      expect(createdAt.gte).toEqual(new Date('2026-01-01'))
+      expect((createdAt.lte as Date).getHours()).toBe(23)
+    })
+
+    it('searches across email, first name, last name and company', async () => {
+      await exportCsv({ search: 'acme' })
+
+      const search = andConditions(lastWhere()).find(
+        (c) => Array.isArray(c.OR) && c.OR.length === 4,
+      )
+      expect(search?.OR).toEqual([
+        { email: { contains: 'acme', mode: 'insensitive' } },
+        { firstName: { contains: 'acme', mode: 'insensitive' } },
+        { lastName: { contains: 'acme', mode: 'insensitive' } },
+        { company: { contains: 'acme', mode: 'insensitive' } },
+      ])
+    })
+
+    it('requires every requested tag to be present', async () => {
+      await exportCsv({ tags: 'VIP, Enterprise' })
+
+      expect(andConditions(lastWhere())).toContainEqual({
+        AND: [
+          { tags: { some: { tag: { name: 'VIP' } } } },
+          { tags: { some: { tag: { name: 'Enterprise' } } } },
+        ],
+      })
+    })
+
+    it('ignores blank filter values', async () => {
+      await exportCsv({ company: '   ', search: '', tags: '' })
+
+      expect(andConditions(lastWhere())).toHaveLength(0)
+    })
+  })
+
+  describe('streaming', () => {
+    it('pages through the table with a cursor instead of loading it all at once', async () => {
+      const firstPage = Array.from({ length: 500 }, (_, i) =>
+        makeContact({ id: `c${i}`, email: `u${i}@example.com` }),
+      )
+      const secondPage = [makeContact({ id: 'last', email: 'last@example.com' })]
+
+      prisma.contact.findMany.mockResolvedValueOnce(firstPage).mockResolvedValueOnce(secondPage)
+
+      const csv = await exportCsv()
+
+      expect(prisma.contact.findMany).toHaveBeenCalledTimes(2)
+      expect(prisma.contact.findMany.mock.calls[0]![0].take).toBe(500)
+      expect(prisma.contact.findMany.mock.calls[0]![0].cursor).toBeUndefined()
+      // The second page resumes after the last row of the first.
+      expect(prisma.contact.findMany.mock.calls[1]![0].cursor).toEqual({ id: 'c499' })
+      expect(prisma.contact.findMany.mock.calls[1]![0].skip).toBe(1)
+      expect(csv.trim().split('\n')).toHaveLength(502) // header + 501 rows
+    })
+
+    it('stops after a partial page', async () => {
+      prisma.contact.findMany.mockResolvedValueOnce([makeContact()])
+
+      await exportCsv()
+
+      expect(prisma.contact.findMany).toHaveBeenCalledTimes(1)
+    })
+
+    it('orders by creation date with a stable id tiebreaker', async () => {
+      await exportCsv()
+
+      expect(prisma.contact.findMany.mock.calls[0]![0].orderBy).toEqual([
+        { createdAt: 'desc' },
+        { id: 'asc' },
+      ])
     })
   })
 })
-
-async function streamToString(stream: NodeJS.ReadableStream): Promise<string> {
-  const chunks: Buffer[] = []
-  for await (const chunk of stream) {
-    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk))
-  }
-  return Buffer.concat(chunks).toString('utf-8')
-}

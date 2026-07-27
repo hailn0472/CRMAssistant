@@ -8,11 +8,14 @@ import { Card, CardContent } from '@/components/ui/card'
 export type ImportDropZoneProps = {
   onFileSelected: (file: File) => void
   onDownloadTemplate: () => void
+  /** True while the selected file is being analyzed by the server. */
+  isLoading?: boolean
 }
 
 export function ImportDropZone({
   onFileSelected,
   onDownloadTemplate,
+  isLoading = false,
 }: ImportDropZoneProps): React.JSX.Element {
   const [isDragOver, setIsDragOver] = useState(false)
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
@@ -21,9 +24,14 @@ export function ImportDropZone({
 
   const validateFile = useCallback((file: File): boolean => {
     const allowedTypes = ['.csv', '.tsv']
-    const ext = '.' + file.name.split('.').pop()?.toLowerCase()
+    const dotIndex = file.name.lastIndexOf('.')
+    const ext = dotIndex > 0 ? file.name.slice(dotIndex).toLowerCase() : ''
     if (!allowedTypes.includes(ext)) {
-      setError(`Invalid file type "${ext}". Only CSV and TSV files are accepted.`)
+      setError(
+        ext
+          ? `Invalid file type "${ext}". Only CSV and TSV files are accepted.`
+          : 'This file has no extension. Only CSV and TSV files are accepted.',
+      )
       return false
     }
 
@@ -64,12 +72,20 @@ export function ImportDropZone({
       e.stopPropagation()
       setIsDragOver(false)
 
+      // Ignore drops while a file is already being analyzed, otherwise the
+      // second upload races the first and the preview may describe a different
+      // file than the one the user goes on to confirm.
+      if (isLoading) return
+
       const files = e.dataTransfer.files
-      if (files.length > 0) {
-        handleFile(files[0]!)
+      if (files.length === 0) return
+      if (files.length > 1) {
+        setError('Please drop a single file. Only the first file would be imported.')
+        return
       }
+      handleFile(files[0]!)
     },
-    [handleFile],
+    [handleFile, isLoading],
   )
 
   const handleBrowseClick = useCallback(() => {
@@ -114,11 +130,17 @@ export function ImportDropZone({
                 <span className="font-medium">{selectedFile.name}</span>
                 <span className="text-slate-400">({(selectedFile.size / 1024).toFixed(1)} KB)</span>
               </div>
-              <div className="flex gap-2">
-                <Button variant="outline" size="sm" onClick={handleClear}>
-                  Remove
-                </Button>
-              </div>
+              {isLoading ? (
+                <p className="text-sm text-slate-500" role="status">
+                  Analyzing file&hellip;
+                </p>
+              ) : (
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" onClick={handleClear}>
+                    Remove
+                  </Button>
+                </div>
+              )}
             </>
           ) : (
             <>

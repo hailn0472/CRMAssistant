@@ -16,6 +16,7 @@ jest.mock('react-hot-toast', () => ({
 }))
 
 import { exportContacts } from '@/services/import-export.service'
+import { toast } from 'react-hot-toast'
 
 describe('ExportButton', () => {
   beforeEach(() => {
@@ -40,5 +41,35 @@ describe('ExportButton', () => {
     await user.click(screen.getByText('Export CSV'))
 
     expect(screen.getByText('Exporting...')).toBeDisabled()
+  })
+
+  it('forwards every active filter so the export matches the visible list', async () => {
+    const user = userEvent.setup()
+    ;(exportContacts as jest.Mock).mockResolvedValue(new Blob(['csv']))
+
+    const filters = {
+      tags: ['VIP'],
+      company: 'Acme',
+      jobTitle: 'CTO',
+      createdAtFrom: '2026-01-01',
+      createdAtTo: '2026-01-31',
+    }
+
+    render(<ExportButton filters={filters} />)
+    await user.click(screen.getByText('Export CSV'))
+
+    // Dropping jobTitle/date filters used to export far more than the user saw.
+    expect(exportContacts).toHaveBeenCalledWith(filters, expect.any(AbortSignal))
+  })
+
+  it('surfaces a failure as a toast instead of failing silently', async () => {
+    const user = userEvent.setup()
+    ;(exportContacts as jest.Mock).mockRejectedValue(new Error('Export failed'))
+
+    render(<ExportButton />)
+    await user.click(screen.getByText('Export CSV'))
+
+    expect(toast.error).toHaveBeenCalledWith('Export failed')
+    expect(await screen.findByText('Export CSV')).toBeInTheDocument()
   })
 })

@@ -30,6 +30,11 @@ export function ImportPreview({
   onCancel,
   isLoading = false,
 }: ImportPreviewProps): React.JSX.Element {
+  // The server returns rows in file order across all three categories, so the
+  // first ten shown here include the duplicates and invalid rows the user needs
+  // to see before choosing a strategy.
+  const visibleRows = previewRows.slice(0, 10)
+
   const statusBadge = (status: PreviewRow['status'], reason?: string) => {
     switch (status) {
       case 'new':
@@ -117,21 +122,24 @@ export function ImportPreview({
       {/* Preview Table */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg">Preview (first {previewRows.length} rows)</CardTitle>
+          <CardTitle className="text-lg">
+            Preview ({visibleRows.length} of {totalRows} rows)
+          </CardTitle>
         </CardHeader>
         <CardContent className="p-0">
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
               <thead className="border-b border-slate-200 bg-slate-50 text-slate-600">
                 <tr>
-                  <th className="py-3 pr-4 pl-4 font-medium">#</th>
+                  <th className="py-3 pr-4 pl-4 font-medium">Line</th>
                   <th className="py-3 pr-4 font-medium">Email</th>
                   <th className="py-3 pr-4 font-medium">Name</th>
                   <th className="py-3 pr-4 font-medium">Status</th>
+                  <th className="py-3 pr-4 font-medium">Details</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {previewRows.slice(0, 10).map((row) => (
+                {visibleRows.map((row) => (
                   <tr className="hover:bg-slate-50" key={row.rowNumber}>
                     <td className="py-3 pr-4 pl-4 text-slate-400">{row.rowNumber}</td>
                     <td className="py-3 pr-4 text-slate-700">{row.email || '-'}</td>
@@ -139,11 +147,32 @@ export function ImportPreview({
                       {row.firstName} {row.lastName}
                     </td>
                     <td className="py-3 pr-4">{statusBadge(row.status, row.reason)}</td>
+                    <td className="py-3 pr-4 text-xs text-slate-500">
+                      {row.status === 'duplicate' && row.existingContact ? (
+                        <span>
+                          Existing:{' '}
+                          <span className="font-medium text-slate-700">
+                            {row.existingContact.firstName} {row.existingContact.lastName}
+                          </span>{' '}
+                          &lt;{row.existingContact.email}&gt;
+                        </span>
+                      ) : row.status === 'invalid' && row.reason ? (
+                        <span className="text-red-600">{row.reason}</span>
+                      ) : (
+                        <span className="text-slate-300">—</span>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
+          {totalRows > visibleRows.length && (
+            <p className="border-t border-slate-100 px-4 py-3 text-xs text-slate-500">
+              Showing the first {visibleRows.length} rows in file order. All {totalRows} rows will
+              be processed.
+            </p>
+          )}
         </CardContent>
       </Card>
 

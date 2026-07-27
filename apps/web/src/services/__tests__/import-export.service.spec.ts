@@ -1,8 +1,10 @@
 import {
+  buildExportParams,
   exportContacts,
   downloadTemplate,
+  getImportStatus,
+  startImport,
   uploadPreview,
-  confirmImport,
 } from '../import-export.service'
 
 const mockFetch = jest.fn<Promise<Response>, [RequestInfo | URL, RequestInit?]>()
@@ -35,6 +37,37 @@ function makeResp(overrides?: Record<string, unknown>): Response {
   } as unknown as Response
 }
 
+function requestedUrl(call = 0): string {
+  return mockFetch.mock.calls[call]![0] as string
+}
+
+describe('buildExportParams', () => {
+  it('forwards every active filter, not just tags and company', async () => {
+    const params = new URLSearchParams(
+      buildExportParams({
+        tags: ['VIP', 'Enterprise'],
+        company: 'Acme',
+        search: 'ada',
+        jobTitle: 'CTO',
+        createdAtFrom: '2026-01-01',
+        createdAtTo: '2026-01-31',
+      }),
+    )
+
+    expect(params.get('tags')).toBe('VIP,Enterprise')
+    expect(params.get('company')).toBe('Acme')
+    expect(params.get('search')).toBe('ada')
+    expect(params.get('jobTitle')).toBe('CTO')
+    expect(params.get('createdAtFrom')).toBe('2026-01-01')
+    expect(params.get('createdAtTo')).toBe('2026-01-31')
+  })
+
+  it('omits empty filters', () => {
+    expect(buildExportParams({ tags: [], company: '' })).toBe('')
+    expect(buildExportParams()).toBe('')
+  })
+})
+
 describe('exportContacts', () => {
   it('returns blob on success', async () => {
     const testBlob = new Blob(['a,b\n1,2'], { type: 'text/csv' })
@@ -47,10 +80,11 @@ describe('exportContacts', () => {
   it('passes filter params when provided', async () => {
     mockFetch.mockResolvedValueOnce(makeResp())
 
-    await exportContacts({ tags: 'VIP', company: 'Acme' })
-    const url = mockFetch.mock.calls[0][0] as string
-    expect(url).toContain('tags=VIP')
-    expect(url).toContain('company=Acme')
+    await exportContacts({ tags: ['VIP'], company: 'Acme', jobTitle: 'CTO' })
+
+    expect(requestedUrl()).toContain('tags=VIP')
+    expect(requestedUrl()).toContain('company=Acme')
+    expect(requestedUrl()).toContain('jobTitle=CTO')
   })
 
   it('throws on server error', async () => {
@@ -75,6 +109,20 @@ describe('exportContacts', () => {
     )
 
     await expect(exportContacts()).rejects.toThrow('status 502')
+  })
+
+  it('reports a network failure with a friendly message', async () => {
+    mockFetch.mockRejectedValueOnce(new TypeError('Failed to fetch'))
+
+    await expect(exportContacts()).rejects.toThrow('Network error')
+  })
+
+  it('propagates an abort so callers can tell it apart from a failure', async () => {
+    mockFetch.mockRejectedValueOnce(new DOMException('aborted', 'AbortError'))
+
+    await expect(exportContacts()).rejects.toThrow(
+      expect.objectContaining({ name: 'AbortError' }) as unknown as Error,
+    )
   })
 })
 
@@ -102,6 +150,13 @@ describe('downloadTemplate', () => {
 
     await expect(downloadTemplate()).rejects.toThrow('Fail')
   })
+
+  it('reports a network failure through the shared error wrapper', async () => {
+    // downloadTemplate used to call bare fetch, surfacing a raw TypeError.
+    mockFetch.mockRejectedValueOnce(new TypeError('Failed to fetch'))
+
+    await expect(downloadTemplate()).rejects.toThrow('Network error')
+  })
 })
 
 describe('uploadPreview', () => {
@@ -123,58 +178,94 @@ describe('uploadPreview', () => {
 
     const file = new File(['a\n1'], 'test.csv', { type: 'text/csv' })
     const result = await uploadPreview(file)
+
     expect(result.preview).toBe(true)
     expect(result.totalRows).toBe(2)
+    expect(requestedUrl()).not.toContain('confirm=true')
   })
 })
 
-describe('confirmImport', () => {
-  it('confirms import with skip strategy', async () => {
+describe('startImport', () => {
+  it.each(['skip', 'update', 'create_new'] as const)(
+    'starts an import with the %s strategy and returns the import id',
+    async (strategy) => {
+      mockFetch.mockResolvedValueOnce(
+        makeResp({
+          ok: true,
+          json: () => Promise.resolve({ importId: 'import-1', totalRows: 3 }),
+        }),
+      )
+
+      const file = new File(['a\n1'], 'test.csv', { type: 'text/csv' })
+      const result = await startImport(file, strategy)
+
+      expect(result).toEqual({ importId: 'import-1', totalRows: 3 })
+      expect(requestedUrl()).toContain('confirm=true')
+      expect(requestedUrl()).toContain(`strategy=${strategy}`)
+    },
+  )
+
+  it('sends the file as multipart form data', async () => {
     mockFetch.mockResolvedValueOnce(
-      makeResp({
-        ok: true,
-        json: () =>
-          Promise.resolve({
-            totalRows: 1,
-            imported: 1,
-            skipped: 0,
-            updated: 0,
-            failed: 0,
-            errors: [],
-            duration: 100,
-          }),
-      }),
+      makeResp({ ok: true, json: () => Promise.resolve({ importId: 'x', totalRows: 1 }) }),
     )
 
     const file = new File(['a\n1'], 'test.csv', { type: 'text/csv' })
-    const result = await confirmImport(file, 'skip')
-    expect(result.imported).toBe(1)
-    const url = mockFetch.mock.calls[0][0] as string
-    expect(url).toContain('confirm=true')
-    expect(url).toContain('strategy=skip')
+    await startImport(file, 'skip')
+
+    const init = mockFetch.mock.calls[0]![1]!
+    expect(init.method).toBe('POST')
+    expect(init.body).toBeInstanceOf(FormData)
   })
 
-  it('confirms import with update strategy', async () => {
+  it('throws with the server message when the upload is rejected', async () => {
+    mockFetch.mockResolvedValueOnce(
+      makeResp({
+        ok: false,
+        status: 400,
+        json: () => Promise.resolve({ message: 'missing required column "email"' }),
+      }),
+    )
+
+    const file = new File(['a\n1'], 'test.csv', { type: 'text/csv' })
+    await expect(startImport(file, 'skip')).rejects.toThrow('missing required column "email"')
+  })
+})
+
+describe('getImportStatus', () => {
+  it('fetches the status for an import id', async () => {
     mockFetch.mockResolvedValueOnce(
       makeResp({
         ok: true,
         json: () =>
           Promise.resolve({
-            totalRows: 1,
-            imported: 0,
-            updated: 1,
-            skipped: 0,
-            failed: 0,
-            errors: [],
-            duration: 50,
+            importId: 'import-1',
+            status: 'running',
+            progress: {
+              batch: 1,
+              totalBatches: 3,
+              imported: 100,
+              skipped: 0,
+              updated: 0,
+              failed: 0,
+              totalRows: 250,
+            },
           }),
       }),
     )
 
-    const file = new File(['a\n1'], 'test.csv', { type: 'text/csv' })
-    const result = await confirmImport(file, 'update')
-    expect(result.updated).toBe(1)
-    const url = mockFetch.mock.calls[0][0] as string
-    expect(url).toContain('strategy=update')
+    const status = await getImportStatus('import-1')
+
+    expect(requestedUrl()).toContain('/api/contacts/import/import-1/status')
+    expect(status.status).toBe('running')
+    expect(status.progress.imported).toBe(100)
+  })
+
+  it('encodes the import id', async () => {
+    mockFetch.mockResolvedValueOnce(makeResp({ ok: true, json: () => Promise.resolve({}) }))
+
+    await getImportStatus('a b/c')
+
+    expect(requestedUrl()).toContain('a%20b%2Fc')
   })
 })
