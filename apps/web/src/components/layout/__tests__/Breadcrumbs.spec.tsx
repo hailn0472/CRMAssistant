@@ -37,7 +37,7 @@ describe('Breadcrumbs', () => {
 
     const { container } = render(<Breadcrumbs />)
 
-    expect(screen.getByText('Command Center')).toHaveAttribute('aria-current', 'page')
+    expect(screen.getByText('Dashboard')).toHaveAttribute('aria-current', 'page')
     // No navigable anchors when there is only the current page.
     expect(container.querySelector('a')).toBeNull()
   })

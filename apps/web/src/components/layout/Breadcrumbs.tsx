@@ -17,7 +17,7 @@ import { cn } from '@/lib/utils'
 // Human-readable labels for known route segments. Anything not listed is
 // treated as a dynamic segment (record id, etc.) and rendered as "Chi tiết".
 const SEGMENT_LABELS: Record<string, string> = {
-  dashboard: 'Command Center',
+  dashboard: 'Dashboard',
   contacts: 'Contacts',
   inbox: 'Inbox',
   users: 'Users',

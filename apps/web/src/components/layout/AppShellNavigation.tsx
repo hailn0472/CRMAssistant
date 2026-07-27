@@ -4,6 +4,16 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import {
+  LayoutDashboard,
+  Users,
+  MessageSquare,
+  Briefcase,
+  CheckSquare,
+  UserCog,
+  Settings,
+  type LucideIcon,
+} from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -18,7 +28,7 @@ interface NavigationPermission {
 interface NavigationItem {
   label: string
   href?: string
-  marker: string
+  icon: LucideIcon
   isAi?: boolean
   roles?: string[]
   permission?: NavigationPermission
@@ -35,21 +45,23 @@ interface NavigationSection {
 // Reports, AI Query) are intentionally omitted until they have real routes.
 const navigationSections: NavigationSection[] = [
   {
-    title: 'Workspace',
+    title: 'Main',
     items: [
-      { label: 'Command Center', href: '/dashboard', marker: 'CC' },
+      { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
       {
         label: 'Contacts',
         href: '/contacts',
-        marker: 'CO',
+        icon: Users,
         permission: { resource: 'CONTACT', action: 'READ' },
       },
       {
         label: 'Inbox',
         href: '/inbox',
-        marker: 'IN',
+        icon: MessageSquare,
         permission: { resource: 'INBOX', action: 'READ' },
       },
+      { label: 'Deals', href: '/deals', icon: Briefcase },
+      { label: 'Tasks', href: '/tasks', icon: CheckSquare },
     ],
   },
   {
@@ -58,11 +70,11 @@ const navigationSections: NavigationSection[] = [
       {
         label: 'Users',
         href: '/users',
-        marker: 'US',
+        icon: UserCog,
         roles: ['ADMIN', 'SALES_MANAGER'],
         permission: { resource: 'USER', action: 'READ' },
       },
-      { label: 'Settings', href: '/settings', marker: 'SE' },
+      { label: 'Settings', href: '/settings', icon: Settings },
     ],
   },
 ]
@@ -121,13 +133,19 @@ function NavigationList({
   const pathname = usePathname()
   const userRoles = useAuthStore((state) => state.user?.roles ?? null)
   const isAuthenticated = useAuthStore((state) => !!state.user)
+  const isAuthLoading = useAuthStore((state) => state.isLoading)
 
-  const { data: permissionChecks, isLoading: isPermissionsLoading } = useQuery({
+  const { data: permissionChecks, isLoading: isQueryLoading } = useQuery({
     queryKey: ['myPermissions'],
     queryFn: getMyPermissions,
     staleTime: 5 * 60 * 1000,
     enabled: isAuthenticated,
   })
+
+  // Treat unready auth the same as loading permissions — show all items
+  // until we know for sure which ones the user can see. This prevents a
+  // "flash of partial nav" then "full nav" split-second jump.
+  const isPermissionsLoading = isQueryLoading || isAuthLoading
 
   const grantedPermissions = new Set(
     (permissionChecks ?? []).filter((p) => p.granted).map((p) => `${p.resource}:${p.action}`),
@@ -138,25 +156,6 @@ function NavigationList({
   const allHrefs = sections
     .flatMap((s) => s.items.map((i) => i.href))
     .filter((h): h is string => !!h)
-
-  if (isPermissionsLoading && isAuthenticated) {
-    // Show skeleton rows while permissions load to avoid layout flash
-    return (
-      <nav aria-label="CRM navigation" className="px-3 py-4">
-        <div className="animate-pulse space-y-3">
-          {navigationSections.map((section, si) => (
-            <div key={section.title} className="flex flex-col gap-1">
-              {si > 0 && <hr className="my-2 border-slate-100" />}
-              <div className="mb-1.5 mt-4 h-4 w-20 rounded bg-slate-100 px-3" />
-              {section.items.map((_item, ii) => (
-                <div key={ii} className="mx-3 h-9 rounded bg-slate-100" />
-              ))}
-            </div>
-          ))}
-        </div>
-      </nav>
-    )
-  }
 
   return (
     <nav
@@ -177,6 +176,7 @@ function NavigationList({
             </div>
           )}
           {section.items.map((item) => {
+            const Icon = item.icon
             const isActive = item.href ? isActivePath(pathname, item.href, allHrefs) : false
             const className = cn(
               compact
@@ -187,19 +187,17 @@ function NavigationList({
               !isActive && item.isAi && 'text-violet-700 hover:bg-violet-50',
               !item.href && 'cursor-not-allowed opacity-70',
             )
-            const marker = (
-              <span
+            const iconEl = (
+              <Icon
                 aria-hidden="true"
                 className={cn(
-                  'flex items-center justify-center rounded-md border text-[10px] font-semibold',
-                  compact ? 'h-7 w-7' : 'h-7 w-7',
-                  isActive && 'border-blue-200 bg-white text-blue-700',
-                  !isActive && !item.isAi && 'border-slate-200 bg-slate-50 text-slate-500',
-                  !isActive && item.isAi && 'border-violet-200 bg-violet-50 text-violet-700',
+                  'h-[18px] w-[18px]',
+                  compact ? 'h-5 w-5' : 'h-[18px] w-[18px]',
+                  isActive && 'text-blue-700',
+                  !isActive && !item.isAi && 'text-slate-400',
+                  !isActive && item.isAi && 'text-violet-500',
                 )}
-              >
-                {item.marker}
-              </span>
+              />
             )
 
             if (item.href) {
@@ -212,7 +210,7 @@ function NavigationList({
                   className={className}
                   onClick={onNavigate}
                 >
-                  {marker}
+                  {iconEl}
                   {!compact && <span>{item.label}</span>}
                 </Link>
               )
@@ -226,7 +224,7 @@ function NavigationList({
                 aria-label={`${item.label} coming soon`}
                 className={className}
               >
-                {marker}
+                {iconEl}
                 {!compact && <span>{item.label}</span>}
               </button>
             )

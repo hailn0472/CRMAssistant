@@ -92,6 +92,10 @@ jest.mock('@/stores/auth.store', () => ({
 
 function setAuthRole(role: string | null): void {
   mockAuthState.user = role ? { roles: [role] } : null
+  // When auth state resolves (user confirmed null), loading is done
+  if (!role) {
+    mockAuthState.isLoading = false
+  }
 }
 
 describe('AppShell', () => {
@@ -137,7 +141,7 @@ describe('AppShell', () => {
     const desktopNav = within(getDesktopNavigation())
     const desktopLinks = desktopNav.getByRole('navigation', { name: 'CRM navigation' })
 
-    expect(within(desktopLinks).getByText('Command Center')).toBeInTheDocument()
+    expect(within(desktopLinks).getByText('Dashboard')).toBeInTheDocument()
     expect(within(desktopLinks).getByRole('link', { name: 'Contacts' })).toHaveAttribute(
       'href',
       '/contacts',
@@ -179,7 +183,7 @@ describe('AppShell', () => {
 
     const dialog = screen.getByRole('dialog')
     expect(dialog).toBeInTheDocument()
-    expect(within(dialog).queryByText('Command Center')).not.toBeInTheDocument()
+    expect(within(dialog).queryByText('Dashboard')).not.toBeInTheDocument()
     expect(
       within(dialog).queryByPlaceholderText('Search contacts, deals, or actions...'),
     ).not.toBeInTheDocument()
@@ -209,13 +213,13 @@ describe('AppShell', () => {
     ).not.toBeInTheDocument()
   })
 
-  it('renders Command Center as a navigable sidebar link', () => {
+  it('renders Dashboard as a navigable sidebar link', () => {
     renderApp(<AppShell>Content</AppShell>)
 
     const desktopNav = within(getDesktopNavigation())
     const desktopLinks = desktopNav.getByRole('navigation', { name: 'CRM navigation' })
 
-    expect(within(desktopLinks).getByRole('link', { name: 'Command Center' })).toHaveAttribute(
+    expect(within(desktopLinks).getByRole('link', { name: 'Dashboard' })).toHaveAttribute(
       'href',
       '/dashboard',
     )
@@ -225,13 +229,13 @@ describe('AppShell', () => {
     )
   })
 
-  it('marks Command Center active on the dashboard route', () => {
+  it('marks Dashboard active on the dashboard route', () => {
     mockUsePathname.mockReturnValue('/dashboard')
 
     renderApp(<AppShell>Content</AppShell>)
 
-    const allCommandCenterLinks = screen.getAllByRole('link', { name: 'Command Center' })
-    const activeLink = allCommandCenterLinks.find(
+    const allDashboardLinks = screen.getAllByRole('link', { name: 'Dashboard' })
+    const activeLink = allDashboardLinks.find(
       (link) => link.getAttribute('aria-current') === 'page',
     )
     expect(activeLink).toBeDefined()
@@ -242,7 +246,7 @@ describe('AppShell', () => {
     })
   })
 
-  it('exposes Command Center in mobile navigation', () => {
+  it('exposes Dashboard in mobile navigation', () => {
     mockUsePathname.mockReturnValue('/dashboard')
 
     renderApp(<AppShell>Content</AppShell>)
@@ -251,7 +255,7 @@ describe('AppShell', () => {
 
     const mobileNavigation = screen.getByRole('complementary', { name: 'Mobile CRM navigation' })
 
-    expect(within(mobileNavigation).getByRole('link', { name: 'Command Center' })).toHaveAttribute(
+    expect(within(mobileNavigation).getByRole('link', { name: 'Dashboard' })).toHaveAttribute(
       'href',
       '/dashboard',
     )
@@ -266,7 +270,7 @@ describe('AppShell', () => {
       const tabletNav = within(tabletRail).getByRole('navigation', { name: 'CRM navigation' })
 
       // Tablet rail shows compact navigation items with aria-labels (no visible text)
-      expect(within(tabletNav).getByRole('link', { name: 'Command Center' })).toBeInTheDocument()
+      expect(within(tabletNav).getByRole('link', { name: 'Dashboard' })).toBeInTheDocument()
       expect(within(tabletNav).getByRole('link', { name: 'Contacts' })).toBeInTheDocument()
       expect(within(tabletNav).getByRole('link', { name: 'Inbox' })).toBeInTheDocument()
       expect(within(tabletNav).getByRole('link', { name: 'Users' })).toBeInTheDocument()

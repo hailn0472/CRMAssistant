@@ -55,6 +55,54 @@ ContactRef.implement({
     phone: t.exposeString('phone', { nullable: true }),
     company: t.exposeString('company', { nullable: true }),
     jobTitle: t.exposeString('jobTitle', { nullable: true }),
+    // Enrichment fields
+    linkedin: t.string({
+      nullable: true,
+      resolve: (contact) =>
+        ((contact as Record<string, unknown>).linkedin as string | null) ?? null,
+    }),
+    twitter: t.string({
+      nullable: true,
+      resolve: (contact) => ((contact as Record<string, unknown>).twitter as string | null) ?? null,
+    }),
+    addressStreet: t.string({
+      nullable: true,
+      resolve: (contact) =>
+        ((contact as Record<string, unknown>).addressStreet as string | null) ?? null,
+    }),
+    addressCity: t.string({
+      nullable: true,
+      resolve: (contact) =>
+        ((contact as Record<string, unknown>).addressCity as string | null) ?? null,
+    }),
+    addressCountry: t.string({
+      nullable: true,
+      resolve: (contact) =>
+        ((contact as Record<string, unknown>).addressCountry as string | null) ?? null,
+    }),
+    department: t.string({
+      nullable: true,
+      resolve: (contact) =>
+        ((contact as Record<string, unknown>).department as string | null) ?? null,
+    }),
+    timezone: t.string({
+      nullable: true,
+      resolve: (contact) =>
+        ((contact as Record<string, unknown>).timezone as string | null) ?? null,
+    }),
+    language: t.string({
+      nullable: true,
+      resolve: (contact) =>
+        ((contact as Record<string, unknown>).language as string | null) ?? null,
+    }),
+    source: t.string({
+      nullable: true,
+      resolve: (contact) => ((contact as Record<string, unknown>).source as string | null) ?? null,
+    }),
+    notes: t.string({
+      nullable: true,
+      resolve: (contact) => ((contact as Record<string, unknown>).notes as string | null) ?? null,
+    }),
     ownerId: t.exposeString('ownerId'),
     owner: t.field({
       type: UserRef,
@@ -113,6 +161,17 @@ const CreateContactInputRef = builder.inputType('CreateContactInput', {
     phone: t.string(),
     company: t.string(),
     jobTitle: t.string(),
+    // Enrichment fields
+    linkedin: t.string(),
+    twitter: t.string(),
+    addressStreet: t.string(),
+    addressCity: t.string(),
+    addressCountry: t.string(),
+    department: t.string(),
+    timezone: t.string(),
+    language: t.string(),
+    source: t.string(),
+    notes: t.string(),
   }),
 })
 
@@ -124,6 +183,17 @@ const UpdateContactInputRef = builder.inputType('UpdateContactInput', {
     phone: t.string(),
     company: t.string(),
     jobTitle: t.string(),
+    // Enrichment fields
+    linkedin: t.string(),
+    twitter: t.string(),
+    addressStreet: t.string(),
+    addressCity: t.string(),
+    addressCountry: t.string(),
+    department: t.string(),
+    timezone: t.string(),
+    language: t.string(),
+    source: t.string(),
+    notes: t.string(),
   }),
 })
 

@@ -276,6 +276,17 @@ model Contact {
   company   String?
   jobTitle  String?
   ownerId   String    @default("system")
+  // Enrichment fields — optional data collected to build a 360° contact profile
+  linkedin      String?
+  twitter       String?
+  addressStreet String?
+  addressCity   String?
+  addressCountry String?
+  department    String?
+  timezone      String?
+  language      String?
+  source        String?    // How the contact was acquired: Website, Referral, Event, etc.
+  notes         String?    // Internal notes about the contact
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   createdBy String    @default("system")

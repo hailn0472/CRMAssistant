@@ -20,6 +20,17 @@ export type CreateContactInput = {
   phone?: string
   company?: string
   jobTitle?: string
+  // Enrichment fields
+  linkedin?: string
+  twitter?: string
+  addressStreet?: string
+  addressCity?: string
+  addressCountry?: string
+  department?: string
+  timezone?: string
+  language?: string
+  source?: string
+  notes?: string
 }
 
 export type UpdateContactInput = {
@@ -29,6 +40,17 @@ export type UpdateContactInput = {
   phone?: string | null
   company?: string | null
   jobTitle?: string | null
+  // Enrichment fields
+  linkedin?: string | null
+  twitter?: string | null
+  addressStreet?: string | null
+  addressCity?: string | null
+  addressCountry?: string | null
+  department?: string | null
+  timezone?: string | null
+  language?: string | null
+  source?: string | null
+  notes?: string | null
 }
 
 export type ContactFilterInput = {
@@ -64,6 +86,17 @@ const contactListSelect = {
       tag: { select: { id: true, name: true, color: true } },
     },
   },
+  // Enrichment fields
+  linkedin: true,
+  twitter: true,
+  addressStreet: true,
+  addressCity: true,
+  addressCountry: true,
+  department: true,
+  timezone: true,
+  language: true,
+  source: true,
+  notes: true,
   createdAt: true,
   updatedAt: true,
 } as const
@@ -134,6 +167,16 @@ function normalizeCreateInput(input: CreateContactInput): CreateContactInput {
     phone: normalizeOptionalString(input.phone, 'Phone') ?? undefined,
     company: normalizeOptionalString(input.company, 'Company') ?? undefined,
     jobTitle: normalizeOptionalString(input.jobTitle, 'Job title') ?? undefined,
+    linkedin: normalizeOptionalString(input.linkedin, 'LinkedIn') ?? undefined,
+    twitter: normalizeOptionalString(input.twitter, 'Twitter') ?? undefined,
+    addressStreet: normalizeOptionalString(input.addressStreet, 'Address street') ?? undefined,
+    addressCity: normalizeOptionalString(input.addressCity, 'Address city') ?? undefined,
+    addressCountry: normalizeOptionalString(input.addressCountry, 'Address country') ?? undefined,
+    department: normalizeOptionalString(input.department, 'Department') ?? undefined,
+    timezone: normalizeOptionalString(input.timezone, 'Timezone') ?? undefined,
+    language: normalizeOptionalString(input.language, 'Language') ?? undefined,
+    source: normalizeOptionalString(input.source, 'Source') ?? undefined,
+    notes: normalizeOptionalString(input.notes, 'Notes') ?? undefined,
   }
 }
 
@@ -151,6 +194,16 @@ function normalizeUpdateInput(input: UpdateContactInput): UpdateContactInput {
     phone: normalizeOptionalString(input.phone, 'Phone'),
     company: normalizeOptionalString(input.company, 'Company'),
     jobTitle: normalizeOptionalString(input.jobTitle, 'Job title'),
+    linkedin: normalizeOptionalString(input.linkedin, 'LinkedIn'),
+    twitter: normalizeOptionalString(input.twitter, 'Twitter'),
+    addressStreet: normalizeOptionalString(input.addressStreet, 'Address street'),
+    addressCity: normalizeOptionalString(input.addressCity, 'Address city'),
+    addressCountry: normalizeOptionalString(input.addressCountry, 'Address country'),
+    department: normalizeOptionalString(input.department, 'Department'),
+    timezone: normalizeOptionalString(input.timezone, 'Timezone'),
+    language: normalizeOptionalString(input.language, 'Language'),
+    source: normalizeOptionalString(input.source, 'Source'),
+    notes: normalizeOptionalString(input.notes, 'Notes'),
   }
 }
 
@@ -174,6 +227,17 @@ export class ContactsService {
           phone: normalizedInput.phone,
           company: normalizedInput.company,
           jobTitle: normalizedInput.jobTitle,
+          // Enrichment fields
+          linkedin: normalizedInput.linkedin,
+          twitter: normalizedInput.twitter,
+          addressStreet: normalizedInput.addressStreet,
+          addressCity: normalizedInput.addressCity,
+          addressCountry: normalizedInput.addressCountry,
+          department: normalizedInput.department,
+          timezone: normalizedInput.timezone,
+          language: normalizedInput.language,
+          source: normalizedInput.source,
+          notes: normalizedInput.notes,
           ownerId: userId,
           createdBy: userId,
           updatedBy: userId,

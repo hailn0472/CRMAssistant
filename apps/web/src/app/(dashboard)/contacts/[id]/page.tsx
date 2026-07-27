@@ -1,9 +1,7 @@
 import { cookies } from 'next/headers'
 import { notFound, redirect } from 'next/navigation'
 
-import { TagBadge } from '@/components/contacts/TagBadge'
-import { ContactTimeline } from '@/components/contacts/ContactTimeline'
-import { WorkspacePanel } from '@/components/layout/AppShell'
+import { ContactDetailClient } from '@/components/contacts/ContactDetailClient'
 import type { Contact } from '@/services/contact.service'
 
 const API_URL = process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:4000'
@@ -36,6 +34,16 @@ async function loadContact(id: string): Promise<Contact> {
           phone
           company
           jobTitle
+          linkedin
+          twitter
+          addressStreet
+          addressCity
+          addressCountry
+          department
+          timezone
+          language
+          source
+          notes
           ownerId
           owner { id firstName lastName email }
           tags { id name color }
@@ -72,47 +80,5 @@ export default async function ContactDetailPage({
 }: ContactPageProps): Promise<React.JSX.Element> {
   const contact = await loadContact(params.id)
 
-  return (
-    <main className="space-y-6 p-6 text-slate-950">
-      <WorkspacePanel className="p-6">
-        <div className="grid gap-4 md:grid-cols-2">
-          <Detail label="Email" value={contact.email} />
-          <Detail label="Phone" value={contact.phone ?? '—'} />
-          <Detail label="Company" value={contact.company ?? '—'} />
-          <Detail label="Job title" value={contact.jobTitle ?? '—'} />
-          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Tags</p>
-            <div className="mt-2 flex flex-wrap gap-1.5">
-              {contact.tags && contact.tags.length > 0 ? (
-                contact.tags.map((t) => <TagBadge key={t.id} tag={t} />)
-              ) : (
-                <p className="text-sm font-medium text-slate-400">—</p>
-              )}
-            </div>
-          </div>
-          <Detail label="Created" value={new Date(contact.createdAt).toLocaleString()} />
-          <Detail label="Updated" value={new Date(contact.updatedAt).toLocaleString()} />
-        </div>
-      </WorkspacePanel>
-
-      {/* Activity Timeline Section */}
-      <WorkspacePanel className="p-6">
-        <ContactTimeline contactId={params.id} />
-      </WorkspacePanel>
-    </main>
-  )
-}
-
-type DetailProps = {
-  label: string
-  value: string
-}
-
-function Detail({ label, value }: DetailProps): React.JSX.Element {
-  return (
-    <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">{label}</p>
-      <p className="mt-2 text-sm font-medium text-slate-950">{value}</p>
-    </div>
-  )
+  return <ContactDetailClient contact={contact} />
 }

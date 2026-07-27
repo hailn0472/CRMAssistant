@@ -6,6 +6,17 @@ export type Contact = {
   phone?: string | null
   company?: string | null
   jobTitle?: string | null
+  // Enrichment fields
+  linkedin?: string | null
+  twitter?: string | null
+  addressStreet?: string | null
+  addressCity?: string | null
+  addressCountry?: string | null
+  department?: string | null
+  timezone?: string | null
+  language?: string | null
+  source?: string | null
+  notes?: string | null
   ownerId: string
   owner?: { id: string; firstName: string; lastName: string; email: string } | null
   sharedWithMe?: boolean
@@ -28,6 +39,17 @@ export type ContactFormData = {
   phone?: string | null
   company?: string | null
   jobTitle?: string | null
+  // Enrichment fields
+  linkedin?: string | null
+  twitter?: string | null
+  addressStreet?: string | null
+  addressCity?: string | null
+  addressCountry?: string | null
+  department?: string | null
+  timezone?: string | null
+  language?: string | null
+  source?: string | null
+  notes?: string | null
 }
 
 import { graphqlRequest } from '@/lib/graphql-client'
@@ -40,6 +62,16 @@ const CONTACT_FIELDS = `
   phone
   company
   jobTitle
+  linkedin
+  twitter
+  addressStreet
+  addressCity
+  addressCountry
+  department
+  timezone
+  language
+  source
+  notes
   ownerId
   owner { id firstName lastName email }
   sharedWithMe

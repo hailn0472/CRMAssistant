@@ -138,9 +138,11 @@ describe('ContactsTable', () => {
 
     renderWithQueryClient(<ContactsTable />)
 
-    expect(await screen.findByText('Page 1 of 3 · 25 contacts')).toBeInTheDocument()
-    expect(screen.getByText('Next')).toBeInTheDocument()
-    expect(screen.getByText('Previous')).toBeDisabled()
+    // Wait for pagination to appear: page 1 button is active
+    const page1Btn = await screen.findByRole('button', { name: '1' })
+    expect(page1Btn).toHaveClass('bg-indigo-600')
+    expect(screen.getByRole('button', { name: '2' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '3' })).toBeInTheDocument()
   })
 
   it('navigates to next page', async () => {
@@ -174,11 +176,15 @@ describe('ContactsTable', () => {
 
     renderWithQueryClient(<ContactsTable />)
 
-    await screen.findByText('Page 1 of 3 · 25 contacts')
+    // Wait for page 1 button to appear (pagination rendered)
+    const page1Btn = await screen.findByRole('button', { name: '1' })
+    expect(page1Btn).toHaveClass('bg-indigo-600')
 
-    fireEvent.click(screen.getByText('Next'))
+    // Click page 2
+    fireEvent.click(screen.getByRole('button', { name: '2' }))
 
-    await screen.findByText('Page 2 of 3 · 25 contacts')
-    expect(screen.getByText('Previous')).not.toBeDisabled()
+    // Page 2 should now be active
+    const page2Btn = await screen.findByRole('button', { name: '2' })
+    expect(page2Btn).toHaveClass('bg-indigo-600')
   })
 })
