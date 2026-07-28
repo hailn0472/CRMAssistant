@@ -269,31 +269,35 @@ describe('Ownership rules (integration)', () => {
   //  SCENARIO 3: Permission enforcement — non-admin cannot assign outside scope
   // =========================================================================
   it('rejects owner assignment when user lacks CONTACT:UPDATE permission (INT-O-04)', async () => {
-    const { tenant } = await setupTenant('NoPerm Co', 'no-perm-user')
+    const { tenant, token: adminToken } = await setupTenant('NoPerm Co', 'no-perm-admin')
     const tenantAId = tenant.id
 
-    // Create a role WITHOUT CONTACT:UPDATE
+    // A DISTINCT user holding only a role WITHOUT CONTACT:UPDATE.
+    // requirePermission() resolves permissions from every role the user holds
+    // in the DB (the JWT `roles` claim only drives the ADMIN bypass), so the
+    // viewer must not share a user record with the admin that seeded the data.
+    const viewerUserId = 'no-perm-viewer'
+    await createUser(tenantAId, viewerUserId)
+
     const role = await prisma.role.create({
       data: {
         tenantId: tenantAId,
         name: 'VIEWER',
         isSystem: true,
-        dataVisibility: 'OWN',
+        dataVisibility: 'ALL',
         createdBy: 'test',
         updatedBy: 'test',
       },
     })
     await prisma.userRole.create({
-      data: { userId: 'no-perm-user', roleId: role.id, assignedBy: 'test' },
+      data: { userId: viewerUserId, roleId: role.id, assignedBy: 'test' },
     })
     // Do NOT grant CONTACT:UPDATE to this role
 
-    // Create a user with ADMIN role for setup
-    const adminToken = signToken('no-perm-user', tenantAId, ['ADMIN'])
     const contactId = await createContactViaGraphql(adminToken, 'noperm@example.com')
 
     // Now try assigning with the viewer token
-    const viewerToken = signToken('no-perm-user', tenantAId, ['VIEWER'])
+    const viewerToken = signToken(viewerUserId, tenantAId, ['VIEWER'])
 
     const newOwnerId = 'another-user'
     await createUser(tenantAId, newOwnerId)
@@ -311,7 +315,7 @@ describe('Ownership rules (integration)', () => {
     // Should fail with 403 Forbidden or similar
     expect(response.status).toBe(200) // GraphQL always returns 200
     expect(response.body.errors).toBeDefined()
-    expect(response.body.errors[0].extensions?.code).toBe('FORBIDDEN')
+    expect(response.body.errors[0].message).toContain('Missing required permission')
   })
 
   // =========================================================================
@@ -400,9 +404,10 @@ describe('Ownership rules (integration)', () => {
 
     expect(response.status).toBe(200) // GraphQL always returns 200
     expect(response.body.errors).toBeDefined()
-    expect(
-      response.body.errors[0].extensions?.code === 'NOT_FOUND' ||
-        response.body.errors[0].extensions?.code === 'FORBIDDEN',
-    ).toBe(true)
+    expect(response.body.errors[0].message).toMatch(/not found|forbidden|access/i)
+
+    // And the contact must still be owned by the tenant A user
+    const contact = await prisma.contact.findUniqueOrThrow({ where: { id: contactId } })
+    expect(contact.ownerId).not.toBe(tenantBUser)
   })
 })

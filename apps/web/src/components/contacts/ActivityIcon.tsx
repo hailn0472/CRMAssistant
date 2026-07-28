@@ -1,13 +1,14 @@
 'use client'
 
-import { 
-  Mail, 
-  Phone, 
-  Calendar, 
-  FileText, 
-  Briefcase, 
-  Sparkles, 
+import {
+  Mail,
+  Phone,
+  Calendar,
+  FileText,
+  Briefcase,
+  Sparkles,
   RefreshCw,
+  UserCog,
   type LucideIcon,
 } from 'lucide-react'
 import type { ActivityTypeValue } from '@/types/activity.types'
@@ -61,6 +62,12 @@ const ICON_CONFIGS: Record<ActivityTypeValue, IconConfig> = {
     color: 'text-blue-600',
     bgColor: 'bg-blue-100',
     label: 'Contact Updated',
+  },
+  CONTACT_OWNER_CHANGED: {
+    icon: UserCog,
+    color: 'text-indigo-600',
+    bgColor: 'bg-indigo-100',
+    label: 'Owner Changed',
   },
 }
 
