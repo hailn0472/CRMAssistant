@@ -1,0 +1,155 @@
+{
+  "status": "FINDINGS",
+  "findings": [
+    {
+      "severity": "Critical",
+      "file": "apps/api/src/activities/activities.graphql.ts",
+      "line": 115,
+      "description": "contactTimeline GraphQL resolver chỉ kiểm tra authentication (requireUser) nhưng KHÔNG kiểm tra user có quyền truy cập contact (visibility check). User có thể query timeline cho bất kỳ contact nào trong tenant, kể cả contact họ không có quyền xem. Tương tự, addContactNote mutation cũng thiếu contact visibility check.",
+      "suggestion": "Thêm contact visibility check trước khi gọi findByContact/log. Sử dụng ContactsService.findOne() hoặc một lightweight visibility check function để xác nhận user có quyền truy cập contact. Ví dụ: gọi contactsService.findOne(user.tenantId, user.userId, contactId) trong resolver trước khi query activities."
+    },
+    {
+      "severity": "Important",
+      "file": "apps/api/src/activities/activities.graphql.ts",
+      "line": 153,
+      "description": "addContactNote mutation cũng thiếu contact visibility check. User có thể thêm note vào contact họ không có quyền truy cập, miễn là họ biết contactId.",
+      "suggestion": "Thêm visibility check giống contactTimeline resolver. Verify user có quyền xem/edit contact trước khi cho phép add note."
+    },
+    {
+      "severity": "Important",
+      "file": "apps/api/src/activities/activities.graphql.ts",
+      "line": 134,
+      "description": "contactTimeline resolver gọi countByContact() trong cùng một request, tạo N+1 query pattern. Khi user có nhiều activities, mỗi lần query timeline sẽ tốn 2 database queries (findMany + count) thay vì 1. Có thể dùng SQL count window function hoặc chỉ tính count khi cần hiển thị.",
+      "suggestion": "Cân nhắc loại bỏ countByContact() call riêng và dùng Prisma's count với $transaction, hoặc accept 2 queries nếu performance acceptable. Nếu timeline query cần <100ms cho 1000+ activities, cần benchmark cả 2 queries."
+    },
+    {
+      "severity": "Minor",
+      "file": "apps/web/src/types/activity.types.ts",
+      "line": 1,
+      "description": "File naming convention violation: file là 'activity.types.ts' (kebab-case) nhưng rules yêu cầu 'PascalCase.types.ts' (Activity.types.ts). Tuy nhiên toàn bộ project dùng kebab-case cho type files (import-export.types.ts, auth.types.ts) nên đây là convention inconsistency ở cấp độ rules documentation, không phải lỗi implementation.",
+      "suggestion": "Cập nhật naming-conventions.md để phản ánh convention thực tế: type files dùng kebab-case.types.ts thay vì PascalCase.types.ts, hoặc đổi tên file nếu muốn giữ rule."
+    },
+    {
+      "severity": "Minor",
+      "file": "apps/web/src/components/contacts/__tests__/ContactTimeline.test.tsx",
+      "line": 1,
+      "description": "Test file naming convention: rule yêu cầu .spec.tsx suffix nhưng frontend tests dùng .test.tsx (ContactTimeline.test.tsx, TimelineCard.test.tsx, NoteComposer.test.tsx, TimelineFilter.test.tsx). Đây là Jest convention thay vì spec convention từ NestJS.",
+      "suggestion": "Thống nhất convention: hoặc cập nhật rules cho phép .test.tsx cho frontend tests, hoặc rename files thành .spec.tsx."
+    },
+    {
+      "severity": "Minor",
+      "file": "apps/api/src/activities/activities.service.ts",
+      "line": 44,
+      "description": "EXCLUDED_FIELDS không bao gồm 'createdAt'. Mặc dù createdAt không nên thay đổi trong update, nếu có bug nào đó khiến createdAt field xuất hiện trong update payload, detectChangedFields sẽ báo changed. Nên add 'createdAt' vào excluded set để an toàn.",
+      "suggestion": "Thêm 'createdAt' vào EXCLUDED_FIELDS set: const EXCLUDED_FIELDS = new Set(['updatedAt', 'updatedBy', 'deletedAt', 'ownerId', 'id', 'createdAt'])"
+    },
+    {
+      "severity": "Minor",
+      "file": "apps/api/src/activities/activities.graphql.ts",
+      "line": 99,
+      "description": "Module-level singleton pattern (activityService variable) - có thread-safety concerns trong serverless/edge environments. Nếu app chạy nhiều instances, singleton sẽ không được synchronize.",
+      "suggestion": "Cân nhắc dùng NestJS DI injection pattern thay vì singleton. Nếu cần lazy registration, dùng forwardRef() hoặc module reference."
+    },
+    {
+      "severity": "Minor",
+      "file": "apps/api/src/contacts/contacts.service.ts",
+      "line": 420,
+      "description": "detectChangedFields sử dụng 'contact as unknown as Record<string, unknown>' để bypass TypeScript type safety. Nếu Contact model thay đổi (thêm/bớt field), detectChangedFields có thể không detect được changes ở fields mới.",
+      "suggestion": "Sử dụng typed comparison dựa trên Prisma Contact type thay vì cast sang unknown. Hoặc implement detectChangedFields dựa trên input diff thay vì fetch lại contact từ DB."
+    },
+    {
+      "severity": "Minor",
+      "file": "apps/web/src/components/contacts/TimelineCard.tsx",
+      "line": 18,
+      "description": "formatRelativeTime() không handle future dates (createdAt > now). Nếu clock drift hoặc dữ liệu test có createdAt trong tương lai, diff sẽ âm và hiển thị sai.",
+      "suggestion": "Thêm fallback: if (diffMs < 0) return 'just now'"
+    },
+    {
+      "severity": "Minor",
+      "file": "apps/web/src/components/contacts/ContactTimeline.tsx",
+      "line": 77,
+      "description": "Infinite scroll IntersectionObserver không được disconnect khi component unmount trong quá trình loading (isLoadingMore = true). Mặc dù cleanup function có disconnect(), nếu component unmount giữa async fetch, có thể gây memory leak hoặc state update trên unmounted component.",
+      "suggestion": "Thêm mounted flag ref để kiểm tra trong async callback: if (!mountedRef.current) return;"
+    },
+    {
+      "severity": "Minor",
+      "file": "apps/web/src/components/contacts/ContactTimeline.tsx",
+      "line": 88,
+      "description": "Infinite scroll error handling silently swallows errors (empty catch block). User không biết khi fetch page mới thất bại.",
+      "suggestion": "Ít nhất log error cho developer, hoặc hiển thị toast.error() cho user biết có lỗi khi load thêm activities."
+    },
+    {
+      "severity": "Minor",
+      "file": "apps/api/src/activities/activities.service.ts",
+      "line": 121,
+      "description": "findByContact clamps first value giữa 1 và MAX_PAGE_SIZE (50). Tuy nhiên, AC 8 yêu cầu 20 items per page, và DEFAULT_PAGE_SIZE là 20. MAX_PAGE_SIZE = 50 có thể dễ dàng bị abuse (query large result sets).",
+      "suggestion": "Cân nhắc giảm MAX_PAGE_SIZE xuống 20-25 để prevent large data exfiltration via pagination, unless có business requirement cho page size lớn hơn."
+    }
+  ],
+  "rules_compliance": {
+    "naming_conventions": "PASS",
+    "typescript_rules": "PASS",
+    "nestjs_rules": "PASS",
+    "prisma_rules": "PASS",
+    "react_nextjs_rules": "PASS"
+  },
+  "ac_verification": {
+    "ac_1_prisma_model": {
+      "status": "PASS",
+      "notes": "Activity model có đủ fields: id, tenantId, contactId, type (ActivityType), title, description (optional), createdAt, createdBy. Description field nullable đúng spec."
+    },
+    "ac_2_enum": {
+      "status": "PASS",
+      "notes": "ActivityType enum có đủ 7 values: EMAIL_SENT, CALL_MADE, MEETING_SCHEDULED, NOTE_ADDED, DEAL_CREATED, CONTACT_CREATED, CONTACT_UPDATED. Prisma enum và GraphQL enum đồng bộ."
+    },
+    "ac_3_graphql_query": {
+      "status": "PASS",
+      "notes": "Query contactTimeline(contactId: ID!, first: Int, after: String) hoạt động với cursor pagination, trả về ContactTimelineResult với edges, pageInfo, totalCount. Sắp xếp DESC theo createdAt."
+    },
+    "ac_4_auto_logging_create": {
+      "status": "PASS",
+      "notes": "ContactsService.create() auto-log CONTACT_CREATED qua ActivityService.logSafe(). Non-blocking (không throw nếu log thất bại)."
+    },
+    "ac_5_auto_logging_update": {
+      "status": "PASS",
+      "notes": "ContactsService.update() auto-log CONTACT_UPDATED với changed fields detection qua ActivityService.detectChangedFields(). Excluded fields: updatedAt, updatedBy, deletedAt, ownerId, id."
+    },
+    "ac_6_frontend_timeline": {
+      "status": "PASS",
+      "notes": "ContactTimeline component được render trong ContactDetailPage (server component) với contactId prop."
+    },
+    "ac_7_activity_cards": {
+      "status": "PASS",
+      "notes": "TimelineCard component hiển thị: type icon (ActivityIcon), title, description (có truncate 200 chars + 'Show more'), timestamp (relative time), createdBy ('by user'). Timeline line visual connector."
+    },
+    "ac_8_infinite_scroll": {
+      "status": "PASS",
+      "notes": "IntersectionObserver-based infinite scroll với PAGE_SIZE=20. Sentinel element trigger fetch when visible. 'Loading more...' spinner trong khi fetch. 'No more activities' message ở cuối."
+    },
+    "ac_9_note_composer": {
+      "status": "PASS",
+      "notes": "NoteComposer với optimistic update (thêm activity tạm thời với id='optimistic-{timestamp}'), replace với real data khi server response, remove optimistic + toast.error nếu thất bại. Ctrl+Enter submit. Character counter (max 1000)."
+    },
+    "ac_10_performance": {
+      "status": "PASS",
+      "notes": "Composite index @@index([tenantId, contactId, createdAt(sort: Desc)]) được tạo trong migration. ACTIVITY_SELECT chỉ select 6 fields cần thiết (no N+1). take: first+1 pattern để detect hasNextPage không cần count query riêng. Tuy nhiên totalCount query thêm 1 DB call."
+    },
+    "ac_11_filter_tabs": {
+      "status": "PASS",
+      "notes": "TimelineFilter component có 3 tabs: All, Sales (EMAIL_SENT, CALL_MADE, MEETING_SCHEDULED, NOTE_ADDED), System (CONTACT_CREATED, CONTACT_UPDATED, DEAL_CREATED). Client-side filtering (lọc activities đã loaded). Sales vs System label hơi khác AC (Notes, Calls, Emails, Meetings, System) nhưng functional equivalent."
+    },
+    "ac_12_unit_tests": {
+      "status": "PASS",
+      "notes": "Backend: activities.service.spec.ts (419 lines) test log(), findByContact(), countByContact(), logSafe(), detectChangedFields(). Frontend: ContactTimeline.test.tsx, TimelineCard.test.tsx, NoteComposer.test.tsx, TimelineFilter.test.tsx — coverage cho loading, error, empty, filters, pagination, optimistic update, keyboard shortcuts."
+    },
+    "ac_13_integration_tests": {
+      "status": "PASS",
+      "notes": "activities.integration.spec.ts (493 lines) với real PostgreSQL (testcontainers). Tests: DESC sort, auto-log CONTACT_CREATED, auto-log CONTACT_UPDATED, addContactNote mutation, cursor pagination, tenant isolation, empty timeline, non-existent contact."
+    }
+  },
+  "test_quality": {
+    "status": "CONCERNS",
+    "notes": "Backend tests: 1) Missing test for log() khi contactId không tồn tại (FK error). 2) detectChangedFields test dùng baseOld có type 'any' (eslint-disable), không test edge case như field chỉ có ở newContact. 3) Không test findByContact() khi first được omit (default 20). Frontend tests: 1) ContactTimeline test dùng mock implementation không resolve để test loading state — có thể dùng jest.useFakeTimers thay vì unresolved promise. 2) Không test infinite scroll trigger (IntersectionObserver mock không trigger callback). Integration tests: 1) Không test trường hợp update contact không có meaningful changes (không log CONTACT_UPDATED). 2) Không test concurrent note creation (race condition)."
+  },
+  "summary": "Kết quả review Story 5.4 (Contact Timeline & Activity History): trả về FINDINGS với 1 Critical + 1 Important security issues.\n\n=== CRITICAL FINDINGS ===\n1. **Thiếu contact visibility check trong GraphQL resolvers**: contactTimeline query và addContactNote mutation chỉ kiểm tra authentication (JWT) nhưng KHÔNG kiểm tra user có quyền truy cập contact cụ thể. User có thể query timeline cho bất kỳ contact nào trong tenant hoặc thêm note vào contact không thuộc quyền. Cần inject ContactsService và gọi visibility check.\n\n=== IMPORTANT FINDINGS ===\n2. N+1 query pattern: contactTimeline resolver gọi countByContact() riêng biệt. Có thể ảnh hưởng AC 10 (<100ms) nếu volume lớn.\n\n=== CÁC AC ===\n13/13 AC PASS. Code coverage đầy đủ: backend unit tests (419 lines), frontend tests (543 lines), integration tests (493 lines). Composite index cho performance OK.\n\n=== RULES ===\nAll rules PASS (có 2 minor naming issues không ảnh hưởng functionality).\n\n=== KẾT LUẬN ===\nCần FIX critical security issue (visibility check) trước khi merge. Sau khi fix → Stage 9 (E2E/QA)."
+}
