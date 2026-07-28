@@ -25,8 +25,10 @@ import { Button } from '@/components/ui/button'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { TagBadge } from '@/components/contacts/TagBadge'
 import { TagSelector } from '@/components/contacts/TagSelector'
+import { OwnerSection } from '@/components/contacts/OwnerSection'
 import { addTagToContact, removeTagFromContact } from '@/services/tag.service'
 import { updateContact } from '@/services/contact.service'
+import { assignContactOwner } from '@/services/owner.service'
 import { cn } from '@/lib/utils'
 import type { Contact } from '@/services/contact.service'
 
@@ -670,6 +672,11 @@ export function ContactDetailClient({ contact }: { contact: Contact }): React.JS
   const refreshContact = useCallback(() => {
     setRefreshKey((k) => k + 1)
   }, [])
+
+  const handleAssignOwner = useCallback(async (contactId: string, userId: string) => {
+    await assignContactOwner(contactId, userId)
+  }, [])
+
   const handleEnrichSave = useCallback((fieldKey: string, value: string) => {
     setLocalContact((prev) => ({ ...prev, [fieldKey]: value || null }))
   }, [])
@@ -858,6 +865,13 @@ export function ContactDetailClient({ contact }: { contact: Contact }): React.JS
           </div>
 
           <div className="space-y-4">
+            <OwnerSection
+              contactId={localContact.id}
+              ownerId={localContact.ownerId}
+              owner={localContact.owner}
+              canUpdate={true}
+              onAssignOwner={handleAssignOwner}
+            />
             <QuickInfoCard contact={localContact} />
             <Card>
               <CardHeader className="border-b border-slate-100 px-5 py-3.5">

@@ -18,7 +18,14 @@ export type Contact = {
   source?: string | null
   notes?: string | null
   ownerId: string
-  owner?: { id: string; firstName: string; lastName: string; email: string } | null
+  owner?: {
+    id: string
+    firstName: string
+    lastName: string
+    email: string
+    avatar?: string | null
+  } | null
+  teamId?: string | null
   sharedWithMe?: boolean
   tags?: Array<{ id: string; name: string; color: string }>
   createdAt: string
@@ -73,7 +80,8 @@ const CONTACT_FIELDS = `
   source
   notes
   ownerId
-  owner { id firstName lastName email }
+  owner { id firstName lastName email avatar }
+  teamId
   sharedWithMe
   tags { id name color }
   createdAt

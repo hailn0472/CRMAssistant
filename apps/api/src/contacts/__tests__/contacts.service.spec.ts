@@ -36,6 +36,7 @@ type MockContactDelegate = {
   findMany: jest.Mock
   count: jest.Mock
   updateMany: jest.Mock
+  update: jest.Mock
 }
 
 type MockSharingRuleDelegate = {
@@ -44,6 +45,15 @@ type MockSharingRuleDelegate = {
 
 type MockUserRoleDelegate = {
   findMany: jest.Mock
+}
+
+type MockUserDelegate = {
+  findFirst: jest.Mock
+  findUnique: jest.Mock
+}
+
+type MockTeamDelegate = {
+  findFirst: jest.Mock
 }
 
 type MockContactTagDelegate = {
@@ -63,8 +73,11 @@ type MockPrisma = {
   contact: MockContactDelegate
   sharingRule: MockSharingRuleDelegate
   userRole: MockUserRoleDelegate
+  user: MockUserDelegate
+  team: MockTeamDelegate
   contactTag: MockContactTagDelegate
   tag: MockTagDelegate
+  $transaction: jest.Mock
 }
 
 const NOW = new Date('2026-05-13T00:00:00.000Z')
@@ -94,6 +107,7 @@ function makeContact(overrides: Partial<Contact> = {}): Contact {
     source: null,
     notes: null,
     ownerId: USER_ID,
+    teamId: null,
     createdAt: NOW,
     updatedAt: NOW,
     createdBy: USER_ID,
@@ -104,19 +118,27 @@ function makeContact(overrides: Partial<Contact> = {}): Contact {
 }
 
 function makePrisma(): MockPrisma {
-  return {
+  const delegates = {
     contact: {
       create: jest.fn(),
       findFirst: jest.fn(),
       findMany: jest.fn(),
       count: jest.fn(),
       updateMany: jest.fn(),
+      update: jest.fn(),
     },
     sharingRule: {
       findFirst: jest.fn(),
     },
     userRole: {
       findMany: jest.fn(),
+    },
+    user: {
+      findFirst: jest.fn(),
+      findUnique: jest.fn(),
+    },
+    team: {
+      findFirst: jest.fn(),
     },
     contactTag: {
       create: jest.fn(),
@@ -129,7 +151,12 @@ function makePrisma(): MockPrisma {
       findMany: jest.fn(),
       delete: jest.fn(),
     },
+    $transaction: jest.fn(),
   }
+  delegates.$transaction.mockImplementation((cb: (tx: typeof delegates) => unknown) =>
+    cb(delegates),
+  )
+  return delegates
 }
 
 function makeActivityService(): MockActivityService {
@@ -320,7 +347,11 @@ describe('ContactsService', () => {
       await expect(service.findOne(TENANT_ID, USER_ID, CONTACT_ID)).resolves.toBe(contact)
       expect(prisma.contact.findFirst).toHaveBeenCalledWith({
         where: { id: CONTACT_ID, tenantId: TENANT_ID, deletedAt: null },
-        include: { owner: { select: { id: true, firstName: true, lastName: true, email: true } } },
+        include: {
+          owner: {
+            select: { id: true, firstName: true, lastName: true, email: true, avatar: true },
+          },
+        },
       })
     })
 
@@ -436,7 +467,9 @@ describe('ContactsService', () => {
           source: true,
           notes: true,
           ownerId: true,
-          owner: { select: { id: true, firstName: true, lastName: true, email: true } },
+          owner: {
+            select: { id: true, firstName: true, lastName: true, email: true, avatar: true },
+          },
           tags: { select: { tag: { select: { id: true, name: true, color: true } } } },
           createdAt: true,
           updatedAt: true,
@@ -749,5 +782,492 @@ describe('ContactsService', () => {
     await expect(
       service.update(TENANT_ID, USER_ID, CONTACT_ID, { company: 'Acme' }),
     ).rejects.toThrow('database unavailable')
+  })
+})
+
+describe('ContactsService — Ownership', () => {
+  let service: ContactsService
+  let prisma: MockPrisma
+  let activityService: MockActivityService
+
+  const NEW_OWNER_ID = 'new-owner-1'
+  const TEAM_ID = 'team-1'
+
+  const makeOwnedContact = (overrides: Partial<Contact> = {}): Contact => makeContact(overrides)
+
+  const makeUser = (
+    id: string,
+    overrides: Partial<Record<string, unknown>> = {},
+  ): Record<string, unknown> => ({
+    id,
+    tenantId: TENANT_ID,
+    email: `${id}@example.com`,
+    firstName: overrides.firstName ?? 'Test',
+    lastName: overrides.lastName ?? 'User',
+    ...overrides,
+  })
+
+  const makeTeam = (id: string): Record<string, unknown> => ({
+    id,
+    tenantId: TENANT_ID,
+    name: 'Test Team',
+    createdAt: NOW,
+    updatedAt: NOW,
+  })
+
+  beforeEach(() => {
+    prisma = makePrisma()
+    activityService = makeActivityService()
+    ;(activityService.detectChangedFields as jest.Mock).mockReturnValue([])
+    service = new ContactsService(
+      prisma as unknown as ConstructorParameters<typeof ContactsService>[0],
+      activityService as unknown as ConstructorParameters<typeof ContactsService>[1],
+    )
+    ;(resolveVisibilityFilter as jest.Mock).mockResolvedValue(undefined)
+    ;(resolveSharedRecordIds as jest.Mock).mockResolvedValue([])
+  })
+
+  describe('assignOwner()', () => {
+    // UT-O-01: Updates contact ownerId to new userId
+    it('updates contact ownerId to new userId (UT-O-01)', async () => {
+      const contact = makeOwnedContact({ ownerId: USER_ID })
+      const newOwner = makeUser(NEW_OWNER_ID, { firstName: 'Jane', lastName: 'Smith' })
+      const updatedContact = makeOwnedContact({ ownerId: NEW_OWNER_ID })
+
+      prisma.contact.findFirst.mockResolvedValueOnce(contact)
+      prisma.user.findFirst.mockResolvedValueOnce(newOwner)
+      prisma.contact.update.mockResolvedValue(updatedContact)
+      ;(activityService.logSafe as jest.Mock).mockResolvedValue(updatedContact)
+
+      const result = await service.assignOwner(TENANT_ID, USER_ID, CONTACT_ID, NEW_OWNER_ID)
+
+      expect(result).toBe(updatedContact)
+      expect(prisma.contact.update).toHaveBeenCalledWith({
+        where: { id: CONTACT_ID, tenantId: TENANT_ID, deletedAt: null },
+        data: { ownerId: NEW_OWNER_ID, updatedBy: USER_ID },
+        include: {
+          owner: {
+            select: { id: true, firstName: true, lastName: true, email: true, avatar: true },
+          },
+        },
+      })
+    })
+
+    // UT-O-02: Validates contact exists in tenant
+    it('throws NotFoundException when contact not found in tenant (UT-O-02)', async () => {
+      prisma.contact.findFirst.mockResolvedValue(null)
+
+      await expect(
+        service.assignOwner(TENANT_ID, USER_ID, CONTACT_ID, NEW_OWNER_ID),
+      ).rejects.toThrow(NotFoundException)
+    })
+
+    // UT-O-03: Validates target user exists in same tenant
+    it('throws NotFoundException when target user not found (UT-O-03)', async () => {
+      const contact = makeOwnedContact()
+      prisma.contact.findFirst.mockResolvedValue(contact)
+      prisma.user.findFirst.mockResolvedValue(null)
+
+      await expect(
+        service.assignOwner(TENANT_ID, USER_ID, CONTACT_ID, NEW_OWNER_ID),
+      ).rejects.toThrow(NotFoundException)
+    })
+
+    // UT-O-04: Cross-tenant target user → NotFoundException
+    it('throws NotFoundException for cross-tenant target user (UT-O-04)', async () => {
+      const contact = makeOwnedContact()
+      prisma.contact.findFirst.mockResolvedValue(contact)
+      // User exists but in different tenant
+      prisma.user.findFirst.mockResolvedValue(null)
+
+      await expect(
+        service.assignOwner(TENANT_ID, USER_ID, CONTACT_ID, NEW_OWNER_ID),
+      ).rejects.toThrow(NotFoundException)
+      expect(prisma.user.findFirst).toHaveBeenCalledWith({
+        where: { id: NEW_OWNER_ID, tenantId: TENANT_ID, deletedAt: null },
+        select: { id: true, firstName: true, lastName: true, email: true },
+      })
+    })
+
+    // UT-O-05: Contact not found → NotFoundException
+    it('throws NotFoundException for non-existent contact (UT-O-05)', async () => {
+      prisma.contact.findFirst.mockResolvedValue(null)
+
+      await expect(
+        service.assignOwner(TENANT_ID, USER_ID, 'nonexistent', NEW_OWNER_ID),
+      ).rejects.toThrow(NotFoundException)
+    })
+
+    // UT-O-06: Logs CONTACT_OWNER_CHANGED activity after success
+    it('logs CONTACT_OWNER_CHANGED activity after successful update (UT-O-06)', async () => {
+      const contact = makeOwnedContact({ ownerId: USER_ID })
+      // Include owner relation in findFirst
+      const contactWithOwner = {
+        ...contact,
+        owner: { id: USER_ID, firstName: 'Current', lastName: 'Owner' },
+      }
+      const newOwner = makeUser(NEW_OWNER_ID, { firstName: 'Jane', lastName: 'Smith' })
+      const updatedContact = makeOwnedContact({ ownerId: NEW_OWNER_ID })
+
+      prisma.contact.findFirst.mockResolvedValueOnce(contactWithOwner)
+      prisma.user.findFirst.mockResolvedValueOnce(newOwner)
+      prisma.contact.update.mockResolvedValue(updatedContact)
+      ;(activityService.logSafe as jest.Mock).mockResolvedValue(updatedContact)
+
+      await service.assignOwner(TENANT_ID, USER_ID, CONTACT_ID, NEW_OWNER_ID)
+
+      expect(activityService.logSafe).toHaveBeenCalledWith({
+        tenantId: TENANT_ID,
+        contactId: CONTACT_ID,
+        type: 'CONTACT_OWNER_CHANGED',
+        title: 'Contact owner changed',
+        description: 'Owner changed from Current Owner → Jane Smith',
+        createdBy: USER_ID,
+      })
+    })
+
+    // UT-O-07: Activity description includes from → to owner names
+    it('activity description includes from → to owner names (UT-O-07)', async () => {
+      const contact = makeOwnedContact({ ownerId: USER_ID })
+      const contactWithOwner = {
+        ...contact,
+        owner: { id: USER_ID, firstName: 'Alice', lastName: 'Smith' },
+      }
+      const newOwner = makeUser(NEW_OWNER_ID, { firstName: 'Jane', lastName: 'Smith' })
+      const updatedContact = makeOwnedContact({ ownerId: NEW_OWNER_ID })
+
+      prisma.contact.findFirst.mockResolvedValueOnce(contactWithOwner)
+      prisma.user.findFirst.mockResolvedValueOnce(newOwner)
+      prisma.contact.update.mockResolvedValue(updatedContact)
+      ;(activityService.logSafe as jest.Mock).mockResolvedValue(updatedContact)
+
+      await service.assignOwner(TENANT_ID, USER_ID, CONTACT_ID, NEW_OWNER_ID)
+
+      expect(activityService.logSafe).toHaveBeenCalledWith(
+        expect.objectContaining({
+          description: 'Owner changed from Alice Smith → Jane Smith',
+        }),
+      )
+    })
+
+    // UT-O-08: Activity logging failure does not block ownership change
+    it('activity logging failure does not block ownership change (UT-O-08)', async () => {
+      const contact = makeOwnedContact()
+      const contactWithOwner = {
+        ...contact,
+        owner: { id: USER_ID, firstName: 'Current', lastName: 'Owner' },
+      }
+      const newOwner = makeUser(NEW_OWNER_ID, { firstName: 'Jane', lastName: 'Smith' })
+      const updatedContact = makeOwnedContact({ ownerId: NEW_OWNER_ID })
+
+      prisma.contact.findFirst.mockResolvedValueOnce(contactWithOwner)
+      prisma.user.findFirst.mockResolvedValueOnce(newOwner)
+      prisma.contact.update.mockResolvedValue(updatedContact)
+      // logSafe returns null on failure — does not throw
+      ;(activityService.logSafe as jest.Mock).mockResolvedValue(null)
+
+      const result = await service.assignOwner(TENANT_ID, USER_ID, CONTACT_ID, NEW_OWNER_ID)
+
+      expect(result).toBe(updatedContact)
+      expect(prisma.contact.update).toHaveBeenCalled()
+    })
+
+    // UT-O-09: Returns updated Contact
+    it('returns the updated contact (UT-O-09)', async () => {
+      const contact = makeOwnedContact({ ownerId: USER_ID })
+      const contactWithOwner = {
+        ...contact,
+        owner: { id: USER_ID, firstName: 'Current', lastName: 'Owner' },
+      }
+      const newOwner = makeUser(NEW_OWNER_ID, { firstName: 'Jane', lastName: 'Smith' })
+      const updatedContact = makeOwnedContact({ ownerId: NEW_OWNER_ID })
+
+      prisma.contact.findFirst.mockResolvedValueOnce(contactWithOwner)
+      prisma.user.findFirst.mockResolvedValueOnce(newOwner)
+      prisma.contact.update.mockResolvedValue(updatedContact)
+
+      const result = await service.assignOwner(TENANT_ID, USER_ID, CONTACT_ID, NEW_OWNER_ID)
+
+      expect(result.ownerId).toBe(NEW_OWNER_ID)
+    })
+  })
+
+  describe('assignTeam()', () => {
+    // UT-T-01: Sets teamId to valid team in same tenant
+    it('sets teamId to valid team in same tenant (UT-T-01)', async () => {
+      const contact = makeOwnedContact()
+      const updatedContact = makeOwnedContact({ teamId: TEAM_ID })
+
+      prisma.contact.findFirst.mockResolvedValueOnce(contact)
+      prisma.team.findFirst.mockResolvedValueOnce(makeTeam(TEAM_ID))
+      prisma.contact.update.mockResolvedValue(updatedContact)
+
+      const result = await service.assignTeam(TENANT_ID, USER_ID, CONTACT_ID, TEAM_ID)
+
+      expect(result).toBe(updatedContact)
+      expect(prisma.contact.update).toHaveBeenCalledWith({
+        where: { id: CONTACT_ID, tenantId: TENANT_ID, deletedAt: null },
+        data: { teamId: TEAM_ID, updatedBy: USER_ID },
+        include: {
+          owner: {
+            select: { id: true, firstName: true, lastName: true, email: true, avatar: true },
+          },
+        },
+      })
+    })
+
+    // UT-T-02: Sets teamId to null (removes team assignment)
+    it('sets teamId to null to remove team assignment (UT-T-02)', async () => {
+      const contact = makeOwnedContact({ teamId: TEAM_ID })
+      const updatedContact = makeOwnedContact({ teamId: null })
+
+      prisma.contact.findFirst.mockResolvedValueOnce(contact)
+      prisma.contact.update.mockResolvedValue(updatedContact)
+
+      const result = await service.assignTeam(TENANT_ID, USER_ID, CONTACT_ID, null)
+
+      expect(result).toBe(updatedContact)
+      expect(prisma.contact.update).toHaveBeenCalledWith({
+        where: { id: CONTACT_ID, tenantId: TENANT_ID, deletedAt: null },
+        data: { teamId: null, updatedBy: USER_ID },
+        include: {
+          owner: {
+            select: { id: true, firstName: true, lastName: true, email: true, avatar: true },
+          },
+        },
+      })
+    })
+
+    // UT-T-03: Invalid teamId → NotFoundException
+    it('throws NotFoundException for invalid teamId (UT-T-03)', async () => {
+      const contact = makeOwnedContact()
+      prisma.contact.findFirst.mockResolvedValueOnce(contact)
+      prisma.team.findFirst.mockResolvedValue(null)
+
+      await expect(
+        service.assignTeam(TENANT_ID, USER_ID, CONTACT_ID, 'nonexistent-team'),
+      ).rejects.toThrow(NotFoundException)
+    })
+
+    // UT-T-04: Cross-tenant team → NotFoundException
+    it('throws NotFoundException for cross-tenant team (UT-T-04)', async () => {
+      const contact = makeOwnedContact()
+      prisma.contact.findFirst.mockResolvedValueOnce(contact)
+      prisma.team.findFirst.mockResolvedValue(null)
+
+      await expect(
+        service.assignTeam(TENANT_ID, USER_ID, CONTACT_ID, 'other-tenant-team'),
+      ).rejects.toThrow(NotFoundException)
+      expect(prisma.team.findFirst).toHaveBeenCalledWith({
+        where: { id: 'other-tenant-team', tenantId: TENANT_ID, deletedAt: null },
+      })
+    })
+
+    // UT-T-05: Non-existent contact → NotFoundException
+    it('throws NotFoundException for non-existent contact (UT-T-05)', async () => {
+      prisma.contact.findFirst.mockResolvedValue(null)
+
+      await expect(service.assignTeam(TENANT_ID, USER_ID, 'nonexistent', TEAM_ID)).rejects.toThrow(
+        NotFoundException,
+      )
+    })
+
+    // UT-T-06: Returns updated Contact
+    it('returns updated contact with teamId (UT-T-06)', async () => {
+      const contact = makeOwnedContact()
+      const updatedContact = makeOwnedContact({ teamId: TEAM_ID })
+
+      prisma.contact.findFirst.mockResolvedValueOnce(contact)
+      prisma.team.findFirst.mockResolvedValueOnce(makeTeam(TEAM_ID))
+      prisma.contact.update.mockResolvedValue(updatedContact)
+
+      const result = await service.assignTeam(TENANT_ID, USER_ID, CONTACT_ID, TEAM_ID)
+
+      expect(result.teamId).toBe(TEAM_ID)
+    })
+  })
+
+  describe('assignOwnerBulk()', () => {
+    const CONTACT_IDS = ['contact-1', 'contact-2', 'contact-3']
+
+    // UT-B-01: All contacts updated successfully
+    it('returns all success when all contacts are valid (UT-B-01)', async () => {
+      const newOwner = makeUser(NEW_OWNER_ID, { firstName: 'Jane', lastName: 'Smith' })
+      prisma.user.findFirst.mockResolvedValue(newOwner)
+
+      // Each contact succeeds
+      for (const cId of CONTACT_IDS) {
+        const c = makeOwnedContact({ id: cId, ownerId: USER_ID })
+        const cWithOwner = { ...c, owner: { id: USER_ID, firstName: 'Current', lastName: 'O' } }
+        prisma.contact.findFirst.mockResolvedValueOnce(cWithOwner)
+        prisma.contact.update.mockResolvedValue(
+          makeOwnedContact({ id: cId, ownerId: NEW_OWNER_ID }),
+        )
+        prisma.user.findUnique.mockResolvedValue({ firstName: 'Jane', lastName: 'Smith' })
+      }
+      ;(activityService.logSafe as jest.Mock).mockResolvedValue(null)
+
+      const result = await service.assignOwnerBulk(TENANT_ID, USER_ID, CONTACT_IDS, NEW_OWNER_ID)
+
+      expect(result.successCount).toBe(3)
+      expect(result.failedCount).toBe(0)
+      expect(result.errors).toHaveLength(0)
+    })
+
+    // UT-B-02: Partial failure — one contact invalid
+    it('handles partial failure — one invalid contact (UT-B-02)', async () => {
+      const newOwner = makeUser(NEW_OWNER_ID, { firstName: 'Jane', lastName: 'Smith' })
+      prisma.user.findFirst.mockResolvedValue(newOwner)
+
+      // First contact fails (not found)
+      prisma.contact.findFirst.mockResolvedValueOnce(null)
+
+      // Second contact succeeds
+      const c2 = makeOwnedContact({ id: 'contact-2', ownerId: USER_ID })
+      const c2WithOwner = { ...c2, owner: { id: USER_ID, firstName: 'Current', lastName: 'O' } }
+      prisma.contact.findFirst.mockResolvedValueOnce(c2WithOwner)
+      prisma.contact.update.mockResolvedValue(
+        makeOwnedContact({ id: 'contact-2', ownerId: NEW_OWNER_ID }),
+      )
+
+      // Third contact succeeds
+      const c3 = makeOwnedContact({ id: 'contact-3', ownerId: USER_ID })
+      const c3WithOwner = { ...c3, owner: { id: USER_ID, firstName: 'Current', lastName: 'O' } }
+      prisma.contact.findFirst.mockResolvedValueOnce(c3WithOwner)
+      prisma.contact.update.mockResolvedValue(
+        makeOwnedContact({ id: 'contact-3', ownerId: NEW_OWNER_ID }),
+      )
+      prisma.user.findUnique.mockResolvedValue({ firstName: 'Jane', lastName: 'Smith' })
+      ;(activityService.logSafe as jest.Mock).mockResolvedValue(null)
+
+      const result = await service.assignOwnerBulk(TENANT_ID, USER_ID, CONTACT_IDS, NEW_OWNER_ID)
+
+      expect(result.successCount).toBe(2)
+      expect(result.failedCount).toBe(1)
+      expect(result.errors).toHaveLength(1)
+      expect(result.errors[0]!.contactId).toBe('contact-1')
+    })
+
+    // UT-B-03: All contacts invalid
+    it('returns all failures when all contacts are invalid (UT-B-03)', async () => {
+      const newOwner = makeUser(NEW_OWNER_ID, { firstName: 'Jane', lastName: 'Smith' })
+      prisma.user.findFirst.mockResolvedValue(newOwner)
+
+      for (let idx = 0; idx < CONTACT_IDS.length; idx++) {
+        prisma.contact.findFirst.mockResolvedValueOnce(null)
+      }
+
+      const result = await service.assignOwnerBulk(TENANT_ID, USER_ID, CONTACT_IDS, NEW_OWNER_ID)
+
+      expect(result.successCount).toBe(0)
+      expect(result.failedCount).toBe(3)
+      expect(result.errors).toHaveLength(3)
+    })
+
+    // UT-B-04: Returns correct BulkAssignResult shape
+    it('returns correct BulkAssignResult shape (UT-B-04)', async () => {
+      const newOwner = makeUser(NEW_OWNER_ID, { firstName: 'Jane', lastName: 'Smith' })
+      prisma.user.findFirst.mockResolvedValue(newOwner)
+      prisma.contact.findFirst.mockResolvedValueOnce(null)
+
+      const result = await service.assignOwnerBulk(TENANT_ID, USER_ID, ['contact-1'], NEW_OWNER_ID)
+
+      expect(result).toMatchObject({
+        successCount: expect.any(Number),
+        failedCount: expect.any(Number),
+        errors: expect.any(Array),
+      })
+    })
+
+    // UT-B-05: Activity logged for each successfully updated contact
+    it('logs activity for each successfully updated contact (UT-B-05)', async () => {
+      const newOwner = makeUser(NEW_OWNER_ID, { firstName: 'Jane', lastName: 'Smith' })
+      prisma.user.findFirst.mockResolvedValue(newOwner)
+
+      for (let i = 0; i < 2; i++) {
+        const c = makeOwnedContact({ id: `contact-${i + 1}`, ownerId: USER_ID })
+        const cWithOwner = { ...c, owner: { id: USER_ID, firstName: 'Current', lastName: 'O' } }
+        prisma.contact.findFirst.mockResolvedValueOnce(cWithOwner)
+        prisma.contact.update.mockResolvedValue(
+          makeOwnedContact({ id: `contact-${i + 1}`, ownerId: NEW_OWNER_ID }),
+        )
+        prisma.user.findUnique.mockResolvedValue({ firstName: 'Jane', lastName: 'Smith' })
+      }
+      ;(activityService.logSafe as jest.Mock).mockResolvedValue(null)
+
+      await service.assignOwnerBulk(TENANT_ID, USER_ID, ['contact-1', 'contact-2'], NEW_OWNER_ID)
+
+      expect(activityService.logSafe).toHaveBeenCalledTimes(2)
+    })
+
+    // UT-B-06: Permission checked once before loop (tested via resolver, not service)
+    // This is enforced in the GraphQL resolver with requirePermission
+
+    // UT-B-07: User validation done once upfront
+    it('validates user once upfront, not per contact (UT-B-07)', async () => {
+      const newOwner = makeUser(NEW_OWNER_ID, { firstName: 'Jane', lastName: 'Smith' })
+      prisma.user.findFirst.mockResolvedValue(newOwner)
+
+      // Both contacts succeed
+      for (let i = 0; i < 2; i++) {
+        const c = makeOwnedContact({ id: `contact-${i + 1}`, ownerId: USER_ID })
+        const cWithOwner = { ...c, owner: { id: USER_ID, firstName: 'Current', lastName: 'O' } }
+        prisma.contact.findFirst.mockResolvedValueOnce(cWithOwner)
+        prisma.contact.update.mockResolvedValue(
+          makeOwnedContact({ id: `contact-${i + 1}`, ownerId: NEW_OWNER_ID }),
+        )
+      }
+      ;(activityService.logSafe as jest.Mock).mockResolvedValue(null)
+
+      await service.assignOwnerBulk(TENANT_ID, USER_ID, ['contact-1', 'contact-2'], NEW_OWNER_ID)
+
+      // Called 1 time upfront in assignOwnerBulk (assignOwnerUnsafe skips per-contact user validation)
+      expect(prisma.user.findFirst).toHaveBeenCalledTimes(1)
+      expect(prisma.user.findUnique).toHaveBeenCalledTimes(2)
+    })
+
+    // UT-B-08: Processed sequentially
+    it('processes contacts in sequence (UT-B-08)', async () => {
+      const newOwner = makeUser(NEW_OWNER_ID, { firstName: 'Jane', lastName: 'Smith' })
+      prisma.user.findFirst.mockResolvedValue(newOwner)
+
+      const c1 = makeOwnedContact({ id: 'contact-1', ownerId: USER_ID })
+      const c1WithOwner = { ...c1, owner: { id: USER_ID, firstName: 'Current', lastName: 'O' } }
+      prisma.contact.findFirst.mockResolvedValueOnce(c1WithOwner)
+      prisma.contact.update.mockResolvedValueOnce(
+        makeOwnedContact({ id: 'contact-1', ownerId: NEW_OWNER_ID }),
+      )
+
+      const c2 = makeOwnedContact({ id: 'contact-2', ownerId: USER_ID })
+      const c2WithOwner = { ...c2, owner: { id: USER_ID, firstName: 'Current', lastName: 'O' } }
+      prisma.contact.findFirst.mockResolvedValueOnce(c2WithOwner)
+      prisma.contact.update.mockResolvedValueOnce(
+        makeOwnedContact({ id: 'contact-2', ownerId: NEW_OWNER_ID }),
+      )
+      prisma.user.findUnique.mockResolvedValue({ firstName: 'Jane', lastName: 'Smith' })
+      ;(activityService.logSafe as jest.Mock).mockResolvedValue(null)
+
+      const result = await service.assignOwnerBulk(
+        TENANT_ID,
+        USER_ID,
+        ['contact-1', 'contact-2'],
+        NEW_OWNER_ID,
+      )
+
+      expect(result.successCount).toBe(2)
+      // Verify first call was for contact-1 then contact-2
+      expect(prisma.contact.findFirst).toHaveBeenNthCalledWith(
+        1,
+        expect.objectContaining({
+          where: expect.objectContaining({ id: 'contact-1' }),
+        }),
+      )
+      expect(prisma.contact.findFirst).toHaveBeenNthCalledWith(
+        2,
+        expect.objectContaining({
+          where: expect.objectContaining({ id: 'contact-2' }),
+        }),
+      )
+    })
   })
 })

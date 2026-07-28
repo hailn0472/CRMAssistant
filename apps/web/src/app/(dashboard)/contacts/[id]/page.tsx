@@ -46,6 +46,7 @@ async function loadContact(id: string): Promise<Contact> {
           notes
           ownerId
           owner { id firstName lastName email }
+          teamId
           tags { id name color }
           createdAt
           updatedAt

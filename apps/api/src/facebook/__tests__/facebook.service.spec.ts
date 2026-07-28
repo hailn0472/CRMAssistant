@@ -76,6 +76,7 @@ function makeContact(overrides: Partial<Contact> = {}): Contact {
     source: null,
     notes: null,
     ownerId: USER_ID,
+    teamId: null,
     createdAt: NOW,
     updatedAt: NOW,
     createdBy: USER_ID,
