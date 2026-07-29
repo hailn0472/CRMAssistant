@@ -17,6 +17,7 @@ type MockDealDelegate = {
   count: jest.Mock
   updateMany: jest.Mock
   update: jest.Mock
+  groupBy: jest.Mock
 }
 
 type MockDealStageDelegate = {
@@ -34,6 +35,10 @@ type MockPrisma = {
   dealStage: MockDealStageDelegate
   contact: MockContactDelegate
   $transaction: jest.Mock
+}
+
+function makePubSub(): { publish: jest.Mock; subscribe: jest.Mock } {
+  return { publish: jest.fn(), subscribe: jest.fn() }
 }
 
 const NOW = new Date('2026-07-29T00:00:00.000Z')
@@ -75,6 +80,7 @@ function makePrisma(): MockPrisma {
       count: jest.fn(),
       updateMany: jest.fn(),
       update: jest.fn(),
+      groupBy: jest.fn(),
     },
     dealStage: {
       findFirst: jest.fn(),
@@ -94,7 +100,11 @@ describe('DealsService', () => {
 
   beforeEach(() => {
     prisma = makePrisma()
-    service = new DealsService(prisma as unknown as ConstructorParameters<typeof DealsService>[0])
+    const pubSubMock = makePubSub()
+    service = new DealsService(
+      prisma as unknown as ConstructorParameters<typeof DealsService>[0],
+      pubSubMock as never,
+    )
     ;(resolveVisibilityFilter as jest.Mock).mockResolvedValue(undefined)
   })
 
@@ -104,6 +114,7 @@ describe('DealsService', () => {
       prisma.contact.findFirst.mockResolvedValue({ id: CONTACT_ID })
       prisma.dealStage.findFirst.mockResolvedValue({ id: STAGE_ID, probability: 10 })
       prisma.deal.create.mockResolvedValue(deal)
+      prisma.deal.findFirst.mockResolvedValue(deal)
 
       const result = await service.create(TENANT_ID, USER_ID, {
         title: 'Big Deal',
@@ -194,6 +205,7 @@ describe('DealsService', () => {
       prisma.contact.findFirst.mockResolvedValue({ id: CONTACT_ID })
       prisma.dealStage.findFirst.mockResolvedValue({ id: STAGE_ID, probability: 10 })
       prisma.deal.create.mockResolvedValue(makeDeal())
+      prisma.deal.findFirst.mockResolvedValue(makeDeal())
 
       await service.create(TENANT_ID, USER_ID, {
         title: 'Test Deal',
@@ -210,6 +222,7 @@ describe('DealsService', () => {
       prisma.contact.findFirst.mockResolvedValue({ id: CONTACT_ID })
       prisma.dealStage.findFirst.mockResolvedValue({ id: STAGE_ID, probability: 25 })
       prisma.deal.create.mockResolvedValue(makeDeal({ probability: 25 }))
+      prisma.deal.findFirst.mockResolvedValue(makeDeal({ probability: 25 }))
 
       const result = await service.create(TENANT_ID, USER_ID, {
         title: 'Test Deal',
@@ -224,6 +237,7 @@ describe('DealsService', () => {
       prisma.contact.findFirst.mockResolvedValue({ id: CONTACT_ID })
       prisma.dealStage.findFirst.mockResolvedValue({ id: STAGE_ID, probability: 10 })
       prisma.deal.create.mockResolvedValue(makeDeal({ title: 'Big Deal' }))
+      prisma.deal.findFirst.mockResolvedValue(makeDeal({ title: 'Big Deal' }))
 
       await service.create(TENANT_ID, USER_ID, {
         title: '  Big Deal  ',
@@ -240,6 +254,7 @@ describe('DealsService', () => {
       prisma.contact.findFirst.mockResolvedValue({ id: CONTACT_ID })
       prisma.dealStage.findFirst.mockResolvedValue({ id: STAGE_ID, probability: 10 })
       prisma.deal.create.mockResolvedValue(makeDeal({ currency: 'USD' }))
+      prisma.deal.findFirst.mockResolvedValue(makeDeal({ currency: 'USD' }))
 
       await service.create(TENANT_ID, USER_ID, {
         title: 'Test Deal',
@@ -533,6 +548,168 @@ describe('DealsService', () => {
     })
   })
 
+  describe('pipelineSummary()', () => {
+    it('returns aggregate per stage for tenant active deals', async () => {
+      prisma.deal.groupBy.mockResolvedValue([
+        { stageId: 'stage-1', _count: { _all: 3 }, _sum: { value: 150000 } },
+        { stageId: 'stage-2', _count: { _all: 2 }, _sum: { value: 75000 } },
+      ])
+      prisma.dealStage.findMany.mockResolvedValue([
+        { id: 'stage-1', name: 'Lead' },
+        { id: 'stage-2', name: 'Qualified' },
+      ])
+
+      const result = await service.pipelineSummary(TENANT_ID, USER_ID, {})
+
+      expect(result).toEqual([
+        { stageId: 'stage-1', count: 3, totalValue: 150000 },
+        { stageId: 'stage-2', count: 2, totalValue: 75000 },
+      ])
+    })
+
+    it('applies visibility filter identically to findMany', async () => {
+      ;(resolveVisibilityFilter as jest.Mock).mockResolvedValue(USER_ID)
+      prisma.deal.groupBy.mockResolvedValue([])
+      prisma.dealStage.findMany.mockResolvedValue([])
+
+      await service.pipelineSummary(TENANT_ID, USER_ID, {})
+
+      expect(prisma.deal.groupBy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            AND: expect.arrayContaining([expect.objectContaining({ ownerId: USER_ID })]),
+          }),
+        }),
+      )
+    })
+
+    it('filters by stageId', async () => {
+      prisma.deal.groupBy.mockResolvedValue([])
+      prisma.dealStage.findMany.mockResolvedValue([])
+
+      await service.pipelineSummary(TENANT_ID, USER_ID, { stageId: STAGE_ID })
+
+      expect(prisma.deal.groupBy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            AND: expect.arrayContaining([expect.objectContaining({ stageId: STAGE_ID })]),
+          }),
+        }),
+      )
+    })
+
+    it('filters by ownerId', async () => {
+      prisma.deal.groupBy.mockResolvedValue([])
+      prisma.dealStage.findMany.mockResolvedValue([])
+
+      await service.pipelineSummary(TENANT_ID, USER_ID, { ownerId: 'owner-1' })
+
+      expect(prisma.deal.groupBy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            AND: expect.arrayContaining([expect.objectContaining({ ownerId: 'owner-1' })]),
+          }),
+        }),
+      )
+    })
+
+    it('filters by expectedCloseDate range', async () => {
+      prisma.deal.groupBy.mockResolvedValue([])
+      prisma.dealStage.findMany.mockResolvedValue([])
+
+      await service.pipelineSummary(TENANT_ID, USER_ID, {
+        expectedCloseDateFrom: '2026-01-01',
+        expectedCloseDateTo: '2026-12-31',
+      })
+
+      expect(prisma.deal.groupBy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            AND: expect.arrayContaining([
+              expect.objectContaining({
+                expectedCloseDate: expect.objectContaining({
+                  gte: expect.any(Date),
+                  lte: expect.any(Date),
+                }),
+              }),
+            ]),
+          }),
+        }),
+      )
+    })
+
+    it('excludes soft-deleted deals', async () => {
+      prisma.deal.groupBy.mockResolvedValue([])
+      prisma.dealStage.findMany.mockResolvedValue([])
+
+      await service.pipelineSummary(TENANT_ID, USER_ID, {})
+
+      expect(prisma.deal.groupBy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ deletedAt: null }),
+        }),
+      )
+    })
+
+    it('stages with zero deals default to count=0 totalValue=0', async () => {
+      prisma.deal.groupBy.mockResolvedValue([])
+      prisma.dealStage.findMany.mockResolvedValue([
+        { id: 'stage-1', name: 'Lead' },
+        { id: 'stage-2', name: 'Qualified' },
+        { id: 'stage-3', name: 'Proposal' },
+      ])
+
+      const result = await service.pipelineSummary(TENANT_ID, USER_ID, {})
+
+      expect(result).toEqual([
+        { stageId: 'stage-1', count: 0, totalValue: 0 },
+        { stageId: 'stage-2', count: 0, totalValue: 0 },
+        { stageId: 'stage-3', count: 0, totalValue: 0 },
+      ])
+    })
+
+    it('defaults missing _count/_sum gracefully', async () => {
+      prisma.deal.groupBy.mockResolvedValue([
+        { stageId: 'stage-1', _count: undefined, _sum: undefined },
+      ])
+      prisma.dealStage.findMany.mockResolvedValue([{ id: 'stage-1', name: 'Lead' }])
+
+      const result = await service.pipelineSummary(TENANT_ID, USER_ID, {})
+
+      expect(result).toEqual([{ stageId: 'stage-1', count: 0, totalValue: 0 }])
+    })
+
+    it('tenant-scoped: always includes tenantId in where clause', async () => {
+      prisma.deal.groupBy.mockResolvedValue([])
+      prisma.dealStage.findMany.mockResolvedValue([])
+
+      await service.pipelineSummary(TENANT_ID, USER_ID, {})
+
+      expect(prisma.deal.groupBy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ tenantId: TENANT_ID }),
+        }),
+      )
+    })
+
+    it('searches title with case-insensitive contains', async () => {
+      prisma.deal.groupBy.mockResolvedValue([])
+      prisma.dealStage.findMany.mockResolvedValue([])
+
+      await service.pipelineSummary(TENANT_ID, USER_ID, { search: 'Big' })
+
+      expect(prisma.deal.groupBy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            AND: expect.arrayContaining([
+              expect.objectContaining({ title: { contains: 'Big', mode: 'insensitive' } }),
+            ]),
+          }),
+        }),
+      )
+    })
+  })
+
   describe('moveToStage()', () => {
     it('moves deal to valid stage in same tenant', async () => {
       const deal = makeDeal()
@@ -569,7 +746,7 @@ describe('DealsService', () => {
       ).rejects.toThrow(NotFoundException)
     })
 
-    it('does NOT auto-sync probability from stage (Story 3.3 scope)', async () => {
+    it('auto-syncs probability from target stage on moveToStage', async () => {
       const deal = makeDeal({ probability: 10 })
       prisma.deal.findFirst.mockResolvedValue(deal)
       prisma.dealStage.findFirst.mockResolvedValue({ id: 'new-stage', probability: 50 })
@@ -580,7 +757,7 @@ describe('DealsService', () => {
 
       expect(prisma.deal.updateMany).toHaveBeenCalledWith({
         where: { id: DEAL_ID, tenantId: TENANT_ID, deletedAt: null },
-        data: expect.not.objectContaining({ probability: expect.any(Number) }),
+        data: expect.objectContaining({ probability: 50 }),
       })
     })
   })

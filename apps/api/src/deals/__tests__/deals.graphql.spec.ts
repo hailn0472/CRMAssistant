@@ -5,6 +5,7 @@ import { schema } from '../../graphql/schema'
 import { builder } from '../../graphql/schema.builder'
 import type { DealsService } from '../deals.service'
 import type { DealStageService } from '../deal-stages.service'
+import type { DealPubSubService } from '../deal-pubsub.service'
 import type { JwtPayload } from '../../auth/strategies/jwt.strategy'
 
 const mockDeal = {
@@ -73,6 +74,9 @@ function makeDealsService(): jest.Mocked<DealsService> {
     update: jest.fn().mockResolvedValue(mockDeal),
     delete: jest.fn().mockResolvedValue(true),
     moveToStage: jest.fn().mockResolvedValue(mockDeal),
+    pipelineSummary: jest
+      .fn()
+      .mockResolvedValue([{ stageId: 'stage-1', count: 3, totalValue: 150000 }]),
   } as unknown as jest.Mocked<DealsService>
 }
 
@@ -86,9 +90,18 @@ function makeDealStagesService(): jest.Mocked<DealStageService> {
   } as unknown as jest.Mocked<DealStageService>
 }
 
+function makePubSubService(): jest.Mocked<DealPubSubService> {
+  return {
+    publish: jest.fn(),
+    subscribe: jest.fn(),
+  } as unknown as jest.Mocked<DealPubSubService>
+}
+
 describe('deals.graphql', () => {
   it('registers GraphQL fields without throwing', () => {
-    expect(() => registerDealGraphql(makeDealsService(), makeDealStagesService())).not.toThrow()
+    expect(() =>
+      registerDealGraphql(makeDealsService(), makeDealStagesService(), makePubSubService()),
+    ).not.toThrow()
   })
 
   it('builds an executable schema', () => {
@@ -118,6 +131,16 @@ describe('deals.graphql', () => {
     await service.moveToStage('tenant-1', 'user-1', 'deal-1', 'stage-2')
 
     expect(service.moveToStage).toHaveBeenCalledWith('tenant-1', 'user-1', 'deal-1', 'stage-2')
+  })
+
+  it('pipelineSummary passes tenant, user and filter', async () => {
+    const service = makeDealsService()
+
+    await service.pipelineSummary('tenant-1', 'user-1', { stageId: 'stage-1' })
+
+    expect(service.pipelineSummary).toHaveBeenCalledWith('tenant-1', 'user-1', {
+      stageId: 'stage-1',
+    })
   })
 
   it('can represent authentication failures', () => {

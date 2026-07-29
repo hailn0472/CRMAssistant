@@ -6,8 +6,10 @@ import { builder } from '../graphql/schema.builder'
 import { requirePermission } from '../common/guards/permission-check'
 import type { DealsService } from './deals.service'
 import type { DealStageService } from './deal-stages.service'
+import type { DealPubSubService } from './deal-pubsub.service'
 import type { GraphqlContext } from '../graphql/graphql-context'
 import type { JwtPayload } from '../auth/strategies/jwt.strategy'
+import { resolveVisibilityFilter } from '../common/guards/visibility-check'
 
 // ─── DealStage Type ──────────────────────────────────────
 
@@ -240,6 +242,7 @@ const DealPaginationInputRef = builder.inputType('DealPaginationInput', {
 
 let dealsService: DealsService | undefined
 let dealStagesService: DealStageService | undefined
+let dealPubSub: DealPubSubService | undefined
 
 function getDealsService(): DealsService {
   if (!dealsService) {
@@ -253,6 +256,13 @@ function getDealStagesService(): DealStageService {
     throw new Error('DealStageService is not initialized')
   }
   return dealStagesService
+}
+
+function getDealPubSub(): DealPubSubService {
+  if (!dealPubSub) {
+    throw new Error('DealPubSubService is not initialized')
+  }
+  return dealPubSub
 }
 
 function requireUser(context: GraphqlContext): JwtPayload {
@@ -269,6 +279,24 @@ function isAdmin(context: GraphqlContext): boolean {
   }
   return true
 }
+
+// ─── DealStageSummary Type ───────────────────────────────
+
+type DealStageSummaryShape = {
+  stageId: string
+  count: number
+  totalValue: number
+}
+
+const DealStageSummaryRef = builder.objectRef<DealStageSummaryShape>('DealStageSummary')
+
+DealStageSummaryRef.implement({
+  fields: (t) => ({
+    stageId: t.exposeID('stageId'),
+    count: t.exposeInt('count'),
+    totalValue: t.exposeFloat('totalValue'),
+  }),
+})
 
 // ─── Queries ─────────────────────────────────────────────
 
@@ -316,6 +344,23 @@ builder.queryFields((t) => ({
     resolve: async (_parent, _args, context) => {
       const user = requireUser(context)
       return getDealStagesService().findMany(user.tenantId)
+    },
+  }),
+  dealPipelineSummary: t.field({
+    type: [DealStageSummaryRef],
+    args: {
+      filter: t.arg({ type: DealFilterInputRef }),
+    },
+    resolve: async (_parent, args, context) => {
+      const user = requireUser(context)
+      return getDealsService().pipelineSummary(user.tenantId, user.userId, {
+        search: args.filter?.search ?? undefined,
+        stageId: args.filter?.stageId ?? undefined,
+        contactId: args.filter?.contactId ?? undefined,
+        ownerId: args.filter?.ownerId ?? undefined,
+        expectedCloseDateFrom: args.filter?.expectedCloseDateFrom ?? undefined,
+        expectedCloseDateTo: args.filter?.expectedCloseDateTo ?? undefined,
+      })
     },
   }),
 }))
@@ -452,9 +497,44 @@ builder.mutationFields((t) => ({
   }),
 }))
 
+// ─── Subscriptions ───────────────────────────────────────
+
+builder.subscriptionField('onDealUpdated', (t) =>
+  t.field({
+    type: DealRef,
+    subscribe: async (_root, _args, context) => {
+      const user = requireUser(context)
+      const visibility = await resolveVisibilityFilter(user.userId, user.tenantId)
+      const pubsub = getDealPubSub()
+      return {
+        [Symbol.asyncIterator]: async function* () {
+          const channel = `DEAL_UPDATED:${user.tenantId}`
+          for await (const deal of pubsub.subscribe<DealGraphqlShape>(channel)) {
+            // Apply visibility filter: yield only deals the subscriber may see
+            if (visibility === undefined) {
+              yield deal // ADMIN/ALL — yield everything
+            } else if (typeof visibility === 'string') {
+              if (deal.ownerId === visibility) yield deal // OWN — only own deals
+            } else if ('in' in visibility) {
+              const allowedIds = (visibility as { in: string[] }).in
+              if (allowedIds.includes(deal.ownerId)) yield deal // TEAM
+            }
+          }
+        },
+      }
+    },
+    resolve: (payload: unknown) => payload as DealGraphqlShape,
+  }),
+)
+
 // ─── Registration ────────────────────────────────────────
 
-export function registerDealGraphql(service: DealsService, stagesService: DealStageService): void {
+export function registerDealGraphql(
+  service: DealsService,
+  stagesService: DealStageService,
+  pubSubService: DealPubSubService,
+): void {
   dealsService = service
   dealStagesService = stagesService
+  dealPubSub = pubSubService
 }
