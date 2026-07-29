@@ -15,6 +15,7 @@ enum ActivityType {
   DEAL_CREATED
   CONTACT_CREATED
   CONTACT_UPDATED
+  CONTACT_OWNER_CHANGED
 }
 
 // =============================================================================
@@ -168,6 +169,7 @@ model Team {
   manager         User?         @relation("TeamManager", fields: [managerId], references: [id], onDelete: SetNull)
   members         User[] // users with this teamId
   sharedWithRules SharingRule[] @relation("SharedWithTeam")
+  contacts        Contact[]
 
   @@unique([tenantId, name])
   @@index([tenantId])
@@ -276,6 +278,7 @@ model Contact {
   company   String?
   jobTitle  String?
   ownerId   String    @default("system")
+  teamId    String?
   // Enrichment fields — optional data collected to build a 360° contact profile
   linkedin      String?
   twitter       String?
@@ -295,6 +298,7 @@ model Contact {
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   owner  User   @relation("ContactOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  team   Team?  @relation(fields: [teamId], references: [id], onDelete: SetNull)
 
   tags              ContactTag[]
   conversations     Conversation[]
@@ -304,6 +308,7 @@ model Contact {
   @@unique([tenantId, email])
   @@index([tenantId])
   @@index([tenantId, ownerId])
+  @@index([tenantId, teamId])
   @@index([tenantId, createdAt])
 }
 

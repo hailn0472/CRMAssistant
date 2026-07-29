@@ -6,6 +6,7 @@ export type ActivityTypeValue =
   | 'DEAL_CREATED'
   | 'CONTACT_CREATED'
   | 'CONTACT_UPDATED'
+  | 'CONTACT_OWNER_CHANGED'
 
 export type Activity = {
   id: string
@@ -45,6 +46,7 @@ export const SALES_TYPES: ActivityTypeValue[] = [
 export const SYSTEM_TYPES: ActivityTypeValue[] = [
   'CONTACT_CREATED',
   'CONTACT_UPDATED',
+  'CONTACT_OWNER_CHANGED',
   'DEAL_CREATED',
 ]
 
@@ -56,4 +58,5 @@ export const ACTIVITY_TYPE_LABELS: Record<ActivityTypeValue, string> = {
   DEAL_CREATED: 'Deal Created',
   CONTACT_CREATED: 'Contact Created',
   CONTACT_UPDATED: 'Contact Updated',
+  CONTACT_OWNER_CHANGED: 'Owner Changed',
 }

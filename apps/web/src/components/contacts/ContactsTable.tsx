@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { useState, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { ChevronLeft, ChevronRight, Plus, Upload } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Plus, Upload, User } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -15,7 +15,10 @@ import { SharedBadge } from '@/components/sharing/SharedBadge'
 import { TagBadge } from '@/components/contacts/TagBadge'
 import { SegmentBuilder } from '@/components/contacts/SegmentBuilder'
 import { ExportButton } from '@/components/contacts/ExportButton'
+import { OwnerCell } from '@/components/contacts/OwnerCell'
+import { BulkAssignDialog } from '@/components/contacts/BulkAssignDialog'
 import { getContacts } from '@/services/contact.service'
+import { assignContactOwnerBulk } from '@/services/owner.service'
 import { cn } from '@/lib/utils'
 import type { SegmentFilters } from '@/components/contacts/SegmentBuilder'
 import type { ExportFilters } from '@/types/import-export.types'
@@ -131,6 +134,8 @@ function AvatarCell({
 // ─── Main component ───────────────────────────────────
 export function ContactsTable(): React.JSX.Element {
   const [page, setPage] = useState(1)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [bulkAssignOpen, setBulkAssignOpen] = useState(false)
   const [filterTags, setFilterTags] = useState<Array<{ id: string; name: string; color: string }>>(
     [],
   )
@@ -157,6 +162,16 @@ export function ContactsTable(): React.JSX.Element {
 
   const toolbarActions = (
     <div className="flex items-center gap-2">
+      {selectedIds.size > 0 ? (
+        <Button
+          variant="outline"
+          className="gap-1.5 border-indigo-200 text-indigo-700 hover:bg-indigo-50"
+          onClick={() => setBulkAssignOpen(true)}
+        >
+          <User className="h-3.5 w-3.5" />
+          Assign Owner ({selectedIds.size})
+        </Button>
+      ) : null}
       <Button asChild variant="outline" className="gap-1.5">
         <Link href="/contacts/import">
           <Upload className="h-3.5 w-3.5" />
@@ -258,8 +273,23 @@ export function ContactsTable(): React.JSX.Element {
           <table className="w-full text-left text-sm">
             <thead>
               <tr className="border-b border-slate-100 bg-slate-50/80 text-xs font-semibold uppercase tracking-wider text-slate-400">
+                <th className="w-10 py-3 pl-4 pr-2">
+                  <input
+                    type="checkbox"
+                    checked={data.items.length > 0 && selectedIds.size === data.items.length}
+                    onChange={() => {
+                      if (selectedIds.size === data.items.length) {
+                        setSelectedIds(new Set())
+                      } else {
+                        setSelectedIds(new Set(data.items.map((c) => c.id)))
+                      }
+                    }}
+                    className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                  />
+                </th>
                 <th className="py-3 pl-5 pr-4">Name</th>
                 <th className="py-3 pr-4">Email</th>
+                <th className="py-3 pr-4">Owner</th>
                 <th className="py-3 pr-4">Company</th>
                 <th className="py-3 pr-4">Job Title</th>
                 <th className="py-3 pr-5">Tags</th>
@@ -268,6 +298,22 @@ export function ContactsTable(): React.JSX.Element {
             <tbody className="divide-y divide-slate-100">
               {data.items.map((contact) => (
                 <tr className="group transition-colors hover:bg-slate-50" key={contact.id}>
+                  <td className="py-3 pl-4 pr-2">
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.has(contact.id)}
+                      onChange={() => {
+                        const next = new Set(selectedIds)
+                        if (next.has(contact.id)) {
+                          next.delete(contact.id)
+                        } else {
+                          next.add(contact.id)
+                        }
+                        setSelectedIds(next)
+                      }}
+                      className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                    />
+                  </td>
                   <td className="py-3 pl-5 pr-4">
                     <Link
                       href={`/contacts/${contact.id}`}
@@ -281,6 +327,9 @@ export function ContactsTable(): React.JSX.Element {
                     </Link>
                   </td>
                   <td className="py-3 pr-4 text-slate-500">{contact.email}</td>
+                  <td className="py-3 pr-4">
+                    <OwnerCell ownerId={contact.ownerId} owner={contact.owner} />
+                  </td>
                   <td className="py-3 pr-4 text-slate-500">
                     {contact.company ?? <span className="italic text-slate-300">—</span>}
                   </td>
@@ -312,6 +361,19 @@ export function ContactsTable(): React.JSX.Element {
           />
         </div>
       </Card>
+
+      <BulkAssignDialog
+        open={bulkAssignOpen}
+        onOpenChange={setBulkAssignOpen}
+        contactIds={Array.from(selectedIds)}
+        onAssignBulk={async (contactIds, userId) => {
+          const result = await assignContactOwnerBulk(contactIds, userId)
+          if (result.failedCount === 0) {
+            setSelectedIds(new Set())
+          }
+          return result
+        }}
+      />
     </div>
   )
 }

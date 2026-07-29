@@ -80,7 +80,7 @@ const contactListSelect = {
   company: true,
   jobTitle: true,
   ownerId: true,
-  owner: { select: { id: true, firstName: true, lastName: true, email: true } },
+  owner: { select: { id: true, firstName: true, lastName: true, email: true, avatar: true } },
   tags: {
     select: {
       tag: { select: { id: true, name: true, color: true } },
@@ -110,6 +110,12 @@ export type ContactConnection = {
   total: number
   page: number
   pageSize: number
+}
+
+export type BulkAssignResult = {
+  successCount: number
+  failedCount: number
+  errors: Array<{ contactId: string; error: string }>
 }
 
 const MAX_REQUIRED_FIELD_LENGTH = 100
@@ -266,7 +272,9 @@ export class ContactsService {
   async findOne(tenantId: string, userId: string, id: string): Promise<Contact> {
     const contact = await this.prisma.contact.findFirst({
       where: { id, tenantId, deletedAt: null },
-      include: { owner: { select: { id: true, firstName: true, lastName: true, email: true } } },
+      include: {
+        owner: { select: { id: true, firstName: true, lastName: true, email: true, avatar: true } },
+      },
     })
 
     if (!contact) {
@@ -528,5 +536,204 @@ export class ContactsService {
     }
 
     return true
+  }
+
+  /**
+   * Assign a new owner to a contact.
+   * Validates caller visibility/access, target user tenant, and wraps in a transaction.
+   * Auto-logs CONTACT_OWNER_CHANGED activity (non-blocking).
+   */
+  async assignOwner(
+    tenantId: string,
+    userId: string,
+    contactId: string,
+    newOwnerId: string,
+  ): Promise<Contact> {
+    // Verify caller has access to this contact
+    const contact = await this.findOne(tenantId, userId, contactId)
+
+    // Check access level: EDIT or FULL required
+    const accessLevel = await this.resolveAccessLevel(tenantId, userId, contact)
+    if (accessLevel === 'READ') {
+      throw new ForbiddenException('Read-only access: cannot reassign owner')
+    }
+
+    // No-op: same owner
+    if (newOwnerId === contact.ownerId) return contact
+
+    // Validate target user exists and belongs to same tenant
+    const newOwner = await this.prisma.user.findFirst({
+      where: { id: newOwnerId, tenantId, deletedAt: null },
+      select: { id: true, firstName: true, lastName: true, email: true },
+    })
+    if (!newOwner) throw new NotFoundException('User not found')
+
+    const contactWithOwner = contact as { owner?: { firstName: string; lastName: string } }
+
+    return this.prisma.$transaction(async (tx) => {
+      const updatedContact = await tx.contact.update({
+        where: { id: contactId, tenantId, deletedAt: null },
+        data: { ownerId: newOwnerId, updatedBy: userId },
+        include: {
+          owner: {
+            select: { id: true, firstName: true, lastName: true, email: true, avatar: true },
+          },
+        },
+      })
+
+      // Auto-log ownership change (non-blocking)
+      const oldOwnerName = contactWithOwner.owner
+        ? `${contactWithOwner.owner.firstName} ${contactWithOwner.owner.lastName}`
+        : 'System'
+      const newOwnerName = `${newOwner.firstName} ${newOwner.lastName}`
+
+      await this.activityService.logSafe({
+        tenantId,
+        contactId: contact.id,
+        type: 'CONTACT_OWNER_CHANGED',
+        title: 'Contact owner changed',
+        description: `Owner changed from ${oldOwnerName} → ${newOwnerName}`,
+        createdBy: userId,
+      })
+
+      return updatedContact
+    })
+  }
+
+  /**
+   * Internal variant that skips redundant user validation.
+   * Used by assignOwnerBulk — caller must validate the user upfront.
+   * Still performs visibility check, access-level check, no-op check, and per-contact transaction.
+   */
+  private async assignOwnerUnsafe(
+    tenantId: string,
+    userId: string,
+    contactId: string,
+    newOwnerId: string,
+  ): Promise<Contact> {
+    // Verify caller has access to this contact
+    const contact = await this.findOne(tenantId, userId, contactId)
+
+    // Check access level: EDIT or FULL required
+    const accessLevel = await this.resolveAccessLevel(tenantId, userId, contact)
+    if (accessLevel === 'READ') {
+      throw new ForbiddenException('Read-only access: cannot reassign owner')
+    }
+
+    // No-op: same owner
+    if (newOwnerId === contact.ownerId) return contact
+
+    const contactWithOwner = contact as { owner?: { firstName: string; lastName: string } }
+
+    return this.prisma.$transaction(async (tx) => {
+      const updatedContact = await tx.contact.update({
+        where: { id: contactId, tenantId, deletedAt: null },
+        data: { ownerId: newOwnerId, updatedBy: userId },
+        include: {
+          owner: {
+            select: { id: true, firstName: true, lastName: true, email: true, avatar: true },
+          },
+        },
+      })
+
+      // Look up user info for activity log (fast path — primary key lookup)
+      const newOwner = await tx.user.findUnique({
+        where: { id: newOwnerId },
+        select: { firstName: true, lastName: true },
+      })
+
+      const oldOwnerName = contactWithOwner.owner
+        ? `${contactWithOwner.owner.firstName} ${contactWithOwner.owner.lastName}`
+        : 'System'
+      const newOwnerName = newOwner ? `${newOwner.firstName} ${newOwner.lastName}` : newOwnerId
+
+      await this.activityService.logSafe({
+        tenantId,
+        contactId: contact.id,
+        type: 'CONTACT_OWNER_CHANGED',
+        title: 'Contact owner changed',
+        description: `Owner changed from ${oldOwnerName} → ${newOwnerName}`,
+        createdBy: userId,
+      })
+
+      return updatedContact
+    })
+  }
+
+  /**
+   * Assign a team to a contact.
+   * Pass null to remove team assignment.
+   * Validates caller visibility/access, team tenant, and no-op.
+   */
+  async assignTeam(
+    tenantId: string,
+    userId: string,
+    contactId: string,
+    teamId: string | null,
+  ): Promise<Contact> {
+    // Verify caller has access to this contact
+    const contact = await this.findOne(tenantId, userId, contactId)
+
+    // Check access level: EDIT or FULL required
+    const accessLevel = await this.resolveAccessLevel(tenantId, userId, contact)
+    if (accessLevel === 'READ') {
+      throw new ForbiddenException('Read-only access: cannot assign team')
+    }
+
+    // No-op: same team
+    if (contact.teamId === teamId) return contact
+
+    // Validate team exists when setting (not when removing)
+    if (teamId !== null) {
+      const team = await this.prisma.team.findFirst({
+        where: { id: teamId, tenantId, deletedAt: null },
+      })
+      if (!team) throw new NotFoundException('Team not found')
+    }
+
+    return this.prisma.contact.update({
+      where: { id: contactId, tenantId, deletedAt: null },
+      data: { teamId: teamId ?? null, updatedBy: userId },
+      include: {
+        owner: { select: { id: true, firstName: true, lastName: true, email: true, avatar: true } },
+      },
+    })
+  }
+
+  /**
+   * Assign a new owner to multiple contacts in bulk.
+   * Processes contacts sequentially for individual error handling.
+   * User validation is done once upfront; uses assignOwnerUnsafe to avoid N+1.
+   */
+  async assignOwnerBulk(
+    tenantId: string,
+    userId: string,
+    contactIds: string[],
+    newOwnerId: string,
+  ): Promise<BulkAssignResult> {
+    // Validate target user once upfront
+    const newOwner = await this.prisma.user.findFirst({
+      where: { id: newOwnerId, tenantId, deletedAt: null },
+      select: { id: true, firstName: true, lastName: true },
+    })
+    if (!newOwner) throw new NotFoundException('User not found')
+
+    const result: BulkAssignResult = { successCount: 0, failedCount: 0, errors: [] }
+
+    // Process each contact in sequence — assignOwnerUnsafe skips redundant user validation
+    for (const contactId of contactIds) {
+      try {
+        await this.assignOwnerUnsafe(tenantId, userId, contactId, newOwnerId)
+        result.successCount++
+      } catch (error) {
+        result.failedCount++
+        result.errors.push({
+          contactId,
+          error: error instanceof Error ? error.message : 'Unknown error',
+        })
+      }
+    }
+
+    return result
   }
 }

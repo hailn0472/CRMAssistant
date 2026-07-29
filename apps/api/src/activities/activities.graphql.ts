@@ -15,10 +15,19 @@ const ActivityTypeEnum = builder.enumType('ActivityType', {
     DEAL_CREATED: { value: 'DEAL_CREATED' as const },
     CONTACT_CREATED: { value: 'CONTACT_CREATED' as const },
     CONTACT_UPDATED: { value: 'CONTACT_UPDATED' as const },
+    CONTACT_OWNER_CHANGED: { value: 'CONTACT_OWNER_CHANGED' as const },
   },
 })
 
-type ActivityTypeValue = 'EMAIL_SENT' | 'CALL_MADE' | 'MEETING_SCHEDULED' | 'NOTE_ADDED' | 'DEAL_CREATED' | 'CONTACT_CREATED' | 'CONTACT_UPDATED'
+type ActivityTypeValue =
+  | 'EMAIL_SENT'
+  | 'CALL_MADE'
+  | 'MEETING_SCHEDULED'
+  | 'NOTE_ADDED'
+  | 'DEAL_CREATED'
+  | 'CONTACT_CREATED'
+  | 'CONTACT_UPDATED'
+  | 'CONTACT_OWNER_CHANGED'
 
 // Activity GraphQL type
 type ActivityShape = {
@@ -85,7 +94,8 @@ type ContactTimelineResultShape = {
   totalCount: number
 }
 
-const ContactTimelineResultRef = builder.objectRef<ContactTimelineResultShape>('ContactTimelineResult')
+const ContactTimelineResultRef =
+  builder.objectRef<ContactTimelineResultShape>('ContactTimelineResult')
 
 ContactTimelineResultRef.implement({
   fields: (t) => ({

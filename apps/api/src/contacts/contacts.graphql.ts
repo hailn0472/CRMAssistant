@@ -18,6 +18,7 @@ const UserRef = builder.objectRef<{
   firstName: string
   lastName: string
   email: string
+  avatar?: string | null
 }>('ContactOwner')
 
 UserRef.implement({
@@ -26,6 +27,10 @@ UserRef.implement({
     firstName: t.exposeString('firstName'),
     lastName: t.exposeString('lastName'),
     email: t.exposeString('email'),
+    avatar: t.string({
+      nullable: true,
+      resolve: (owner) => owner.avatar ?? null,
+    }),
   }),
 })
 
@@ -104,6 +109,10 @@ ContactRef.implement({
       resolve: (contact) => ((contact as Record<string, unknown>).notes as string | null) ?? null,
     }),
     ownerId: t.exposeString('ownerId'),
+    teamId: t.string({
+      nullable: true,
+      resolve: (contact) => ((contact as Record<string, unknown>).teamId as string | null) ?? null,
+    }),
     owner: t.field({
       type: UserRef,
       nullable: true,
@@ -111,7 +120,13 @@ ContactRef.implement({
         // Use the contactsService's bound prisma to resolve owner
         // contact object may only have ownerId but not owner relation loaded
         if ('owner' in contact && contact.owner) {
-          return contact.owner as { id: string; firstName: string; lastName: string; email: string }
+          return contact.owner as {
+            id: string
+            firstName: string
+            lastName: string
+            email: string
+            avatar?: string | null
+          }
         }
         return null
       },
@@ -327,6 +342,90 @@ builder.mutationFields((t) => ({
       const user = requireUser(context)
       await requirePermission(context, 'CONTACT', 'DELETE')
       return getContactsService().delete(user.tenantId, user.userId, String(args.id))
+    },
+  }),
+  assignContactOwner: t.field({
+    type: ContactRef,
+    args: {
+      contactId: t.arg.id({ required: true }),
+      userId: t.arg.id({ required: true }),
+    },
+    resolve: async (_parent, args, context) => {
+      const user = requireUser(context)
+      await requirePermission(context, 'CONTACT', 'UPDATE')
+      return getContactsService().assignOwner(
+        user.tenantId,
+        user.userId,
+        String(args.contactId),
+        String(args.userId),
+      )
+    },
+  }),
+  assignContactTeam: t.field({
+    type: ContactRef,
+    args: {
+      contactId: t.arg.id({ required: true }),
+      teamId: t.arg.id({ required: false }),
+    },
+    resolve: async (_parent, args, context) => {
+      const user = requireUser(context)
+      await requirePermission(context, 'CONTACT', 'UPDATE')
+      return getContactsService().assignTeam(
+        user.tenantId,
+        user.userId,
+        String(args.contactId),
+        args.teamId ? String(args.teamId) : null,
+      )
+    },
+  }),
+}))
+
+// Bulk assignment types
+const BulkOperationErrorRef = builder
+  .objectRef<{
+    contactId: string
+    error: string
+  }>('BulkOperationError')
+  .implement({
+    fields: (t) => ({
+      contactId: t.exposeID('contactId'),
+      error: t.exposeString('error'),
+    }),
+  })
+
+const BulkAssignResultRef = builder
+  .objectRef<{
+    successCount: number
+    failedCount: number
+    errors: Array<{ contactId: string; error: string }>
+  }>('BulkAssignResult')
+  .implement({
+    fields: (t) => ({
+      successCount: t.exposeInt('successCount'),
+      failedCount: t.exposeInt('failedCount'),
+      errors: t.field({
+        type: [BulkOperationErrorRef],
+        resolve: (result) => result.errors,
+      }),
+    }),
+  })
+
+builder.mutationFields((t) => ({
+  assignContactOwnerBulk: t.field({
+    type: BulkAssignResultRef,
+    args: {
+      contactIds: t.arg.idList({ required: true }),
+      userId: t.arg.id({ required: true }),
+    },
+    resolve: async (_parent, args, context) => {
+      const user = requireUser(context)
+      await requirePermission(context, 'CONTACT', 'UPDATE')
+      return getContactsService().assignOwnerBulk(
+        user.tenantId,
+        user.userId,
+        args.contactIds.map(String),
+        String(args.userId),
+      )
     },
   }),
 }))
