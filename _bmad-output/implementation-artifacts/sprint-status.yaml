@@ -1,0 +1,264 @@
+# generated: 2026-05-09T05:39:46.484Z
+# last_updated: 2026-07-29T22:30:00.000Z
+# project: CRMAssistant
+# project_key: NOKEY
+# tracking_system: file-system
+# story_location: {project-root}/_bmad-output/implementation-artifacts
+
+# STATUS DEFINITIONS:
+# ==================
+# Epic Status:
+#   - backlog: Epic not yet started
+#   - in-progress: Epic actively being worked on
+#   - done: All stories in epic completed
+#   - deferred: Epic documented but intentionally not built (see sprint-change-proposal-2026-07-29)
+#
+# Epic Status Transitions:
+#   - backlog → in-progress: Automatically when first story is created (via create-story)
+#   - in-progress → done: Manually when all stories reach 'done' status
+#
+# Story Status:
+#   - backlog: Story only exists in epic file
+#   - ready-for-dev: Story file created in stories folder
+#   - in-progress: Developer actively working on implementation
+#   - review: Ready for code review (via Dev's code-review workflow)
+#   - done: Story completed
+#   - deferred: Documented in roadmap, intentionally not built (see sprint-change-proposal-2026-07-26)
+#
+# Retrospective Status:
+#   - optional: Can be completed but not required
+#   - done: Retrospective has been completed
+#
+# WORKFLOW NOTES:
+# ===============
+# - Epic transitions to 'in-progress' automatically when first story is created
+# - Stories can be worked in parallel if team capacity allows
+# - Developer typically creates next story after previous one is 'done' to incorporate learnings
+# - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
+
+generated: 2026-05-09T05:39:46.484Z
+last_updated: 2026-07-29T13:00:00.000Z
+project: CRMAssistant
+project_key: NOKEY
+tracking_system: file-system
+story_location: _bmad-output/implementation-artifacts
+
+development_status:
+  # Epic 1: Project Foundation & Infrastructure Setup
+  epic-1: done
+  1-1-initialize-monorepo-with-turborepo: done
+  1-2-setup-frontend-foundation-nextjs-14-tailwind-shadcn-ui: done
+  1-3-setup-backend-foundation-nestjs-10-prisma-5: done
+  1-4-configure-typescript-strict-mode-code-quality-tools: done
+  1-5-setup-testing-infrastructure: done
+  1-6-implement-multi-tenancy-database-patterns: done
+  1-7-implement-authentication-system-supabase-auth-jwt: done
+  1-8-setup-ci-cd-pipeline-with-github-actions: done
+  1-9-setup-staging-environment-deployment-pipeline: done
+  1-10-add-backend-api-test-harness: done
+  1-11-enforce-api-tests-in-ci-cd-quality-gates: done
+  1-12-configure-infisical-secret-manager: done
+  epic-1-retrospective: done
+
+  # Epic 2A: Core Product UI Foundation
+  epic-2a: in-progress
+  2a-1-auth-screens-login-register-password-recovery: done
+  2a-2-protected-app-layout-route-guards: done
+  2a-3-crm-app-shell-sidebar-topbar-content-workspace: done
+  2a-4-shared-shadcn-ui-component-baseline: done
+  2a-5-command-center-dashboard-skeleton: done
+  2a-6-navigation-command-search-foundation: done
+  2a-7-empty-loading-error-permission-limited-states: done
+  2a-8-responsive-app-shell-behavior: done
+  2a-9-google-oauth-authentication-via-supabase-auth: done
+  epic-2a-retrospective: optional
+
+  # Epic 2: User Management & RBAC System
+  epic-2: done
+  2-1-user-crud-profile-management: done
+  2-2-role-based-access-control-rbac-with-custom-roles: done
+  2-3-permission-matrix-granular-permissions: done
+  2-4-data-visibility-rules-own-team-all: done
+  2-5-sharing-rules-for-cross-team-collaboration: done
+  2-6-two-factor-authentication-2fa-sso-integration: done
+  2-7-comprehensive-audit-logs-api-key-management: done
+  epic-2-retrospective: done
+
+  # Epic 8A: Omnichannel Communication Hub — Core + Internal Chat + Facebook Messenger
+  epic-8a: in-progress
+  8a-1-unified-inbox-with-multi-channel-message-management: done
+  8a-2-internal-chat-and-inbox-seeding: done
+  8a-3-facebook-messenger-integration: done
+  8a-4-facebook-message-history-sync: done
+  epic-8a-retrospective: optional
+
+  # Epic 5: Contact Management System
+  # Change proposal 2026-07-26: Contact model gains accountId + lifecycleStage (HubSpot-style Lead).
+  # 5-5/5-6/5-7 deferred to roadmap (documented, not built).
+  epic-5: in-progress
+  5-1-contact-crud-operations-with-graphql-api: done
+  5-2-contact-tags-segmentation-system: done
+  5-3-contact-import-export-with-duplicate-detection: done
+  5-4-contact-timeline-activity-history: done
+  5-5-contact-relationships-visualization: deferred
+  5-6-social-media-profile-enrichment: deferred
+  5-7-contact-scoring-algorithm: deferred
+  5-8-contact-ownership-access-rules: done
+  # Added 2026-07-29: ContactLifecycleStage rehomed here from the deferred Epic 5B.
+  5-9-contact-lifecycle-stage: backlog
+  epic-5-retrospective: optional
+
+  # Epic 5B: Company/Account Management (added 2026-07-26, DEFERRED 2026-07-29)
+  # Deferred by sprint-change-proposal-2026-07-29: product repositioned from SaaS B2B to an
+  # internal single-tenant CRM managing B2C contacts from channels (Zalo/Facebook/...).
+  # Contacts do not belong to an organization, so Account has no data behind it.
+  # Contact.company stays a free-text String. Deal gets NO accountId.
+  # Story files kept as design records in case the company later moves to B2B.
+  epic-5b: deferred
+  5b-1-account-crud-and-contact-account-linkage: deferred
+  5b-2-account-detail-customer-360: deferred
+  epic-5b-retrospective: optional
+
+  # Epic 3: Deal & Pipeline Management
+  epic-3: in-progress
+  3-1-deal-crud-with-customizable-pipeline-stages: done
+  3-2-kanban-board-interface-with-drag-and-drop: backlog
+  3-3-deal-probability-calculation-sales-forecasting: backlog
+  3-4-products-line-items-association: backlog
+  3-5-competitor-tracking-win-loss-analysis: backlog
+  3-6-deal-document-attachment-collaboration: backlog
+  3-7-automated-deal-reminders-health-alerts: backlog
+  epic-3-retrospective: optional
+
+  # Epic 4: Activity & Task Management
+  # Change proposal 2026-07-26: added 4-7 Notes and 4-8 Notification Center.
+  epic-4: backlog
+  4-1-task-crud-with-templates-assignment: backlog
+  4-2-automatic-activity-logging-from-integrated-channels: backlog
+  4-3-calendar-integration-google-calendar-outlook: backlog
+  4-4-multiple-activity-views-list-calendar-timeline: backlog
+  4-5-time-tracking-productivity-reports: backlog
+  4-6-task-dependencies-recurring-tasks: backlog
+  4-7-notes-on-contact-deal-account: backlog
+  4-8-notification-center: backlog
+  epic-4-retrospective: optional
+
+  # Epic 6: Reporting & Analytics Dashboard
+  epic-6: backlog
+  6-1-role-based-dashboard-with-customizable-widgets: backlog
+  6-2-sales-reports-with-drill-down-comparative-analysis: backlog
+  6-3-custom-report-builder-with-drag-and-drop-interface: backlog
+  6-4-data-visualization-with-multiple-chart-types: backlog
+  6-5-scheduled-report-delivery-via-email: backlog
+  6-6-report-export-in-multiple-formats-pdf-excel-csv: backlog
+  6-7-customer-lifetime-value-churn-risk-analysis: backlog
+  6-8-activity-reports-team-productivity-metrics: backlog
+  epic-6-retrospective: optional
+
+  # Epic 7: Customer Support & Ticketing System
+  epic-7: backlog
+  7-1-ticket-crud-with-multi-channel-support: backlog
+  7-2-intelligent-ticket-routing-with-rules-ai: backlog
+  7-3-sla-tracking-with-breach-alerts-escalation: backlog
+  7-4-knowledge-base-with-article-management-search: backlog
+  7-5-customer-satisfaction-csat-surveys: backlog
+  7-6-ticket-merge-split-operations: backlog
+  epic-7-retrospective: optional
+
+  # Epic 8B: Omnichannel Communication Hub — Third-Party Integrations
+  # Change proposal 2026-07-26: trimmed to Zalo + Conversation History; Telegram/WhatsApp/Email/SMS deferred to roadmap.
+  epic-8b: backlog
+  8b-1-zalo-official-account-integration: backlog
+  8b-2-telegram-bot-integration: deferred
+  8b-3-whatsapp-business-api-integration: deferred
+  8b-4-email-integration-gmail-outlook: deferred
+  8b-5-sms-integration-vietnamese-providers: deferred
+  8b-6-conversation-history-channel-specific-features: backlog
+  epic-8b-retrospective: optional
+
+  # Epic 9: Marketing Automation Engine
+  # Change proposal 2026-07-26: trimmed to 9-1/9-2/9-6 (automation-engine spine). 9-9 narrowed to scoring/attribution
+  # (lifecycle stages moved to Contact). 9-3/9-5/9-7/9-8 deferred to roadmap.
+  epic-9: backlog
+  9-1-email-campaign-creation-with-a-b-testing: backlog
+  9-2-visual-workflow-builder-with-conditional-logic: backlog
+  9-3-drip-campaigns-based-on-user-behavior: deferred
+  9-4-dynamic-contact-segmentation: deferred
+  9-5-campaign-performance-tracking-with-engagement-metrics: deferred
+  9-6-event-triggered-actions-across-modules: backlog
+  9-7-unsubscribe-management-compliance: deferred
+  9-8-email-templates-content-library: deferred
+  9-9-lead-nurturing-attribution-tracking: deferred
+  epic-9-retrospective: optional
+
+  # Epic 10: AI-Powered Text-to-SQL Query Engine
+  epic-10: backlog
+  10-1-natural-language-query-interface: backlog
+  10-2-sql-generation-with-vertex-ai-integration: backlog
+  10-3-query-execution-with-result-display: backlog
+  10-4-semantic-caching-with-redis: backlog
+  10-5-query-validation-security-sanitization: backlog
+  10-6-query-audit-logging: backlog
+  10-7-query-templates-saved-queries: backlog
+  epic-10-retrospective: optional
+
+action_items:
+  - epic: 2
+    action: "Create security review checklist at design phase — apply for every story with security implications"
+    owner: "Winston + Amelia"
+    status: open
+  - epic: 2
+    action: "Write integration tests for audit logs and API keys (AC 15, Story 2.7)"
+    owner: "Murat + Developer"
+    status: open
+  - epic: 2
+    action: "Expand AuditLogPage + ApiKeyPage frontend tests to cover page behavior"
+    owner: "Developer"
+    status: open
+  - epic: 2
+    action: "Establish migration review process — checklist: operation order, data migration, nullable FK"
+    owner: "Winston"
+    status: open
+  - epic: 2
+    action: "Add post-deploy health check to CI/CD workflow"
+    owner: "Developer"
+    status: open
+  - epic: 2
+    action: "Document deployment environment setup (Render/Vercel/Supabase env notes)"
+    owner: "Developer"
+    status: open
+  # From sprint-change-proposal-2026-07-26 (Account entity + Lead model + scope trim + resequence)
+  - epic: 5b
+    action: "Update PRD: add FR63 (Account/Company), FR64 (Notes), FR65 (Notifications); add Lead-vs-Contact-vs-Deal note; trim Phase 3 scope"
+    owner: "John (PM)"
+    status: done
+  - epic: 5b
+    action: "Update architecture.md: Account/Note/Notification models, ContactLifecycleStage enum, Contact/Deal accountId FKs, migration + backfill from Contact.company"
+    owner: "Winston (Architect)"
+    status: superseded  # Account portion voided by sprint-change-proposal-2026-07-29
+  - epic: 5b
+    action: "Update UX spec: Account list + Customer-360 detail, lifecycleStage badge, notification center in topbar"
+    owner: "Sally (UX)"
+    status: open  # narrowed: drop Account list + Customer-360; keep lifecycleStage badge + notification center
+  - epic: 5b
+    action: "Create story files: 5b-1, 5b-2, 4-7 (Notes), 4-8 (Notification Center) via create-story"
+    owner: "Amelia (PO/Dev)"
+    status: open  # 5b-1 written then deferred; 5b-2 dropped; 4-7 / 4-8 still to write
+
+  # From sprint-change-proposal-2026-07-29 (repositioning: not SaaS, internal B2C CRM)
+  - epic: 5
+    action: "Create story file 5-9-contact-lifecycle-stage via create-story (ContactLifecycleStage rehomed from deferred 5B-1)"
+    owner: "Amelia (PO/Dev)"
+    status: open
+  - epic: 5b
+    action: "Rewrite PRD User Journeys 1 (Alex) and 2 (Sarah) for the B2C internal-tool context — they still describe B2B SaaS selling with a company-level deal example"
+    owner: "John (PM)"
+    status: open
+  - epic: 3
+    action: "When authoring Story 3.1, model Deal with contactId only — do NOT add accountId (Account deferred 2026-07-29)"
+    owner: "Amelia (PO/Dev)"
+    status: open
+  - epic: 4
+    action: "When authoring Story 4-7 (Notes), model Note with contactId/dealId only — no accountId"
+    owner: "Amelia (PO/Dev)"
+    status: open
