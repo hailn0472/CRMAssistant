@@ -19,6 +19,7 @@ import { cn } from '@/lib/utils'
 const SEGMENT_LABELS: Record<string, string> = {
   dashboard: 'Dashboard',
   contacts: 'Contacts',
+  deals: 'Deals',
   inbox: 'Inbox',
   users: 'Users',
   settings: 'Settings',
@@ -32,6 +33,7 @@ const SEGMENT_LABELS: Record<string, string> = {
   edit: 'Chỉnh sửa',
   permissions: 'Phân quyền',
   tags: 'Nhãn',
+  'pipeline-settings': 'Pipeline Settings',
 }
 
 function labelForSegment(segment: string): string {
