@@ -70,6 +70,8 @@ model Tenant {
   channelConnections       ChannelConnection[]
   contactChannelIdentities ContactChannelIdentity[]
   activities               Activity[]
+  deals                    Deal[]
+  dealStages               DealStage[]
 }
 
 /// Tenant-scoped user model with authentication support.
@@ -115,6 +117,7 @@ model User {
   assignedConversations Conversation[]       @relation("ConversationAssignee")
   sharedWithRules       SharingRule[]        @relation("SharedWithUser")
   MessageReadReceipt    MessageReadReceipt[]
+  deals                 Deal[]               @relation("DealOwner")
 
   // Email is unique per tenant, NOT globally unique
   @@unique([tenantId, email])
@@ -304,6 +307,7 @@ model Contact {
   conversations     Conversation[]
   channelIdentities ContactChannelIdentity[]
   activities        Activity[]
+  deals             Deal[]
 
   @@unique([tenantId, email])
   @@index([tenantId])
@@ -492,6 +496,67 @@ model Message {
 
   @@index([conversationId])
   @@index([conversationId, createdAt])
+}
+
+// =============================================================================
+// DEAL MODELS (Story 3.1)
+// =============================================================================
+
+/// Tenant-scoped pipeline stage model for customizable sales pipeline.
+/// Stages are ordered and can be customized by ADMIN users.
+model DealStage {
+  id          String    @id @default(uuid())
+  tenantId    String
+  name        String
+  order       Int       @default(0)
+  probability Int       @default(0)
+  isWon       Boolean   @default(false)
+  isLost      Boolean   @default(false)
+  color       String    @default("#3B82F6")
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  createdBy   String    @default("system")
+  updatedBy   String    @default("system")
+  deletedAt   DateTime?
+
+  tenant Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  deals  Deal[]
+
+  @@index([tenantId])
+  @@index([tenantId, order])
+  @@unique([tenantId, name])
+}
+
+/// Tenant-scoped deal model for tracking opportunities through the sales pipeline.
+/// Links to a Contact (not Account — Account entity is deferred indefinitely).
+/// No activity logging — Activity.contactId is required and no dealId column exists.
+model Deal {
+  id                String    @id @default(uuid())
+  tenantId          String
+  title             String
+  value             Float     @default(0)
+  currency          String    @default("USD")
+  probability       Int       @default(0)
+  stageId           String
+  contactId         String
+  ownerId           String
+  expectedCloseDate DateTime?
+  actualCloseDate   DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  createdBy         String    @default("system")
+  updatedBy         String    @default("system")
+  deletedAt         DateTime?
+
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  stage   DealStage @relation(fields: [stageId], references: [id])
+  contact Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  owner   User    @relation("DealOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([tenantId, stageId])
+  @@index([tenantId, contactId])
+  @@index([tenantId, ownerId])
 }
 
 model MessageReadReceipt {

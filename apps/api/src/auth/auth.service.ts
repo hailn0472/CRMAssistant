@@ -15,6 +15,7 @@ import type { WebSocketLikeConstructor } from '@supabase/realtime-js'
 import { PrismaService } from '../prisma/prisma.service'
 import { TokenRevocationService } from './token-revocation.service'
 import { DEFAULT_ROLE_PERMISSIONS } from '../permissions/default-role-permissions'
+import { DEFAULT_DEAL_STAGES } from '../deals/default-deal-stages'
 import { TwoFactorService } from './two-factor.service'
 import type { LoginDto } from './dto/login.dto'
 import type { OAuthTokenDto } from './dto/oauth-token.dto'
@@ -42,7 +43,10 @@ export type TwoFactorSetupRequiredResponse = {
   tempToken: string
 }
 
-export type LoginResult = AuthTokenResponse | TwoFactorRequiredResponse | TwoFactorSetupRequiredResponse
+export type LoginResult =
+  | AuthTokenResponse
+  | TwoFactorRequiredResponse
+  | TwoFactorSetupRequiredResponse
 
 const SUPABASE_AUTH_TIMEOUT_MS = 10_000
 
@@ -163,6 +167,23 @@ export class AuthService {
 
         // Assign default permissions to system roles
         await this.assignDefaultPermissionsForRoles(tx, createdRoles)
+
+        // Seed default deal stages for the new tenant
+        for (const stage of DEFAULT_DEAL_STAGES) {
+          await tx.dealStage.create({
+            data: {
+              tenantId: tenant.id,
+              name: stage.name,
+              order: stage.order,
+              probability: stage.probability,
+              isWon: stage.isWon,
+              isLost: stage.isLost,
+              color: stage.color,
+              createdBy: 'system',
+              updatedBy: 'system',
+            },
+          })
+        }
 
         const user = await tx.user.create({
           data: {
@@ -337,7 +358,8 @@ export class AuthService {
 
     // Detect SSO provider from Supabase user metadata
     const provider = supabaseUser.app_metadata?.provider as string | undefined
-    const ssoProviderName = provider === 'google' ? 'GOOGLE' : provider === 'azure' ? 'AZURE_AD' : undefined
+    const ssoProviderName =
+      provider === 'google' ? 'GOOGLE' : provider === 'azure' ? 'AZURE_AD' : undefined
     const ssoId = supabaseUser.id
 
     // Phase 2: Lookup existing user by supabaseUserId
@@ -545,6 +567,23 @@ export class AuthService {
 
         await this.assignDefaultPermissionsForRoles(tx, createdRoles)
 
+        // Seed default deal stages for the new tenant
+        for (const stage of DEFAULT_DEAL_STAGES) {
+          await tx.dealStage.create({
+            data: {
+              tenantId: tenant.id,
+              name: stage.name,
+              order: stage.order,
+              probability: stage.probability,
+              isWon: stage.isWon,
+              isLost: stage.isLost,
+              color: stage.color,
+              createdBy: 'system',
+              updatedBy: 'system',
+            },
+          })
+        }
+
         const newUserSsoData: Record<string, unknown> = {}
         if (ssoProviderName && ssoId) {
           newUserSsoData.ssoProvider = ssoProviderName
@@ -617,7 +656,14 @@ export class AuthService {
   }
 
   private async buildAuthTokenResponse(
-    user: { id: string; tenantId: string; email: string; firstName: string; lastName: string; avatar?: string | null },
+    user: {
+      id: string
+      tenantId: string
+      email: string
+      firstName: string
+      lastName: string
+      avatar?: string | null
+    },
     roles: string[],
     backupCodesRemaining?: number,
   ): Promise<AuthTokenResponse> {
@@ -651,7 +697,10 @@ export class AuthService {
     return { requires2FA: true, tempToken }
   }
 
-  private respondTwoFactorSetupRequired(userId: string, tenantId: string): TwoFactorSetupRequiredResponse {
+  private respondTwoFactorSetupRequired(
+    userId: string,
+    tenantId: string,
+  ): TwoFactorSetupRequiredResponse {
     const tempToken = this.jwtService.sign(
       { sub: userId, userId, tenantId, purpose: '2fa_setup' },
       { expiresIn: '15m' },
