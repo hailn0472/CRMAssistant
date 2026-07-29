@@ -41,6 +41,7 @@ type MockPrisma = {
   userRole: { findMany: jest.Mock; create: jest.Mock }
   tenant: { create: jest.Mock; findFirst: jest.Mock }
   role: { findFirst: jest.Mock; create: jest.Mock }
+  dealStage: { create: jest.Mock }
 }
 
 function makePrisma(): MockPrisma {
@@ -62,6 +63,9 @@ function makePrisma(): MockPrisma {
     },
     role: {
       findFirst: jest.fn(),
+      create: jest.fn(),
+    },
+    dealStage: {
       create: jest.fn(),
     },
   }
@@ -181,6 +185,9 @@ describe('AuthService', () => {
           rolePermission: {
             createMany: jest.fn().mockResolvedValue({ count: 0 }),
           },
+          dealStage: {
+            create: jest.fn().mockResolvedValue({}),
+          },
         }),
       )
       prisma.userRole.findMany.mockResolvedValue([{ role: { name: 'SALES_REP' } }])
@@ -253,6 +260,7 @@ describe('AuthService', () => {
           userRole: { create: jest.fn() },
           permission: { findMany: jest.fn().mockResolvedValue([]) },
           rolePermission: { createMany: jest.fn().mockResolvedValue({ count: 0 }) },
+          dealStage: { create: jest.fn().mockResolvedValue({}) },
         }),
       )
       // Override to throw for this test
@@ -516,6 +524,7 @@ describe('AuthService', () => {
           userRole: { create: jest.fn().mockResolvedValue({}) },
           permission: { findMany: jest.fn().mockResolvedValue([]) },
           rolePermission: { createMany: jest.fn().mockResolvedValue({ count: 0 }) },
+          dealStage: { create: jest.fn().mockResolvedValue({}) },
         }),
       )
       prisma.userRole.findMany.mockResolvedValue([{ role: { name: 'SALES_REP' } }])
@@ -562,6 +571,7 @@ describe('AuthService', () => {
           userRole: { create: jest.fn().mockResolvedValue({}) },
           permission: { findMany: jest.fn().mockResolvedValue([]) },
           rolePermission: { createMany: jest.fn().mockResolvedValue({ count: 0 }) },
+          dealStage: { create: jest.fn().mockResolvedValue({}) },
         }),
       )
       prisma.userRole.findMany.mockResolvedValue([{ role: { name: 'SALES_REP' } }])

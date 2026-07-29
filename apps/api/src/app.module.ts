@@ -5,6 +5,7 @@ import { ConfigModule } from '@nestjs/config'
 import { AuditModule } from './audit/audit.module'
 import { AuthModule } from './auth/auth.module'
 import { ContactsModule } from './contacts/contacts.module'
+import { DealsModule } from './deals/deals.module'
 import { RolesModule } from './roles/roles.module'
 import { SegmentsModule } from './segments/segments.module'
 import { TagsModule } from './tags/tags.module'
@@ -33,6 +34,7 @@ import { ImportExportModule } from './import-export/import-export.module'
     AuthModule,
     AppGraphqlModule,
     ContactsModule,
+    DealsModule,
     TagsModule,
     SegmentsModule,
     UsersModule,

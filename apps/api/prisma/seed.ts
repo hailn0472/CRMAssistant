@@ -12,6 +12,7 @@
 import { PrismaClient } from '@prisma/client'
 import { createClient } from '@supabase/supabase-js'
 import { DEFAULT_ROLE_PERMISSIONS as DEFAULT_ROLE_PERMISSIONS_SHARED } from '../src/permissions/default-role-permissions'
+import { DEFAULT_DEAL_STAGES } from '../src/deals/default-deal-stages'
 
 const prisma = new PrismaClient()
 
@@ -353,6 +354,36 @@ async function main(): Promise<void> {
   // ── Seed Default Role Permissions ───────────────────────────────────────────
   await seedRolePermissions()
   console.log(`✅ Default permissions assigned to system roles`)
+
+  // ── Seed Default Deal Stages for each tenant ──────────────────────────────
+  for (const tenantId of [acmeTenant.id, betaTenant.id]) {
+    for (const stage of DEFAULT_DEAL_STAGES) {
+      await prisma.dealStage.upsert({
+        where: {
+          tenantId_name: { tenantId, name: stage.name },
+        },
+        update: {
+          order: stage.order,
+          probability: stage.probability,
+          isWon: stage.isWon,
+          isLost: stage.isLost,
+          color: stage.color,
+        },
+        create: {
+          tenantId,
+          name: stage.name,
+          order: stage.order,
+          probability: stage.probability,
+          isWon: stage.isWon,
+          isLost: stage.isLost,
+          color: stage.color,
+          createdBy: 'seed',
+          updatedBy: 'seed',
+        },
+      })
+    }
+  }
+  console.log(`✅ Default deal stages seeded for both tenants`)
 
   // ── Seed Users for Acme Corp (with Supabase Auth) ──────────────────────────
   const acmeAdminUserId = supabase
