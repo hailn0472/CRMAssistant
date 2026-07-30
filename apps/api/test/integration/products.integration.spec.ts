@@ -103,22 +103,23 @@ describe('Products Integration', () => {
         updatedBy: 'test',
       },
     })
-    const contact = await prisma.contact.create({
-      data: {
-        tenantId: tenant.id,
-        email: `deal-test-${Date.now()}@test.com`,
-        firstName: 'Test',
-        lastName: 'User',
-        createdBy: 'test',
-        updatedBy: 'test',
-      },
-    })
     const user = await prisma.user.create({
       data: {
         tenantId: tenant.id,
         email: `user-${Date.now()}@test.com`,
         firstName: 'Test',
         lastName: 'User',
+        createdBy: 'test',
+        updatedBy: 'test',
+      },
+    })
+    const contact = await prisma.contact.create({
+      data: {
+        tenantId: tenant.id,
+        email: `deal-test-${Date.now()}@test.com`,
+        firstName: 'Test',
+        lastName: 'User',
+        ownerId: user.id,
         createdBy: 'test',
         updatedBy: 'test',
       },
