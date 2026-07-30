@@ -4,8 +4,10 @@ _bmad-output/
 
 # Workflow orchestration artifacts (per-story UI/UX prototypes, test plans,
 # orchestration ledgers & stage reports — reference material, not code)
+docs/
 docs/workflow-artifacts/
 docs/pr-screenshots/
+docs/designs/
 
 # Claude Code
 .codex
