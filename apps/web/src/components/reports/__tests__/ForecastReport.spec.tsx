@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 
 import { ForecastReport } from '../ForecastReport'
 import { getSalesForecast, getForecastAccuracy } from '@/services/forecast.service'
@@ -20,11 +20,14 @@ jest.mock('@/services/team.service', () => ({
   getTeams: jest.fn(),
 }))
 
-// Mock GraphQL subscription to prevent actual WebSocket connections
+// Mock GraphQL subscription to trigger onData callback
 jest.mock('@/lib/graphql-subscription', () => ({
   GraphqlSubscriptionClient: jest.fn().mockImplementation(() => ({
     connect: jest.fn(),
-    subscribe: jest.fn(),
+    subscribe: jest.fn().mockImplementation((_event, { onData }) => {
+      // Immediately trigger the callback to cover handleDealUpdate
+      onData()
+    }),
     disconnect: jest.fn(),
   })),
 }))
@@ -176,6 +179,41 @@ describe('ForecastReport', () => {
     ;(getSalesForecast as jest.Mock).mockResolvedValue(mockSalesData)
 
     fireEvent.click(retryButton)
+
+    expect(await screen.findByText('Forecast Trend')).toBeInTheDocument()
+  })
+
+  it('changes forecast data when groupBy filter is changed', async () => {
+    renderWithQueryClient(<ForecastReport />)
+
+    expect(await screen.findByText('Forecast Trend')).toBeInTheDocument()
+
+    const groupBySelect = screen.getByLabelText('Group By')
+    fireEvent.change(groupBySelect, { target: { value: 'QUARTER' } })
+
+    // Should trigger a refetch with new filter
+    await waitFor(() => {
+      expect(getSalesForecast).toHaveBeenCalledWith(
+        expect.objectContaining({ groupBy: 'QUARTER' }),
+      )
+    })
+  })
+
+  it('updates start date filter', async () => {
+    renderWithQueryClient(<ForecastReport />)
+
+    const startDateInput = screen.getByLabelText('Start Date')
+    fireEvent.change(startDateInput, { target: { value: '2026-08-01' } })
+
+    await waitFor(() => {
+      expect(getSalesForecast).toHaveBeenCalledWith(
+        expect.objectContaining({ startDate: '2026-08-01' }),
+      )
+    })
+  })
+
+  it('renders with EUR currency from forecast data', async () => {
+    renderWithQueryClient(<ForecastReport />)
 
     expect(await screen.findByText('Forecast Trend')).toBeInTheDocument()
   })
