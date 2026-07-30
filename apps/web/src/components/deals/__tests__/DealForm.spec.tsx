@@ -60,7 +60,7 @@ describe('DealForm', () => {
 
     await user.type(screen.getByPlaceholderText('Enter deal title'), 'Test Deal')
 
-    const stageSelect = screen.getByLabelText(/stage/i)
+    const stageSelect = screen.getByRole('combobox', { name: /stage/i })
     await user.selectOptions(stageSelect, 'stage-1')
 
     const contactInput = screen.getByPlaceholderText('Search contacts...')
@@ -96,7 +96,7 @@ describe('DealForm', () => {
     await user.type(screen.getByPlaceholderText('Enter deal title'), 'Big Deal')
     await user.type(screen.getByLabelText(/value/i), '50000')
 
-    const stageSelect = screen.getByLabelText(/stage/i)
+    const stageSelect = screen.getByRole('combobox', { name: /stage/i })
     await user.selectOptions(stageSelect, 'stage-1')
 
     const contactInput = screen.getByPlaceholderText('Search contacts...')
@@ -170,7 +170,7 @@ describe('DealForm', () => {
     await user.type(screen.getByPlaceholderText('Enter deal title'), 'Big Deal')
     await user.type(screen.getByLabelText(/value/i), '50000')
 
-    const stageSelect = screen.getByLabelText(/stage/i)
+    const stageSelect = screen.getByRole('combobox', { name: /stage/i })
     await user.selectOptions(stageSelect, 'stage-1')
 
     const contactInput = screen.getByPlaceholderText('Search contacts...')

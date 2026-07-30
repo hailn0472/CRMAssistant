@@ -22,6 +22,7 @@ import { InboxModule } from './inbox/inbox.module'
 import { FacebookModule } from './facebook/facebook.module'
 import { ChannelDispatcherBindingModule } from './facebook/channel-dispatcher-binding.module'
 import { ImportExportModule } from './import-export/import-export.module'
+import { ReportsModule } from './reports/reports.module'
 
 @Module({
   imports: [
@@ -47,6 +48,7 @@ import { ImportExportModule } from './import-export/import-export.module'
     FacebookModule,
     ChannelDispatcherBindingModule,
     ImportExportModule,
+    ReportsModule,
   ],
   providers: [
     {

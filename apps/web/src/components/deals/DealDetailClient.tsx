@@ -4,11 +4,11 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import toast from 'react-hot-toast'
-import { Pencil, Trash2, ArrowLeft, User, Clock } from 'lucide-react'
+import { Pencil, Trash2, ArrowLeft, User, Clock, Check, X } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Card, CardHeader } from '@/components/ui/card'
-import { deleteDeal, moveDealToStage, getDealStages } from '@/services/deal.service'
+import { deleteDeal, moveDealToStage, getDealStages, updateDeal } from '@/services/deal.service'
 import { useQuery } from '@tanstack/react-query'
 import type { Deal } from '@/services/deal.service'
 
@@ -50,6 +50,8 @@ export function DealDetailClient({ deal }: DealDetailClientProps): React.JSX.Ele
   const router = useRouter()
   const [deleting, setDeleting] = useState(false)
   const [movingStage, setMovingStage] = useState(false)
+  const [editingProbability, setEditingProbability] = useState(false)
+  const [probabilityValue, setProbabilityValue] = useState(String(deal.probability))
 
   const { data: stages } = useQuery({
     queryKey: ['dealStages'],
@@ -82,6 +84,27 @@ export function DealDetailClient({ deal }: DealDetailClientProps): React.JSX.Ele
       toast.error('Failed to update stage')
     } finally {
       setMovingStage(false)
+    }
+  }
+
+  const handleProbabilityUpdate = async () => {
+    const parsed = parseInt(probabilityValue, 10)
+    if (isNaN(parsed) || parsed < 0 || parsed > 100) {
+      toast.error('Probability must be between 0 and 100')
+      return
+    }
+    if (parsed === deal.probability) {
+      setEditingProbability(false)
+      return
+    }
+    try {
+      await updateDeal(deal.id, { probability: parsed })
+      toast.success('Probability updated')
+      setEditingProbability(false)
+      router.refresh()
+    } catch {
+      toast.error('Failed to update probability')
+      setProbabilityValue(String(deal.probability))
     }
   }
 
@@ -163,7 +186,59 @@ export function DealDetailClient({ deal }: DealDetailClientProps): React.JSX.Ele
                   ))}
                 </select>
               </DetailRow>
-              <DetailRow label="Probability">{deal.probability}%</DetailRow>
+              <DetailRow label="Probability">
+                <div className="flex items-center gap-2">
+                  {editingProbability ? (
+                    <>
+                      <input
+                        type="number"
+                        min={0}
+                        max={100}
+                        value={probabilityValue}
+                        onChange={(e) => setProbabilityValue(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') handleProbabilityUpdate()
+                          if (e.key === 'Escape') {
+                            setProbabilityValue(String(deal.probability))
+                            setEditingProbability(false)
+                          }
+                        }}
+                        className="h-8 w-20 rounded-md border border-slate-300 px-2 text-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                        autoFocus
+                      />
+                      <button
+                        type="button"
+                        onClick={handleProbabilityUpdate}
+                        className="inline-flex h-7 w-7 items-center justify-center rounded text-green-600 hover:bg-green-50"
+                      >
+                        <Check className="h-4 w-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setProbabilityValue(String(deal.probability))
+                          setEditingProbability(false)
+                        }}
+                        className="inline-flex h-7 w-7 items-center justify-center rounded text-slate-400 hover:bg-slate-100"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setEditingProbability(true)}
+                      className="group inline-flex items-center gap-1.5 rounded px-1.5 py-0.5 hover:bg-slate-100"
+                    >
+                      <span>{deal.probability}%</span>
+                      <Pencil className="h-3 w-3 text-slate-300 opacity-0 transition-opacity group-hover:opacity-100" />
+                    </button>
+                  )}
+                </div>
+                <span className="mt-1 block text-xs text-slate-400 italic">
+                  Moving this deal to another stage resets probability to the stage default.
+                </span>
+              </DetailRow>
               <DetailRow label="Expected close">
                 {deal.expectedCloseDate ? (
                   new Date(deal.expectedCloseDate).toLocaleDateString()

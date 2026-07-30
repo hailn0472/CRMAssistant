@@ -66,6 +66,7 @@ export type DealFormData = {
   stageId: string
   contactId: string
   ownerId?: string
+  probability?: number
   expectedCloseDate?: string
 }
 

@@ -72,6 +72,7 @@ model Tenant {
   activities               Activity[]
   deals                    Deal[]
   dealStages               DealStage[]
+  forecastSnapshots        ForecastSnapshot[]
 }
 
 /// Tenant-scoped user model with authentication support.
@@ -557,6 +558,34 @@ model Deal {
   @@index([tenantId, stageId])
   @@index([tenantId, contactId])
   @@index([tenantId, ownerId])
+}
+
+/// Point-in-time snapshot of the tenant-wide weighted forecast for one period.
+/// Written through on every salesForecast query (no cron in this codebase).
+/// Enables forecast-vs-actual accuracy, which cannot be reconstructed after the
+/// fact because closing a deal overwrites Deal.probability with 100/0.
+model ForecastSnapshot {
+  id            String    @id @default(uuid())
+  tenantId      String
+  periodStart   DateTime
+  periodEnd     DateTime
+  snapshotDate  DateTime  // normalized to UTC midnight — one row per tenant/period/day
+  forecastValue Float     @default(0)
+  commitValue   Float     @default(0)
+  bestCaseValue Float     @default(0)
+  pipelineValue Float     @default(0)
+  dealCount     Int       @default(0)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  createdBy     String    @default("system")
+  updatedBy     String    @default("system")
+  deletedAt     DateTime?
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, periodStart, snapshotDate])
+  @@index([tenantId])
+  @@index([tenantId, periodStart])
 }
 
 model MessageReadReceipt {

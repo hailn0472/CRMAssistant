@@ -714,7 +714,7 @@ describe('DealsService', () => {
     it('moves deal to valid stage in same tenant', async () => {
       const deal = makeDeal()
       prisma.deal.findFirst.mockResolvedValue(deal)
-      prisma.dealStage.findFirst.mockResolvedValue({ id: STAGE_ID })
+      prisma.dealStage.findFirst.mockResolvedValue({ id: STAGE_ID, isWon: false, isLost: false })
       prisma.deal.updateMany.mockResolvedValue({ count: 1 })
       prisma.deal.findFirst.mockResolvedValue(deal)
 
@@ -749,7 +749,12 @@ describe('DealsService', () => {
     it('auto-syncs probability from target stage on moveToStage', async () => {
       const deal = makeDeal({ probability: 10 })
       prisma.deal.findFirst.mockResolvedValue(deal)
-      prisma.dealStage.findFirst.mockResolvedValue({ id: 'new-stage', probability: 50 })
+      prisma.dealStage.findFirst.mockResolvedValue({
+        id: 'new-stage',
+        probability: 50,
+        isWon: false,
+        isLost: false,
+      })
       prisma.deal.updateMany.mockResolvedValue({ count: 1 })
       prisma.deal.findFirst.mockResolvedValue(deal)
 
@@ -759,6 +764,183 @@ describe('DealsService', () => {
         where: { id: DEAL_ID, tenantId: TENANT_ID, deletedAt: null },
         data: expect.objectContaining({ probability: 50 }),
       })
+    })
+
+    it('sets actualCloseDate to now when moving to a won stage', async () => {
+      const deal = makeDeal()
+      prisma.deal.findFirst.mockResolvedValue(deal)
+      prisma.dealStage.findFirst.mockResolvedValue({
+        id: 'won-stage',
+        probability: 100,
+        isWon: true,
+        isLost: false,
+      })
+      prisma.deal.updateMany.mockResolvedValue({ count: 1 })
+      prisma.deal.findFirst.mockResolvedValue(deal)
+
+      await service.moveToStage(TENANT_ID, USER_ID, DEAL_ID, 'won-stage')
+
+      expect(prisma.deal.updateMany).toHaveBeenCalledWith({
+        where: { id: DEAL_ID, tenantId: TENANT_ID, deletedAt: null },
+        data: expect.objectContaining({ actualCloseDate: expect.any(Date) }),
+      })
+    })
+
+    it('sets actualCloseDate to now when moving to a lost stage', async () => {
+      const deal = makeDeal()
+      prisma.deal.findFirst.mockResolvedValue(deal)
+      prisma.dealStage.findFirst.mockResolvedValue({
+        id: 'lost-stage',
+        probability: 0,
+        isWon: false,
+        isLost: true,
+      })
+      prisma.deal.updateMany.mockResolvedValue({ count: 1 })
+      prisma.deal.findFirst.mockResolvedValue(deal)
+
+      await service.moveToStage(TENANT_ID, USER_ID, DEAL_ID, 'lost-stage')
+
+      expect(prisma.deal.updateMany).toHaveBeenCalledWith({
+        where: { id: DEAL_ID, tenantId: TENANT_ID, deletedAt: null },
+        data: expect.objectContaining({ actualCloseDate: expect.any(Date) }),
+      })
+    })
+
+    it('clears actualCloseDate to null when moving back to an open stage', async () => {
+      const deal = makeDeal({ actualCloseDate: new Date('2026-07-15') })
+      prisma.deal.findFirst.mockResolvedValue(deal)
+      prisma.dealStage.findFirst.mockResolvedValue({
+        id: 'open-stage',
+        probability: 25,
+        isWon: false,
+        isLost: false,
+      })
+      prisma.deal.updateMany.mockResolvedValue({ count: 1 })
+      prisma.deal.findFirst.mockResolvedValue(deal)
+
+      await service.moveToStage(TENANT_ID, USER_ID, DEAL_ID, 'open-stage')
+
+      expect(prisma.deal.updateMany).toHaveBeenCalledWith({
+        where: { id: DEAL_ID, tenantId: TENANT_ID, deletedAt: null },
+        data: expect.objectContaining({ actualCloseDate: null }),
+      })
+    })
+  })
+
+  describe('normalizeProbability (create)', () => {
+    it('accepts valid probability 0', async () => {
+      prisma.contact.findFirst.mockResolvedValue({ id: CONTACT_ID })
+      prisma.dealStage.findFirst.mockResolvedValue({ id: STAGE_ID, probability: 10 })
+      prisma.deal.create.mockResolvedValue(makeDeal({ probability: 0 }))
+      prisma.deal.findFirst.mockResolvedValue(makeDeal({ probability: 0 }))
+
+      const result = await service.create(TENANT_ID, USER_ID, {
+        title: 'Test',
+        probability: 0,
+        stageId: STAGE_ID,
+        contactId: CONTACT_ID,
+      })
+      expect(result.probability).toBe(0)
+    })
+
+    it('accepts valid probability 100', async () => {
+      prisma.contact.findFirst.mockResolvedValue({ id: CONTACT_ID })
+      prisma.dealStage.findFirst.mockResolvedValue({ id: STAGE_ID, probability: 10 })
+      prisma.deal.create.mockResolvedValue(makeDeal({ probability: 100 }))
+      prisma.deal.findFirst.mockResolvedValue(makeDeal({ probability: 100 }))
+
+      const result = await service.create(TENANT_ID, USER_ID, {
+        title: 'Test',
+        probability: 100,
+        stageId: STAGE_ID,
+        contactId: CONTACT_ID,
+      })
+      expect(result.probability).toBe(100)
+    })
+
+    it('rejects probability below 0 on create', async () => {
+      prisma.contact.findFirst.mockResolvedValue({ id: CONTACT_ID })
+      prisma.dealStage.findFirst.mockResolvedValue({ id: STAGE_ID, probability: 10 })
+
+      await expect(
+        service.create(TENANT_ID, USER_ID, {
+          title: 'Test',
+          probability: -1,
+          stageId: STAGE_ID,
+          contactId: CONTACT_ID,
+        }),
+      ).rejects.toThrow(BadRequestException)
+    })
+
+    it('rejects probability above 100 on create', async () => {
+      prisma.contact.findFirst.mockResolvedValue({ id: CONTACT_ID })
+      prisma.dealStage.findFirst.mockResolvedValue({ id: STAGE_ID, probability: 10 })
+
+      await expect(
+        service.create(TENANT_ID, USER_ID, {
+          title: 'Test',
+          probability: 101,
+          stageId: STAGE_ID,
+          contactId: CONTACT_ID,
+        }),
+      ).rejects.toThrow(BadRequestException)
+    })
+
+    it('rejects non-integer probability on create', async () => {
+      prisma.contact.findFirst.mockResolvedValue({ id: CONTACT_ID })
+      prisma.dealStage.findFirst.mockResolvedValue({ id: STAGE_ID, probability: 10 })
+
+      await expect(
+        service.create(TENANT_ID, USER_ID, {
+          title: 'Test',
+          probability: 50.5,
+          stageId: STAGE_ID,
+          contactId: CONTACT_ID,
+        }),
+      ).rejects.toThrow(BadRequestException)
+    })
+
+    it('rejects NaN probability on create', async () => {
+      prisma.contact.findFirst.mockResolvedValue({ id: CONTACT_ID })
+      prisma.dealStage.findFirst.mockResolvedValue({ id: STAGE_ID, probability: 10 })
+
+      await expect(
+        service.create(TENANT_ID, USER_ID, {
+          title: 'Test',
+          probability: NaN,
+          stageId: STAGE_ID,
+          contactId: CONTACT_ID,
+        }),
+      ).rejects.toThrow(BadRequestException)
+    })
+  })
+
+  describe('normalizeProbability (update)', () => {
+    it('rejects probability below 0 on update', async () => {
+      const deal = makeDeal()
+      prisma.deal.findFirst.mockResolvedValue(deal)
+
+      await expect(
+        service.update(TENANT_ID, USER_ID, DEAL_ID, { probability: -1 }),
+      ).rejects.toThrow(BadRequestException)
+    })
+
+    it('rejects probability above 100 on update', async () => {
+      const deal = makeDeal()
+      prisma.deal.findFirst.mockResolvedValue(deal)
+
+      await expect(
+        service.update(TENANT_ID, USER_ID, DEAL_ID, { probability: 150 }),
+      ).rejects.toThrow(BadRequestException)
+    })
+
+    it('rejects non-integer probability on update', async () => {
+      const deal = makeDeal()
+      prisma.deal.findFirst.mockResolvedValue(deal)
+
+      await expect(
+        service.update(TENANT_ID, USER_ID, DEAL_ID, { probability: 75.5 }),
+      ).rejects.toThrow(BadRequestException)
     })
   })
 })
