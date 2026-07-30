@@ -12,6 +12,7 @@ import {
   CheckSquare,
   UserCog,
   Settings,
+  BarChart3,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -41,8 +42,7 @@ interface NavigationSection {
 
 // Team/Role/Audit-log/API-key/Channel management live under `/settings/*` and
 // are surfaced via the Settings sub-navigation (see settings/layout.tsx) rather
-// than crowding the top-level sidebar. Not-yet-built areas (Deals, Activities,
-// Reports, AI Query) are intentionally omitted until they have real routes.
+// than crowding the top-level sidebar.
 const navigationSections: NavigationSection[] = [
   {
     title: 'Main',
@@ -62,6 +62,12 @@ const navigationSections: NavigationSection[] = [
       },
       { label: 'Deals', href: '/deals', icon: Briefcase },
       { label: 'Tasks', href: '/tasks', icon: CheckSquare },
+      {
+        label: 'Reports',
+        href: '/reports/forecast',
+        icon: BarChart3,
+        permission: { resource: 'REPORT', action: 'READ' },
+      },
     ],
   },
   {

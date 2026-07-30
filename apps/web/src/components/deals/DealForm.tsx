@@ -20,6 +20,7 @@ const dealSchema = z.object({
   currency: z.string().trim().default('USD'),
   stageId: z.string().min(1, 'Stage is required'),
   contactId: z.string().min(1, 'Contact is required'),
+  probability: z.coerce.number().int().min(0).max(100).optional(),
   expectedCloseDate: z.string().optional(),
 })
 
@@ -60,6 +61,7 @@ export function DealForm({ deal }: DealFormProps): React.JSX.Element {
       currency: deal?.currency ?? 'USD',
       stageId: deal?.stageId ?? '',
       contactId: deal?.contactId ?? '',
+      probability: deal?.probability ?? undefined,
       expectedCloseDate: deal?.expectedCloseDate
         ? new Date(deal.expectedCloseDate).toISOString().split('T')[0]
         : '',
@@ -76,6 +78,7 @@ export function DealForm({ deal }: DealFormProps): React.JSX.Element {
         currency: values.currency || 'USD',
         stageId: values.stageId,
         contactId: values.contactId,
+        probability: values.probability ?? undefined,
         expectedCloseDate: values.expectedCloseDate || undefined,
       }
       const savedDeal = deal ? await updateDeal(deal.id, payload) : await createDeal(payload)
@@ -112,6 +115,20 @@ export function DealForm({ deal }: DealFormProps): React.JSX.Element {
               {...register('value')}
               aria-invalid={Boolean(errors.value)}
             />
+          </Field>
+
+          <Field label="Probability (%)" error={errors.probability?.message}>
+            <Input
+              type="number"
+              min="0"
+              max="100"
+              placeholder="Leave empty to inherit stage default"
+              {...register('probability')}
+              aria-invalid={Boolean(errors.probability)}
+            />
+            <span className="text-xs text-slate-400 italic">
+              Moving this deal to another stage resets probability to the stage default.
+            </span>
           </Field>
 
           <Field label="Currency" error={errors.currency?.message}>

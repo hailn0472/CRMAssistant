@@ -93,12 +93,23 @@ function normalizeRequiredString(value: string, fieldName: string): string {
   return normalizedValue
 }
 
+function normalizeProbability(value: number): number {
+  if (!Number.isInteger(value)) {
+    throw new BadRequestException('Probability must be between 0 and 100')
+  }
+  if (value < 0 || value > 100) {
+    throw new BadRequestException('Probability must be between 0 and 100')
+  }
+  return value
+}
+
 function normalizeCreateInput(input: CreateDealInput): CreateDealInput {
   return {
     title: normalizeRequiredString(input.title, 'Title'),
     value: input.value ?? 0,
     currency: input.currency?.trim().toUpperCase() || 'USD',
-    probability: input.probability,
+    probability:
+      input.probability !== undefined ? normalizeProbability(input.probability) : input.probability,
     stageId: input.stageId,
     contactId: input.contactId,
     ownerId: input.ownerId,
@@ -124,7 +135,12 @@ function normalizeUpdateInput(input: UpdateDealInput): UpdateDealInput {
     normalized.currency = input.currency.trim().toUpperCase()
   }
   if (input.probability !== undefined) {
-    normalized.probability = input.probability
+    if (input.probability === null) {
+      throw new BadRequestException(
+        'Probability cannot be cleared (always set from stage or explicit value)',
+      )
+    }
+    normalized.probability = normalizeProbability(input.probability)
   }
   if (input.stageId !== undefined) {
     normalized.stageId = input.stageId
@@ -270,7 +286,7 @@ export class DealsService {
     }
   }
 
-  private async buildDealWhere(
+  async buildDealWhere(
     tenantId: string,
     userId: string,
     filter: DealFilterInput = {},
@@ -460,6 +476,7 @@ export class DealsService {
       data: {
         stageId: newStageId,
         probability: stage.probability,
+        actualCloseDate: stage.isWon || stage.isLost ? new Date() : null,
         updatedBy: userId,
       },
     })
