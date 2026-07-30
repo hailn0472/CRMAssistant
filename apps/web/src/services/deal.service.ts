@@ -8,6 +8,21 @@ export type DealStage = {
   color: string
 }
 
+export type DealFilter = {
+  search?: string
+  stageId?: string
+  contactId?: string
+  ownerId?: string
+  expectedCloseDateFrom?: string
+  expectedCloseDateTo?: string
+}
+
+export type DealStageSummary = {
+  stageId: string
+  count: number
+  totalValue: number
+}
+
 export type Deal = {
   id: string
   title: string
@@ -77,14 +92,7 @@ const DEAL_FIELDS = `
 export async function getDeals(
   page: number,
   pageSize: number,
-  filter?: {
-    search?: string
-    stageId?: string
-    contactId?: string
-    ownerId?: string
-    expectedCloseDateFrom?: string
-    expectedCloseDateTo?: string
-  },
+  filter?: DealFilter,
 ): Promise<DealConnection> {
   const hasFilter = Boolean(
     filter?.search ||
@@ -223,3 +231,45 @@ export async function reorderDealStages(stageIds: string[]): Promise<DealStage[]
   )
   return data.reorderDealStages
 }
+
+export async function getDealPipelineSummary(filter?: DealFilter): Promise<DealStageSummary[]> {
+  const hasFilter = Boolean(
+    filter?.search ||
+      filter?.stageId ||
+      filter?.contactId ||
+      filter?.ownerId ||
+      filter?.expectedCloseDateFrom ||
+      filter?.expectedCloseDateTo,
+  )
+  const data = await graphqlRequest<{ dealPipelineSummary: DealStageSummary[] }>(
+    `query DealPipelineSummary($filter: DealFilterInput) {
+      dealPipelineSummary(filter: $filter) {
+        stageId
+        count
+        totalValue
+      }
+    }`,
+    { filter: hasFilter ? filter : undefined },
+  )
+  return data.dealPipelineSummary
+}
+
+export const ON_DEAL_UPDATED_SUBSCRIPTION = `subscription OnDealUpdated {
+  onDealUpdated {
+    id
+    title
+    value
+    currency
+    probability
+    stageId
+    contactId
+    ownerId
+    expectedCloseDate
+    actualCloseDate
+    stage { id name color probability isWon isLost }
+    contact { id firstName lastName email }
+    owner { id firstName lastName email avatar }
+    createdAt
+    updatedAt
+  }
+}`

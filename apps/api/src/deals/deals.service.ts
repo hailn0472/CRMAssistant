@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 
 import { PrismaService } from '../prisma/prisma.service'
 import { resolveVisibilityFilter } from '../common/guards/visibility-check'
+import { DealPubSubService, PUBSUB_DEAL_UPDATED } from './deal-pubsub.service'
 import type { Deal, Prisma } from '@prisma/client'
 
 export type CreateDealInput = {
@@ -142,7 +143,10 @@ function normalizeUpdateInput(input: UpdateDealInput): UpdateDealInput {
 
 @Injectable()
 export class DealsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly dealPubSub: DealPubSubService,
+  ) {}
 
   async create(tenantId: string, userId: string, input: CreateDealInput): Promise<Deal> {
     const normalizedInput = normalizeCreateInput(input)
@@ -187,7 +191,10 @@ export class DealsService {
       },
     })
 
-    return deal
+    const createdDeal = await this.findOne(tenantId, userId, deal.id)
+    this.dealPubSub.publish(`${PUBSUB_DEAL_UPDATED}:${tenantId}`, createdDeal)
+
+    return createdDeal
   }
 
   async findOne(tenantId: string, userId: string, id: string): Promise<Deal> {
@@ -241,6 +248,33 @@ export class DealsService {
   ): Promise<DealConnection> {
     const page = Math.max(pagination.page ?? DEFAULT_PAGE, 1)
     const pageSize = Math.min(Math.max(pagination.pageSize ?? DEFAULT_PAGE_SIZE, 1), MAX_PAGE_SIZE)
+
+    const where = await this.buildDealWhere(tenantId, userId, filter)
+
+    const [items, total] = await Promise.all([
+      this.prisma.deal.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        select: dealListSelect,
+      }),
+      this.prisma.deal.count({ where }),
+    ])
+
+    return {
+      items: items as unknown as Deal[],
+      total,
+      page,
+      pageSize,
+    }
+  }
+
+  private async buildDealWhere(
+    tenantId: string,
+    userId: string,
+    filter: DealFilterInput = {},
+  ): Promise<Prisma.DealWhereInput> {
     const search = filter.search?.trim()
 
     const visibilityFilter = await resolveVisibilityFilter(userId, tenantId)
@@ -292,23 +326,43 @@ export class DealsService {
       where.AND = andConditions
     }
 
-    const [items, total] = await Promise.all([
-      this.prisma.deal.findMany({
+    return where
+  }
+
+  async pipelineSummary(
+    tenantId: string,
+    userId: string,
+    filter: DealFilterInput = {},
+  ): Promise<Array<{ stageId: string; count: number; totalValue: number }>> {
+    const where = await this.buildDealWhere(tenantId, userId, filter)
+
+    const [grouped, allStages] = await Promise.all([
+      this.prisma.deal.groupBy({
+        by: ['stageId'],
         where,
-        orderBy: { createdAt: 'desc' },
-        skip: (page - 1) * pageSize,
-        take: pageSize,
-        select: dealListSelect,
+        _count: { _all: true },
+        _sum: { value: true },
       }),
-      this.prisma.deal.count({ where }),
+      this.prisma.dealStage.findMany({
+        where: { tenantId, deletedAt: null },
+        select: { id: true },
+      }),
     ])
 
-    return {
-      items: items as unknown as Deal[],
-      total,
-      page,
-      pageSize,
+    const summaryMap = new Map<string, { count: number; totalValue: number }>()
+    for (const entry of grouped) {
+      summaryMap.set(entry.stageId, {
+        count: entry._count?._all ?? 0,
+        totalValue: entry._sum?.value ?? 0,
+      })
     }
+
+    // Ensure all stages appear in output, even those with zero deals
+    return allStages.map((stage) => ({
+      stageId: stage.id,
+      count: summaryMap.get(stage.id)?.count ?? 0,
+      totalValue: summaryMap.get(stage.id)?.totalValue ?? 0,
+    }))
   }
 
   async update(
@@ -378,7 +432,10 @@ export class DealsService {
       throw new NotFoundException('Deal not found')
     }
 
-    return this.findOne(tenantId, userId, id)
+    const updatedDeal = await this.findOne(tenantId, userId, id)
+    this.dealPubSub.publish(`${PUBSUB_DEAL_UPDATED}:${tenantId}`, updatedDeal)
+
+    return updatedDeal
   }
 
   async moveToStage(
@@ -390,7 +447,7 @@ export class DealsService {
     // Validate deal exists and is visible
     await this.findOne(tenantId, userId, dealId)
 
-    // Validate target stage exists in tenant (do NOT auto-sync probability — Story 3.3 scope)
+    // Validate target stage exists in tenant
     const stage = await this.prisma.dealStage.findFirst({
       where: { id: newStageId, tenantId, deletedAt: null },
     })
@@ -402,8 +459,8 @@ export class DealsService {
       where: { id: dealId, tenantId, deletedAt: null },
       data: {
         stageId: newStageId,
+        probability: stage.probability,
         updatedBy: userId,
-        // Do NOT auto-sync probability — that belongs to Story 3.3
       },
     })
 
@@ -411,12 +468,15 @@ export class DealsService {
       throw new NotFoundException('Deal not found')
     }
 
-    return this.findOne(tenantId, userId, dealId)
+    const movedDeal = await this.findOne(tenantId, userId, dealId)
+    this.dealPubSub.publish(`${PUBSUB_DEAL_UPDATED}:${tenantId}`, movedDeal)
+
+    return movedDeal
   }
 
   async delete(tenantId: string, userId: string, id: string): Promise<boolean> {
     // Verify deal exists and is visible
-    await this.findOne(tenantId, userId, id)
+    const deal = await this.findOne(tenantId, userId, id)
 
     const result = await this.prisma.deal.updateMany({
       where: { id, tenantId, deletedAt: null },
@@ -426,6 +486,9 @@ export class DealsService {
     if (result.count === 0) {
       throw new NotFoundException('Deal not found')
     }
+
+    // Publish the deal before delete so the board can remove it
+    this.dealPubSub.publish(`${PUBSUB_DEAL_UPDATED}:${tenantId}`, deal)
 
     return true
   }

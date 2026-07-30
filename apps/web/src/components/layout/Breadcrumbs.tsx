@@ -34,6 +34,7 @@ const SEGMENT_LABELS: Record<string, string> = {
   permissions: 'Phân quyền',
   tags: 'Nhãn',
   'pipeline-settings': 'Pipeline Settings',
+  pipeline: 'Pipeline',
 }
 
 function labelForSegment(segment: string): string {
