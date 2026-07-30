@@ -106,7 +106,7 @@ describe('Products Integration', () => {
     const contact = await prisma.contact.create({
       data: {
         tenantId: tenant.id,
-        email: 'test@test.com',
+        email: `deal-test-${Date.now()}@test.com`,
         firstName: 'Test',
         lastName: 'User',
         createdBy: 'test',
@@ -116,7 +116,7 @@ describe('Products Integration', () => {
     const user = await prisma.user.create({
       data: {
         tenantId: tenant.id,
-        email: 'user@test.com',
+        email: `user-${Date.now()}@test.com`,
         firstName: 'Test',
         lastName: 'User',
         createdBy: 'test',
