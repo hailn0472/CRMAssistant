@@ -42,6 +42,15 @@ const MUTATION_AUDIT_MAP: Record<string, { action: string; entity: string }> = {
   createApiKey: { action: 'API_KEY_CREATED', entity: 'API_KEY' },
   revokeApiKey: { action: 'API_KEY_REVOKED', entity: 'API_KEY' },
   rotateApiKey: { action: 'API_KEY_ROTATED', entity: 'API_KEY' },
+
+  // Product mutations
+  createProduct: { action: 'CREATE', entity: 'PRODUCT' },
+  updateProduct: { action: 'UPDATE', entity: 'PRODUCT' },
+
+  // Line-item mutations
+  addLineItemToDeal: { action: 'UPDATE', entity: 'DEAL' },
+  updateLineItem: { action: 'UPDATE', entity: 'DEAL' },
+  removeLineItem: { action: 'UPDATE', entity: 'DEAL' },
 }
 
 @Injectable()

@@ -37,6 +37,7 @@ const SEGMENT_LABELS: Record<string, string> = {
   tags: 'Nhãn',
   'pipeline-settings': 'Pipeline Settings',
   pipeline: 'Pipeline',
+  products: 'Products',
 }
 
 function labelForSegment(segment: string): string {

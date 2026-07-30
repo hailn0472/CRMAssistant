@@ -10,37 +10,9 @@ import { Button } from '@/components/ui/button'
 import { Card, CardHeader } from '@/components/ui/card'
 import { deleteDeal, moveDealToStage, getDealStages, updateDeal } from '@/services/deal.service'
 import { useQuery } from '@tanstack/react-query'
+import { StageBadge, formatCurrency } from '@/components/deals/deal-display'
+import { DealLineItems } from './DealLineItems'
 import type { Deal } from '@/services/deal.service'
-
-function StageBadge({
-  stage,
-}: {
-  stage: { name: string; color: string } | null | undefined
-}): React.JSX.Element | null {
-  if (!stage) return null
-  return (
-    <span
-      className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-sm font-medium"
-      style={{ backgroundColor: stage.color + '20', color: stage.color }}
-    >
-      <span className="h-2 w-2 rounded-full" style={{ backgroundColor: stage.color }} />
-      {stage.name}
-    </span>
-  )
-}
-
-function formatCurrency(value: number, currency: string): string {
-  try {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: currency || 'USD',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(value)
-  } catch {
-    return `${currency || 'USD'} ${value.toLocaleString()}`
-  }
-}
 
 type DealDetailClientProps = {
   deal: Deal
@@ -307,6 +279,9 @@ export function DealDetailClient({ deal }: DealDetailClientProps): React.JSX.Ele
             </div>
           </div>
         </div>
+
+        {/* Products */}
+        <DealLineItems dealId={deal.id} currency={deal.currency} />
       </Card>
     </div>
   )

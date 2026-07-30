@@ -73,6 +73,8 @@ model Tenant {
   deals                    Deal[]
   dealStages               DealStage[]
   forecastSnapshots        ForecastSnapshot[]
+  products                 Product[]
+  dealLineItems            DealLineItem[]
 }
 
 /// Tenant-scoped user model with authentication support.
@@ -553,11 +555,63 @@ model Deal {
   stage   DealStage @relation(fields: [stageId], references: [id])
   contact Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
   owner   User    @relation("DealOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  lineItems          DealLineItem[]
 
   @@index([tenantId])
   @@index([tenantId, stageId])
   @@index([tenantId, contactId])
   @@index([tenantId, ownerId])
+}
+
+/// Tenant-scoped product model for tracking sellable items.
+model Product {
+  id          String    @id @default(uuid())
+  tenantId    String
+  name        String
+  description String?
+  price       Float     @default(0)
+  currency    String    @default("USD")
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  createdBy   String    @default("system")
+  updatedBy   String    @default("system")
+  deletedAt   DateTime?
+
+  tenant   Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  lineItems DealLineItem[]
+
+  @@index([tenantId])
+  @@index([tenantId, isActive])
+}
+
+/// Tenant-scoped line item model linking products to deals.
+/// unitPrice is a snapshot from Product.price at the time of addition.
+/// total is computed server-side only: round2(quantity * unitPrice * (1 - discount / 100)).
+/// onDelete: Restrict on productId — prevents accidental hard DELETE of referenced products.
+model DealLineItem {
+  id        String    @id @default(uuid())
+  tenantId  String
+  dealId    String
+  productId String
+  quantity  Float     @default(1)
+  unitPrice Float
+  discount  Float     @default(0)
+  total     Float     @default(0)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  createdBy String    @default("system")
+  updatedBy String    @default("system")
+  deletedAt DateTime?
+
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  deal    Deal    @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId])
+  @@index([tenantId, dealId])
+  @@index([dealId, deletedAt])
+  @@index([tenantId, productId])
 }
 
 /// Point-in-time snapshot of the tenant-wide weighted forecast for one period.

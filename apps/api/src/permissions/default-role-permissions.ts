@@ -10,8 +10,8 @@ export function buildAllPermissionActions(
  * Default permission assignments for system roles (Story 2.3).
  *
  * ADMIN bypasses permission checks in code, so it needs zero DB rows (empty array).
- * SALES_MANAGER: 20 permissions
- * SALES_REP: 13 permissions
+ * SALES_MANAGER: 23 permissions
+ * SALES_REP: 14 permissions
  * SUPPORT_AGENT: 9 permissions
  * MARKETING_USER: 4 permissions
  */
@@ -26,6 +26,9 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, { resource: string; action
     })),
     { resource: 'REPORT', action: 'READ' },
     { resource: 'REPORT', action: 'EXPORT' },
+    { resource: 'PRODUCT', action: 'CREATE' },
+    { resource: 'PRODUCT', action: 'READ' },
+    { resource: 'PRODUCT', action: 'UPDATE' },
     { resource: 'USER', action: 'READ' },
     { resource: 'INBOX', action: 'READ' },
     { resource: 'INBOX', action: 'WRITE' },
@@ -39,6 +42,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, { resource: string; action
     { resource: 'DEAL', action: 'READ' },
     { resource: 'DEAL', action: 'UPDATE' },
     { resource: 'DEAL', action: 'DELETE' },
+    { resource: 'PRODUCT', action: 'READ' },
     { resource: 'TASK', action: 'CREATE' },
     { resource: 'TASK', action: 'READ' },
     { resource: 'TASK', action: 'UPDATE' },

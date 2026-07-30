@@ -30,10 +30,15 @@ type MockContactDelegate = {
   findFirst: jest.Mock
 }
 
+type MockDealLineItemDelegate = {
+  count: jest.Mock
+}
+
 type MockPrisma = {
   deal: MockDealDelegate
   dealStage: MockDealStageDelegate
   contact: MockContactDelegate
+  dealLineItem: MockDealLineItemDelegate
   $transaction: jest.Mock
 }
 
@@ -89,6 +94,9 @@ function makePrisma(): MockPrisma {
     },
     contact: {
       findFirst: jest.fn(),
+    },
+    dealLineItem: {
+      count: jest.fn(),
     },
     $transaction: jest.fn(),
   }
