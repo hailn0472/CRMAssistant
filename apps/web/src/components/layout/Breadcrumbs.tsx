@@ -38,6 +38,8 @@ const SEGMENT_LABELS: Record<string, string> = {
   'pipeline-settings': 'Pipeline Settings',
   pipeline: 'Pipeline',
   products: 'Products',
+  competitors: 'Competitors',
+  'win-loss': 'Win/Loss',
 }
 
 function labelForSegment(segment: string): string {

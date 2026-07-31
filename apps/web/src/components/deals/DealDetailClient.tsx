@@ -12,10 +12,19 @@ import { deleteDeal, moveDealToStage, getDealStages, updateDeal } from '@/servic
 import { useQuery } from '@tanstack/react-query'
 import { StageBadge, formatCurrency } from '@/components/deals/deal-display'
 import { DealLineItems } from './DealLineItems'
-import type { Deal } from '@/services/deal.service'
+import { DealCompetitors } from './DealCompetitors'
+import { WinLossDialog } from './WinLossDialog'
+import type { Deal, DealStage } from '@/services/deal.service'
 
 type DealDetailClientProps = {
   deal: Deal
+}
+
+type WinLossTarget = {
+  stageId: string
+  stageName: string
+  isWon: boolean
+  isLost: boolean
 }
 
 export function DealDetailClient({ deal }: DealDetailClientProps): React.JSX.Element {
@@ -24,6 +33,7 @@ export function DealDetailClient({ deal }: DealDetailClientProps): React.JSX.Ele
   const [movingStage, setMovingStage] = useState(false)
   const [editingProbability, setEditingProbability] = useState(false)
   const [probabilityValue, setProbabilityValue] = useState(String(deal.probability))
+  const [winLossTarget, setWinLossTarget] = useState<WinLossTarget | null>(null)
 
   const { data: stages } = useQuery({
     queryKey: ['dealStages'],
@@ -47,6 +57,18 @@ export function DealDetailClient({ deal }: DealDetailClientProps): React.JSX.Ele
 
   const handleStageChange = async (newStageId: string) => {
     if (newStageId === deal.stageId) return
+    // Intercept closed-stage moves: the WinLossDialog records the reason and
+    // performs the move atomically — nothing moves until the user confirms.
+    const targetStage = stages?.find((stage: DealStage) => stage.id === newStageId)
+    if (targetStage && (targetStage.isWon || targetStage.isLost)) {
+      setWinLossTarget({
+        stageId: targetStage.id,
+        stageName: targetStage.name,
+        isWon: targetStage.isWon,
+        isLost: targetStage.isLost,
+      })
+      return
+    }
     setMovingStage(true)
     try {
       await moveDealToStage(deal.id, newStageId)
@@ -282,7 +304,22 @@ export function DealDetailClient({ deal }: DealDetailClientProps): React.JSX.Ele
 
         {/* Products */}
         <DealLineItems dealId={deal.id} currency={deal.currency} />
+
+        {/* Competitors */}
+        <DealCompetitors dealId={deal.id} />
       </Card>
+
+      <WinLossDialog
+        dealId={deal.id}
+        stageId={winLossTarget?.stageId ?? ''}
+        stageName={winLossTarget?.stageName ?? ''}
+        isWon={winLossTarget?.isWon ?? false}
+        isLost={winLossTarget?.isLost ?? false}
+        open={winLossTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setWinLossTarget(null)
+        }}
+      />
     </div>
   )
 }

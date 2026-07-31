@@ -7,6 +7,7 @@ import { AuthModule } from './auth/auth.module'
 import { ContactsModule } from './contacts/contacts.module'
 import { DealsModule } from './deals/deals.module'
 import { ProductsModule } from './products/products.module'
+import { CompetitorsModule } from './competitors/competitors.module'
 import { RolesModule } from './roles/roles.module'
 import { SegmentsModule } from './segments/segments.module'
 import { TagsModule } from './tags/tags.module'
@@ -35,6 +36,7 @@ import { ReportsModule } from './reports/reports.module'
     HealthModule,
     AuthModule,
     ProductsModule,
+    CompetitorsModule,
     AppGraphqlModule,
     ContactsModule,
     DealsModule,

@@ -37,7 +37,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-05-09T05:39:46.484Z
-last_updated: 2026-07-31T09:00:00.000Z
+last_updated: 2026-07-31T16:30:00.000Z
 project: CRMAssistant
 project_key: NOKEY
 tracking_system: file-system
@@ -125,7 +125,7 @@ development_status:
   3-2-kanban-board-interface-with-drag-and-drop: done
   3-3-deal-probability-calculation-sales-forecasting: done
   3-4-products-line-items-association: done
-  3-5-competitor-tracking-win-loss-analysis: backlog
+  3-5-competitor-tracking-win-loss-analysis: done
   3-6-deal-document-attachment-collaboration: backlog
   3-7-automated-deal-reminders-health-alerts: backlog
   epic-3-retrospective: optional

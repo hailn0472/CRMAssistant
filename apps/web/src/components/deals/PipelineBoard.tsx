@@ -25,6 +25,7 @@ import {
 import type { DealFilter, DealStageSummary } from '@/services/deal.service'
 import { PipelineColumn } from './PipelineColumn'
 import { DealCard } from './DealCard'
+import { WinLossDialog } from './WinLossDialog'
 import { TableSkeleton } from '@/components/shared/LoadingSkeleton'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { ErrorState } from '@/components/shared/ErrorState'
@@ -46,6 +47,14 @@ interface PipelineDeal {
     email: string
     avatar?: string | null
   } | null
+}
+
+type WinLossTarget = {
+  dealId: string
+  stageId: string
+  stageName: string
+  isWon: boolean
+  isLost: boolean
 }
 
 function StageColumn({
@@ -101,6 +110,7 @@ export function PipelineBoard(): React.JSX.Element {
   const queryClient = useQueryClient()
   const [filter, setFilter] = useState<DealFilter>({})
   const [activeId, setActiveId] = useState<string | null>(null)
+  const [winLossTarget, setWinLossTarget] = useState<WinLossTarget | null>(null)
   const currentUserId = useAuthStore((s) => s.user?.userId)
   const subClientRef = useRef<GraphqlSubscriptionClient | null>(null)
 
@@ -271,16 +281,42 @@ export function PipelineBoard(): React.JSX.Element {
 
       if (!sourceStageId || sourceStageId === targetStageId) return
 
+      // Intercept closed-stage drops: open WinLossDialog instead of moving.
+      // recordWinLoss performs the move atomically; cancelling is a no-op.
+      const targetStage = stages?.find((s) => s.id === targetStageId)
+      if (targetStage && (targetStage.isWon || targetStage.isLost)) {
+        setWinLossTarget({
+          dealId,
+          stageId: targetStage.id,
+          stageName: targetStage.name,
+          isWon: targetStage.isWon,
+          isLost: targetStage.isLost,
+        })
+        return
+      }
+
       moveMutation.mutate({ dealId, stageId: targetStageId })
     },
-    [findStageForDeal, moveMutation],
+    [findStageForDeal, moveMutation, stages],
   )
 
   const handleMoveToStage = useCallback(
     (dealId: string, stageId: string) => {
+      // Keyboard / card-menu path: same closed-stage interception (AC #27)
+      const targetStage = stages?.find((s) => s.id === stageId)
+      if (targetStage && (targetStage.isWon || targetStage.isLost)) {
+        setWinLossTarget({
+          dealId,
+          stageId: targetStage.id,
+          stageName: targetStage.name,
+          isWon: targetStage.isWon,
+          isLost: targetStage.isLost,
+        })
+        return
+      }
       moveMutation.mutate({ dealId, stageId })
     },
-    [moveMutation],
+    [moveMutation, stages],
   )
 
   // Find the active deal for drag overlay
@@ -399,6 +435,18 @@ export function PipelineBoard(): React.JSX.Element {
           </DndContext>
         </div>
       </div>
+
+      <WinLossDialog
+        dealId={winLossTarget?.dealId ?? ''}
+        stageId={winLossTarget?.stageId ?? ''}
+        stageName={winLossTarget?.stageName ?? ''}
+        isWon={winLossTarget?.isWon ?? false}
+        isLost={winLossTarget?.isLost ?? false}
+        open={winLossTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setWinLossTarget(null)
+        }}
+      />
     </div>
   )
 }

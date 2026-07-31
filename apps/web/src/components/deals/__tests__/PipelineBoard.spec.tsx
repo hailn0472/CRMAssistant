@@ -17,6 +17,13 @@ jest.mock('@/services/deal.service', () => ({
   getDealStages: jest.fn(),
 }))
 
+jest.mock('@/services/competitor.service', () => ({
+  getDealCompetitors: jest.fn(),
+  removeCompetitorFromDeal: jest.fn(),
+  getCompetitors: jest.fn(),
+  recordWinLoss: jest.fn(),
+}))
+
 // Mock toast
 jest.mock('react-hot-toast', () => ({
   __esModule: true,
@@ -324,5 +331,71 @@ describe('PipelineBoard', () => {
     expect(contactInput).toHaveValue('contact-1')
     expect(dateFromInput).toHaveValue('2026-01-01')
     expect(dateToInput).toHaveValue('2026-12-31')
+  })
+
+  it('picking a closed stage from the card menu opens WinLossDialog without moving (AC #27)', async () => {
+    mockStageFilteredDeals()
+    ;(getDealStages as jest.Mock).mockResolvedValue(mockStages)
+    ;(getDealPipelineSummary as jest.Mock).mockResolvedValue([
+      { stageId: 'stage-1', count: 1, totalValue: 50000 },
+      { stageId: 'stage-2', count: 0, totalValue: 0 },
+      { stageId: 'stage-3', count: 0, totalValue: 0 },
+    ])
+    ;(moveDealToStage as jest.Mock).mockResolvedValue({})
+
+    renderWithQueryClient(<PipelineBoard />)
+
+    expect(await screen.findByText('Big Deal')).toBeInTheDocument()
+
+    // Open the card's stage menu
+    const moveButtons = screen.getAllByLabelText('Move to stage')
+    await userEvent.click(moveButtons[0])
+
+    // Pick the Closed Won option inside the dropdown
+    const wonElements = screen.getAllByText('Closed Won')
+    const stageOption =
+      wonElements
+        .find((el) => el.tagName === 'BUTTON' || el.closest('button'))
+        ?.closest('button') ?? wonElements[wonElements.length - 1].closest('button')
+    expect(stageOption).not.toBeNull()
+    await userEvent.click(stageOption!)
+
+    // The dialog opens pre-filled with the closed target; the move never fires
+    expect(await screen.findByText('Record win/loss reason')).toBeInTheDocument()
+    expect(screen.getByText('Mark as Closed Won')).toBeInTheDocument()
+    expect(moveDealToStage).not.toHaveBeenCalled()
+  })
+
+  it('cancelling the WinLossDialog from the card menu leaves the board untouched (AC #27)', async () => {
+    mockStageFilteredDeals()
+    ;(getDealStages as jest.Mock).mockResolvedValue(mockStages)
+    ;(getDealPipelineSummary as jest.Mock).mockResolvedValue([
+      { stageId: 'stage-1', count: 1, totalValue: 50000 },
+      { stageId: 'stage-2', count: 0, totalValue: 0 },
+      { stageId: 'stage-3', count: 0, totalValue: 0 },
+    ])
+    ;(moveDealToStage as jest.Mock).mockResolvedValue({})
+
+    renderWithQueryClient(<PipelineBoard />)
+
+    expect(await screen.findByText('Big Deal')).toBeInTheDocument()
+
+    const moveButtons = screen.getAllByLabelText('Move to stage')
+    await userEvent.click(moveButtons[0])
+
+    const wonElements = screen.getAllByText('Closed Won')
+    const stageOption =
+      wonElements
+        .find((el) => el.tagName === 'BUTTON' || el.closest('button'))
+        ?.closest('button') ?? wonElements[wonElements.length - 1].closest('button')
+    await userEvent.click(stageOption!)
+
+    expect(await screen.findByText('Record win/loss reason')).toBeInTheDocument()
+    await userEvent.click(screen.getByText('Cancel'))
+
+    expect(moveDealToStage).not.toHaveBeenCalled()
+    expect(screen.queryByText('Record win/loss reason')).not.toBeInTheDocument()
+    // The card is still in the board
+    expect(screen.getByText('Big Deal')).toBeInTheDocument()
   })
 })

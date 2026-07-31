@@ -40,6 +40,10 @@ async function loadDeal(id: string): Promise<Deal> {
           stage { id name color probability isWon isLost }
           contact { id firstName lastName email }
           owner { id firstName lastName email avatar }
+          winLossReason
+          winLossNote
+          competitorId
+          competitor { id name }
           createdAt
           updatedAt
         }

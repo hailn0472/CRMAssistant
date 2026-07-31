@@ -5,6 +5,7 @@ import toast from 'react-hot-toast'
 
 import { DealDetailClient } from '../DealDetailClient'
 import { deleteDeal, moveDealToStage, getDealStages } from '@/services/deal.service'
+import { getDealCompetitors } from '@/services/competitor.service'
 
 jest.mock('next/navigation', () => ({
   useRouter: () => ({ push: jest.fn(), refresh: jest.fn() }),
@@ -14,6 +15,13 @@ jest.mock('@/services/deal.service', () => ({
   deleteDeal: jest.fn(),
   moveDealToStage: jest.fn(),
   getDealStages: jest.fn(),
+}))
+
+jest.mock('@/services/competitor.service', () => ({
+  getDealCompetitors: jest.fn(),
+  removeCompetitorFromDeal: jest.fn(),
+  getCompetitors: jest.fn(),
+  recordWinLoss: jest.fn(),
 }))
 
 jest.mock('react-hot-toast', () => ({
@@ -34,20 +42,36 @@ const mockDeal = {
   actualCloseDate: null,
   createdAt: '2026-07-29T00:00:00.000Z',
   updatedAt: '2026-07-29T00:00:00.000Z',
-  stage: { id: 'stage-1', name: 'Lead', color: '#3B82F6', probability: 10, isWon: false, isLost: false, order: 0 },
+  stage: {
+    id: 'stage-1',
+    name: 'Lead',
+    color: '#3B82F6',
+    probability: 10,
+    isWon: false,
+    isLost: false,
+    order: 0,
+  },
   contact: { id: 'contact-1', firstName: 'Ownership', lastName: 'Test', email: 'test@example.com' },
-  owner: { id: 'owner-1', firstName: 'Acme', lastName: 'Admin', email: 'admin@example.com', avatar: null },
+  owner: {
+    id: 'owner-1',
+    firstName: 'Acme',
+    lastName: 'Admin',
+    email: 'admin@example.com',
+    avatar: null,
+  },
 } as const
 
 const mockStages = [
   { id: 'stage-1', name: 'Lead', color: '#3B82F6', probability: 10, order: 0 },
   { id: 'stage-2', name: 'Qualified', color: '#10B981', probability: 25, order: 1 },
   { id: 'stage-3', name: 'Closed Won', color: '#10B981', probability: 100, order: 4, isWon: true },
+  { id: 'stage-4', name: 'Closed Lost', color: '#EF4444', probability: 0, order: 5, isLost: true },
 ]
 
 function renderWithQuery(ui: React.ReactElement): ReturnType<typeof render> {
-  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  (getDealStages as jest.Mock).mockResolvedValue(mockStages)
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  ;(getDealStages as jest.Mock).mockResolvedValue(mockStages)
+  ;(getDealCompetitors as jest.Mock).mockResolvedValue([])
   return render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>)
 }
 
@@ -145,9 +169,12 @@ describe('DealDetailClient', () => {
 
     fireEvent.change(stageSelect, { target: { value: 'stage-2' } })
 
-    await waitFor(() => {
-      expect(moveDealToStage).toHaveBeenCalledWith('deal-1', 'stage-2')
-    }, { timeout: 3000 })
+    await waitFor(
+      () => {
+        expect(moveDealToStage).toHaveBeenCalledWith('deal-1', 'stage-2')
+      },
+      { timeout: 3000 },
+    )
     expect(toast.success).toHaveBeenCalledWith('Stage updated')
   })
 
@@ -208,5 +235,43 @@ describe('DealDetailClient', () => {
     renderWithQuery(<DealDetailClient deal={dealNoDate} />)
 
     expect(screen.getAllByText('—').length).toBeGreaterThan(0)
+  })
+
+  it('mounts the Competitors section with its own header (AC #25)', async () => {
+    renderWithQuery(<DealDetailClient deal={mockDeal} />)
+
+    const header = await screen.findByText('Competitors')
+    expect(header).toBeInTheDocument()
+    expect(header.className).toContain(
+      'text-sm font-semibold uppercase tracking-wider text-slate-400',
+    )
+    expect(getDealCompetitors).toHaveBeenCalledWith('deal-1')
+  })
+
+  it('changing the stage select to a closed stage opens WinLossDialog without moving (AC #27)', async () => {
+    ;(moveDealToStage as jest.Mock).mockResolvedValue(true)
+    renderWithQuery(<DealDetailClient deal={mockDeal} />)
+
+    const stageSelect = await screen.findByDisplayValue('Lead')
+    fireEvent.change(stageSelect, { target: { value: 'stage-3' } })
+
+    // Dialog opens with the concrete confirm verb — the move has NOT fired
+    expect(await screen.findByText('Record win/loss reason')).toBeInTheDocument()
+    expect(screen.getByText('Mark as Closed Won')).toBeInTheDocument()
+    expect(moveDealToStage).not.toHaveBeenCalled()
+  })
+
+  it('cancelling the WinLossDialog leaves the deal untouched (AC #27)', async () => {
+    ;(moveDealToStage as jest.Mock).mockResolvedValue(true)
+    renderWithQuery(<DealDetailClient deal={mockDeal} />)
+
+    const stageSelect = await screen.findByDisplayValue('Lead')
+    fireEvent.change(stageSelect, { target: { value: 'stage-4' } })
+
+    expect(await screen.findByText('Record win/loss reason')).toBeInTheDocument()
+    fireEvent.click(screen.getByText('Cancel'))
+
+    expect(moveDealToStage).not.toHaveBeenCalled()
+    expect(screen.queryByText('Record win/loss reason')).not.toBeInTheDocument()
   })
 })
