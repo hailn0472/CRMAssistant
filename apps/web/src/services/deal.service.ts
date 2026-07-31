@@ -48,6 +48,10 @@ export type Deal = {
     email: string
     avatar?: string | null
   } | null
+  winLossReason?: string | null
+  winLossNote?: string | null
+  competitorId?: string | null
+  competitor?: { id: string; name: string } | null
   createdAt: string
   updatedAt: string
 }
@@ -86,6 +90,10 @@ const DEAL_FIELDS = `
   stage { id name color probability isWon isLost }
   contact { id firstName lastName email }
   owner { id firstName lastName email avatar }
+  winLossReason
+  winLossNote
+  competitorId
+  competitor { id name }
   createdAt
   updatedAt
 `
@@ -270,6 +278,10 @@ export const ON_DEAL_UPDATED_SUBSCRIPTION = `subscription OnDealUpdated {
     stage { id name color probability isWon isLost }
     contact { id firstName lastName email }
     owner { id firstName lastName email avatar }
+    winLossReason
+    winLossNote
+    competitorId
+    competitor { id name }
     createdAt
     updatedAt
   }

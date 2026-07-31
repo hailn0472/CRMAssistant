@@ -102,7 +102,21 @@ StageInfoRef.implement({
   }),
 })
 
-type DealGraphqlShape = {
+type CompetitorInfoShape = {
+  id: string
+  name: string
+}
+
+const CompetitorInfoRef = builder.objectRef<CompetitorInfoShape>('DealCompetitorInfo')
+
+CompetitorInfoRef.implement({
+  fields: (t) => ({
+    id: t.exposeID('id'),
+    name: t.exposeString('name'),
+  }),
+})
+
+export type DealGraphqlShape = {
   id: string
   title: string
   value: number
@@ -118,9 +132,13 @@ type DealGraphqlShape = {
   stage?: StageShape | null
   contact?: ContactShape | null
   owner?: OwnerShape | null
+  winLossReason?: string | null
+  winLossNote?: string | null
+  competitorId?: string | null
+  competitor?: { id: string; name: string } | null
 }
 
-const DealRef = builder.objectRef<DealGraphqlShape>('Deal')
+export const DealRef = builder.objectRef<DealGraphqlShape>('Deal')
 
 DealRef.implement({
   fields: (t) => ({
@@ -172,6 +190,28 @@ DealRef.implement({
     }),
     createdAt: t.string({ resolve: (deal) => deal.createdAt.toISOString() }),
     updatedAt: t.string({ resolve: (deal) => deal.updatedAt.toISOString() }),
+    winLossReason: t.string({
+      nullable: true,
+      resolve: (deal) => deal.winLossReason ?? null,
+    }),
+    winLossNote: t.string({
+      nullable: true,
+      resolve: (deal) => deal.winLossNote ?? null,
+    }),
+    competitorId: t.string({
+      nullable: true,
+      resolve: (deal) => deal.competitorId ?? null,
+    }),
+    competitor: t.field({
+      type: CompetitorInfoRef,
+      nullable: true,
+      resolve: (deal) => {
+        if ('competitor' in deal && deal.competitor) {
+          return deal.competitor as unknown as { id: string; name: string }
+        }
+        return null
+      },
+    }),
   }),
 })
 

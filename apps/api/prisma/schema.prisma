@@ -75,6 +75,8 @@ model Tenant {
   forecastSnapshots        ForecastSnapshot[]
   products                 Product[]
   dealLineItems            DealLineItem[]
+  competitors              Competitor[]
+  dealCompetitors          DealCompetitor[]
 }
 
 /// Tenant-scoped user model with authentication support.
@@ -556,11 +558,17 @@ model Deal {
   contact Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
   owner   User    @relation("DealOwner", fields: [ownerId], references: [id], onDelete: Cascade)
   lineItems          DealLineItem[]
+  competitors        DealCompetitor[]
+  competitor         Competitor? @relation("DealWinLossCompetitor", fields: [competitorId], references: [id], onDelete: Restrict)
+  winLossReason      String?
+  winLossNote        String?
+  competitorId       String?
 
   @@index([tenantId])
   @@index([tenantId, stageId])
   @@index([tenantId, contactId])
   @@index([tenantId, ownerId])
+  @@index([tenantId, winLossReason])
 }
 
 /// Tenant-scoped product model for tracking sellable items.
@@ -612,6 +620,58 @@ model DealLineItem {
   @@index([tenantId, dealId])
   @@index([dealId, deletedAt])
   @@index([tenantId, productId])
+}
+
+/// Tenant-scoped competitor model for tracking rivals in win/loss analysis.
+/// No DB unique constraint on name — duplicates are rejected in the service
+/// over active rows only, so a soft-deleted competitor's name can be reused.
+model Competitor {
+  id         String    @id @default(uuid())
+  tenantId   String
+  name       String
+  website    String?
+  strengths  String?
+  weaknesses String?
+  isActive   Boolean   @default(true)
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  createdBy  String    @default("system")
+  updatedBy  String    @default("system")
+  deletedAt  DateTime?
+
+  tenant       Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  wonLostDeals Deal[]           @relation("DealWinLossCompetitor")
+  dealLinks    DealCompetitor[]
+
+  @@index([tenantId])
+  @@index([tenantId, isActive])
+}
+
+/// Tenant-scoped junction model linking competitors to deals.
+/// No DB unique on [dealId, competitorId] — duplicates are rejected in the
+/// service over active rows only, so a removed-and-re-added link is allowed.
+/// onDelete: Restrict on competitorId — prevents accidental hard DELETE of
+/// referenced competitors.
+model DealCompetitor {
+  id           String   @id @default(uuid())
+  tenantId     String
+  dealId       String
+  competitorId String
+  note         String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  createdBy    String   @default("system")
+  updatedBy    String   @default("system")
+  deletedAt    DateTime?
+
+  tenant     Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  deal       Deal       @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  competitor Competitor @relation(fields: [competitorId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId])
+  @@index([tenantId, dealId])
+  @@index([dealId, deletedAt])
+  @@index([tenantId, competitorId])
 }
 
 /// Point-in-time snapshot of the tenant-wide weighted forecast for one period.

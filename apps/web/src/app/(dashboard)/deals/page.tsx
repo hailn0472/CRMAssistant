@@ -9,6 +9,12 @@ export default function DealsPage(): React.JSX.Element {
         <div />
         <div className="flex items-center gap-2">
           <Link
+            href="/deals/competitors"
+            className="rounded-md border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 transition-colors"
+          >
+            Competitors
+          </Link>
+          <Link
             href="/deals/products"
             className="rounded-md border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 transition-colors"
           >

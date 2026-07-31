@@ -49,4 +49,22 @@ describe('Breadcrumbs', () => {
 
     expect(container).toBeEmptyDOMElement()
   })
+
+  it('labels the competitors segment (AC #29)', () => {
+    mockUsePathname.mockReturnValue('/deals/competitors')
+
+    render(<Breadcrumbs />)
+
+    expect(screen.getByRole('link', { name: 'Deals' })).toHaveAttribute('href', '/deals')
+    expect(screen.getByText('Competitors')).toHaveAttribute('aria-current', 'page')
+  })
+
+  it('labels the win-loss segment (AC #31)', () => {
+    mockUsePathname.mockReturnValue('/reports/win-loss')
+
+    render(<Breadcrumbs />)
+
+    expect(screen.getByRole('link', { name: 'Reports' })).toHaveAttribute('href', '/reports')
+    expect(screen.getByText('Win/Loss')).toHaveAttribute('aria-current', 'page')
+  })
 })

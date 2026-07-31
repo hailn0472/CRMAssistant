@@ -11,6 +11,12 @@ import type {
   ForecastBand,
   ForecastAccuracyPeriod,
 } from './forecast.service'
+import type {
+  WinLossService,
+  WinLossAnalysisResult,
+  WinLossReasonBucket,
+  CompetitorOutcome,
+} from './win-loss.service'
 import type { GraphqlContext } from '../graphql/graphql-context'
 import type { JwtPayload } from '../auth/strategies/jwt.strategy'
 
@@ -72,6 +78,49 @@ ForecastAccuracyPeriodRef.implement({
   }),
 })
 
+// ─── Win/Loss Analysis Types (AC #21) ─────────────────────
+
+const WinLossReasonBucketRef = builder.objectRef<WinLossReasonBucket>('WinLossReasonBucket')
+
+WinLossReasonBucketRef.implement({
+  fields: (t) => ({
+    reason: t.exposeString('reason'),
+    count: t.exposeInt('count'),
+    totalValue: t.exposeFloat('totalValue'),
+    percentage: t.exposeFloat('percentage'),
+  }),
+})
+
+const CompetitorOutcomeRef = builder.objectRef<CompetitorOutcome>('CompetitorOutcome')
+
+CompetitorOutcomeRef.implement({
+  fields: (t) => ({
+    competitorId: t.exposeID('competitorId'),
+    competitorName: t.exposeString('competitorName'),
+    wonCount: t.exposeInt('wonCount'),
+    lostCount: t.exposeInt('lostCount'),
+    winRate: t.exposeFloat('winRate'),
+    totalValue: t.exposeFloat('totalValue'),
+  }),
+})
+
+const WinLossAnalysisRef = builder.objectRef<WinLossAnalysisResult>('WinLossAnalysis')
+
+WinLossAnalysisRef.implement({
+  fields: (t) => ({
+    totalClosed: t.exposeInt('totalClosed'),
+    wonCount: t.exposeInt('wonCount'),
+    lostCount: t.exposeInt('lostCount'),
+    winRate: t.exposeFloat('winRate'),
+    wonValue: t.exposeFloat('wonValue'),
+    lostValue: t.exposeFloat('lostValue'),
+    currency: t.exposeString('currency'),
+    lossReasons: t.field({ type: [WinLossReasonBucketRef], resolve: (r) => r.lossReasons }),
+    winReasons: t.field({ type: [WinLossReasonBucketRef], resolve: (r) => r.winReasons }),
+    competitors: t.field({ type: [CompetitorOutcomeRef], resolve: (r) => r.competitors }),
+  }),
+})
+
 // ─── Input Types ──────────────────────────────────────────
 
 const SalesForecastInputRef = builder.inputType('SalesForecastInput', {
@@ -87,12 +136,20 @@ const SalesForecastInputRef = builder.inputType('SalesForecastInput', {
 // ─── Service Singleton ─────────────────────────────────────
 
 let forecastService: ForecastService | undefined
+let winLossService: WinLossService | undefined
 
 function getForecastService(): ForecastService {
   if (!forecastService) {
     throw new Error('ForecastService is not initialized')
   }
   return forecastService
+}
+
+function getWinLossService(): WinLossService {
+  if (!winLossService) {
+    throw new Error('WinLossService is not initialized')
+  }
+  return winLossService
 }
 
 function requireUser(context: GraphqlContext): JwtPayload {
@@ -137,10 +194,30 @@ builder.queryFields((t) => ({
       })
     },
   }),
+  winLossAnalysis: t.field({
+    type: WinLossAnalysisRef,
+    args: {
+      startDate: t.arg.string({ required: true }),
+      endDate: t.arg.string({ required: true }),
+      ownerId: t.arg.string(),
+      teamId: t.arg.string(),
+    },
+    resolve: async (_parent, args, context) => {
+      const user = requireUser(context)
+      await requirePermission(context, 'REPORT', 'READ')
+      return getWinLossService().winLossAnalysis(user.tenantId, user.userId, {
+        startDate: args.startDate,
+        endDate: args.endDate,
+        ownerId: args.ownerId ?? undefined,
+        teamId: args.teamId ?? undefined,
+      })
+    },
+  }),
 }))
 
 // ─── Registration ─────────────────────────────────────────
 
-export function registerReportsGraphql(service: ForecastService): void {
+export function registerReportsGraphql(service: ForecastService, winLoss: WinLossService): void {
   forecastService = service
+  winLossService = winLoss
 }

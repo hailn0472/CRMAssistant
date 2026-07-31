@@ -51,6 +51,16 @@ const MUTATION_AUDIT_MAP: Record<string, { action: string; entity: string }> = {
   addLineItemToDeal: { action: 'UPDATE', entity: 'DEAL' },
   updateLineItem: { action: 'UPDATE', entity: 'DEAL' },
   removeLineItem: { action: 'UPDATE', entity: 'DEAL' },
+
+  // Competitor mutations
+  createCompetitor: { action: 'CREATE', entity: 'COMPETITOR' },
+  updateCompetitor: { action: 'UPDATE', entity: 'COMPETITOR' },
+  deleteCompetitor: { action: 'DELETE', entity: 'COMPETITOR' },
+
+  // Deal-competitor / win-loss mutations (deal edits, not catalog management)
+  addCompetitorToDeal: { action: 'UPDATE', entity: 'DEAL' },
+  removeCompetitorFromDeal: { action: 'UPDATE', entity: 'DEAL' },
+  recordWinLoss: { action: 'UPDATE', entity: 'DEAL' },
 }
 
 @Injectable()

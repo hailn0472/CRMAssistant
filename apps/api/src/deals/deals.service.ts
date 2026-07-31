@@ -65,6 +65,9 @@ const dealListSelect = {
   ownerId: true,
   expectedCloseDate: true,
   actualCloseDate: true,
+  winLossReason: true,
+  winLossNote: true,
+  competitorId: true,
   createdAt: true,
   updatedAt: true,
   createdBy: true,
@@ -77,6 +80,9 @@ const dealListSelect = {
   },
   owner: {
     select: { id: true, firstName: true, lastName: true, email: true, avatar: true },
+  },
+  competitor: {
+    select: { id: true, name: true },
   },
 } as const
 
@@ -229,6 +235,7 @@ export class DealsService {
         },
         contact: { select: { id: true, firstName: true, lastName: true, email: true } },
         owner: { select: { id: true, firstName: true, lastName: true, email: true, avatar: true } },
+        competitor: { select: { id: true, name: true } },
       },
     })
 

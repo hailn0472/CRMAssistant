@@ -68,6 +68,12 @@ const navigationSections: NavigationSection[] = [
         icon: BarChart3,
         permission: { resource: 'REPORT', action: 'READ' },
       },
+      {
+        label: 'Win/Loss',
+        href: '/reports/win-loss',
+        icon: BarChart3,
+        permission: { resource: 'REPORT', action: 'READ' },
+      },
     ],
   },
   {

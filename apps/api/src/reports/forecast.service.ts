@@ -61,12 +61,33 @@ function getTodayUtcMidnight(): Date {
   return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
 }
 
-function parseDateOrThrow(value: string, label: string): Date {
+export function parseDateOrThrow(value: string, label: string): Date {
   const d = new Date(value)
   if (isNaN(d.getTime())) {
     throw new BadRequestException(`Invalid date: ${label}`)
   }
   return d
+}
+
+/**
+ * Detect the most frequent currency across a set of deal-like rows.
+ * Shared with WinLossService — do not re-derive per report.
+ */
+export function detectMostFrequentCurrency(deals: { currency: string }[]): string {
+  const currencyCount = new Map<string, number>()
+  for (const d of deals) {
+    const cur = d.currency || 'USD'
+    currencyCount.set(cur, (currencyCount.get(cur) || 0) + 1)
+  }
+  let currency = 'USD'
+  let maxCount = 0
+  for (const [cur, count] of currencyCount) {
+    if (count > maxCount) {
+      maxCount = count
+      currency = cur
+    }
+  }
+  return currency
 }
 
 function getMonthKey(date: Date): string {
@@ -229,19 +250,7 @@ export class ForecastService {
     const typedDeals = deals as unknown as DealForecastItem[]
 
     // Compute currency (most frequent)
-    const currencyCount = new Map<string, number>()
-    for (const d of typedDeals) {
-      const cur = d.currency || 'USD'
-      currencyCount.set(cur, (currencyCount.get(cur) || 0) + 1)
-    }
-    let currency = 'USD'
-    let maxCount = 0
-    for (const [cur, count] of currencyCount) {
-      if (count > maxCount) {
-        maxCount = count
-        currency = cur
-      }
-    }
+    const currency = detectMostFrequentCurrency(typedDeals)
 
     // Compute buckets
     const buckets = this.computeBuckets(typedDeals, input.groupBy, startDate, endDate)
