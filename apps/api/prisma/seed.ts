@@ -28,6 +28,7 @@ const RESOURCES = [
   'USER',
   'ROLE',
   'SETTINGS',
+  'PRODUCT',
 ] as const
 const ACTIONS = [
   'CREATE',
@@ -60,6 +61,7 @@ function describePermission(resource: string, action: string): string {
     USER: 'users',
     ROLE: 'roles',
     SETTINGS: 'settings',
+    PRODUCT: 'products',
   }
   return `${actionLabel[action] ?? action} ${resourceLabel[resource] ?? resource}`
 }

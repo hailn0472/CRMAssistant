@@ -12,6 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { createDeal, updateDeal, getDealStages } from '@/services/deal.service'
 import { getContacts } from '@/services/contact.service'
+import { getDealLineItems } from '@/services/product.service'
 import type { Deal } from '@/services/deal.service'
 
 const dealSchema = z.object({
@@ -39,6 +40,14 @@ export function DealForm({ deal }: DealFormProps): React.JSX.Element {
     queryKey: ['dealStages'],
     queryFn: getDealStages,
   })
+
+  const { data: dealLineItems } = useQuery({
+    queryKey: ['dealLineItems', deal?.id],
+    queryFn: () => getDealLineItems(deal!.id),
+    enabled: Boolean(deal?.id),
+  })
+
+  const hasLineItems = dealLineItems && dealLineItems.length > 0
 
   const { data: contactsData } = useQuery({
     queryKey: ['contacts', 'search', contactSearch],
@@ -74,7 +83,7 @@ export function DealForm({ deal }: DealFormProps): React.JSX.Element {
     try {
       const payload = {
         title: values.title.trim(),
-        value: values.value,
+        value: hasLineItems ? undefined : values.value,
         currency: values.currency || 'USD',
         stageId: values.stageId,
         contactId: values.contactId,
@@ -113,8 +122,15 @@ export function DealForm({ deal }: DealFormProps): React.JSX.Element {
               min="0"
               step="0.01"
               {...register('value')}
+              readOnly={hasLineItems}
               aria-invalid={Boolean(errors.value)}
+              className={hasLineItems ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : ''}
             />
+            {hasLineItems && (
+              <span className="text-xs text-slate-400 italic">
+                Value is calculated from the deal&apos;s products.
+              </span>
+            )}
           </Field>
 
           <Field label="Probability (%)" error={errors.probability?.message}>

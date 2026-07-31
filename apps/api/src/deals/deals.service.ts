@@ -388,7 +388,23 @@ export class DealsService {
     input: UpdateDealInput,
   ): Promise<Deal> {
     // Verify deal exists and is visible
-    await this.findOne(tenantId, userId, id)
+    const currentDeal = await this.findOne(tenantId, userId, id)
+
+    // Value lock: reject manual value change when line items exist
+    if (input.value !== undefined && input.value !== null) {
+      const activeLineItems = await this.prisma.dealLineItem.count({
+        where: { dealId: id, tenantId, deletedAt: null },
+      })
+      if (activeLineItems > 0) {
+        if (Math.abs(input.value - currentDeal.value) > 0.005) {
+          throw new BadRequestException(
+            'Deal value is derived from line items \u2014 remove the line items to set it manually',
+          )
+        }
+        // No-op within tolerance: drop value from payload
+        delete input.value
+      }
+    }
 
     const normalizedInput = normalizeUpdateInput(input)
 
@@ -508,5 +524,9 @@ export class DealsService {
     this.dealPubSub.publish(`${PUBSUB_DEAL_UPDATED}:${tenantId}`, deal)
 
     return true
+  }
+
+  publishDealUpdate(tenantId: string, deal: Deal): void {
+    this.dealPubSub.publish(`${PUBSUB_DEAL_UPDATED}:${tenantId}`, deal)
   }
 }

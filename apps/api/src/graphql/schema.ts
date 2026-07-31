@@ -10,6 +10,7 @@ import '../audit/audit.graphql'
 import '../auth/api-key.graphql'
 import '../inbox/inbox.graphql'
 import '../facebook/facebook.graphql'
+import '../products/products.graphql'
 import '../reports/reports.graphql'
 import { builder } from './schema.builder'
 

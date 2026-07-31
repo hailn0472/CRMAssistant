@@ -6,6 +6,7 @@ import { AuditModule } from './audit/audit.module'
 import { AuthModule } from './auth/auth.module'
 import { ContactsModule } from './contacts/contacts.module'
 import { DealsModule } from './deals/deals.module'
+import { ProductsModule } from './products/products.module'
 import { RolesModule } from './roles/roles.module'
 import { SegmentsModule } from './segments/segments.module'
 import { TagsModule } from './tags/tags.module'
@@ -33,6 +34,7 @@ import { ReportsModule } from './reports/reports.module'
     PrismaModule,
     HealthModule,
     AuthModule,
+    ProductsModule,
     AppGraphqlModule,
     ContactsModule,
     DealsModule,
