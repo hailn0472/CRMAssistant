@@ -13,6 +13,7 @@ import { useQuery } from '@tanstack/react-query'
 import { StageBadge, formatCurrency } from '@/components/deals/deal-display'
 import { DealLineItems } from './DealLineItems'
 import { DealCompetitors } from './DealCompetitors'
+import { DealCollaboration } from './DealCollaboration'
 import { WinLossDialog } from './WinLossDialog'
 import type { Deal, DealStage } from '@/services/deal.service'
 
@@ -307,6 +308,9 @@ export function DealDetailClient({ deal }: DealDetailClientProps): React.JSX.Ele
 
         {/* Competitors */}
         <DealCompetitors dealId={deal.id} />
+
+        {/* Collaboration — Documents and Comments tabs */}
+        <DealCollaboration dealId={deal.id} />
       </Card>
 
       <WinLossDialog

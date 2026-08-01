@@ -61,6 +61,11 @@ const MUTATION_AUDIT_MAP: Record<string, { action: string; entity: string }> = {
   addCompetitorToDeal: { action: 'UPDATE', entity: 'DEAL' },
   removeCompetitorFromDeal: { action: 'UPDATE', entity: 'DEAL' },
   recordWinLoss: { action: 'UPDATE', entity: 'DEAL' },
+
+  // Deal document / comment mutations (Story 3.6)
+  deleteDealDocument: { action: 'DELETE', entity: 'DEAL' },
+  addDealComment: { action: 'UPDATE', entity: 'DEAL' },
+  deleteDealComment: { action: 'DELETE', entity: 'DEAL' },
 }
 
 @Injectable()
