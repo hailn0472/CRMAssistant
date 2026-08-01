@@ -1,12 +1,21 @@
 import { cookies } from 'next/headers'
 import { NextRequest, NextResponse } from 'next/server'
 
-import { API_URL, AUTH_COOKIE, forwardJson } from '../../_lib/proxy'
+import { API_URL, AUTH_COOKIE, forwardJson } from '../../../_lib/proxy'
 
 /** Uploads can be up to 10MB, so allow generous time before giving up. */
 const UPLOAD_TIMEOUT_MS = 120_000
 
-export async function POST(request: NextRequest): Promise<NextResponse> {
+/**
+ * Forwards the multipart upload to the NestJS REST endpoint. The httpOnly
+ * `auth-token` cookie never leaves the server; upstream 400/401/413 statuses
+ * must reach the browser unchanged so the drop zone can tell the user to
+ * re-login or shrink the file.
+ */
+export async function POST(
+  request: NextRequest,
+  { params }: { params: { id: string } },
+): Promise<NextResponse> {
   const realToken = cookies().get(AUTH_COOKIE)?.value
   if (!realToken) {
     return NextResponse.json({ message: 'Authentication required' }, { status: 401 })
@@ -21,8 +30,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ message: 'Invalid or incomplete upload' }, { status: 400 })
   }
 
-  const searchParams = request.nextUrl.searchParams.toString()
-  const url = `${API_URL}/api/contacts/import${searchParams ? `?${searchParams}` : ''}`
+  const url = `${API_URL}/api/deals/${params.id}/documents`
 
   return forwardJson(url, {
     method: 'POST',

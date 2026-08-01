@@ -6,6 +6,8 @@ import toast from 'react-hot-toast'
 import { DealDetailClient } from '../DealDetailClient'
 import { deleteDeal, moveDealToStage, getDealStages } from '@/services/deal.service'
 import { getDealCompetitors } from '@/services/competitor.service'
+import { getDealDocuments } from '@/services/deal-document.service'
+import { getDealComments } from '@/services/deal-comment.service'
 
 jest.mock('next/navigation', () => ({
   useRouter: () => ({ push: jest.fn(), refresh: jest.fn() }),
@@ -22,6 +24,34 @@ jest.mock('@/services/competitor.service', () => ({
   removeCompetitorFromDeal: jest.fn(),
   getCompetitors: jest.fn(),
   recordWinLoss: jest.fn(),
+}))
+
+jest.mock('@/services/deal-document.service', () => ({
+  getDealDocuments: jest.fn(),
+  deleteDealDocument: jest.fn(),
+  getDealDocumentDownloadUrl: jest.fn(),
+  uploadDealDocument: jest.fn(),
+}))
+
+jest.mock('@/services/deal-comment.service', () => ({
+  getDealComments: jest.fn(),
+  addDealComment: jest.fn(),
+  deleteDealComment: jest.fn(),
+  getDealMentionCandidates: jest.fn(),
+  ON_DEAL_COMMENT_ADDED_SUBSCRIPTION:
+    'subscription OnDealCommentAdded($dealId: ID!) { onDealCommentAdded(dealId: $dealId) { id } }',
+}))
+
+jest.mock('@/lib/graphql-subscription', () => ({
+  GraphqlSubscriptionClient: jest.fn().mockImplementation(() => ({
+    connect: jest.fn(),
+    subscribe: jest.fn(),
+    disconnect: jest.fn(),
+  })),
+}))
+
+jest.mock('@/hooks/usePermission', () => ({
+  usePermission: jest.fn(() => true),
 }))
 
 jest.mock('react-hot-toast', () => ({
@@ -72,6 +102,8 @@ function renderWithQuery(ui: React.ReactElement): ReturnType<typeof render> {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   ;(getDealStages as jest.Mock).mockResolvedValue(mockStages)
   ;(getDealCompetitors as jest.Mock).mockResolvedValue([])
+  ;(getDealDocuments as jest.Mock).mockResolvedValue([])
+  ;(getDealComments as jest.Mock).mockResolvedValue({ items: [], total: 0, page: 1, pageSize: 50 })
   return render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>)
 }
 
@@ -273,5 +305,28 @@ describe('DealDetailClient', () => {
 
     expect(moveDealToStage).not.toHaveBeenCalled()
     expect(screen.queryByText('Record win/loss reason')).not.toBeInTheDocument()
+  })
+
+  it('mounts the Collaboration tab block after Competitors (AC #37, #38)', async () => {
+    renderWithQuery(<DealDetailClient deal={mockDeal} />)
+
+    const tablist = await screen.findByRole('tablist', { name: 'Deal collaboration' })
+    expect(tablist).toBeInTheDocument()
+
+    const documentsTab = screen.getByRole('tab', { name: 'Documents' })
+    const commentsTab = screen.getByRole('tab', { name: 'Comments' })
+    expect(documentsTab).toHaveAttribute('aria-selected', 'true')
+    expect(commentsTab).toHaveAttribute('aria-selected', 'false')
+    expect(getDealDocuments).toHaveBeenCalledWith('deal-1')
+  })
+
+  it('switches the Collaboration block to the Comments tab (AC #38)', async () => {
+    renderWithQuery(<DealDetailClient deal={mockDeal} />)
+
+    await screen.findByRole('tablist', { name: 'Deal collaboration' })
+    fireEvent.click(screen.getByRole('tab', { name: 'Comments' }))
+
+    expect(screen.getByRole('tab', { name: 'Comments' })).toHaveAttribute('aria-selected', 'true')
+    expect(getDealComments).toHaveBeenCalledWith('deal-1')
   })
 })

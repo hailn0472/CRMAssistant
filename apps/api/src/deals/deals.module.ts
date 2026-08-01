@@ -9,7 +9,7 @@ import { PrismaModule } from '../prisma/prisma.module'
 @Module({
   imports: [PrismaModule],
   providers: [DealsService, DealStageService, DealPubSubService],
-  exports: [DealsService, DealStageService],
+  exports: [DealsService, DealStageService, DealPubSubService],
 })
 export class DealsModule implements OnModuleInit {
   constructor(

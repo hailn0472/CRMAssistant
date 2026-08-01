@@ -77,6 +77,9 @@ model Tenant {
   dealLineItems            DealLineItem[]
   competitors              Competitor[]
   dealCompetitors          DealCompetitor[]
+  dealDocuments            DealDocument[]
+  dealComments             DealComment[]
+  dealCommentMentions      DealCommentMention[]
 }
 
 /// Tenant-scoped user model with authentication support.
@@ -123,6 +126,9 @@ model User {
   sharedWithRules       SharingRule[]        @relation("SharedWithUser")
   MessageReadReceipt    MessageReadReceipt[]
   deals                 Deal[]               @relation("DealOwner")
+  uploadedDealDocuments DealDocument[]       @relation("DealDocumentUploader")
+  dealComments          DealComment[]        @relation("DealCommentAuthor")
+  dealCommentMentions   DealCommentMention[] @relation("DealCommentMentionedUser")
 
   // Email is unique per tenant, NOT globally unique
   @@unique([tenantId, email])
@@ -559,6 +565,8 @@ model Deal {
   owner   User    @relation("DealOwner", fields: [ownerId], references: [id], onDelete: Cascade)
   lineItems          DealLineItem[]
   competitors        DealCompetitor[]
+  documents          DealDocument[]
+  comments           DealComment[]
   competitor         Competitor? @relation("DealWinLossCompetitor", fields: [competitorId], references: [id], onDelete: Restrict)
   winLossReason      String?
   winLossNote        String?
@@ -672,6 +680,82 @@ model DealCompetitor {
   @@index([tenantId, dealId])
   @@index([dealId, deletedAt])
   @@index([tenantId, competitorId])
+}
+
+/// Tenant-scoped document attachment for a deal (Story 3.6).
+/// Files live in Supabase Storage at deals/{tenantId}/{dealId}/{documentId}-{sanitizedFileName};
+/// the row stores the object path, never a URL (signed URLs expire, so a persisted
+/// fileUrl would be wrong five minutes after it was written).
+/// onDelete: Restrict on uploadedBy — an uploader must not be hard-deletable out
+/// from under an attributed document.
+model DealDocument {
+  id          String   @id @default(uuid())
+  tenantId    String
+  dealId      String
+  fileName    String
+  storagePath String
+  fileSize    Int
+  mimeType    String
+  uploadedBy  String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  createdBy   String   @default("system")
+  updatedBy   String   @default("system")
+  deletedAt   DateTime?
+
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  deal     Deal   @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  uploader User   @relation("DealDocumentUploader", fields: [uploadedBy], references: [id], onDelete: Restrict)
+
+  @@index([tenantId])
+  @@index([tenantId, dealId])
+  @@index([dealId, deletedAt])
+}
+
+/// Tenant-scoped comment on a deal (Story 3.6).
+/// Comment text is stored verbatim and never rendered as HTML on the client.
+/// onDelete: Restrict on userId — an author must not be hard-deletable out from
+/// under an attributed comment.
+model DealComment {
+  id        String   @id @default(uuid())
+  tenantId  String
+  dealId    String
+  userId    String
+  comment   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  createdBy String   @default("system")
+  updatedBy String   @default("system")
+  deletedAt DateTime?
+
+  tenant   Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  deal     Deal                @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  author   User                @relation("DealCommentAuthor", fields: [userId], references: [id], onDelete: Restrict)
+  mentions DealCommentMention[]
+
+  @@index([tenantId])
+  @@index([tenantId, dealId])
+  @@index([dealId, deletedAt, createdAt])
+}
+
+/// Junction row recording that a DealComment mentions a tenant user (Story 3.6).
+/// Story 4-8 (Notification Center) reads this table to turn mentions into bells;
+/// this story only persists the row. Explicit junction, not a String[] scalar
+/// list — there is not one array column in the schema today.
+model DealCommentMention {
+  id              String   @id @default(uuid())
+  tenantId        String
+  commentId       String
+  mentionedUserId String
+  createdAt       DateTime @default(now())
+
+  tenant        Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  comment       DealComment @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  mentionedUser User       @relation("DealCommentMentionedUser", fields: [mentionedUserId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([commentId])
+  @@index([tenantId, mentionedUserId])
 }
 
 /// Point-in-time snapshot of the tenant-wide weighted forecast for one period.

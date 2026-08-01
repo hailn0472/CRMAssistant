@@ -1,7 +1,7 @@
 import { cookies } from 'next/headers'
 import { NextRequest, NextResponse } from 'next/server'
 
-import { API_URL, AUTH_COOKIE } from '../_lib/proxy'
+import { API_URL, AUTH_COOKIE } from '../../_lib/proxy'
 
 const EXPORT_TIMEOUT_MS = 120_000
 

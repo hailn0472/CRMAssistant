@@ -1,7 +1,7 @@
 import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
 
-import { API_URL, AUTH_COOKIE, forwardJson } from '../../../_lib/proxy'
+import { API_URL, AUTH_COOKIE, forwardJson } from '../../../../_lib/proxy'
 
 export async function GET(
   _request: Request,

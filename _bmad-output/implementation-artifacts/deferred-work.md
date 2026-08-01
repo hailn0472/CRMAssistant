@@ -90,3 +90,13 @@
 - No `winLossAnalysis` export (`REPORT:EXPORT` exists in the permission catalog but no export path is built here) — PRD FR45 remains unmet for this report. The import/export module from Story 5-3 is the natural place to add it.
 - No historical trend of win rate over time; the report answers a single date range at a time. A time-series breakdown (e.g. win rate per month/quarter) would need a second reduce pass in `WinLossService` and a new chart.
 - Reopening a closed deal clears `actualCloseDate` (existing `moveToStage` behaviour) but leaves `winLossReason` set — decide whether a reopen should clear `winLossReason`/`winLossNote`/`competitorId` in a follow-up, otherwise the closed-deal reason lingers on an open deal.
+
+## Deferred from: 3-6-deal-document-attachment-collaboration (2026-07-31)
+
+- @mentions persist a `DealCommentMention` row and push over the comment subscription, but write no `Notification` and light no bell — Story 4-8 owns the notification centre and the `Notification` model does not exist yet. A mentioned user who is not watching the deal detail page learns nothing.
+- No virus/malware scanning on uploaded files. Files are stored in a private bucket and served only through short-lived signed URLs, but a malicious document handed to another user is not detected.
+- No rate limiting on `POST /api/deals/:dealId/documents` — `@nestjs/throttler` is still not wired anywhere in `apps/api`. This endpoint joins the CSV import as a prime candidate for the dedicated throttler pass.
+- A soft-deleted `DealDocument` is not restorable: the storage object is hard-removed on delete, so the row survives only as an audit trace.
+- No storage quota per tenant or per deal, and no total-storage reporting.
+- Comments cannot be edited, threaded or reacted to; the model is a flat chronological list.
+- Document list is unpaginated — a deal with hundreds of attachments loads them all.

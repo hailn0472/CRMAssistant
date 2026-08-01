@@ -12,6 +12,7 @@ import '../inbox/inbox.graphql'
 import '../facebook/facebook.graphql'
 import '../products/products.graphql'
 import '../competitors/competitors.graphql'
+import '../deal-collaboration/deal-collaboration.graphql'
 import '../reports/reports.graphql'
 import { builder } from './schema.builder'
 
