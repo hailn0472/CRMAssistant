@@ -146,7 +146,8 @@ describe('AppShell', () => {
       'href',
       '/contacts',
     )
-    expect(within(desktopLinks).getByRole('link', { name: 'Inbox' })).toHaveAttribute(
+    // Accessible name includes the unread badge, e.g. "Inbox 4"
+    expect(within(desktopLinks).getByRole('link', { name: /^Inbox/ })).toHaveAttribute(
       'href',
       '/inbox',
     )
@@ -168,9 +169,10 @@ describe('AppShell', () => {
 
     expect(screen.getByRole('searchbox', { name: 'Search or run command' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'View notifications' })).toBeInTheDocument()
-    // User menu button is always visible
-    const menuButtons = screen.getAllByRole('button', { name: 'User menu' })
-    expect(menuButtons.length).toBeGreaterThanOrEqual(1)
+    // Identity lives in the sidebar profile menu, not the topbar
+    expect(
+      within(getDesktopNavigation()).getByRole('button', { name: 'User profile menu' }),
+    ).toBeInTheDocument()
   })
 
   it('opens command dialog when topbar search trigger is clicked', () => {
@@ -197,9 +199,11 @@ describe('AppShell', () => {
     const mobileNavigation = screen.getByRole('complementary', { name: 'Mobile CRM navigation' })
 
     expect(within(mobileNavigation).getByText('Contacts')).toBeInTheDocument()
-    expect(within(mobileNavigation).getByLabelText('Current tenant and user')).toHaveTextContent(
-      'Workspace',
-    )
+    // Workspace identity in the drawer header + the user profile menu at its foot
+    expect(within(mobileNavigation).getByText('CRMAssistant')).toBeInTheDocument()
+    expect(
+      within(mobileNavigation).getByRole('button', { name: 'User profile menu' }),
+    ).toBeInTheDocument()
   })
 
   it('closes mobile navigation from the collapsed state', () => {
@@ -368,19 +372,24 @@ describe('AppShell', () => {
 
   // Tenant/user visibility tests (AC: 7)
   describe('Tenant and user visibility', () => {
-    it('shows user menu button at all breakpoints', () => {
+    it('shows the user profile menu in the desktop sidebar', () => {
       renderApp(<AppShell>Content</AppShell>)
 
-      const menuButtons = screen.getAllByRole('button', { name: 'User menu' })
+      const menuButtons = screen.getAllByRole('button', { name: 'User profile menu' })
       expect(menuButtons.length).toBeGreaterThanOrEqual(1)
     })
 
-    it('has compact mobile user menu visible below lg', () => {
+    it('exposes the user profile menu below lg through the mobile drawer', () => {
       renderApp(<AppShell>Content</AppShell>)
 
-      // Below lg, compact badge is visible (lg:hidden class on the mobile container)
-      const menuButtons = screen.getAllByRole('button', { name: 'User menu' })
-      expect(menuButtons.length).toBeGreaterThan(1)
+      fireEvent.click(screen.getByRole('button', { name: 'Open navigation menu' }))
+
+      const mobileNavigation = screen.getByRole('complementary', { name: 'Mobile CRM navigation' })
+      expect(
+        within(mobileNavigation).getByRole('button', { name: 'User profile menu' }),
+      ).toBeInTheDocument()
+      // Desktop sidebar copy + drawer copy
+      expect(screen.getAllByRole('button', { name: 'User profile menu' }).length).toBeGreaterThan(1)
     })
   })
 

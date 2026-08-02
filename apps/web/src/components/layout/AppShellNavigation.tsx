@@ -13,12 +13,14 @@ import {
   UserCog,
   Settings,
   BarChart3,
+  LogOut,
   type LucideIcon,
 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth.store'
+import { useAuth } from '@/hooks/useAuth'
 import { getMyPermissions } from '@/services/permission.service'
 
 interface NavigationPermission {
@@ -33,6 +35,7 @@ interface NavigationItem {
   isAi?: boolean
   roles?: string[]
   permission?: NavigationPermission
+  badge?: number
 }
 
 interface NavigationSection {
@@ -59,6 +62,7 @@ const navigationSections: NavigationSection[] = [
         href: '/inbox',
         icon: MessageSquare,
         permission: { resource: 'INBOX', action: 'READ' },
+        badge: 4,
       },
       { label: 'Deals', href: '/deals', icon: Briefcase },
       {
@@ -185,8 +189,8 @@ function NavigationList({
           {!compact && (
             <div
               className={cn(
-                'px-3 text-[10px] font-bold uppercase tracking-wider text-slate-400/80 mb-1.5',
-                sectionIdx > 0 ? 'mt-4' : 'mt-1',
+                'px-3 text-[10px] font-semibold uppercase tracking-[0.09em] text-slate-400 mb-1.5',
+                sectionIdx > 0 ? 'mt-5' : 'mt-1',
               )}
             >
               {section.title}
@@ -197,10 +201,10 @@ function NavigationList({
             const isActive = item.href ? isActivePath(pathname, item.href, allHrefs) : false
             const className = cn(
               compact
-                ? 'flex flex-col min-h-11 items-center justify-center gap-0.5 rounded-md text-[10px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-1'
-                : 'flex min-h-11 items-center gap-3 rounded-md px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2',
-              isActive && 'border-l-2 border-blue-600 bg-blue-50 text-blue-700 rounded-l-none',
-              !isActive && !item.isAi && 'text-slate-600 hover:bg-slate-100 hover:text-slate-950',
+                ? 'flex flex-col min-h-11 items-center justify-center gap-0.5 rounded-lg text-[10px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600 focus-visible:ring-offset-1'
+                : 'flex min-h-11 items-center gap-3 rounded-lg px-3 text-[13.5px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600 focus-visible:ring-offset-2',
+              isActive && 'bg-slate-900 text-white shadow-sm',
+              !isActive && !item.isAi && 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
               !isActive && item.isAi && 'text-violet-700 hover:bg-violet-50',
               !item.href && 'cursor-not-allowed opacity-70',
             )
@@ -210,7 +214,7 @@ function NavigationList({
                 className={cn(
                   'h-[18px] w-[18px]',
                   compact ? 'h-5 w-5' : 'h-[18px] w-[18px]',
-                  isActive && 'text-blue-700',
+                  isActive && 'text-white',
                   !isActive && !item.isAi && 'text-slate-400',
                   !isActive && item.isAi && 'text-violet-500',
                 )}
@@ -229,6 +233,11 @@ function NavigationList({
                 >
                   {iconEl}
                   {!compact && <span>{item.label}</span>}
+                  {item.badge !== undefined && !compact && (
+                    <span className="ml-auto flex h-4 min-w-[18px] items-center justify-center rounded-full bg-slate-100 px-1.5 text-[10.5px] font-semibold text-slate-500">
+                      {item.badge}
+                    </span>
+                  )}
                 </Link>
               )
             }
@@ -243,6 +252,11 @@ function NavigationList({
               >
                 {iconEl}
                 {!compact && <span>{item.label}</span>}
+                {item.badge !== undefined && !compact && (
+                  <span className="ml-auto flex h-4 min-w-[18px] items-center justify-center rounded-full bg-slate-100 px-1.5 text-[10.5px] font-semibold text-slate-500">
+                    {item.badge}
+                  </span>
+                )}
               </button>
             )
           })}
@@ -252,8 +266,187 @@ function NavigationList({
   )
 }
 
+const ROLE_PRIORITY: Record<string, number> = {
+  ADMIN: 0,
+  SALES_MANAGER: 1,
+  SUPPORT_AGENT: 2,
+  MARKETING_USER: 3,
+  SALES_REP: 4,
+}
+
+const ROLE_LABELS: Record<string, string> = {
+  ADMIN: 'Admin',
+  SALES_MANAGER: 'Sales Manager',
+  SALES_REP: 'Sales Rep',
+  SUPPORT_AGENT: 'Support Agent',
+  MARKETING_USER: 'Marketing',
+}
+
+const ROLE_COLORS: Record<string, string> = {
+  ADMIN: 'bg-purple-50 text-purple-700 border-purple-200/60',
+  SALES_MANAGER: 'bg-blue-50 text-blue-700 border-blue-200/60',
+  SALES_REP: 'bg-slate-50 text-slate-700 border-slate-200/60',
+  SUPPORT_AGENT: 'bg-emerald-50 text-emerald-700 border-emerald-200/60',
+  MARKETING_USER: 'bg-amber-50 text-amber-700 border-amber-200/60',
+}
+
+function getPrimaryRole(roles: string[]): string | null {
+  if (roles.length === 0) return null
+  let primary = roles[0]
+  let primaryPriority = ROLE_PRIORITY[primary] ?? 99
+  for (const r of roles) {
+    const p = ROLE_PRIORITY[r] ?? 99
+    if (p < primaryPriority) {
+      primary = r
+      primaryPriority = p
+    }
+  }
+  return primary
+}
+
+export function SidebarUserProfileMenu({
+  onNavigate,
+}: {
+  onNavigate?: () => void
+}): React.JSX.Element {
+  const { user } = useAuthStore()
+  const { logout } = useAuth()
+  const [dropdownOpen, setDropdownOpen] = useState(false)
+
+  const firstName = user?.firstName ?? 'Acme'
+  const lastName = user?.lastName ?? 'Admin'
+  const email = user?.email ?? 'admin@example.co'
+  const userRoles = user?.roles ?? []
+  const primaryRole = getPrimaryRole(userRoles)
+  const initials = `${firstName.charAt(0) || 'A'}${lastName.charAt(0) || 'A'}`.toUpperCase()
+
+  const closeDropdown = useCallback(() => setDropdownOpen(false), [])
+  const toggleDropdown = useCallback(() => setDropdownOpen((prev) => !prev), [])
+
+  const handleLogout = useCallback(async () => {
+    closeDropdown()
+    if (onNavigate) onNavigate()
+    await logout()
+  }, [closeDropdown, logout, onNavigate])
+
+  useEffect(() => {
+    if (!dropdownOpen) return
+    function handleKey(e: KeyboardEvent): void {
+      if (e.key === 'Escape') setDropdownOpen(false)
+    }
+    document.addEventListener('keydown', handleKey)
+    return () => document.removeEventListener('keydown', handleKey)
+  }, [dropdownOpen])
+
+  const roleColor = primaryRole
+    ? ROLE_COLORS[primaryRole] ?? 'bg-slate-50 text-slate-700 border-slate-200/60'
+    : ''
+  const roleLabel = primaryRole ? ROLE_LABELS[primaryRole] ?? primaryRole : ''
+
+  return (
+    <div className="relative mt-auto border-t border-slate-100 p-3.5">
+      <button
+        type="button"
+        aria-label="User profile menu"
+        aria-expanded={dropdownOpen}
+        aria-haspopup="true"
+        className="flex w-full items-center gap-3 rounded-xl p-1.5 text-left transition-colors hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-600/40"
+        onClick={toggleDropdown}
+      >
+        {user?.avatar ? (
+          <img
+            src={user.avatar}
+            alt={`${firstName} ${lastName}`}
+            className="h-8 w-8 shrink-0 rounded-full object-cover border border-slate-100 shadow-sm"
+          />
+        ) : (
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-purple-600 text-[11px] font-bold text-white shadow-sm">
+            {initials}
+          </div>
+        )}
+        <div className="min-w-0 flex-1 leading-tight">
+          <p className="truncate text-xs font-semibold text-slate-900">
+            {firstName} {lastName}
+          </p>
+          <p className="truncate text-[10.5px] text-slate-400">{email}</p>
+        </div>
+      </button>
+
+      {dropdownOpen && (
+        <>
+          <button
+            type="button"
+            aria-label="Close user profile menu"
+            className="fixed inset-0 z-40 cursor-default"
+            onClick={closeDropdown}
+          />
+          <div className="absolute bottom-full left-3.5 right-3.5 mb-2 z-50 rounded-xl border border-slate-200 bg-white p-3 shadow-xl ring-1 ring-black/5 animate-in fade-in slide-in-from-bottom-2 duration-150">
+            {/* User Info Header */}
+            <div className="flex items-center gap-3 px-1 py-1.5 mb-2">
+              {user?.avatar ? (
+                <img
+                  src={user.avatar}
+                  alt={`${firstName} ${lastName}`}
+                  className="h-10 w-10 shrink-0 rounded-full object-cover border border-slate-100"
+                />
+              ) : (
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-purple-600 text-xs font-bold text-white shadow-sm">
+                  {initials}
+                </div>
+              )}
+              <div className="flex flex-col min-w-0">
+                <p className="text-sm font-semibold text-slate-900 truncate">
+                  {firstName} {lastName}
+                </p>
+                <p className="text-xs text-slate-500 truncate mb-1">{email}</p>
+                {primaryRole && (
+                  <span
+                    className={`inline-flex items-center self-start rounded-full border px-2 py-0.5 text-[10px] font-semibold ${roleColor}`}
+                  >
+                    {roleLabel}
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <div className="border-t border-slate-100 my-2" />
+
+            {/* Menu options */}
+            <div className="space-y-0.5">
+              <Link
+                href="/settings"
+                className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
+                onClick={() => {
+                  closeDropdown()
+                  if (onNavigate) onNavigate()
+                }}
+              >
+                <Settings className="h-4 w-4 text-slate-400" />
+                <span>Settings</span>
+              </Link>
+              <button
+                type="button"
+                className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm text-red-600 hover:bg-red-50 hover:text-red-700 transition-colors"
+                onClick={handleLogout}
+              >
+                <LogOut className="h-4 w-4 text-red-400" />
+                <span>Sign out</span>
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
 export function DesktopNavigation(): React.JSX.Element {
-  return <NavigationList />
+  return (
+    <div className="flex h-full flex-col justify-between">
+      <NavigationList />
+      <SidebarUserProfileMenu />
+    </div>
+  )
 }
 
 export function TabletRailNavigation(): React.JSX.Element {
@@ -358,30 +551,31 @@ export function MobileNavigation(): React.JSX.Element {
             aria-label="Mobile CRM navigation"
             className="relative flex h-full w-72 max-w-[85vw] flex-col border-r border-slate-200 bg-white shadow-sm transition-transform duration-200"
           >
-            <div className="flex h-16 items-center justify-between border-b border-slate-200 px-5">
-              <div>
-                <p className="text-sm font-semibold tracking-tight text-slate-950">CRMAssistant</p>
-                <p className="text-xs text-slate-500">Calm CRM workspace</p>
+            <div className="flex h-16 items-center justify-between gap-2 border-b border-slate-200 px-4">
+              <div className="flex min-w-0 items-center gap-2.5">
+                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-indigo-600 text-[13px] font-bold text-white">
+                  C
+                </div>
+                <div className="min-w-0 leading-tight">
+                  <p className="truncate text-sm font-semibold tracking-tight text-slate-900">
+                    CRMAssistant
+                  </p>
+                  <p className="truncate text-[11px] text-slate-500">Calm workspace</p>
+                </div>
               </div>
               <Button
                 type="button"
                 variant="ghost"
                 size="icon"
                 aria-label="Close navigation menu"
-                className="h-11 w-11"
+                className="h-11 w-11 shrink-0"
                 onClick={closeNavigation}
               >
                 <span aria-hidden="true">×</span>
               </Button>
             </div>
             <NavigationList onNavigate={closeNavigation} />
-            <div
-              aria-label="Current tenant and user"
-              className="mx-3 mt-auto mb-4 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm"
-            >
-              <p className="font-medium text-slate-950">Workspace</p>
-              <p className="text-xs text-slate-500">Signed in</p>
-            </div>
+            <SidebarUserProfileMenu onNavigate={closeNavigation} />
           </aside>
         </div>
       )}

@@ -8,6 +8,7 @@ const mockUsePathname = jest.fn(() => '/contacts')
 jest.mock('next/navigation', () => ({
   useRouter: (): { push: jest.Mock } => ({ push: jest.fn() }),
   usePathname: (): string => mockUsePathname(),
+  useSearchParams: (): URLSearchParams => new URLSearchParams(),
 }))
 
 jest.mock('@tanstack/react-query', () => {

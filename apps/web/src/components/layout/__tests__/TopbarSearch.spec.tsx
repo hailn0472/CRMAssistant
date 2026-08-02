@@ -7,7 +7,7 @@ describe('TopbarSearch', () => {
   it('renders search input with placeholder', () => {
     render(<TopbarSearch value="" onChange={jest.fn()} onFocus={jest.fn()} />)
 
-    expect(screen.getByPlaceholderText('Search or run command')).toBeInTheDocument()
+    expect(screen.getByPlaceholderText('Search or run a command')).toBeInTheDocument()
   })
 
   it('displays current value', () => {
@@ -37,9 +37,9 @@ describe('TopbarSearch', () => {
     expect(onFocus).toHaveBeenCalled()
   })
 
-  it('renders Ctrl K shortcut badge', () => {
+  it('renders K K shortcut badge', () => {
     render(<TopbarSearch value="" onChange={jest.fn()} onFocus={jest.fn()} />)
 
-    expect(screen.getByText('Ctrl K')).toBeInTheDocument()
+    expect(screen.getByText('K K')).toBeInTheDocument()
   })
 })

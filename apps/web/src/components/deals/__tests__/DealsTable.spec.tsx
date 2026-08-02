@@ -212,7 +212,7 @@ describe('DealsTable', () => {
 
     // Wait for pagination to appear: page 1 button is active (highlighted)
     const page1Btn = await screen.findByRole('button', { name: '1' })
-    expect(page1Btn).toHaveClass('bg-indigo-600')
+    expect(page1Btn).toHaveClass('bg-slate-900')
     expect(screen.getByRole('button', { name: '2' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '3' })).toBeInTheDocument()
   })
@@ -288,14 +288,14 @@ describe('DealsTable', () => {
 
     // Wait for page 1 button to appear (pagination rendered)
     const page1Btn = await screen.findByRole('button', { name: '1' })
-    expect(page1Btn).toHaveClass('bg-indigo-600')
+    expect(page1Btn).toHaveClass('bg-slate-900')
 
     // Click page 2
     fireEvent.click(screen.getByRole('button', { name: '2' }))
 
     // Page 2 should now be active
     const page2Btn = await screen.findByRole('button', { name: '2' })
-    expect(page2Btn).toHaveClass('bg-indigo-600')
+    expect(page2Btn).toHaveClass('bg-slate-900')
   })
 
   it('renders stage badge with name', async () => {

@@ -1,108 +1,34 @@
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen } from '@testing-library/react'
 
 import { TopbarActions } from '../TopbarActions'
 
-const mockLogout = jest.fn().mockResolvedValue(undefined)
-
-jest.mock('@/hooks/useAuth', () => ({
-  useAuth: () => ({ logout: mockLogout }),
-}))
-
-let mockAuthState: {
-  user: { roles: string[]; firstName: string; lastName: string; avatar?: string | null } | null
-} = {
-  user: { roles: ['ADMIN'], firstName: 'System', lastName: 'Admin' },
-}
-
-jest.mock('@/stores/auth.store', () => ({
-  useAuthStore: jest.fn((selector?: (state: unknown) => unknown) => {
-    if (selector) {
-      return selector(mockAuthState)
-    }
-    return mockAuthState
-  }),
-}))
-
-function setAuthRole(role: string | null): void {
-  mockAuthState = role
-    ? { user: { roles: [role], firstName: 'Test', lastName: 'User' } }
-    : { user: null }
-}
-
+// The topbar keeps only ambient status + notifications; identity (role badge,
+// user name, sign out) now lives in SidebarUserProfileMenu — see
+// __tests__/SidebarUserProfileMenu.spec.tsx.
 describe('TopbarActions', () => {
-  beforeEach(() => {
-    jest.clearAllMocks()
-    setAuthRole('ADMIN')
-  })
-
   it('renders notification button', () => {
     render(<TopbarActions />)
 
     expect(screen.getByRole('button', { name: 'View notifications' })).toBeInTheDocument()
   })
 
-  it('renders role badge for ADMIN', () => {
-    setAuthRole('ADMIN')
+  it('keeps the notification button at the 44x44px touch target', () => {
     render(<TopbarActions />)
 
-    expect(screen.getAllByText('Admin').length).toBeGreaterThanOrEqual(1)
+    expect(screen.getByRole('button', { name: 'View notifications' })).toHaveClass('h-11', 'w-11')
   })
 
-  it('renders role badge for SALES_MANAGER', () => {
-    setAuthRole('SALES_MANAGER')
+  it('renders the system status pill', () => {
     render(<TopbarActions />)
 
-    expect(screen.getAllByText('Sales Manager').length).toBeGreaterThanOrEqual(1)
+    expect(screen.getByText('All systems normal')).toBeInTheDocument()
   })
 
-  it('renders role badge for SALES_REP', () => {
-    setAuthRole('SALES_REP')
+  it('does not render identity controls (moved to the sidebar profile menu)', () => {
     render(<TopbarActions />)
 
-    expect(screen.getAllByText('Sales Rep').length).toBeGreaterThanOrEqual(1)
-  })
-
-  it('does not render role badge when user is null', () => {
-    setAuthRole(null)
-    render(<TopbarActions />)
-
-    expect(screen.queryByText('Admin')).not.toBeInTheDocument()
-    expect(screen.queryByText('Sales Manager')).not.toBeInTheDocument()
-    expect(screen.queryByText('Sales Rep')).not.toBeInTheDocument()
-  })
-
-  it('renders user menu buttons', () => {
-    render(<TopbarActions />)
-
-    const menuButtons = screen.getAllByRole('button', { name: 'User menu' })
-    expect(menuButtons.length).toBeGreaterThanOrEqual(1)
-  })
-
-  it('renders user name in desktop badge', () => {
-    render(<TopbarActions />)
-
-    expect(screen.getAllByText('Test User').length).toBeGreaterThanOrEqual(1)
-  })
-
-  it('shows dropdown with sign out button on click', () => {
-    render(<TopbarActions />)
-
-    const menuButtons = screen.getAllByRole('button', { name: 'User menu' })
-    fireEvent.click(menuButtons[0])
-
-    const signOutButton = screen.getByRole('button', { name: 'Sign out' })
-    expect(signOutButton).toBeInTheDocument()
-  })
-
-  it('calls logout when sign out is clicked', () => {
-    render(<TopbarActions />)
-
-    const menuButtons = screen.getAllByRole('button', { name: 'User menu' })
-    fireEvent.click(menuButtons[0])
-
-    const signOutButton = screen.getByRole('button', { name: 'Sign out' })
-    fireEvent.click(signOutButton)
-
-    expect(mockLogout).toHaveBeenCalled()
+    expect(screen.queryByRole('button', { name: 'User menu' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'User profile menu' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Sign out' })).not.toBeInTheDocument()
   })
 })

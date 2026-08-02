@@ -20,10 +20,11 @@ export function TopbarSearch({ value, onChange, onFocus }: TopbarSearchProps): R
 
   return (
     <div className="w-full">
-      <div className="flex h-10 items-center rounded-lg border border-slate-200 bg-white px-3 text-slate-500 shadow-none focus-within:border-blue-200 focus-within:ring-2 focus-within:ring-blue-100">
-        <span aria-hidden="true" className="mr-2 text-slate-400">
-          /
-        </span>
+      <div className="flex h-9 items-center gap-2.5 rounded-full border border-slate-200 bg-slate-50/80 px-3 text-slate-500 shadow-none transition-colors focus-within:border-slate-300 focus-within:bg-white">
+        <span
+          aria-hidden="true"
+          className="h-3 w-3 shrink-0 rounded-full border-[1.5px] border-slate-400"
+        />
         <input
           type="search"
           aria-label="Search or run command"
@@ -31,11 +32,11 @@ export function TopbarSearch({ value, onChange, onFocus }: TopbarSearchProps): R
           value={value}
           onChange={(event) => onChange(event.target.value)}
           onFocus={handleFocus}
-          placeholder="Search or run command"
-          className="h-full min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-slate-500"
+          placeholder="Search or run a command"
+          className="h-full min-w-0 flex-1 bg-transparent text-[13px] outline-none placeholder:text-slate-400"
         />
-        <kbd className="ml-2 hidden rounded-md border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[11px] font-medium text-slate-500 sm:inline-flex">
-          Ctrl K
+        <kbd className="hidden shrink-0 rounded-[5px] border border-slate-200 bg-white px-1.5 py-0.5 font-mono text-[10px] font-medium text-slate-400 sm:inline-flex">
+          K K
         </kbd>
       </div>
     </div>
