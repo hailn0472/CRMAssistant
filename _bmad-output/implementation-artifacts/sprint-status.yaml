@@ -127,7 +127,7 @@ development_status:
   3-4-products-line-items-association: done
   3-5-competitor-tracking-win-loss-analysis: done
   3-6-deal-document-attachment-collaboration: done
-  3-7-automated-deal-reminders-health-alerts: review
+  3-7-automated-deal-reminders-health-alerts: done
   epic-3-retrospective: optional
 
   # Epic 4: Activity & Task Management
