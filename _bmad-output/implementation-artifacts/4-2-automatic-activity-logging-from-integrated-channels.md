@@ -1,6 +1,6 @@
 # Story 4.2: Automatic Activity Logging from Integrated Channels
 
-Status: review
+Status: done
 
 Epic: 4 — Activity & Task Management
 FR: **FR17** — "System can automatically log activities from integrated channels" [Source: prd.md#Functional Requirements › Activity & Task Management]
