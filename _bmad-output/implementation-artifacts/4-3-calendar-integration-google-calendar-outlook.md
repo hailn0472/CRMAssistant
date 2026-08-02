@@ -1,6 +1,6 @@
 # Story 4.3: Calendar Integration (Google Calendar & Outlook)
 
-Status: review
+Status: done
 
 Epic: 4 — Activity & Task Management
 FR: **FR18** — "Users can sync tasks and activities with external calendars" [Source: `prd.md:947`]
