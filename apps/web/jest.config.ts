@@ -47,6 +47,11 @@ const config: Config = {
     },
   },
   testMatch: ['**/__tests__/**/*.{ts,tsx}', '**/*.spec.{ts,tsx}', '**/*.test.{ts,tsx}'],
+  // jsdom + v8 coverage across ~140 spec files is memory-hungry; unbounded
+  // workers (cores - 1) push the machine into swap, especially when turbo runs
+  // this alongside the api suite.
+  maxWorkers: '50%',
+  workerIdleMemoryLimit: '512MB',
 }
 
 // createJestConfig is exported this way to ensure that next/jest can load the Next.js config which is async

@@ -562,6 +562,53 @@ describe('ContactsService', () => {
       expect(result.items.find((c) => c.id === CONTACT_ID)!.sharedWithMe).toBe(false)
       expect(result.items.find((c) => c.id === 'shared-contact')!.sharedWithMe).toBe(true)
     })
+
+    it('filters by company, jobTitle, createdAt range and tags', async () => {
+      prisma.contact.findMany.mockResolvedValue([])
+      prisma.contact.count.mockResolvedValue(0)
+
+      await service.findMany(TENANT_ID, USER_ID, {
+        company: 'Acme',
+        jobTitle: 'CTO',
+        createdAtFrom: '2026-08-01T00:00:00.000Z',
+        createdAtTo: '2026-08-05T00:00:00.000Z',
+        tags: ['vip', ''],
+      })
+
+      const where = prisma.contact.findMany.mock.calls[0][0].where
+      expect(where.AND).toContainEqual({ company: { contains: 'Acme', mode: 'insensitive' } })
+      expect(where.AND).toContainEqual({ jobTitle: { contains: 'CTO', mode: 'insensitive' } })
+      expect(where.AND).toContainEqual(
+        expect.objectContaining({
+          createdAt: expect.objectContaining({
+            gte: expect.any(Date),
+            lte: expect.any(Date),
+          }),
+        }),
+      )
+      expect(where.AND).toContainEqual({
+        AND: [{ tags: { some: { tag: { name: 'vip' } } } }],
+      })
+    })
+
+    it('filters by search across email, names and company', async () => {
+      prisma.contact.findMany.mockResolvedValue([])
+      prisma.contact.count.mockResolvedValue(0)
+
+      await service.findMany(TENANT_ID, USER_ID, { search: 'acme' })
+
+      const where = prisma.contact.findMany.mock.calls[0][0].where
+      expect(where.AND).toContainEqual(
+        expect.objectContaining({
+          OR: expect.arrayContaining([
+            { email: { contains: 'acme', mode: 'insensitive' } },
+            { firstName: { contains: 'acme', mode: 'insensitive' } },
+            { lastName: { contains: 'acme', mode: 'insensitive' } },
+            { company: { contains: 'acme', mode: 'insensitive' } },
+          ]),
+        }),
+      )
+    })
   })
 
   describe('update()', () => {

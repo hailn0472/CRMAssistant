@@ -532,6 +532,107 @@ describe('DealsService', () => {
         data: expect.not.objectContaining({ probability: expect.any(Number) }),
       })
     })
+
+    it('rejects clearing value with BadRequestException', async () => {
+      prisma.deal.findFirst.mockResolvedValue(makeDeal())
+
+      await expect(service.update(TENANT_ID, USER_ID, DEAL_ID, { value: null })).rejects.toThrow(
+        'Value cannot be cleared (non-nullable)',
+      )
+    })
+
+    it('rejects a negative value on update', async () => {
+      prisma.deal.findFirst.mockResolvedValue(makeDeal())
+      prisma.dealLineItem.count.mockResolvedValue(0)
+
+      await expect(service.update(TENANT_ID, USER_ID, DEAL_ID, { value: -5 })).rejects.toThrow(
+        'Value must be 0 or greater',
+      )
+    })
+
+    it('rejects clearing probability with BadRequestException', async () => {
+      prisma.deal.findFirst.mockResolvedValue(makeDeal())
+
+      await expect(
+        service.update(TENANT_ID, USER_ID, DEAL_ID, { probability: null }),
+      ).rejects.toThrow('Probability cannot be cleared')
+    })
+
+    it('normalizes currency to uppercase on update', async () => {
+      prisma.deal.findFirst.mockResolvedValue(makeDeal())
+      prisma.deal.updateMany.mockResolvedValue({ count: 1 })
+
+      await service.update(TENANT_ID, USER_ID, DEAL_ID, { currency: ' eur ' })
+
+      expect(prisma.deal.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ currency: 'EUR' }) }),
+      )
+    })
+
+    it('throws NotFoundException when the new contactId is missing', async () => {
+      prisma.deal.findFirst.mockResolvedValue(makeDeal())
+      prisma.contact.findFirst.mockResolvedValue(null)
+
+      await expect(
+        service.update(TENANT_ID, USER_ID, DEAL_ID, { contactId: 'missing-contact' }),
+      ).rejects.toThrow('Contact not found')
+    })
+
+    it('accepts a valid new contactId on update', async () => {
+      prisma.deal.findFirst.mockResolvedValue(makeDeal())
+      prisma.contact.findFirst.mockResolvedValue({ id: 'contact-2' })
+      prisma.deal.updateMany.mockResolvedValue({ count: 1 })
+
+      await service.update(TENANT_ID, USER_ID, DEAL_ID, { contactId: 'contact-2' })
+
+      expect(prisma.deal.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ contactId: 'contact-2' }) }),
+      )
+    })
+
+    it('throws NotFoundException when the new stage is missing', async () => {
+      prisma.deal.findFirst.mockResolvedValue(makeDeal())
+      prisma.dealStage.findFirst.mockResolvedValue(null)
+
+      await expect(
+        service.update(TENANT_ID, USER_ID, DEAL_ID, { stageId: 'missing-stage' }),
+      ).rejects.toThrow('Stage not found')
+    })
+
+    it('sets expectedCloseDate and actualCloseDate when provided', async () => {
+      prisma.deal.findFirst.mockResolvedValue(makeDeal())
+      prisma.deal.updateMany.mockResolvedValue({ count: 1 })
+
+      await service.update(TENANT_ID, USER_ID, DEAL_ID, {
+        expectedCloseDate: '2026-09-01T00:00:00.000Z',
+        actualCloseDate: '2026-08-05T00:00:00.000Z',
+      })
+
+      expect(prisma.deal.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            expectedCloseDate: new Date('2026-09-01T00:00:00.000Z'),
+            actualCloseDate: new Date('2026-08-05T00:00:00.000Z'),
+          }),
+        }),
+      )
+    })
+
+    it('clears expectedCloseDate and actualCloseDate with null', async () => {
+      prisma.deal.findFirst.mockResolvedValue(makeDeal())
+      prisma.deal.updateMany.mockResolvedValue({ count: 1 })
+
+      await service.update(TENANT_ID, USER_ID, DEAL_ID, {
+        expectedCloseDate: null,
+        actualCloseDate: null,
+      })
+
+      expect(prisma.deal.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ expectedCloseDate: null, actualCloseDate: null }),
+        }),
+      )
+    })
   })
 
   describe('delete()', () => {

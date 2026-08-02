@@ -72,6 +72,17 @@ export const MUTATION_AUDIT_MAP: Record<string, { action: string; entity: string
   snoozeDealReminder: { action: 'UPDATE', entity: 'DEAL' },
   unsnoozeDealReminder: { action: 'UPDATE', entity: 'DEAL' },
   updateReminderPreferences: { action: 'UPDATE', entity: 'USER' },
+
+  // Task mutations (Story 4.1)
+  createTask: { action: 'CREATE', entity: 'TASK' },
+  createTaskFromTemplate: { action: 'CREATE', entity: 'TASK' },
+  updateTask: { action: 'UPDATE', entity: 'TASK' },
+  assignTask: { action: 'UPDATE', entity: 'TASK' },
+  completeTask: { action: 'UPDATE', entity: 'TASK' },
+  deleteTask: { action: 'DELETE', entity: 'TASK' },
+  createTaskTemplate: { action: 'CREATE', entity: 'TASK_TEMPLATE' },
+  updateTaskTemplate: { action: 'UPDATE', entity: 'TASK_TEMPLATE' },
+  deleteTaskTemplate: { action: 'DELETE', entity: 'TASK_TEMPLATE' },
 }
 
 @Injectable()

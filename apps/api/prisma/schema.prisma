@@ -50,6 +50,26 @@ enum ResourceType {
   TASK
 }
 
+// Task status/priority are closed, standard, cross-story vocabularies (4.4
+// filters on them, 4.5 aggregates on them, 4.6 blocks completion on them), so
+// they are Prisma enums — the schema's own precedent for closed vocabularies.
+// The const tuples in apps/api/src/tasks/task-due-status.ts mirror these and
+// remain the single source of truth for the Pothos enums, the service
+// validators and the frontend Zod schema (Story 4.1 arbitration #3).
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum TaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
 model Tenant {
   id         String   @id @default(uuid())
   name       String
@@ -83,6 +103,8 @@ model Tenant {
   dealReminders            DealReminder[]
   dealReminderSnoozes      DealReminderSnooze[]
   userReminderPreferences  UserReminderPreference[]
+  tasks                    Task[]
+  taskTemplates            TaskTemplate[]
 }
 
 /// Tenant-scoped user model with authentication support.
@@ -135,6 +157,7 @@ model User {
   dealReminders         DealReminder[]       @relation("DealReminderRecipient")
   dealReminderSnoozes   DealReminderSnooze[] @relation("DealReminderSnoozeUser")
   reminderPreference    UserReminderPreference? @relation("UserReminderPreference")
+  assignedTasks         Task[]                   @relation("TaskAssignee")
 
   // Email is unique per tenant, NOT globally unique
   @@unique([tenantId, email])
@@ -325,6 +348,7 @@ model Contact {
   channelIdentities ContactChannelIdentity[]
   activities        Activity[]
   deals             Deal[]
+  tasks             Task[]
 
   @@unique([tenantId, email])
   @@index([tenantId])
@@ -575,6 +599,7 @@ model Deal {
   comments           DealComment[]
   reminders          DealReminder[]
   reminderSnoozes    DealReminderSnooze[]
+  tasks              Task[]
   competitor         Competitor? @relation("DealWinLossCompetitor", fields: [competitorId], references: [id], onDelete: Restrict)
   winLossReason      String?
   winLossNote        String?
@@ -956,4 +981,70 @@ model ContactChannelIdentity {
   @@index([tenantId])
   @@index([contactId])
   @@index([channelConnectionId])
+}
+
+// =============================================================================
+// TASK MODELS (Story 4.1)
+// =============================================================================
+
+/// Tenant-scoped task model (Story 4.1).
+/// assignedTo is NOT nullable — a nullable assignee combined with
+/// resolveVisibilityFilter on assignedTo would make unassigned tasks invisible
+/// to every non-ADMIN user. createdBy stays a plain String with no FK to User,
+/// matching every other model in the schema — assignedTo is then the ONLY FK
+/// from Task to User, so no ambiguous-relation error and no second back-relation
+/// array on User (do not "improve" createdBy into a relation).
+model Task {
+  id          String       @id @default(uuid())
+  tenantId    String
+  title       String
+  description String?
+  status      TaskStatus   @default(TODO)
+  priority    TaskPriority @default(MEDIUM)
+  dueDate     DateTime?
+  assignedTo  String
+  contactId   String?
+  dealId      String?
+  completedAt DateTime?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  createdBy   String       @default("system")
+  updatedBy   String       @default("system")
+  deletedAt   DateTime?
+
+  tenant   Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  assignee User     @relation("TaskAssignee", fields: [assignedTo], references: [id], onDelete: Cascade)
+  contact  Contact? @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  deal     Deal?    @relation(fields: [dealId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([tenantId, assignedTo])
+  @@index([tenantId, status])
+  @@index([tenantId, dueDate])
+  @@index([tenantId, contactId])
+  @@index([tenantId, dealId])
+}
+
+/// Tenant-global task template catalogue (Story 4.1).
+/// name is the picker label (e.g. "Discovery call follow-up"), title is the
+/// title stamped onto the created task. No @@unique([tenantId, name]) — soft
+/// delete + unique is a documented trap (DealStage); uniqueness is enforced
+/// case-insensitively in TaskTemplatesService over deletedAt: null rows.
+model TaskTemplate {
+  id               String       @id @default(uuid())
+  tenantId         String
+  name             String
+  title            String
+  description      String?
+  defaultPriority  TaskPriority @default(MEDIUM)
+  defaultDueInDays Int?
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+  updatedBy        String       @default("system")
+  createdBy        String       @default("system")
+  deletedAt        DateTime?
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
 }
