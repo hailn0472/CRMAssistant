@@ -1,6 +1,9 @@
 import { graphqlRequest } from '@/lib/graphql-client'
 import type { ContactTimelineResult } from '@/types/activity.types'
 
+// Story 4.2: `source` must be listed here — there is no GraphQL codegen in
+// this workspace; every document is a hand-written template literal, and a
+// field missing from TIMELINE_FIELDS is silently undefined at runtime (AC 47).
 const TIMELINE_FIELDS = `
   edges {
     cursor
@@ -12,6 +15,7 @@ const TIMELINE_FIELDS = `
       description
       createdAt
       createdBy
+      source
     }
   }
   pageInfo {
@@ -50,6 +54,7 @@ export async function addContactNote(
   description: string | null
   createdAt: string
   createdBy: string
+  source: string | null
 }> {
   const data = await graphqlRequest<{
     addContactNote: {
@@ -60,6 +65,7 @@ export async function addContactNote(
       description: string | null
       createdAt: string
       createdBy: string
+      source: string | null
     }
   }>(
     `mutation AddContactNote($contactId: ID!, $title: String!, $description: String) {
@@ -71,10 +77,55 @@ export async function addContactNote(
         description
         createdAt
         createdBy
+        source
       }
     }`,
     { contactId, title, description },
   )
 
   return data.addContactNote
+}
+
+// ─── Activity log preferences (Story 4.2, AC 37) ──────────────────────────
+
+export type ActivityLogPreference = {
+  logTaskCompleted: boolean
+  logDealCreated: boolean
+  logDealStageChanged: boolean
+  logMessageSent: boolean
+  logMessageReceived: boolean
+}
+
+export type UpdateActivityLogPreferenceInput = Partial<ActivityLogPreference>
+
+const ACTIVITY_LOG_PREFERENCE_FIELDS = `
+  logTaskCompleted
+  logDealCreated
+  logDealStageChanged
+  logMessageSent
+  logMessageReceived
+`
+
+export async function getMyActivityLogPreferences(): Promise<ActivityLogPreference> {
+  const data = await graphqlRequest<{ myActivityLogPreferences: ActivityLogPreference }>(
+    `query MyActivityLogPreferences {
+      myActivityLogPreferences { ${ACTIVITY_LOG_PREFERENCE_FIELDS} }
+    }`,
+    {},
+  )
+  return data.myActivityLogPreferences
+}
+
+export async function updateActivityLogPreferences(
+  input: UpdateActivityLogPreferenceInput,
+): Promise<ActivityLogPreference> {
+  const data = await graphqlRequest<{
+    updateActivityLogPreferences: ActivityLogPreference
+  }>(
+    `mutation UpdateActivityLogPreferences($input: UpdateActivityLogPreferenceInput!) {
+      updateActivityLogPreferences(input: $input) { ${ACTIVITY_LOG_PREFERENCE_FIELDS} }
+    }`,
+    { input },
+  )
+  return data.updateActivityLogPreferences
 }

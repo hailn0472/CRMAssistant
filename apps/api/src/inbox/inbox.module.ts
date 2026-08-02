@@ -6,9 +6,10 @@ import { MessagesService } from './messages.service'
 import { InboxPubSubService } from './pubsub.service'
 import { PrismaModule } from '../prisma/prisma.module'
 import { AuditModule } from '../audit/audit.module'
+import { ActivitiesModule } from '../activities/activities.module'
 
 @Module({
-  imports: [PrismaModule, AuditModule],
+  imports: [PrismaModule, AuditModule, ActivitiesModule],
   providers: [ConversationsService, MessagesService, InboxPubSubService],
   exports: [ConversationsService, MessagesService],
 })

@@ -5,9 +5,11 @@ import {
   NotFoundException,
   Optional,
 } from '@nestjs/common'
-import type { Message, Prisma } from '@prisma/client'
+import type { Conversation, Message, Prisma } from '@prisma/client'
 
 import { PrismaService } from '../prisma/prisma.service'
+import { ActivityService } from '../activities/activities.service'
+import { ActivityLogPreferenceService } from '../activities/activity-log-preference.service'
 import { InboxPubSubService } from './pubsub.service'
 import { CHANNEL_DISPATCHER, type ChannelDispatcher } from './channel-dispatcher'
 
@@ -61,6 +63,8 @@ export class MessagesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly pubSub: InboxPubSubService,
+    private readonly activity: ActivityService,
+    private readonly activityLogPreference: ActivityLogPreferenceService,
     @Optional() @Inject(CHANNEL_DISPATCHER) private readonly dispatcher?: ChannelDispatcher,
   ) {}
 
@@ -142,7 +146,104 @@ export class MessagesService {
       }
     }
 
+    // Story 4.2: auto-log the message (AC 28-34). The single hook site at the
+    // tail of sendMessage captures every message write in the system: agent
+    // sends, inbound Facebook messages, postbacks and history backfills. It
+    // sits OUTSIDE the $transaction and after pubsub. logSafe is already
+    // non-throwing, but the preference lookup / contact fetch inside the hook
+    // are real DB calls — the hook must never fail the webhook (AC 34), so
+    // the whole call is defended.
+    try {
+      await this.logMessageActivity(tenantId, conversation, message, input)
+    } catch (error) {
+      console.warn('[MessagesService] Activity auto-log failed', error)
+    }
+
     return message
+  }
+
+  /**
+   * Auto-log a message write (AC 30-33). Five skip conditions, each with a
+   * concrete failure mode (AC 31):
+   *  - `conversation.contactId == null` → internal agent-to-agent threads
+   *    hard-code contactId: null and have no contact to log against.
+   *  - `messageType === 'INTERNAL_NOTE'` or `internalNote === true` →
+   *    internal notes are not customer interactions.
+   *  - `input.sentAt` provided → Facebook history backfill; a first backfill
+   *    would emit a burst of thousands of backdated activities (ledgered in
+   *    deferred-work.md as a known limitation).
+   *  - `metadata.source === 'facebook_echo'` → echo events mirror an outbound
+   *    message the CRM may have already logged under a different Message.id,
+   *    so `MESSAGE:<messageId>` cannot dedupe them. Consequence: an agent
+   *    replying from Facebook's own Page inbox produces no activity
+   *    (ledgered).
+   *  - `senderType === 'SYSTEM'` → system messages are not customer
+   *    interactions.
+   *
+   * MESSAGE_RECEIVED has no acting user: the preference owner is
+   * `conversation.assignedTo` when non-null, otherwise the event is always
+   * logged. MESSAGE_SENT uses the acting user from sendMessage's caller
+   * (AC 33).
+   */
+  private async logMessageActivity(
+    tenantId: string,
+    conversation: Conversation,
+    message: Message,
+    input: SendMessageInput,
+  ): Promise<void> {
+    if (conversation.contactId == null) return
+    if (input.messageType === 'INTERNAL_NOTE' || message.internalNote === true) return
+    if (input.sentAt) return
+
+    const metadata: Record<string, unknown> | undefined =
+      typeof input.metadata === 'string'
+        ? (JSON.parse(input.metadata) as Record<string, unknown>)
+        : input.metadata
+    if (metadata?.source === 'facebook_echo') return
+
+    if (input.senderType === 'SYSTEM') return
+
+    const isReceived = input.senderType === 'CONTACT'
+    const prefKey = isReceived ? 'logMessageReceived' : 'logMessageSent'
+    const prefOwner = isReceived ? conversation.assignedTo ?? null : input.senderId
+
+    if (!(await this.activityLogPreference.isEnabled(tenantId, prefOwner, prefKey))) {
+      return
+    }
+
+    // Contact display name for the title (AC 32).
+    let contactName = 'contact'
+    if (conversation.contactId) {
+      const contact = await this.prisma.contact.findFirst({
+        where: { id: conversation.contactId, tenantId, deletedAt: null },
+        select: { firstName: true, lastName: true },
+      })
+      if (contact) {
+        contactName = `${contact.firstName} ${contact.lastName}`.trim()
+      }
+    }
+
+    const bodyPreview =
+      message.content.length > 200 ? `${message.content.slice(0, 200)}…` : message.content
+
+    await this.activity.logSafe({
+      tenantId,
+      contactId: conversation.contactId,
+      type: isReceived ? 'MESSAGE_RECEIVED' : 'MESSAGE_SENT',
+      title: isReceived ? `Message received from ${contactName}` : `Message sent to ${contactName}`,
+      description: bodyPreview,
+      metadata: {
+        messageId: message.id,
+        conversationId: conversation.id,
+        channel: conversation.channel,
+        messageType: message.messageType,
+        senderType: message.senderType,
+      },
+      source: 'MESSAGE',
+      sourceId: message.id,
+      dedupeKey: `MESSAGE:${message.id}`,
+      createdBy: input.senderId,
+    })
   }
 
   async findByConversation(

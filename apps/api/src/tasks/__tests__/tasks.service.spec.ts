@@ -16,6 +16,8 @@ import type { PrismaService } from '../../prisma/prisma.service'
 import type { ContactsService } from '../../contacts/contacts.service'
 import type { DealsService } from '../../deals/deals.service'
 import type { AuditService } from '../../audit/audit.service'
+import type { ActivityService } from '../../activities/activities.service'
+import type { ActivityLogPreferenceService } from '../../activities/activity-log-preference.service'
 import type { Prisma } from '@prisma/client'
 
 const mockResolveVisibilityFilter = resolveVisibilityFilter as jest.Mock
@@ -97,12 +99,16 @@ function makeService(prisma: MockPrisma): {
   templates: { findOneForTenant: jest.Mock }
   pubsub: { publish: jest.Mock }
   audit: { log: jest.Mock }
+  activity: { logSafe: jest.Mock }
+  activityLogPreference: { isEnabled: jest.Mock }
 } {
   const contacts = { findOne: jest.fn() }
   const deals = { findOne: jest.fn() }
   const templates = { findOneForTenant: jest.fn() }
   const pubsub = { publish: jest.fn() }
   const audit = { log: jest.fn() }
+  const activity = { logSafe: jest.fn().mockResolvedValue(null) }
+  const activityLogPreference = { isEnabled: jest.fn().mockResolvedValue(true) }
   const service = new TasksService(
     prisma as unknown as PrismaService,
     contacts as unknown as ContactsService,
@@ -110,8 +116,10 @@ function makeService(prisma: MockPrisma): {
     templates as unknown as TaskTemplatesService,
     pubsub as unknown as TaskPubSubService,
     audit as unknown as AuditService,
+    activity as unknown as ActivityService,
+    activityLogPreference as unknown as ActivityLogPreferenceService,
   )
-  return { service, contacts, deals, templates, pubsub, audit }
+  return { service, contacts, deals, templates, pubsub, audit, activity, activityLogPreference }
 }
 
 describe('TasksService', () => {
@@ -569,6 +577,35 @@ describe('TasksService', () => {
   })
 
   describe('update()', () => {
+    it('stamps completedAt when the update flips status to COMPLETED', async () => {
+      const { service } = makeService(prisma)
+      const now = new Date('2026-08-02T10:00:00.000Z')
+      prisma.task.findFirst.mockResolvedValue(makeTask({ status: 'TODO', completedAt: null }))
+      prisma.task.updateMany.mockResolvedValue({ count: 1 })
+
+      await service.update(TENANT, USER, 'task-1', { status: 'COMPLETED' }, now)
+
+      expect(prisma.task.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ status: 'COMPLETED', completedAt: now }),
+        }),
+      )
+    })
+
+    it('does not re-stamp completedAt when the task is already COMPLETED', async () => {
+      const { service } = makeService(prisma)
+      const stampedAt = new Date('2026-08-01T00:00:00.000Z')
+      prisma.task.findFirst.mockResolvedValue(
+        makeTask({ status: 'COMPLETED', completedAt: stampedAt }),
+      )
+      prisma.task.updateMany.mockResolvedValue({ count: 1 })
+
+      await service.update(TENANT, USER, 'task-1', { status: 'COMPLETED' })
+
+      const data = prisma.task.updateMany.mock.calls[0][0].data as Record<string, unknown>
+      expect(data).not.toHaveProperty('completedAt')
+    })
+
     it('updates title, status and priority with tri-state semantics', async () => {
       const { service, audit } = makeService(prisma)
       const current = makeTask()
@@ -850,6 +887,183 @@ describe('TasksService', () => {
       prisma.task.updateMany.mockResolvedValue({ count: 0 })
 
       await expect(service.complete(TENANT, USER, 'task-1')).rejects.toThrow('Task not found')
+    })
+  })
+
+  describe('auto-logging TASK_COMPLETED (Story 4.2)', () => {
+    it('complete() logs TASK_COMPLETED once with dedupeKey, title and metadata (AC 19)', async () => {
+      const { service, activity } = makeService(prisma)
+      prisma.task.findFirst
+        .mockResolvedValueOnce(makeTask({ status: 'TODO', contactId: 'contact-1' }))
+        .mockResolvedValueOnce(
+          makeTask({
+            status: 'COMPLETED',
+            contactId: 'contact-1',
+            completedAt: new Date('2026-08-03T00:00:00.000Z'),
+          }),
+        )
+      prisma.task.updateMany.mockResolvedValue({ count: 1 })
+
+      const now = new Date('2026-08-03T00:00:00.000Z')
+      await service.complete(TENANT, USER, 'task-1', now)
+
+      expect(activity.logSafe).toHaveBeenCalledTimes(1)
+      expect(activity.logSafe).toHaveBeenCalledWith(
+        expect.objectContaining({
+          tenantId: TENANT,
+          contactId: 'contact-1',
+          type: 'TASK_COMPLETED',
+          title: 'Task completed: Follow up with Acme',
+          source: 'TASK',
+          sourceId: 'task-1',
+          dedupeKey: 'TASK_COMPLETED:task-1',
+          createdBy: USER,
+          metadata: expect.objectContaining({
+            taskId: 'task-1',
+            priority: 'MEDIUM',
+            assignedTo: USER,
+          }),
+        }),
+      )
+    })
+
+    it('complete() on an already-COMPLETED task logs nothing (UT2)', async () => {
+      const { service, activity } = makeService(prisma)
+      prisma.task.findFirst.mockResolvedValue(
+        makeTask({ status: 'COMPLETED', contactId: 'contact-1' }),
+      )
+
+      await service.complete(TENANT, USER, 'task-1')
+
+      expect(activity.logSafe).not.toHaveBeenCalled()
+    })
+
+    it('update() flipping status to COMPLETED from non-COMPLETED logs exactly once (AC 20 / UT3)', async () => {
+      const { service, activity } = makeService(prisma)
+      prisma.task.findFirst
+        .mockResolvedValueOnce(makeTask({ status: 'TODO', contactId: 'contact-1' }))
+        .mockResolvedValueOnce(makeTask({ status: 'COMPLETED', contactId: 'contact-1' }))
+      prisma.task.updateMany.mockResolvedValue({ count: 1 })
+
+      await service.update(TENANT, USER, 'task-1', { status: 'COMPLETED' })
+
+      expect(activity.logSafe).toHaveBeenCalledTimes(1)
+      expect(activity.logSafe).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'TASK_COMPLETED',
+          dedupeKey: 'TASK_COMPLETED:task-1',
+          contactId: 'contact-1',
+        }),
+      )
+    })
+
+    it('update() from already-COMPLETED logs nothing (UT4)', async () => {
+      const { service, activity } = makeService(prisma)
+      prisma.task.findFirst.mockResolvedValue(
+        makeTask({ status: 'COMPLETED', contactId: 'contact-1' }),
+      )
+      prisma.task.updateMany.mockResolvedValue({ count: 1 })
+
+      await service.update(TENANT, USER, 'task-1', { status: 'COMPLETED' })
+
+      expect(activity.logSafe).not.toHaveBeenCalled()
+    })
+
+    it('update() for a non-COMPLETED field change logs nothing (UT5)', async () => {
+      const { service, activity } = makeService(prisma)
+      prisma.task.findFirst.mockResolvedValue(makeTask({ contactId: 'contact-1' }))
+      prisma.task.updateMany.mockResolvedValue({ count: 1 })
+
+      await service.update(TENANT, USER, 'task-1', { title: 'Renamed' })
+
+      expect(activity.logSafe).not.toHaveBeenCalled()
+    })
+
+    it('an orphan task (contactId null and dealId null) completes but logs nothing (AC 21 / UT6)', async () => {
+      const { service, activity } = makeService(prisma)
+      prisma.task.findFirst
+        .mockResolvedValueOnce(makeTask({ status: 'TODO', contactId: null, dealId: null }))
+        .mockResolvedValueOnce(makeTask({ status: 'COMPLETED', contactId: null, dealId: null }))
+      prisma.task.updateMany.mockResolvedValue({ count: 1 })
+
+      const result = await service.complete(TENANT, USER, 'task-1')
+
+      expect(result.status).toBe('COMPLETED')
+      expect(activity.logSafe).not.toHaveBeenCalled()
+      expect(prisma.task.updateMany).toHaveBeenCalled()
+    })
+
+    it('logs on the task contact when contactId is set (UT7)', async () => {
+      const { service, activity } = makeService(prisma)
+      prisma.task.findFirst
+        .mockResolvedValueOnce(makeTask({ status: 'TODO', contactId: 'contact-1', dealId: null }))
+        .mockResolvedValueOnce(
+          makeTask({ status: 'COMPLETED', contactId: 'contact-1', dealId: null }),
+        )
+      prisma.task.updateMany.mockResolvedValue({ count: 1 })
+
+      await service.complete(TENANT, USER, 'task-1')
+
+      expect(activity.logSafe).toHaveBeenCalledWith(
+        expect.objectContaining({ contactId: 'contact-1' }),
+      )
+    })
+
+    it('resolves the contact from the deal when task.contactId is null (AC 21 / UT8)', async () => {
+      const { service, deals, activity } = makeService(prisma)
+      deals.findOne.mockResolvedValue({ id: 'deal-1', contactId: 'contact-from-deal' })
+      prisma.task.findFirst
+        .mockResolvedValueOnce(makeTask({ status: 'TODO', contactId: null, dealId: 'deal-1' }))
+        .mockResolvedValueOnce(makeTask({ status: 'COMPLETED', contactId: null, dealId: 'deal-1' }))
+      prisma.task.updateMany.mockResolvedValue({ count: 1 })
+
+      await service.complete(TENANT, USER, 'task-1')
+
+      expect(deals.findOne).toHaveBeenCalledWith(TENANT, USER, 'deal-1')
+      expect(activity.logSafe).toHaveBeenCalledWith(
+        expect.objectContaining({ contactId: 'contact-from-deal' }),
+      )
+    })
+
+    it('skips silently when the deal is gone — the mutation still succeeds (AC 21)', async () => {
+      const { service, deals, activity } = makeService(prisma)
+      deals.findOne.mockRejectedValue(new NotFoundException('Deal not found'))
+      prisma.task.findFirst
+        .mockResolvedValueOnce(makeTask({ status: 'TODO', contactId: null, dealId: 'deal-1' }))
+        .mockResolvedValueOnce(makeTask({ status: 'COMPLETED', contactId: null, dealId: 'deal-1' }))
+      prisma.task.updateMany.mockResolvedValue({ count: 1 })
+
+      const result = await service.complete(TENANT, USER, 'task-1')
+
+      expect(result.status).toBe('COMPLETED')
+      expect(activity.logSafe).not.toHaveBeenCalled()
+    })
+
+    it('preference logTaskCompleted=false suppresses the log but the mutation succeeds (AC 22 / UT9)', async () => {
+      const { service, activity, activityLogPreference } = makeService(prisma)
+      activityLogPreference.isEnabled.mockResolvedValue(false)
+      prisma.task.findFirst
+        .mockResolvedValueOnce(makeTask({ status: 'TODO', contactId: 'contact-1' }))
+        .mockResolvedValueOnce(makeTask({ status: 'COMPLETED', contactId: 'contact-1' }))
+      prisma.task.updateMany.mockResolvedValue({ count: 1 })
+
+      const result = await service.complete(TENANT, USER, 'task-1')
+
+      expect(result.status).toBe('COMPLETED')
+      expect(activity.logSafe).not.toHaveBeenCalled()
+      expect(activityLogPreference.isEnabled).toHaveBeenCalledWith(TENANT, USER, 'logTaskCompleted')
+    })
+
+    it('preference logTaskCompleted=true allows the log (UT10)', async () => {
+      const { service, activity } = makeService(prisma)
+      prisma.task.findFirst
+        .mockResolvedValueOnce(makeTask({ status: 'TODO', contactId: 'contact-1' }))
+        .mockResolvedValueOnce(makeTask({ status: 'COMPLETED', contactId: 'contact-1' }))
+      prisma.task.updateMany.mockResolvedValue({ count: 1 })
+
+      await service.complete(TENANT, USER, 'task-1')
+
+      expect(activity.logSafe).toHaveBeenCalledTimes(1)
     })
   })
 

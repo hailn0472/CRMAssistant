@@ -11,6 +11,10 @@ type TimelineCardProps = {
   createdAt: string
   createdBy: string
   isLast?: boolean
+  // Story 4.2 (AC 48): non-null means the row was auto-logged from an
+  // integrated channel — renders the "Auto" badge. Never signal by colour
+  // alone (WCAG AA); the badge pairs colour with a text label.
+  source?: string | null
 }
 
 const MAX_DESC_LENGTH = 200
@@ -44,6 +48,7 @@ export function TimelineCard({
   createdAt,
   createdBy,
   isLast = false,
+  source = null,
 }: TimelineCardProps): React.JSX.Element {
   const [showFullDescription, setShowFullDescription] = useState(false)
 
@@ -84,6 +89,16 @@ export function TimelineCard({
             {relativeTime}
           </time>
         </div>
+
+        {source !== null && (
+          <span
+            title={`Automatically logged from ${source}`}
+            aria-label={`Automatically logged from ${source}`}
+            className="mt-1 inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500"
+          >
+            Auto
+          </span>
+        )}
 
         {displayDescription && (
           <p className="mt-1 text-sm text-slate-600">

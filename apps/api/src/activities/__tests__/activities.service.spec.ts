@@ -1,4 +1,5 @@
-import { BadRequestException, NotFoundException } from '@nestjs/common'
+import { BadRequestException, Logger, NotFoundException } from '@nestjs/common'
+import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library'
 
 import { ActivityService } from '../activities.service'
 import type { ActivityType as PrismaActivityType } from '@prisma/client'
@@ -27,6 +28,9 @@ type MockPrisma = {
   contact: {
     findFirst: jest.Mock
   }
+  auditLog: {
+    create: jest.Mock
+  }
   $transaction: jest.Mock
 }
 
@@ -44,6 +48,9 @@ function makeActivity(overrides: Partial<Record<string, unknown>> = {}): Record<
     type: 'NOTE_ADDED',
     title: 'Test activity',
     description: null,
+    source: null,
+    sourceId: null,
+    dedupeKey: null,
     createdAt: NOW,
     createdBy: USER_ID,
     ...overrides,
@@ -60,19 +67,30 @@ function makePrisma(): MockPrisma {
     contact: {
       findFirst: jest.fn(),
     },
+    auditLog: {
+      create: jest.fn(),
+    },
     $transaction: jest.fn(),
   }
+}
+
+function makeAudit(): { log: jest.Mock } {
+  return { log: jest.fn().mockResolvedValue(undefined) }
 }
 
 describe('ActivityService', () => {
   let service: ActivityService
   let prisma: MockPrisma
+  let audit: { log: jest.Mock }
 
   beforeEach(() => {
     prisma = makePrisma()
+    audit = makeAudit()
     service = new ActivityService(
       prisma as unknown as ConstructorParameters<typeof ActivityService>[0],
+      audit as never,
     )
+    jest.restoreAllMocks()
   })
 
   describe('log()', () => {
@@ -97,6 +115,10 @@ describe('ActivityService', () => {
           type: 'NOTE_ADDED',
           title: 'Test activity',
           description: null,
+          source: null,
+          sourceId: null,
+          dedupeKey: null,
+          metadata: undefined,
           createdBy: USER_ID,
         },
       })
@@ -165,7 +187,7 @@ describe('ActivityService', () => {
       ).rejects.toThrow(BadRequestException)
     })
 
-    it('succeeds with each of the 7 valid ActivityType values', async () => {
+    it('succeeds with each of the 12 valid ActivityType values', async () => {
       const types: PrismaActivityType[] = [
         'EMAIL_SENT',
         'CALL_MADE',
@@ -174,6 +196,11 @@ describe('ActivityService', () => {
         'DEAL_CREATED',
         'CONTACT_CREATED',
         'CONTACT_UPDATED',
+        'CONTACT_OWNER_CHANGED',
+        'TASK_COMPLETED',
+        'DEAL_STAGE_CHANGED',
+        'MESSAGE_RECEIVED',
+        'MESSAGE_SENT',
       ]
 
       for (const type of types) {
@@ -190,6 +217,40 @@ describe('ActivityService', () => {
 
         expect(result.type).toBe(type)
       }
+    })
+
+    it('passes source, sourceId, dedupeKey and metadata through to prisma.activity.create (AC 12)', async () => {
+      const activity = makeActivity({
+        source: 'TASK',
+        sourceId: 'task-1',
+        dedupeKey: 'TASK_COMPLETED:task-1',
+      })
+      prisma.activity.create.mockResolvedValue(activity)
+
+      await service.log({
+        tenantId: TENANT_ID,
+        contactId: CONTACT_ID,
+        type: 'TASK_COMPLETED' as PrismaActivityType,
+        title: 'Task completed: Call Acme',
+        createdBy: USER_ID,
+        source: 'TASK',
+        sourceId: 'task-1',
+        dedupeKey: 'TASK_COMPLETED:task-1',
+        metadata: { taskId: 'task-1', priority: 'HIGH' },
+      })
+
+      expect(prisma.activity.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          tenantId: TENANT_ID,
+          contactId: CONTACT_ID,
+          type: 'TASK_COMPLETED',
+          title: 'Task completed: Call Acme',
+          source: 'TASK',
+          sourceId: 'task-1',
+          dedupeKey: 'TASK_COMPLETED:task-1',
+          metadata: { taskId: 'task-1', priority: 'HIGH' },
+        }),
+      })
     })
   })
 
@@ -208,9 +269,7 @@ describe('ActivityService', () => {
       const result = await service.findByContact(TENANT_ID, CONTACT_ID, { first: 20 })
 
       expect(result.edges).toHaveLength(20)
-      expect(result.edges[0]!.node.createdAt).toBe(
-        (activities[0]!.createdAt as Date).toISOString(),
-      )
+      expect(result.edges[0]!.node.createdAt).toBe((activities[0]!.createdAt as Date).toISOString())
     })
 
     it('respects tenantId filter — tenant B cannot see tenant A activities', async () => {
@@ -274,7 +333,7 @@ describe('ActivityService', () => {
       expect(result.pageInfo.hasNextPage).toBe(false)
     })
 
-    it('uses select only for needed fields (no N+1)', async () => {
+    it('uses select only for needed fields (no N+1) — including source (AC 14)', async () => {
       prisma.activity.findMany.mockResolvedValue(activities.slice(0, 2))
 
       await service.findByContact(TENANT_ID, CONTACT_ID, { first: 20 })
@@ -288,9 +347,22 @@ describe('ActivityService', () => {
             description: true,
             createdAt: true,
             createdBy: true,
+            source: true,
           },
         }),
       )
+    })
+
+    it('exposes source on the timeline edges (null for manual notes)', async () => {
+      prisma.activity.findMany.mockResolvedValue([
+        makeActivity({ id: 'a1', source: 'TASK' }),
+        makeActivity({ id: 'a2', source: null }),
+      ])
+
+      const result = await service.findByContact(TENANT_ID, CONTACT_ID, { first: 20 })
+
+      expect(result.edges[0]!.node.source).toBe('TASK')
+      expect(result.edges[1]!.node.source).toBeNull()
     })
 
     it('clamps first to max 50', async () => {
@@ -349,7 +421,10 @@ describe('ActivityService', () => {
 
     it('returns empty array when no meaningful fields changed', () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const changes = service.detectChangedFields(baseOld as Record<string, unknown>, baseOld as Record<string, unknown>)
+      const changes = service.detectChangedFields(
+        baseOld as Record<string, unknown>,
+        baseOld as Record<string, unknown>,
+      )
 
       expect(changes).toHaveLength(0)
     })
@@ -424,6 +499,134 @@ describe('ActivityService', () => {
 
       expect(result).toBe(activity)
     })
+
+    it('returns null and logs at debug level on a Prisma P2002 dedupe hit (AC 13)', async () => {
+      const debugSpy = jest.spyOn(Logger.prototype, 'debug').mockImplementation(() => undefined)
+      const warnSpy = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined)
+      prisma.activity.create.mockRejectedValue(
+        new PrismaClientKnownRequestError('Unique constraint failed', {
+          code: 'P2002',
+          clientVersion: '5.22.0',
+        }),
+      )
+
+      const result = await service.logSafe({
+        tenantId: TENANT_ID,
+        contactId: CONTACT_ID,
+        type: 'TASK_COMPLETED' as PrismaActivityType,
+        title: 'Task completed: Call Acme',
+        createdBy: USER_ID,
+        source: 'TASK',
+        sourceId: 'task-1',
+        dedupeKey: 'TASK_COMPLETED:task-1',
+      })
+
+      expect(result).toBeNull()
+      expect(debugSpy).toHaveBeenCalled()
+      expect(warnSpy).not.toHaveBeenCalled()
+    })
+
+    it('returns null and logs at warn level on a generic Error (AC 13)', async () => {
+      const debugSpy = jest.spyOn(Logger.prototype, 'debug').mockImplementation(() => undefined)
+      const warnSpy = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined)
+      prisma.activity.create.mockRejectedValue(new Error('connection refused'))
+
+      const result = await service.logSafe({
+        tenantId: TENANT_ID,
+        contactId: CONTACT_ID,
+        type: 'NOTE_ADDED' as PrismaActivityType,
+        title: 'Test',
+        createdBy: USER_ID,
+      })
+
+      expect(result).toBeNull()
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('connection refused'))
+      expect(debugSpy).not.toHaveBeenCalled()
+    })
+
+    it('returns null and logs at warn level on a non-Error throw via String(error) (AC 13 / finding 3.7-F6)', async () => {
+      const warnSpy = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined)
+      prisma.activity.create.mockRejectedValue('panic')
+
+      const result = await service.logSafe({
+        tenantId: TENANT_ID,
+        contactId: CONTACT_ID,
+        type: 'NOTE_ADDED' as PrismaActivityType,
+        title: 'Test',
+        createdBy: USER_ID,
+      })
+
+      expect(result).toBeNull()
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('panic'))
+    })
+
+    it('never audits auto-logged activities (AC 44)', async () => {
+      prisma.activity.create.mockResolvedValue(makeActivity())
+
+      await service.logSafe({
+        tenantId: TENANT_ID,
+        contactId: CONTACT_ID,
+        type: 'TASK_COMPLETED' as PrismaActivityType,
+        title: 'Task completed: Call Acme',
+        createdBy: USER_ID,
+        source: 'TASK',
+        sourceId: 'task-1',
+        dedupeKey: 'TASK_COMPLETED:task-1',
+      })
+
+      expect(audit.log).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('addContactNote()', () => {
+    it('creates the NOTE_ADDED activity and writes an audit row (AC 43)', async () => {
+      const activity = makeActivity({ id: 'note-1', type: 'NOTE_ADDED' })
+      prisma.activity.create.mockResolvedValue(activity)
+
+      const result = await service.addContactNote({
+        tenantId: TENANT_ID,
+        contactId: CONTACT_ID,
+        title: 'Follow up call',
+        description: 'Customer asked for a quote',
+        userId: USER_ID,
+      })
+
+      expect(result.id).toBe('note-1')
+      expect(prisma.activity.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          tenantId: TENANT_ID,
+          contactId: CONTACT_ID,
+          type: 'NOTE_ADDED',
+          title: 'Follow up call',
+          description: 'Customer asked for a quote',
+          createdBy: USER_ID,
+        }),
+      })
+      expect(audit.log).toHaveBeenCalledWith({
+        tenantId: TENANT_ID,
+        userId: USER_ID,
+        action: 'CREATE',
+        entity: 'ACTIVITY',
+        entityId: 'note-1',
+        details: { mutationName: 'CREATE' },
+      })
+    })
+
+    it('defaults a missing description to null', async () => {
+      const activity = makeActivity()
+      prisma.activity.create.mockResolvedValue(activity)
+
+      await service.addContactNote({
+        tenantId: TENANT_ID,
+        contactId: CONTACT_ID,
+        title: 'Note',
+        userId: USER_ID,
+      })
+
+      expect(prisma.activity.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ description: null }),
+      })
+    })
   })
 
   describe('checkContactAccess()', () => {
@@ -463,9 +666,9 @@ describe('ActivityService', () => {
     it('throws NotFoundException when contact does not exist', async () => {
       prisma.contact.findFirst.mockResolvedValue(null)
 
-      await expect(
-        service.checkContactAccess(TENANT_ID, USER_ID, CONTACT_ID),
-      ).rejects.toThrow(NotFoundException)
+      await expect(service.checkContactAccess(TENANT_ID, USER_ID, CONTACT_ID)).rejects.toThrow(
+        NotFoundException,
+      )
     })
 
     it('throws NotFoundException when user has no access (not owner, not shared, no admin)', async () => {
@@ -473,9 +676,9 @@ describe('ActivityService', () => {
       ;(resolveVisibilityFilter as jest.Mock).mockResolvedValue(USER_ID) // OWN visibility
       ;(resolveSharedRecordIds as jest.Mock).mockResolvedValue([])
 
-      await expect(
-        service.checkContactAccess(TENANT_ID, USER_ID, CONTACT_ID),
-      ).rejects.toThrow(NotFoundException)
+      await expect(service.checkContactAccess(TENANT_ID, USER_ID, CONTACT_ID)).rejects.toThrow(
+        NotFoundException,
+      )
     })
 
     it('throws NotFoundException for contact from different tenant', async () => {
@@ -515,10 +718,7 @@ describe('ActivityService', () => {
 
     it('runs findMany and count in a single $transaction when includeTotalCount is true', async () => {
       prisma.activity.findMany.mockResolvedValue(activities.slice(0, 21))
-      prisma.$transaction.mockResolvedValue([
-        activities.slice(0, 21),
-        25,
-      ])
+      prisma.$transaction.mockResolvedValue([activities.slice(0, 21), 25])
 
       await service.findByContact(TENANT_ID, CONTACT_ID, {
         first: 20,

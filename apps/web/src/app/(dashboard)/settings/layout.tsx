@@ -35,6 +35,7 @@ const settingsNav: SettingsNavItem[] = [
   { label: 'API Keys', href: '/settings/api-keys', roles: ['ADMIN'] },
   // No roles and no permission — every user manages their own preferences.
   { label: 'Reminders', href: '/settings/reminders' },
+  { label: 'Activity Logging', href: '/settings/activity-logging' },
   {
     label: 'Channels',
     href: '/settings/channels',

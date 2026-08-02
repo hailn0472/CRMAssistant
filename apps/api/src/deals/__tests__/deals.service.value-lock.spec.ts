@@ -89,8 +89,13 @@ describe('DealsService — value lock (Story 3.4)', () => {
     prisma = makePrisma()
     pubSub = makePubSub()
     ;(resolveVisibilityFilter as jest.Mock).mockResolvedValue(undefined)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    service = new DealsService(prisma as any, pubSub as any)
+    service = new DealsService(
+      prisma as never,
+      pubSub as never,
+      { log: jest.fn().mockResolvedValue(undefined) } as never,
+      { logSafe: jest.fn().mockResolvedValue(null) } as never,
+      { isEnabled: jest.fn().mockResolvedValue(true) } as never,
+    )
   })
 
   it('rejects manual value change when deal has >= 1 active line item', async () => {

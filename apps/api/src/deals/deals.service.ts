@@ -1,6 +1,9 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common'
 
 import { PrismaService } from '../prisma/prisma.service'
+import { AuditService } from '../audit/audit.service'
+import { ActivityService } from '../activities/activities.service'
+import { ActivityLogPreferenceService } from '../activities/activity-log-preference.service'
 import { resolveVisibilityFilter } from '../common/guards/visibility-check'
 import { DealPubSubService, PUBSUB_DEAL_UPDATED } from './deal-pubsub.service'
 import type { Deal, Prisma } from '@prisma/client'
@@ -168,7 +171,35 @@ export class DealsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly dealPubSub: DealPubSubService,
+    private readonly audit: AuditService,
+    private readonly activity: ActivityService,
+    private readonly activityLogPreference: ActivityLogPreferenceService,
   ) {}
+
+  /**
+   * Service-level audit write. The global AuditInterceptor (registered via
+   * APP_INTERCEPTOR) does NOT wrap GraphQL resolvers in this repo — the
+   * hand-built Pothos schema (builder.toSchema() → GraphQLModule.forRoot)
+   * bypasses the NestJS resolver map, so intercept() never fires for
+   * mutations. Deal CUD produced zero AuditLog rows despite NFR9 requiring
+   * them; writing here, synchronously inside the mutation, is the only path
+   * that actually works. Mirrors TasksService.writeAudit.
+   */
+  private writeAudit(
+    tenantId: string,
+    userId: string,
+    action: 'CREATE' | 'UPDATE' | 'DELETE',
+    entityId: string,
+  ): Promise<void> {
+    return this.audit.log({
+      tenantId,
+      userId,
+      action,
+      entity: 'DEAL',
+      entityId,
+      details: { mutationName: action },
+    })
+  }
 
   async create(tenantId: string, userId: string, input: CreateDealInput): Promise<Deal> {
     const normalizedInput = normalizeCreateInput(input)
@@ -215,6 +246,12 @@ export class DealsService {
 
     const createdDeal = await this.findOne(tenantId, userId, deal.id)
     this.dealPubSub.publish(`${PUBSUB_DEAL_UPDATED}:${tenantId}`, createdDeal)
+
+    await this.writeAudit(tenantId, userId, 'CREATE', createdDeal.id)
+
+    // Story 4.2: auto-log the creation on the deal's contact (AC 24).
+    // contactId is guaranteed non-null — validated at deals.service.ts create.
+    await this.logDealCreated(tenantId, userId, createdDeal)
 
     return createdDeal
   }
@@ -474,6 +511,8 @@ export class DealsService {
     const updatedDeal = await this.findOne(tenantId, userId, id)
     this.dealPubSub.publish(`${PUBSUB_DEAL_UPDATED}:${tenantId}`, updatedDeal)
 
+    await this.writeAudit(tenantId, userId, 'UPDATE', updatedDeal.id)
+
     return updatedDeal
   }
 
@@ -483,8 +522,9 @@ export class DealsService {
     dealId: string,
     newStageId: string,
   ): Promise<Deal> {
-    // Validate deal exists and is visible
-    await this.findOne(tenantId, userId, dealId)
+    // Validate deal exists and is visible — keep the pre-move snapshot for
+    // the DEAL_STAGE_CHANGED log (from-stage name/id).
+    const currentDeal = await this.findOne(tenantId, userId, dealId)
 
     // Validate target stage exists in tenant
     const stage = await this.prisma.dealStage.findFirst({
@@ -511,7 +551,89 @@ export class DealsService {
     const movedDeal = await this.findOne(tenantId, userId, dealId)
     this.dealPubSub.publish(`${PUBSUB_DEAL_UPDATED}:${tenantId}`, movedDeal)
 
+    await this.writeAudit(tenantId, userId, 'UPDATE', movedDeal.id)
+
+    // Story 4.2: auto-log the stage transition (AC 25). The from-stage name
+    // comes from the pre-move snapshot captured above. `update()` and
+    // `delete()` log nothing (AC 26) — field-level deal edits are
+    // deliberately out of scope.
+    const fromStageName =
+      (currentDeal as Deal & { stage?: { name?: string } }).stage?.name ?? 'Unknown stage'
+    await this.logDealStageChanged(
+      tenantId,
+      userId,
+      movedDeal,
+      fromStageName,
+      stage.name,
+      currentDeal.stageId,
+    )
+
     return movedDeal
+  }
+
+  /**
+   * Auto-log DEAL_CREATED on the deal's contact (AC 24). Suppressed when the
+   * acting user's `logDealCreated` preference is off. Uses logSafe — a
+   * logging failure never fails the deal mutation.
+   */
+  private async logDealCreated(tenantId: string, userId: string, deal: Deal): Promise<void> {
+    if (!(await this.activityLogPreference.isEnabled(tenantId, userId, 'logDealCreated'))) {
+      return
+    }
+
+    await this.activity.logSafe({
+      tenantId,
+      contactId: deal.contactId,
+      type: 'DEAL_CREATED',
+      title: `Deal created: ${deal.title}`,
+      metadata: {
+        dealId: deal.id,
+        value: deal.value,
+        currency: deal.currency,
+        stageId: deal.stageId,
+        ownerId: deal.ownerId,
+      },
+      source: 'DEAL',
+      sourceId: deal.id,
+      dedupeKey: `DEAL_CREATED:${deal.id}`,
+      createdBy: userId,
+    })
+  }
+
+  /**
+   * Auto-log DEAL_STAGE_CHANGED (AC 25). Suppressed when the acting user's
+   * `logDealStageChanged` preference is off. The dedupeKey carries the
+   * occurredAt ISO timestamp (AC 15) so a later re-log of the same transition
+   * is treated as a distinct event.
+   */
+  private async logDealStageChanged(
+    tenantId: string,
+    userId: string,
+    deal: Deal,
+    fromStageName: string,
+    toStageName: string,
+    fromStageId: string,
+  ): Promise<void> {
+    if (!(await this.activityLogPreference.isEnabled(tenantId, userId, 'logDealStageChanged'))) {
+      return
+    }
+
+    await this.activity.logSafe({
+      tenantId,
+      contactId: deal.contactId,
+      type: 'DEAL_STAGE_CHANGED',
+      title: `Deal moved to ${toStageName}`,
+      description: `${fromStageName} → ${toStageName}`,
+      metadata: {
+        dealId: deal.id,
+        fromStageId,
+        toStageId: deal.stageId,
+      },
+      source: 'DEAL',
+      sourceId: deal.id,
+      dedupeKey: `DEAL_STAGE:${deal.id}:${deal.stageId}:${new Date().toISOString()}`,
+      createdBy: userId,
+    })
   }
 
   async delete(tenantId: string, userId: string, id: string): Promise<boolean> {
@@ -529,6 +651,8 @@ export class DealsService {
 
     // Publish the deal before delete so the board can remove it
     this.dealPubSub.publish(`${PUBSUB_DEAL_UPDATED}:${tenantId}`, deal)
+
+    await this.writeAudit(tenantId, userId, 'DELETE', deal.id)
 
     return true
   }

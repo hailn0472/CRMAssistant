@@ -8,9 +8,10 @@ import { PrismaModule } from '../prisma/prisma.module'
 import { ContactsModule } from '../contacts/contacts.module'
 import { DealsModule } from '../deals/deals.module'
 import { AuditModule } from '../audit/audit.module'
+import { ActivitiesModule } from '../activities/activities.module'
 
 @Module({
-  imports: [PrismaModule, ContactsModule, DealsModule, AuditModule],
+  imports: [PrismaModule, ContactsModule, DealsModule, AuditModule, ActivitiesModule],
   providers: [TasksService, TaskTemplatesService, TaskPubSubService],
   exports: [TasksService, TaskTemplatesService],
 })

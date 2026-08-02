@@ -5,9 +5,11 @@ import { DealsService } from './deals.service'
 import { DealStageService } from './deal-stages.service'
 import { DealPubSubService } from './deal-pubsub.service'
 import { PrismaModule } from '../prisma/prisma.module'
+import { AuditModule } from '../audit/audit.module'
+import { ActivitiesModule } from '../activities/activities.module'
 
 @Module({
-  imports: [PrismaModule],
+  imports: [PrismaModule, AuditModule, ActivitiesModule],
   providers: [DealsService, DealStageService, DealPubSubService],
   exports: [DealsService, DealStageService, DealPubSubService],
 })

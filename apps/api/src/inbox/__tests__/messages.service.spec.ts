@@ -22,10 +22,15 @@ type MockMessageReadReceiptDelegate = {
   upsert: jest.Mock
 }
 
+type MockContactDelegate = {
+  findFirst: jest.Mock
+}
+
 type MockPrisma = {
   message: MockMessageDelegate
   conversation: MockConversationDelegate
   messageReadReceipt: MockMessageReadReceiptDelegate
+  contact: MockContactDelegate
   $transaction: jest.Mock
 }
 
@@ -90,7 +95,20 @@ function makePrisma(): MockPrisma {
     messageReadReceipt: {
       upsert: jest.fn(),
     },
+    contact: {
+      findFirst: jest.fn(),
+    },
     $transaction: jest.fn(),
+  }
+}
+
+function makeActivityMocks(): {
+  activity: { logSafe: jest.Mock }
+  activityLogPreference: { isEnabled: jest.Mock }
+} {
+  return {
+    activity: { logSafe: jest.fn().mockResolvedValue(null) },
+    activityLogPreference: { isEnabled: jest.fn().mockResolvedValue(true) },
   }
 }
 
@@ -98,11 +116,21 @@ describe('MessagesService', () => {
   let service: MessagesService
   let prisma: MockPrisma
   let pubSub: InboxPubSubService
+  let activity: { logSafe: jest.Mock }
+  let activityLogPreference: { isEnabled: jest.Mock }
 
   beforeEach(() => {
     prisma = makePrisma()
     pubSub = new InboxPubSubService()
-    service = new MessagesService(prisma as any, pubSub)
+    const mocks = makeActivityMocks()
+    activity = mocks.activity
+    activityLogPreference = mocks.activityLogPreference
+    service = new MessagesService(
+      prisma as any,
+      pubSub,
+      activity as any,
+      activityLogPreference as any,
+    )
   })
 
   describe('sendMessage()', () => {
@@ -313,7 +341,13 @@ describe('MessagesService', () => {
       prisma.conversation.update.mockResolvedValue(conv)
 
       const dispatcher = { dispatch: jest.fn().mockResolvedValue(undefined) }
-      const dispatchingService = new MessagesService(prisma as any, pubSub, dispatcher as any)
+      const dispatchingService = new MessagesService(
+        prisma as any,
+        pubSub,
+        activity as any,
+        activityLogPreference as any,
+        dispatcher as any,
+      )
 
       await dispatchingService.sendMessage(TENANT_ID, {
         conversationId: CONVERSATION_ID,
@@ -334,7 +368,13 @@ describe('MessagesService', () => {
       prisma.conversation.update.mockResolvedValue(conv)
 
       const dispatcher = { dispatch: jest.fn().mockRejectedValue(new Error('graph api down')) }
-      const dispatchingService = new MessagesService(prisma as any, pubSub, dispatcher as any)
+      const dispatchingService = new MessagesService(
+        prisma as any,
+        pubSub,
+        activity as any,
+        activityLogPreference as any,
+        dispatcher as any,
+      )
 
       await expect(
         dispatchingService.sendMessage(TENANT_ID, {
@@ -344,6 +384,314 @@ describe('MessagesService', () => {
           content: 'Hello from agent',
         }),
       ).resolves.toBe(msg)
+    })
+  })
+
+  describe('auto-logging messages (Story 4.2)', () => {
+    function setupSend(conv: Conversation, msg: Message): void {
+      prisma.conversation.findFirst.mockResolvedValue(conv)
+      prisma.$transaction.mockImplementation(async (cb: Function) => cb(prisma))
+      prisma.message.create.mockResolvedValue(msg)
+      prisma.conversation.update.mockResolvedValue(conv)
+    }
+
+    it('CONTACT sender → MESSAGE_RECEIVED with dedupeKey MESSAGE:<id> (AC 30 / UM1, UM19)', async () => {
+      const conv = makeConversation()
+      const msg = makeMessage({ senderType: 'CONTACT' as any })
+      setupSend(conv, msg)
+      prisma.contact.findFirst.mockResolvedValue({ firstName: 'Ada', lastName: 'Lovelace' })
+
+      await service.sendMessage(TENANT_ID, {
+        conversationId: CONVERSATION_ID,
+        senderId: 'psid-123',
+        senderType: 'CONTACT',
+        content: 'Hello',
+      })
+
+      expect(activity.logSafe).toHaveBeenCalledWith(
+        expect.objectContaining({
+          tenantId: TENANT_ID,
+          contactId: CONTACT_ID,
+          type: 'MESSAGE_RECEIVED',
+          title: 'Message received from Ada Lovelace',
+          source: 'MESSAGE',
+          sourceId: 'msg-1',
+          dedupeKey: 'MESSAGE:msg-1',
+          createdBy: 'psid-123',
+        }),
+      )
+    })
+
+    it('AGENT sender → MESSAGE_SENT (AC 30 / UM2)', async () => {
+      const conv = makeConversation()
+      setupSend(conv, makeMessage())
+      prisma.contact.findFirst.mockResolvedValue({ firstName: 'Ada', lastName: 'Lovelace' })
+
+      await service.sendMessage(TENANT_ID, {
+        conversationId: CONVERSATION_ID,
+        senderId: USER_ID,
+        senderType: 'AGENT',
+        content: 'Hello',
+      })
+
+      expect(activity.logSafe).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'MESSAGE_SENT',
+          title: 'Message sent to Ada Lovelace',
+        }),
+      )
+    })
+
+    it('SYSTEM sender → skip (AC 30 / UM3)', async () => {
+      setupSend(makeConversation(), makeMessage({ senderType: 'SYSTEM' as any }))
+
+      await service.sendMessage(TENANT_ID, {
+        conversationId: CONVERSATION_ID,
+        senderId: 'system',
+        senderType: 'SYSTEM',
+        content: 'Conversation created',
+      })
+
+      expect(activity.logSafe).not.toHaveBeenCalled()
+    })
+
+    it('SKIP: conversation.contactId is null (internal thread) (AC 31 / UM4)', async () => {
+      const conv = makeConversation({ contactId: null })
+      setupSend(conv, makeMessage())
+
+      const result = await service.sendMessage(TENANT_ID, {
+        conversationId: CONVERSATION_ID,
+        senderId: USER_ID,
+        senderType: 'AGENT',
+        content: 'Internal note to teammate',
+      })
+
+      expect(result).toBeDefined()
+      expect(activity.logSafe).not.toHaveBeenCalled()
+    })
+
+    it('SKIP: messageType INTERNAL_NOTE (AC 31 / UM5)', async () => {
+      setupSend(makeConversation(), makeMessage({ messageType: 'INTERNAL_NOTE' as any }))
+
+      await service.sendMessage(TENANT_ID, {
+        conversationId: CONVERSATION_ID,
+        senderId: USER_ID,
+        senderType: 'AGENT',
+        content: 'Note for the team',
+        messageType: 'INTERNAL_NOTE',
+      })
+
+      expect(activity.logSafe).not.toHaveBeenCalled()
+    })
+
+    it('SKIP: message.internalNote is true (AC 31 / UM6)', async () => {
+      const conv = makeConversation()
+      setupSend(conv, makeMessage({ internalNote: true }))
+
+      await service.sendMessage(TENANT_ID, {
+        conversationId: CONVERSATION_ID,
+        senderId: USER_ID,
+        senderType: 'AGENT',
+        content: 'Note for the team',
+      })
+
+      expect(activity.logSafe).not.toHaveBeenCalled()
+    })
+
+    it('SKIP: input.sentAt provided (history backfill) (AC 31 / UM7)', async () => {
+      setupSend(makeConversation(), makeMessage())
+
+      await service.sendMessage(TENANT_ID, {
+        conversationId: CONVERSATION_ID,
+        senderId: 'psid-123',
+        senderType: 'CONTACT',
+        content: 'Backfilled message',
+        sentAt: new Date('2020-01-01T00:00:00.000Z'),
+      })
+
+      expect(activity.logSafe).not.toHaveBeenCalled()
+    })
+
+    it('SKIP: metadata.source === facebook_echo (AC 31 / UM8)', async () => {
+      setupSend(makeConversation(), makeMessage())
+
+      await service.sendMessage(TENANT_ID, {
+        conversationId: CONVERSATION_ID,
+        senderId: USER_ID,
+        senderType: 'AGENT',
+        content: 'Echo of an outbound message',
+        metadata: { source: 'facebook_echo' },
+      })
+
+      expect(activity.logSafe).not.toHaveBeenCalled()
+    })
+
+    it('uses "contact" as the display name when the contact row is gone (UM9 fallback)', async () => {
+      setupSend(makeConversation(), makeMessage({ senderType: 'CONTACT' as any }))
+      prisma.contact.findFirst.mockResolvedValue(null)
+
+      await service.sendMessage(TENANT_ID, {
+        conversationId: CONVERSATION_ID,
+        senderId: 'psid-123',
+        senderType: 'CONTACT',
+        content: 'Hello',
+      })
+
+      expect(activity.logSafe).toHaveBeenCalledWith(
+        expect.objectContaining({ title: 'Message received from contact' }),
+      )
+    })
+
+    it('description is the first 200 characters + ellipsis for long content (AC 32 / UM11)', async () => {
+      const longContent = 'A'.repeat(300)
+      setupSend(
+        makeConversation(),
+        makeMessage({ senderType: 'CONTACT' as any, content: longContent }),
+      )
+
+      await service.sendMessage(TENANT_ID, {
+        conversationId: CONVERSATION_ID,
+        senderId: 'psid-123',
+        senderType: 'CONTACT',
+        content: longContent,
+      })
+
+      expect(activity.logSafe).toHaveBeenCalledWith(
+        expect.objectContaining({ description: 'A'.repeat(200) + '…' }),
+      )
+    })
+
+    it('metadata shape is { messageId, conversationId, channel, messageType, senderType } (AC 32 / UM12)', async () => {
+      const conv = makeConversation({ channel: 'FACEBOOK' as any })
+      setupSend(conv, makeMessage({ senderType: 'CONTACT' as any, messageType: 'TEXT' as any }))
+
+      await service.sendMessage(TENANT_ID, {
+        conversationId: CONVERSATION_ID,
+        senderId: 'psid-123',
+        senderType: 'CONTACT',
+        content: 'Hello',
+      })
+
+      expect(activity.logSafe).toHaveBeenCalledWith(
+        expect.objectContaining({
+          metadata: {
+            messageId: 'msg-1',
+            conversationId: CONVERSATION_ID,
+            channel: 'FACEBOOK',
+            messageType: 'TEXT',
+            senderType: 'CONTACT',
+          },
+        }),
+      )
+    })
+
+    it('MESSAGE_RECEIVED checks the preference on conversation.assignedTo (AC 33 / UM14)', async () => {
+      const conv = makeConversation({ assignedTo: 'agent-9' })
+      setupSend(conv, makeMessage({ senderType: 'CONTACT' as any }))
+
+      await service.sendMessage(TENANT_ID, {
+        conversationId: CONVERSATION_ID,
+        senderId: 'psid-123',
+        senderType: 'CONTACT',
+        content: 'Hello',
+      })
+
+      expect(activityLogPreference.isEnabled).toHaveBeenCalledWith(
+        TENANT_ID,
+        'agent-9',
+        'logMessageReceived',
+      )
+    })
+
+    it('MESSAGE_RECEIVED with null assignedTo skips the preference check and always logs (AC 33 / UM13)', async () => {
+      const conv = makeConversation({ assignedTo: null })
+      setupSend(conv, makeMessage({ senderType: 'CONTACT' as any }))
+
+      await service.sendMessage(TENANT_ID, {
+        conversationId: CONVERSATION_ID,
+        senderId: 'psid-123',
+        senderType: 'CONTACT',
+        content: 'Hello',
+      })
+
+      expect(activityLogPreference.isEnabled).toHaveBeenCalledWith(
+        TENANT_ID,
+        null,
+        'logMessageReceived',
+      )
+      expect(activity.logSafe).toHaveBeenCalled()
+    })
+
+    it('MESSAGE_SENT checks the preference on the acting user (AC 33 / UM15)', async () => {
+      setupSend(makeConversation(), makeMessage())
+
+      await service.sendMessage(TENANT_ID, {
+        conversationId: CONVERSATION_ID,
+        senderId: USER_ID,
+        senderType: 'AGENT',
+        content: 'Hello',
+      })
+
+      expect(activityLogPreference.isEnabled).toHaveBeenCalledWith(
+        TENANT_ID,
+        USER_ID,
+        'logMessageSent',
+      )
+    })
+
+    it('preference off suppresses the log but sendMessage still succeeds (UM16)', async () => {
+      activityLogPreference.isEnabled.mockResolvedValue(false)
+      const msg = makeMessage()
+      setupSend(makeConversation(), msg)
+
+      const result = await service.sendMessage(TENANT_ID, {
+        conversationId: CONVERSATION_ID,
+        senderId: USER_ID,
+        senderType: 'AGENT',
+        content: 'Hello',
+      })
+
+      expect(result).toBe(msg)
+      expect(activity.logSafe).not.toHaveBeenCalled()
+    })
+
+    it('a logSafe rejection does not fail sendMessage (AC 34 / UM17)', async () => {
+      activity.logSafe.mockRejectedValue({ code: 'P2002' })
+      const msg = makeMessage()
+      setupSend(makeConversation(), msg)
+
+      const result = await service.sendMessage(TENANT_ID, {
+        conversationId: CONVERSATION_ID,
+        senderId: USER_ID,
+        senderType: 'AGENT',
+        content: 'Hello',
+      })
+
+      expect(result).toBe(msg)
+    })
+
+    it('the hook fires AFTER the $transaction commits and after pubsub (AC 29 / UM18)', async () => {
+      const order: string[] = []
+      prisma.conversation.findFirst.mockResolvedValue(makeConversation())
+      prisma.$transaction.mockImplementation(async (cb: Function) => {
+        order.push('transaction')
+        return cb(prisma)
+      })
+      prisma.message.create.mockResolvedValue(makeMessage())
+      prisma.conversation.update.mockResolvedValue(makeConversation())
+      activity.logSafe.mockImplementation(async () => {
+        order.push('logSafe')
+        return null
+      })
+
+      await service.sendMessage(TENANT_ID, {
+        conversationId: CONVERSATION_ID,
+        senderId: USER_ID,
+        senderType: 'AGENT',
+        content: 'Hello',
+      })
+
+      expect(order.indexOf('transaction')).toBeLessThan(order.indexOf('logSafe'))
     })
   })
 })

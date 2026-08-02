@@ -16,6 +16,12 @@ enum ActivityType {
   CONTACT_CREATED
   CONTACT_UPDATED
   CONTACT_OWNER_CHANGED
+  // Auto-logged activity types (Story 4.2) — written by the producers in
+  // TasksService / DealsService / MessagesService via ActivityService.logSafe().
+  TASK_COMPLETED
+  DEAL_STAGE_CHANGED
+  MESSAGE_RECEIVED
+  MESSAGE_SENT
 }
 
 // =============================================================================
@@ -103,6 +109,7 @@ model Tenant {
   dealReminders            DealReminder[]
   dealReminderSnoozes      DealReminderSnooze[]
   userReminderPreferences  UserReminderPreference[]
+  userActivityLogPreferences UserActivityLogPreference[]
   tasks                    Task[]
   taskTemplates            TaskTemplate[]
 }
@@ -157,6 +164,7 @@ model User {
   dealReminders         DealReminder[]       @relation("DealReminderRecipient")
   dealReminderSnoozes   DealReminderSnooze[] @relation("DealReminderSnoozeUser")
   reminderPreference    UserReminderPreference? @relation("UserReminderPreference")
+  activityLogPreference UserActivityLogPreference? @relation("UserActivityLogPreference")
   assignedTasks         Task[]                   @relation("TaskAssignee")
 
   // Email is unique per tenant, NOT globally unique
@@ -358,7 +366,18 @@ model Contact {
 }
 
 /// Immutable activity log for contact timeline (Story 5.4).
-/// Append-only — no updates, no deletes, no soft delete.
+/// Append-only — no updates, no deletes, no soft delete. This exemption is
+/// deliberate, not a multi-tenancy-pattern violation: activities are derived
+/// facts, and a timeline that could be rewritten would not be a timeline.
+/// Extended in Story 4.2 (auto logging): `source` is the producing domain
+/// ('TASK' | 'DEAL' | 'MESSAGE'); `source IS NULL` means the row was created
+/// manually (addContactNote). `sourceId` carries the originating row id
+/// (Task.id / Deal.id / Message.id) for traceability. `dedupeKey` is the
+/// deterministic per-event key — Postgres treats NULLs as distinct in unique
+/// indexes, so manual activities (dedupeKey = NULL) never collide. `metadata`
+/// carries the subject/body-preview/participants payload and is persisted but
+/// intentionally NOT exposed over GraphQL (no JSON scalar in the Pothos
+/// schema; Stories 4.4 and 6.8 read it).
 model Activity {
   id          String       @id @default(uuid())
   tenantId    String
@@ -366,12 +385,19 @@ model Activity {
   type        ActivityType
   title       String
   description String?
+  source      String? // 'TASK' | 'DEAL' | 'MESSAGE' — NULL = manual entry (AC 3)
+  sourceId    String? // originating row id — Task.id / Deal.id / Message.id (AC 4)
+  dedupeKey   String? // deterministic per-event key; NULL = manual entry (AC 15)
+  metadata    Json? // persisted, not exposed over GraphQL (AC 5)
   createdAt   DateTime     @default(now())
   createdBy   String       @default("system")
 
   tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   contact Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
 
+  // Dedup for auto-logged events (AC 6): NULL dedupeKey (manual notes) never
+  // collides because Postgres treats NULLs as distinct in unique indexes.
+  @@unique([tenantId, dedupeKey])
   @@index([tenantId])
   @@index([tenantId, contactId])
   @@index([tenantId, contactId, createdAt(sort: Desc)])
@@ -875,6 +901,34 @@ model UserReminderPreference {
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   user   User   @relation("UserReminderPreference", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, userId])
+  @@index([tenantId])
+}
+
+/// Per-user activity auto-logging preferences (Story 4.2).
+/// Shape and defaults copied from UserReminderPreference. A user with no row
+/// is treated as all-defaults (all toggles true) — reads must not create rows
+/// as a side effect. userId is @unique for the 1:1 relation to User even
+/// though @@unique([tenantId, userId]) also exists — Prisma requires the FK
+/// column itself to be unique for a 1:1 relation.
+model UserActivityLogPreference {
+  id                  String   @id @default(uuid())
+  tenantId            String
+  userId              String   @unique // 1:1 with User — user IDs are globally unique UUIDs
+  logTaskCompleted    Boolean  @default(true)
+  logDealCreated      Boolean  @default(true)
+  logDealStageChanged Boolean  @default(true)
+  logMessageSent      Boolean  @default(true)
+  logMessageReceived  Boolean  @default(true)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  createdBy           String   @default("system")
+  updatedBy           String   @default("system")
+  deletedAt           DateTime?
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user   User   @relation("UserActivityLogPreference", fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([tenantId, userId])
   @@index([tenantId])
