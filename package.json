@@ -14,9 +14,9 @@
   "scripts": {
     "dev": "turbo run dev",
     "build": "turbo run build",
-    "test": "turbo run test",
-    "test:api": "turbo run test:api",
-    "test:integration": "turbo run test:integration",
+    "test": "turbo run test --concurrency=1",
+    "test:api": "turbo run test:api --concurrency=1",
+    "test:integration": "turbo run test:integration --concurrency=1",
     "test:e2e": "playwright test",
     "lint": "turbo run lint",
     "type-check": "turbo run type-check",

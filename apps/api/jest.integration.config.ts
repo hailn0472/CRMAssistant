@@ -5,7 +5,8 @@ const config: Config = {
   rootDir: '.',
   testMatch: ['**/test/integration/**/*.spec.ts'],
   transform: {
-    '^.+\\.(t|j)s$': 'ts-jest',
+    // tsconfig.spec.json sets isolatedModules -> transpile-only, no per-worker TS program
+    '^.+\\.(t|j)s$': ['ts-jest', { tsconfig: '<rootDir>/tsconfig.spec.json' }],
   },
   collectCoverageFrom: [
     'src/**/*.(t|j)s',
@@ -25,6 +26,11 @@ const config: Config = {
   testEnvironment: 'node',
   // Integration tests may take longer due to container startup
   testTimeout: 60000,
+  // Each spec file boots its own Postgres testcontainer + `prisma migrate deploy`
+  // + a full Nest app (~1.5GB peak). Jest's default (cores - 1) workers would run
+  // ~11 of those at once and exhaust RAM into swap. Keep the fleet small.
+  maxWorkers: 2,
+  workerIdleMemoryLimit: '512MB',
   coverageThreshold: {
     global: {
       branches: 20,

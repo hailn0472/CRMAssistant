@@ -1,0 +1,10 @@
+{
+  // Test-only compiler config. `isolatedModules` puts ts-jest into transpile-only
+  // mode: each file is compiled in isolation instead of ts-jest building a full
+  // TypeScript program per Jest worker. Type errors are caught by `pnpm type-check`,
+  // which runs tsc once over the whole project instead of once per worker.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "isolatedModules": true
+  }
+}
