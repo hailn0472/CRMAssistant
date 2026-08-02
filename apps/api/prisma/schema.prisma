@@ -80,6 +80,9 @@ model Tenant {
   dealDocuments            DealDocument[]
   dealComments             DealComment[]
   dealCommentMentions      DealCommentMention[]
+  dealReminders            DealReminder[]
+  dealReminderSnoozes      DealReminderSnooze[]
+  userReminderPreferences  UserReminderPreference[]
 }
 
 /// Tenant-scoped user model with authentication support.
@@ -129,6 +132,9 @@ model User {
   uploadedDealDocuments DealDocument[]       @relation("DealDocumentUploader")
   dealComments          DealComment[]        @relation("DealCommentAuthor")
   dealCommentMentions   DealCommentMention[] @relation("DealCommentMentionedUser")
+  dealReminders         DealReminder[]       @relation("DealReminderRecipient")
+  dealReminderSnoozes   DealReminderSnooze[] @relation("DealReminderSnoozeUser")
+  reminderPreference    UserReminderPreference? @relation("UserReminderPreference")
 
   // Email is unique per tenant, NOT globally unique
   @@unique([tenantId, email])
@@ -567,6 +573,8 @@ model Deal {
   competitors        DealCompetitor[]
   documents          DealDocument[]
   comments           DealComment[]
+  reminders          DealReminder[]
+  reminderSnoozes    DealReminderSnooze[]
   competitor         Competitor? @relation("DealWinLossCompetitor", fields: [competitorId], references: [id], onDelete: Restrict)
   winLossReason      String?
   winLossNote        String?
@@ -576,6 +584,7 @@ model Deal {
   @@index([tenantId, stageId])
   @@index([tenantId, contactId])
   @@index([tenantId, ownerId])
+  @@index([tenantId, expectedCloseDate])
   @@index([tenantId, winLossReason])
 }
 
@@ -756,6 +765,94 @@ model DealCommentMention {
   @@index([tenantId])
   @@index([commentId])
   @@index([tenantId, mentionedUserId])
+}
+
+/// Tenant-scoped reminder row produced by the daily deal-health sweep (Story 3.7).
+/// The sweep persists the delivery *intent* and stops — no email transport
+/// exists in this codebase. `deliveredAt` stays null until Story 4-8 (the
+/// Notification Center) stamps delivery without a migration.
+/// The @@unique([tenantId, dealId, reason, sweepDate]) constraint is the
+/// idempotency key: running the sweep five times in one UTC day produces
+/// exactly one row per (deal, reason) — what makes a lazily-triggered sweep
+/// safe. `reason` and `healthStatus` are String, not Prisma enums —
+/// Deal.winLossReason set the precedent of validating a fixed vocabulary in
+/// the service rather than in the DB.
+model DealReminder {
+  id           String    @id @default(uuid())
+  tenantId     String
+  dealId       String
+  userId       String // the recipient — the deal owner at sweep time
+  reason       String // NO_ACTIVITY_7D | CLOSING_SOON_3D | AT_RISK
+  healthStatus String // HEALTHY | AT_RISK | STALE
+  healthScore  Int
+  sweepDate    DateTime // UTC midnight of the day the sweep ran
+  deliveredAt  DateTime? // always null in this story; Story 4-8 stamps it
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  createdBy    String    @default("system")
+  updatedBy    String    @default("system")
+  deletedAt    DateTime?
+
+  tenant    Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  deal      Deal   @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  recipient User   @relation("DealReminderRecipient", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, dealId, reason, sweepDate])
+  @@index([tenantId])
+  @@index([tenantId, userId, sweepDate])
+  @@index([tenantId, dealId])
+}
+
+/// Per-user snooze of deal health reminders (Story 3.7).
+/// A separate table, never a column on Deal — Deal.updatedAt is @updatedAt,
+/// so writing a snooze onto the deal row would bump updatedAt, which AC 20
+/// uses as an activity signal: snoozing a stale deal would silently reset its
+/// staleness clock and make it look healthy. Snooze is per user, not per deal.
+model DealReminderSnooze {
+  id           String    @id @default(uuid())
+  tenantId     String
+  dealId       String
+  userId       String
+  snoozedUntil DateTime
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  createdBy    String    @default("system")
+  updatedBy    String    @default("system")
+  deletedAt    DateTime?
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  deal   Deal   @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  user   User   @relation("DealReminderSnoozeUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, dealId, userId])
+  @@index([tenantId])
+  @@index([tenantId, userId])
+}
+
+/// Per-user reminder delivery preferences (Story 3.7).
+/// emailFrequency is a String validated in the service against the
+/// EMAIL_FREQUENCIES tuple (DAILY | WEEKLY | OFF). A user with no row is
+/// treated as all-defaults (DAILY, all toggles true) — reads must not create
+/// rows as a side effect.
+model UserReminderPreference {
+  id                 String   @id @default(uuid())
+  tenantId           String
+  userId             String   @unique // 1:1 with User — user IDs are globally unique UUIDs
+  emailFrequency     String   @default("DAILY")
+  notifyNoActivity   Boolean  @default(true)
+  notifyClosingSoon  Boolean  @default(true)
+  notifyAtRisk       Boolean  @default(true)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  createdBy          String   @default("system")
+  updatedBy          String   @default("system")
+  deletedAt          DateTime?
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user   User   @relation("UserReminderPreference", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, userId])
+  @@index([tenantId])
 }
 
 /// Point-in-time snapshot of the tenant-wide weighted forecast for one period.

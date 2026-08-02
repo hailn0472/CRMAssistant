@@ -33,6 +33,8 @@ const settingsNav: SettingsNavItem[] = [
   },
   { label: 'Audit Logs', href: '/settings/audit-logs', roles: ['ADMIN'] },
   { label: 'API Keys', href: '/settings/api-keys', roles: ['ADMIN'] },
+  // No roles and no permission — every user manages their own preferences.
+  { label: 'Reminders', href: '/settings/reminders' },
   {
     label: 'Channels',
     href: '/settings/channels',

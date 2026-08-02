@@ -37,7 +37,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-05-09T05:39:46.484Z
-last_updated: 2026-07-31T18:00:00.000Z
+last_updated: 2026-08-01T00:00:00.000Z
 project: CRMAssistant
 project_key: NOKEY
 tracking_system: file-system
@@ -127,7 +127,7 @@ development_status:
   3-4-products-line-items-association: done
   3-5-competitor-tracking-win-loss-analysis: done
   3-6-deal-document-attachment-collaboration: done
-  3-7-automated-deal-reminders-health-alerts: backlog
+  3-7-automated-deal-reminders-health-alerts: done
   epic-3-retrospective: optional
 
   # Epic 4: Activity & Task Management

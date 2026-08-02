@@ -63,8 +63,15 @@ describe('Breadcrumbs', () => {
     mockUsePathname.mockReturnValue('/reports/win-loss')
 
     render(<Breadcrumbs />)
-
     expect(screen.getByRole('link', { name: 'Reports' })).toHaveAttribute('href', '/reports')
     expect(screen.getByText('Win/Loss')).toHaveAttribute('aria-current', 'page')
+  })
+
+  it('labels the reminders segment (AC #54)', () => {
+    mockUsePathname.mockReturnValue('/settings/reminders')
+
+    render(<Breadcrumbs />)
+    expect(screen.getByRole('link', { name: 'Settings' })).toHaveAttribute('href', '/settings')
+    expect(screen.getByText('Reminders')).toHaveAttribute('aria-current', 'page')
   })
 })

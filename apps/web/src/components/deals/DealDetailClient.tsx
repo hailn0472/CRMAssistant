@@ -4,17 +4,22 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import toast from 'react-hot-toast'
-import { Pencil, Trash2, ArrowLeft, User, Clock, Check, X } from 'lucide-react'
+import { Pencil, Trash2, ArrowLeft, User, Clock, Check, X, BellOff } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Card, CardHeader } from '@/components/ui/card'
 import { deleteDeal, moveDealToStage, getDealStages, updateDeal } from '@/services/deal.service'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { StageBadge, formatCurrency } from '@/components/deals/deal-display'
 import { DealLineItems } from './DealLineItems'
 import { DealCompetitors } from './DealCompetitors'
 import { DealCollaboration } from './DealCollaboration'
 import { WinLossDialog } from './WinLossDialog'
+import { DealHealthBadge } from './DealHealthBadge'
+import { SnoozeReminderDialog } from './SnoozeReminderDialog'
+import { getDealHealth, unsnoozeDealReminder } from '@/services/deal-health.service'
+import { HEALTH_SIGNAL_LABELS, formatSnoozedUntil } from '@/lib/deal-health-format'
+import { usePermission } from '@/hooks/usePermission'
 import type { Deal, DealStage } from '@/services/deal.service'
 
 type DealDetailClientProps = {
@@ -30,16 +35,38 @@ type WinLossTarget = {
 
 export function DealDetailClient({ deal }: DealDetailClientProps): React.JSX.Element {
   const router = useRouter()
+  const queryClient = useQueryClient()
   const [deleting, setDeleting] = useState(false)
   const [movingStage, setMovingStage] = useState(false)
   const [editingProbability, setEditingProbability] = useState(false)
   const [probabilityValue, setProbabilityValue] = useState(String(deal.probability))
   const [winLossTarget, setWinLossTarget] = useState<WinLossTarget | null>(null)
+  const [snoozeOpen, setSnoozeOpen] = useState(false)
+  const [unsnoozing, setUnsnoozing] = useState(false)
+  const canSnooze = usePermission('DEAL', 'UPDATE')
 
   const { data: stages } = useQuery({
     queryKey: ['dealStages'],
     queryFn: getDealStages,
   })
+
+  const { data: dealHealth } = useQuery({
+    queryKey: ['dealHealth', deal.id],
+    queryFn: () => getDealHealth(deal.id),
+  })
+
+  const handleUnsnooze = async (): Promise<void> => {
+    setUnsnoozing(true)
+    try {
+      await unsnoozeDealReminder(deal.id)
+      toast.success('Reminders resumed')
+      queryClient.invalidateQueries({ queryKey: ['dealHealth', deal.id] })
+    } catch {
+      toast.error('Failed to unsnooze reminders')
+    } finally {
+      setUnsnoozing(false)
+    }
+  }
 
   const handleDelete = async () => {
     if (!confirm('Are you sure you want to delete this deal?')) return
@@ -130,13 +157,52 @@ export function DealDetailClient({ deal }: DealDetailClientProps): React.JSX.Ele
                     {deal.title}
                   </h1>
                   <StageBadge stage={deal.stage} />
+                  <DealHealthBadge health={dealHealth ?? null} />
                 </div>
+                {dealHealth && dealHealth.signals.length > 0 ? (
+                  <p className="mt-1 text-sm text-slate-500">
+                    {dealHealth.signals
+                      .map((signal) => HEALTH_SIGNAL_LABELS[signal] ?? signal)
+                      .join(' \u00b7 ')}
+                  </p>
+                ) : null}
                 <p className="mt-1 text-xl font-medium text-slate-700">
                   {formatCurrency(deal.value, deal.currency)}
                 </p>
               </div>
             </div>
             <div className="flex items-center gap-2">
+              {canSnooze && dealHealth ? (
+                dealHealth.snoozedUntil ? (
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-slate-600">
+                      Reminders snoozed until{' '}
+                      <strong>{formatSnoozedUntil(dealHealth.snoozedUntil)}</strong>
+                    </span>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-11 text-blue-600"
+                      onClick={handleUnsnooze}
+                      disabled={unsnoozing}
+                    >
+                      {unsnoozing ? 'Unsnoozing...' : 'Unsnooze'}
+                    </Button>
+                  </div>
+                ) : (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-11 gap-1.5"
+                    onClick={() => setSnoozeOpen(true)}
+                  >
+                    <BellOff className="h-3.5 w-3.5" />
+                    Snooze reminders
+                  </Button>
+                )
+              ) : null}
               <Button
                 variant="default"
                 size="sm"
@@ -324,6 +390,8 @@ export function DealDetailClient({ deal }: DealDetailClientProps): React.JSX.Ele
           if (!open) setWinLossTarget(null)
         }}
       />
+
+      <SnoozeReminderDialog dealId={deal.id} open={snoozeOpen} onOpenChange={setSnoozeOpen} />
     </div>
   )
 }

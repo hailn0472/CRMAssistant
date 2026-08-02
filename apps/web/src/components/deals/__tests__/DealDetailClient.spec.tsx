@@ -8,6 +8,7 @@ import { deleteDeal, moveDealToStage, getDealStages } from '@/services/deal.serv
 import { getDealCompetitors } from '@/services/competitor.service'
 import { getDealDocuments } from '@/services/deal-document.service'
 import { getDealComments } from '@/services/deal-comment.service'
+import { getDealHealth, unsnoozeDealReminder } from '@/services/deal-health.service'
 
 jest.mock('next/navigation', () => ({
   useRouter: () => ({ push: jest.fn(), refresh: jest.fn() }),
@@ -42,6 +43,11 @@ jest.mock('@/services/deal-comment.service', () => ({
     'subscription OnDealCommentAdded($dealId: ID!) { onDealCommentAdded(dealId: $dealId) { id } }',
 }))
 
+jest.mock('@/services/deal-health.service', () => ({
+  getDealHealth: jest.fn(),
+  unsnoozeDealReminder: jest.fn(),
+}))
+
 jest.mock('@/lib/graphql-subscription', () => ({
   GraphqlSubscriptionClient: jest.fn().mockImplementation(() => ({
     connect: jest.fn(),
@@ -50,8 +56,9 @@ jest.mock('@/lib/graphql-subscription', () => ({
   })),
 }))
 
+const mockUsePermission = jest.fn(() => true)
 jest.mock('@/hooks/usePermission', () => ({
-  usePermission: jest.fn(() => true),
+  usePermission: (...args: unknown[]) => mockUsePermission(...args),
 }))
 
 jest.mock('react-hot-toast', () => ({
@@ -97,6 +104,16 @@ const mockStages = [
   { id: 'stage-3', name: 'Closed Won', color: '#10B981', probability: 100, order: 4, isWon: true },
   { id: 'stage-4', name: 'Closed Lost', color: '#EF4444', probability: 0, order: 5, isLost: true },
 ]
+
+function mockDealHealth(overrides: Record<string, unknown> = {}): void {
+  ;(getDealHealth as jest.Mock).mockResolvedValue({
+    status: 'AT_RISK',
+    score: 60,
+    signals: ['NO_ACTIVITY_14D'],
+    snoozedUntil: null,
+    ...overrides,
+  })
+}
 
 function renderWithQuery(ui: React.ReactElement): ReturnType<typeof render> {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
@@ -328,5 +345,64 @@ describe('DealDetailClient', () => {
 
     expect(screen.getByRole('tab', { name: 'Comments' })).toHaveAttribute('aria-selected', 'true')
     expect(getDealComments).toHaveBeenCalledWith('deal-1')
+  })
+
+  it('renders the DealHealthBadge next to the StageBadge with a reason line (AC #49)', async () => {
+    mockDealHealth()
+    renderWithQuery(<DealDetailClient deal={mockDeal} />)
+
+    expect(await screen.findByText('At risk')).toBeInTheDocument()
+    expect(screen.getByText(/No activity in 14\+ days/)).toBeInTheDocument()
+  })
+
+  it('shows the Snooze reminders button when DEAL:UPDATE is granted (AC #49)', async () => {
+    mockDealHealth()
+    renderWithQuery(<DealDetailClient deal={mockDeal} />)
+
+    expect(await screen.findByText('Snooze reminders')).toBeInTheDocument()
+    expect(screen.getByText('Snooze reminders').className).toContain('h-11')
+  })
+
+  it('hides the Snooze reminders button when DEAL:UPDATE is not granted (AC #49)', async () => {
+    mockDealHealth()
+    mockUsePermission.mockReturnValue(false)
+    renderWithQuery(<DealDetailClient deal={mockDeal} />)
+
+    await screen.findByText('At risk')
+    expect(screen.queryByText('Snooze reminders')).not.toBeInTheDocument()
+    expect(screen.queryByText(/Reminders snoozed until/)).not.toBeInTheDocument()
+    mockUsePermission.mockReturnValue(true)
+  })
+
+  it('shows the active snooze state with an Unsnooze action instead of the button (AC #49)', async () => {
+    mockDealHealth({ snoozedUntil: '2026-08-08T00:00:00.000Z' })
+    renderWithQuery(<DealDetailClient deal={mockDeal} />)
+
+    expect(await screen.findByText(/Reminders snoozed until/)).toBeInTheDocument()
+    expect(screen.getByText('Unsnooze')).toBeInTheDocument()
+    expect(screen.queryByText('Snooze reminders')).not.toBeInTheDocument()
+  })
+
+  it('calls unsnoozeDealReminder when Unsnooze is clicked (AC #49)', async () => {
+    mockDealHealth({ snoozedUntil: '2026-08-08T00:00:00.000Z' })
+    ;(unsnoozeDealReminder as jest.Mock).mockResolvedValue(true)
+    renderWithQuery(<DealDetailClient deal={mockDeal} />)
+
+    fireEvent.click(await screen.findByText('Unsnooze'))
+
+    await waitFor(() => {
+      expect(unsnoozeDealReminder).toHaveBeenCalledWith('deal-1')
+    })
+    expect(toast.success).toHaveBeenCalledWith('Reminders resumed')
+  })
+
+  it('opens the SnoozeReminderDialog from the Snooze reminders button (AC #49)', async () => {
+    mockDealHealth()
+    renderWithQuery(<DealDetailClient deal={mockDeal} />)
+
+    fireEvent.click(await screen.findByText('Snooze reminders'))
+
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
+    expect(screen.getByRole('radio', { name: '7 days' })).toHaveAttribute('aria-checked', 'true')
   })
 })

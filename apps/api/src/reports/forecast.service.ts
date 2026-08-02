@@ -60,6 +60,10 @@ function getTodayUtcMidnight(): Date {
   const now = new Date()
   return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
 }
+// NOTE: toUtcMidnight in apps/api/src/deal-health/deal-health-score.ts
+// duplicates this three-line UTC-midnight construction (this helper is not
+// exported). Keep the two implementations in sync — hand-duplication with a
+// cross-reference comment is the established convention (docs/project-context.md).
 
 export function parseDateOrThrow(value: string, label: string): Date {
   const d = new Date(value)

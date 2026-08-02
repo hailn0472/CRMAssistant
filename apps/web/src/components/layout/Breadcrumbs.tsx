@@ -40,6 +40,7 @@ const SEGMENT_LABELS: Record<string, string> = {
   products: 'Products',
   competitors: 'Competitors',
   'win-loss': 'Win/Loss',
+  reminders: 'Reminders',
 }
 
 function labelForSegment(segment: string): string {

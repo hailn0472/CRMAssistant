@@ -1,6 +1,7 @@
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { AtRiskDealsWidget } from './AtRiskDealsWidget'
 
 interface PriorityAction {
   title: string
@@ -67,11 +68,6 @@ const metricItems: MetricItem[] = [
     label: 'Follow-ups sample',
     value: '7 planned',
     context: 'Demo queue for today; start with overdue and due-today items.',
-  },
-  {
-    label: 'At-risk deals sample',
-    value: '2 demo',
-    context: 'Planned risk panel; no live scoring is connected yet.',
   },
   {
     label: 'Team activity sample',
@@ -172,6 +168,8 @@ export function CommandCenterDashboard(): React.JSX.Element {
               </CardContent>
             </Card>
           ))}
+          {/* Live at-risk deals — replaces the removed 'At-risk deals sample' card */}
+          <AtRiskDealsWidget />
         </div>
       </section>
 
