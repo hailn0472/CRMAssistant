@@ -20,6 +20,8 @@ const SEGMENT_LABELS: Record<string, string> = {
   dashboard: 'Dashboard',
   contacts: 'Contacts',
   deals: 'Deals',
+  tasks: 'Tasks',
+  templates: 'Templates',
   inbox: 'Inbox',
   reports: 'Reports',
   forecast: 'Forecast',

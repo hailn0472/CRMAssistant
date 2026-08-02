@@ -245,6 +245,125 @@ describe('AuditInterceptor', () => {
     expect(MUTATION_AUDIT_MAP['runDealHealthSweep']).toBeUndefined()
   })
 
+  it('carries the nine Story 4.1 task entries (AC 55)', () => {
+    expect(MUTATION_AUDIT_MAP['createTask']).toEqual({ action: 'CREATE', entity: 'TASK' })
+    expect(MUTATION_AUDIT_MAP['createTaskFromTemplate']).toEqual({
+      action: 'CREATE',
+      entity: 'TASK',
+    })
+    expect(MUTATION_AUDIT_MAP['updateTask']).toEqual({ action: 'UPDATE', entity: 'TASK' })
+    expect(MUTATION_AUDIT_MAP['assignTask']).toEqual({ action: 'UPDATE', entity: 'TASK' })
+    expect(MUTATION_AUDIT_MAP['completeTask']).toEqual({ action: 'UPDATE', entity: 'TASK' })
+    expect(MUTATION_AUDIT_MAP['deleteTask']).toEqual({ action: 'DELETE', entity: 'TASK' })
+    expect(MUTATION_AUDIT_MAP['createTaskTemplate']).toEqual({
+      action: 'CREATE',
+      entity: 'TASK_TEMPLATE',
+    })
+    expect(MUTATION_AUDIT_MAP['updateTaskTemplate']).toEqual({
+      action: 'UPDATE',
+      entity: 'TASK_TEMPLATE',
+    })
+    expect(MUTATION_AUDIT_MAP['deleteTaskTemplate']).toEqual({
+      action: 'DELETE',
+      entity: 'TASK_TEMPLATE',
+    })
+  })
+
+  it('audits deleteTask using the id argument when the result is Boolean (AC 56)', (done) => {
+    mockGqlCtx.getInfo.mockReturnValue({
+      fieldName: 'deleteTask',
+      parentType: { name: 'Mutation' },
+    })
+    mockGqlCtx.getContext.mockReturnValue({
+      req: { headers: {} },
+      user: { userId: 'user-1', tenantId: 'tenant-1' },
+    })
+    mockGqlCtx.getArgs.mockReturnValue({ id: 'task-1' })
+
+    const callHandler: CallHandler = { handle: () => of(true) }
+    const result$ = interceptor.intercept({} as never, callHandler)
+
+    result$.subscribe({
+      complete: () => {
+        try {
+          expect(auditService.log).toHaveBeenCalledWith(
+            expect.objectContaining({
+              action: 'DELETE',
+              entity: 'TASK',
+              entityId: 'task-1',
+            }),
+          )
+          done()
+        } catch (err) {
+          done(err)
+        }
+      },
+    })
+  })
+
+  it('audits assignTask from the returned Task result id (AC 56)', (done) => {
+    mockGqlCtx.getInfo.mockReturnValue({
+      fieldName: 'assignTask',
+      parentType: { name: 'Mutation' },
+    })
+    mockGqlCtx.getContext.mockReturnValue({
+      req: { headers: {} },
+      user: { userId: 'user-1', tenantId: 'tenant-1' },
+    })
+    mockGqlCtx.getArgs.mockReturnValue({ id: 'task-1', assigneeId: 'user-2' })
+
+    const callHandler: CallHandler = { handle: () => of({ id: 'task-1' }) }
+    const result$ = interceptor.intercept({} as never, callHandler)
+
+    result$.subscribe({
+      complete: () => {
+        try {
+          expect(auditService.log).toHaveBeenCalledWith(
+            expect.objectContaining({
+              action: 'UPDATE',
+              entity: 'TASK',
+              entityId: 'task-1',
+            }),
+          )
+          done()
+        } catch (err) {
+          done(err)
+        }
+      },
+    })
+  })
+
+  it('audits createTaskTemplate as CREATE/TASK_TEMPLATE', (done) => {
+    mockGqlCtx.getInfo.mockReturnValue({
+      fieldName: 'createTaskTemplate',
+      parentType: { name: 'Mutation' },
+    })
+    mockGqlCtx.getContext.mockReturnValue({
+      req: { headers: {} },
+      user: { userId: 'user-1', tenantId: 'tenant-1' },
+    })
+
+    const callHandler: CallHandler = { handle: () => of({ id: 'template-1' }) }
+    const result$ = interceptor.intercept({} as never, callHandler)
+
+    result$.subscribe({
+      complete: () => {
+        try {
+          expect(auditService.log).toHaveBeenCalledWith(
+            expect.objectContaining({
+              action: 'CREATE',
+              entity: 'TASK_TEMPLATE',
+              entityId: 'template-1',
+            }),
+          )
+          done()
+        } catch (err) {
+          done(err)
+        }
+      },
+    })
+  })
+
   it('skips runDealHealthSweep — it is not in the map and returns no id (AC 42)', () => {
     mockGqlCtx.getInfo.mockReturnValue({
       fieldName: 'runDealHealthSweep',

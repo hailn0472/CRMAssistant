@@ -61,7 +61,12 @@ const navigationSections: NavigationSection[] = [
         permission: { resource: 'INBOX', action: 'READ' },
       },
       { label: 'Deals', href: '/deals', icon: Briefcase },
-      { label: 'Tasks', href: '/tasks', icon: CheckSquare },
+      {
+        label: 'Tasks',
+        href: '/tasks',
+        icon: CheckSquare,
+        permission: { resource: 'TASK', action: 'READ' },
+      },
       {
         label: 'Reports',
         href: '/reports/forecast',

@@ -10,6 +10,8 @@
  * duplicates the three-line UTC-midnight construction below (it is not
  * exported). Keep the two implementations in sync — hand-duplication with a
  * cross-reference comment is the established convention (docs/project-context.md).
+ * Story 4.1's apps/api/src/tasks/task-due-status.ts duplicates toUtcMidnight
+ * the same way (also not imported from here — see its header comment).
  */
 
 export const STALE_ACTIVITY_DAYS = 7
