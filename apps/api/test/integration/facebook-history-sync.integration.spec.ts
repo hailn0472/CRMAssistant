@@ -14,6 +14,8 @@ import { PostgreSqlContainer } from '@testcontainers/postgresql'
 
 import { PrismaService } from '../../src/prisma/prisma.service'
 import { AuditService } from '../../src/audit/audit.service'
+import { ActivityService } from '../../src/activities/activities.service'
+import { ActivityLogPreferenceService } from '../../src/activities/activity-log-preference.service'
 import { ConversationsService } from '../../src/inbox/conversations.service'
 import { MessagesService } from '../../src/inbox/messages.service'
 import { InboxPubSubService } from '../../src/inbox/pubsub.service'
@@ -63,7 +65,15 @@ describe('Facebook history sync (integration)', () => {
     const auditService = new AuditService(prismaService)
     const pubSub = new InboxPubSubService()
     const conversationsService = new ConversationsService(prismaService, auditService, pubSub)
-    const messagesService = new MessagesService(prismaService, pubSub)
+    // Story 4.2: MessagesService now needs the activity services; real
+    // instances backed by the testcontainer PrismaClient keep the hook honest
+    // (backfilled messages carry sentAt, so the hook skips them anyway).
+    const messagesService = new MessagesService(
+      prismaService,
+      pubSub,
+      new ActivityService(prismaService, auditService),
+      new ActivityLogPreferenceService(prismaService, auditService),
+    )
     const facebookService = new FacebookService(
       prismaService,
       auditService,

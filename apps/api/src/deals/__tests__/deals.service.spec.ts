@@ -1,6 +1,8 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common'
 
 import { DealsService } from '../deals.service'
+import type { ActivityService } from '../../activities/activities.service'
+import type { ActivityLogPreferenceService } from '../../activities/activity-log-preference.service'
 import type { Deal } from '@prisma/client'
 
 jest.mock('../../common/guards/visibility-check', () => ({
@@ -108,15 +110,62 @@ function makePrisma(): MockPrisma {
 describe('DealsService', () => {
   let service: DealsService
   let prisma: MockPrisma
+  let audit: { log: jest.Mock }
+  let activity: { logSafe: jest.Mock }
+  let activityLogPreference: { isEnabled: jest.Mock }
 
   beforeEach(() => {
     prisma = makePrisma()
     const pubSubMock = makePubSub()
+    audit = { log: jest.fn().mockResolvedValue(undefined) }
+    activity = { logSafe: jest.fn().mockResolvedValue(null) }
+    activityLogPreference = { isEnabled: jest.fn().mockResolvedValue(true) }
     service = new DealsService(
       prisma as unknown as ConstructorParameters<typeof DealsService>[0],
       pubSubMock as never,
+      audit as never,
+      activity as unknown as ActivityService,
+      activityLogPreference as unknown as ActivityLogPreferenceService,
     )
     ;(resolveVisibilityFilter as jest.Mock).mockResolvedValue(undefined)
+  })
+
+  describe('audit logging (NFR9)', () => {
+    it('writes a CREATE audit row when a deal is created', async () => {
+      const deal = makeDeal()
+      prisma.contact.findFirst.mockResolvedValue({ id: CONTACT_ID })
+      prisma.dealStage.findFirst.mockResolvedValue({ id: STAGE_ID, probability: 10 })
+      prisma.deal.create.mockResolvedValue(deal)
+      prisma.deal.findFirst.mockResolvedValue(deal)
+
+      await service.create(TENANT_ID, USER_ID, {
+        title: 'Deal',
+        stageId: STAGE_ID,
+        contactId: CONTACT_ID,
+      })
+
+      expect(audit.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          tenantId: TENANT_ID,
+          userId: USER_ID,
+          action: 'CREATE',
+          entity: 'DEAL',
+          entityId: deal.id,
+        }),
+      )
+    })
+
+    it('writes a DELETE audit row when a deal is soft-deleted', async () => {
+      const deal = makeDeal()
+      prisma.deal.findFirst.mockResolvedValue(deal)
+      prisma.deal.updateMany.mockResolvedValue({ count: 1 })
+
+      await service.delete(TENANT_ID, USER_ID, deal.id)
+
+      expect(audit.log).toHaveBeenCalledWith(
+        expect.objectContaining({ action: 'DELETE', entity: 'DEAL', entityId: deal.id }),
+      )
+    })
   })
 
   describe('create()', () => {
@@ -1053,6 +1102,147 @@ describe('DealsService', () => {
       await expect(
         service.update(TENANT_ID, USER_ID, DEAL_ID, { probability: 75.5 }),
       ).rejects.toThrow(BadRequestException)
+    })
+  })
+
+  describe('auto-logging deal events (Story 4.2)', () => {
+    it('create() logs DEAL_CREATED on the deal contact with dedupeKey and metadata (AC 24 / UD1)', async () => {
+      const deal = makeDeal()
+      prisma.contact.findFirst.mockResolvedValue({ id: CONTACT_ID })
+      prisma.dealStage.findFirst.mockResolvedValue({ id: STAGE_ID, probability: 10 })
+      prisma.deal.create.mockResolvedValue(deal)
+      prisma.deal.findFirst.mockResolvedValue(deal)
+
+      await service.create(TENANT_ID, USER_ID, {
+        title: 'Big Deal',
+        stageId: STAGE_ID,
+        contactId: CONTACT_ID,
+      })
+
+      expect(activity.logSafe).toHaveBeenCalledTimes(1)
+      expect(activity.logSafe).toHaveBeenCalledWith(
+        expect.objectContaining({
+          tenantId: TENANT_ID,
+          contactId: CONTACT_ID,
+          type: 'DEAL_CREATED',
+          title: 'Deal created: Big Deal',
+          source: 'DEAL',
+          sourceId: DEAL_ID,
+          dedupeKey: `DEAL_CREATED:${DEAL_ID}`,
+          createdBy: USER_ID,
+          metadata: expect.objectContaining({
+            dealId: DEAL_ID,
+            value: 50000,
+            currency: 'USD',
+            stageId: STAGE_ID,
+            ownerId: USER_ID,
+          }),
+        }),
+      )
+    })
+
+    it('create() is suppressed when logDealCreated is off (UD6)', async () => {
+      activityLogPreference.isEnabled.mockResolvedValue(false)
+      const deal = makeDeal()
+      prisma.contact.findFirst.mockResolvedValue({ id: CONTACT_ID })
+      prisma.dealStage.findFirst.mockResolvedValue({ id: STAGE_ID, probability: 10 })
+      prisma.deal.create.mockResolvedValue(deal)
+      prisma.deal.findFirst.mockResolvedValue(deal)
+
+      const result = await service.create(TENANT_ID, USER_ID, {
+        title: 'Big Deal',
+        stageId: STAGE_ID,
+        contactId: CONTACT_ID,
+      })
+
+      expect(result.id).toBe(DEAL_ID)
+      expect(activity.logSafe).not.toHaveBeenCalled()
+      expect(activityLogPreference.isEnabled).toHaveBeenCalledWith(
+        TENANT_ID,
+        USER_ID,
+        'logDealCreated',
+      )
+    })
+
+    it('moveToStage() logs DEAL_STAGE_CHANGED with stage names and dedupeKey pattern (AC 25 / UD2)', async () => {
+      const toStage = { id: 'stage-2', name: 'Qualified' }
+      const currentDeal = {
+        ...makeDeal({ stageId: 'stage-1' }),
+        stage: { id: 'stage-1', name: 'Lead' },
+      }
+      const movedDeal = {
+        ...makeDeal({ stageId: 'stage-2' }),
+        stage: { id: 'stage-2', name: 'Qualified' },
+      }
+      prisma.deal.findFirst.mockResolvedValueOnce(currentDeal).mockResolvedValueOnce(movedDeal)
+      prisma.dealStage.findFirst.mockResolvedValue(toStage)
+      prisma.deal.updateMany.mockResolvedValue({ count: 1 })
+
+      await service.moveToStage(TENANT_ID, USER_ID, DEAL_ID, 'stage-2')
+
+      expect(activity.logSafe).toHaveBeenCalledTimes(1)
+      expect(activity.logSafe).toHaveBeenCalledWith(
+        expect.objectContaining({
+          tenantId: TENANT_ID,
+          contactId: CONTACT_ID,
+          type: 'DEAL_STAGE_CHANGED',
+          title: 'Deal moved to Qualified',
+          description: 'Lead → Qualified',
+          source: 'DEAL',
+          sourceId: DEAL_ID,
+          createdBy: USER_ID,
+          metadata: expect.objectContaining({
+            dealId: DEAL_ID,
+            fromStageId: 'stage-1',
+            toStageId: 'stage-2',
+          }),
+          dedupeKey: expect.stringMatching(/^DEAL_STAGE:deal-1:stage-2:\d{4}-\d{2}-\d{2}T/),
+        }),
+      )
+    })
+
+    it('moveToStage() is suppressed when logDealStageChanged is off (UD7)', async () => {
+      activityLogPreference.isEnabled.mockResolvedValue(false)
+      const currentDeal = {
+        ...makeDeal({ stageId: 'stage-1' }),
+        stage: { id: 'stage-1', name: 'Lead' },
+      }
+      const movedDeal = {
+        ...makeDeal({ stageId: 'stage-2' }),
+        stage: { id: 'stage-2', name: 'Qualified' },
+      }
+      prisma.deal.findFirst.mockResolvedValueOnce(currentDeal).mockResolvedValueOnce(movedDeal)
+      prisma.dealStage.findFirst.mockResolvedValue({ id: 'stage-2', name: 'Qualified' })
+      prisma.deal.updateMany.mockResolvedValue({ count: 1 })
+
+      await service.moveToStage(TENANT_ID, USER_ID, DEAL_ID, 'stage-2')
+
+      expect(activity.logSafe).not.toHaveBeenCalled()
+    })
+
+    it('update() logs nothing — field-level edits are out of scope (AC 26 / UD3)', async () => {
+      prisma.deal.findFirst.mockResolvedValue(makeDeal())
+      prisma.deal.updateMany.mockResolvedValue({ count: 1 })
+      prisma.dealLineItem.count.mockResolvedValue(0)
+
+      await service.update(TENANT_ID, USER_ID, DEAL_ID, { title: 'Renamed Deal' })
+
+      expect(activity.logSafe).not.toHaveBeenCalled()
+    })
+
+    it('delete() logs nothing (AC 26 / UD4)', async () => {
+      prisma.deal.findFirst.mockResolvedValue(makeDeal())
+      prisma.deal.updateMany.mockResolvedValue({ count: 1 })
+
+      await service.delete(TENANT_ID, USER_ID, DEAL_ID)
+
+      expect(activity.logSafe).not.toHaveBeenCalled()
+    })
+
+    it('publishDealUpdate() logs nothing (UD5)', async () => {
+      service.publishDealUpdate(TENANT_ID, makeDeal())
+
+      expect(activity.logSafe).not.toHaveBeenCalled()
     })
   })
 })

@@ -29,6 +29,7 @@ import { OwnerSection } from '@/components/contacts/OwnerSection'
 import { addTagToContact, removeTagFromContact } from '@/services/tag.service'
 import { updateContact } from '@/services/contact.service'
 import { assignContactOwner } from '@/services/owner.service'
+import { ContactTimeline } from '@/components/contacts/ContactTimeline'
 import { cn } from '@/lib/utils'
 import type { Contact } from '@/services/contact.service'
 
@@ -44,58 +45,10 @@ interface Tab {
 
 const TABS: Tab[] = [
   { id: 'overview', label: 'Overview', icon: User },
-  { id: 'activity', label: 'Activity', icon: Clock, badge: '6' },
+  // Story 4.2 (AC 49): the hardcoded badge '6' is gone — the real timeline
+  // (ContactTimeline) renders its own totalCount header.
+  { id: 'activity', label: 'Activity', icon: Clock },
   { id: 'conversations', label: 'Conversations', icon: MessageSquare, badge: '3' },
-]
-
-const ACTIVITIES = [
-  {
-    type: 'conversation' as const,
-    icon: MessageSquare,
-    color: 'bg-blue-100 text-blue-600',
-    headline: 'New conversation via Facebook',
-    time: 'Today at 14:32',
-    detail: 'Khách hàng hỏi về báo giá giải pháp CRM cho doanh nghiệp vừa và nhỏ.',
-  },
-  {
-    type: 'update' as const,
-    icon: Pencil,
-    color: 'bg-emerald-100 text-emerald-600',
-    headline: 'Contact updated by Lan Tran',
-    time: 'Yesterday at 09:15',
-    detail:
-      'Job title changed from "Software Engineer" → "Senior Software Engineer". Tag "VIP" added.',
-  },
-  {
-    type: 'note' as const,
-    icon: MessageSquare,
-    color: 'bg-indigo-100 text-indigo-600',
-    headline: 'Internal note added by Lan Tran',
-    time: '3 days ago',
-    detail: 'Khách hàng tiềm năng cho gói Enterprise.',
-  },
-  {
-    type: 'system' as const,
-    icon: User,
-    color: 'bg-slate-100 text-slate-500',
-    headline: 'Contact created',
-    time: '15 Jan 2026',
-  },
-  {
-    type: 'conversation' as const,
-    icon: MessageSquare,
-    color: 'bg-blue-100 text-blue-600',
-    headline: 'Previous conversation via Live Chat',
-    time: '10 Jan 2026',
-    detail: 'Khách hàng tham quan tính năng qua demo online.',
-  },
-  {
-    type: 'system' as const,
-    icon: CheckCircle2,
-    color: 'bg-emerald-100 text-emerald-600',
-    headline: 'Contact shared with Team Sales',
-    time: '8 Jan 2026',
-  },
 ]
 
 const CONVERSATIONS = [
@@ -585,41 +538,6 @@ function EnrichmentProgress({ contact }: { contact: Contact }): React.JSX.Elemen
   )
 }
 
-// ─── Activity Timeline ────────────────────────────────
-function ActivityTimeline(): React.JSX.Element {
-  return (
-    <div className="space-y-0">
-      {ACTIVITIES.map((a, i) => (
-        <div key={i} className="relative flex gap-4 px-6 py-4">
-          {i < ACTIVITIES.length - 1 ? (
-            <div className="absolute left-[35px] top-[52px] bottom-0 w-px bg-slate-200" />
-          ) : null}
-          <div
-            className={cn(
-              'relative z-10 flex h-7 w-7 shrink-0 items-center justify-center rounded-full',
-              a.color,
-            )}
-          >
-            <a.icon className="h-3.5 w-3.5" />
-          </div>
-          <div className="min-w-0 flex-1">
-            <p className="text-sm font-medium text-slate-900">
-              {a.headline}
-              {a.detail ? (
-                <span className="block mt-1 text-sm font-normal text-slate-600">{a.detail}</span>
-              ) : null}
-            </p>
-            <p className="mt-0.5 text-xs text-slate-400">{a.time}</p>
-          </div>
-        </div>
-      ))}
-      <div className="border-t border-slate-100 px-6 py-4 text-xs text-slate-400 italic">
-        Activity log is read-only in this view
-      </div>
-    </div>
-  )
-}
-
 // ─── Conversations ────────────────────────────────────
 function ConversationList(): React.JSX.Element {
   return (
@@ -901,7 +819,11 @@ export function ContactDetailClient({ contact }: { contact: Contact }): React.JS
               Activity Timeline
             </CardTitle>
           </CardHeader>
-          <ActivityTimeline />
+          {/* Story 4.2 (AC 49): the real, paginated timeline is mounted here —
+              the hardcoded mock and "read-only" footer are gone. */}
+          <div className="px-6 py-4">
+            <ContactTimeline contactId={contact.id} />
+          </div>
         </Card>
       ) : null}
 

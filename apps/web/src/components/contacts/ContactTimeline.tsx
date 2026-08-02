@@ -15,21 +15,15 @@ type ContactTimelineProps = {
   contactId: string
 }
 
-function filterActivities(
-  activities: Activity[],
-  filter: ActivityFilterType,
-): Activity[] {
+function filterActivities(activities: Activity[], filter: ActivityFilterType): Activity[] {
   if (filter === 'ALL') return activities
 
-  const allowedTypes: ActivityTypeValue[] =
-    filter === 'SALES' ? SALES_TYPES : SYSTEM_TYPES
+  const allowedTypes: ActivityTypeValue[] = filter === 'SALES' ? SALES_TYPES : SYSTEM_TYPES
 
   return activities.filter((a) => allowedTypes.includes(a.type))
 }
 
-export function ContactTimeline({
-  contactId,
-}: ContactTimelineProps): React.JSX.Element {
+export function ContactTimeline({ contactId }: ContactTimelineProps): React.JSX.Element {
   const [activities, setActivities] = useState<Activity[]>([])
   const [filteredActivities, setFilteredActivities] = useState<Activity[]>([])
   const [pageInfo, setPageInfo] = useState<{
@@ -132,6 +126,8 @@ export function ContactTimeline({
         description: text,
         createdAt: new Date().toISOString(),
         createdBy: 'You',
+        // A manual note is never auto-logged (Story 4.2, AC 3).
+        source: null,
       }
 
       setActivities((prev) => [optimisticActivity, ...prev])
@@ -153,6 +149,7 @@ export function ContactTimeline({
                   description: result.description,
                   createdAt: result.createdAt,
                   createdBy: result.createdBy,
+                  source: result.source,
                 }
               : a,
           ),
@@ -162,9 +159,7 @@ export function ContactTimeline({
         // Remove optimistic on failure
         setActivities((prev) => prev.filter((a) => a.id !== optimisticActivity.id))
         setTotalCount((prev) => Math.max(0, prev - 1))
-        toast.error(
-          err instanceof Error ? err.message : 'Failed to save note',
-        )
+        toast.error(err instanceof Error ? err.message : 'Failed to save note')
       } finally {
         setIsAddingNote(false)
       }
@@ -216,9 +211,7 @@ export function ContactTimeline({
     return (
       <div className="space-y-4">
         <div className="flex items-center justify-between">
-          <h3 className="text-lg font-semibold text-slate-900">
-            Activity Timeline
-          </h3>
+          <h3 className="text-lg font-semibold text-slate-900">Activity Timeline</h3>
           <button
             type="button"
             onClick={() => setShowComposer(!showComposer)}
@@ -228,9 +221,7 @@ export function ContactTimeline({
           </button>
         </div>
 
-        {showComposer && (
-          <NoteComposer onSubmit={handleAddNote} isSubmitting={isAddingNote} />
-        )}
+        {showComposer && <NoteComposer onSubmit={handleAddNote} isSubmitting={isAddingNote} />}
 
         <div className="rounded-lg border border-dashed border-slate-300 p-8 text-center">
           <p className="text-sm text-slate-500">
@@ -260,9 +251,7 @@ export function ContactTimeline({
         </button>
       </div>
 
-      {showComposer && (
-        <NoteComposer onSubmit={handleAddNote} isSubmitting={isAddingNote} />
-      )}
+      {showComposer && <NoteComposer onSubmit={handleAddNote} isSubmitting={isAddingNote} />}
 
       <TimelineFilter activeFilter={filter} onFilterChange={setFilter} />
 
@@ -280,6 +269,9 @@ export function ContactTimeline({
               description={activity.description}
               createdAt={activity.createdAt}
               createdBy={activity.createdBy}
+              // Story 4.2 (AC 48): pass the auto-log discriminator through so
+              // TimelineCard can render the "Auto" badge for source != null.
+              source={activity.source}
               isLast={index === filteredActivities.length - 1 && !pageInfo.hasNextPage}
             />
           ))
@@ -300,9 +292,7 @@ export function ContactTimeline({
         )}
 
         {!pageInfo.hasNextPage && activities.length > 0 && (
-          <p className="py-4 text-center text-sm text-slate-400">
-            No more activities
-          </p>
+          <p className="py-4 text-center text-sm text-slate-400">No more activities</p>
         )}
       </div>
     </div>

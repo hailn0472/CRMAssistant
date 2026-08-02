@@ -22,6 +22,7 @@ function makeActivity(overrides: Partial<Activity> = {}): Activity {
     description: 'A description',
     createdAt: new Date().toISOString(),
     createdBy: 'user-1',
+    source: null,
     ...overrides,
   }
 }
@@ -117,10 +118,7 @@ describe('ContactTimeline', () => {
   })
 
   it('shows activity count in the header', async () => {
-    const activities = [
-      makeActivity({ id: '1' }),
-      makeActivity({ id: '2' }),
-    ]
+    const activities = [makeActivity({ id: '1' }), makeActivity({ id: '2' })]
     mockFetchTimeline.mockResolvedValue(makeTimelineResult(activities, false, null, 2))
 
     render(<ContactTimeline contactId="contact-1" />)
@@ -169,6 +167,7 @@ describe('ContactTimeline', () => {
       description: 'New note content',
       createdAt: new Date().toISOString(),
       createdBy: 'user-1',
+      source: null,
     })
 
     render(<ContactTimeline contactId="contact-1" />)

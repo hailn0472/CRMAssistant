@@ -2,6 +2,8 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 
 import { PrismaService } from '../prisma/prisma.service'
 import { AuditService } from '../audit/audit.service'
+import { ActivityService } from '../activities/activities.service'
+import { ActivityLogPreferenceService } from '../activities/activity-log-preference.service'
 import { resolveVisibilityFilter } from '../common/guards/visibility-check'
 import { ContactsService } from '../contacts/contacts.service'
 import { DealsService } from '../deals/deals.service'
@@ -167,6 +169,8 @@ export class TasksService {
     private readonly taskTemplates: TaskTemplatesService,
     private readonly taskPubSub: TaskPubSubService,
     private readonly audit: AuditService,
+    private readonly activity: ActivityService,
+    private readonly activityLogPreference: ActivityLogPreferenceService,
   ) {}
 
   /**
@@ -394,6 +398,7 @@ export class TasksService {
     userId: string,
     id: string,
     input: UpdateTaskInput,
+    now: Date = new Date(),
   ): Promise<TaskListItem> {
     // Verify task exists and is visible
     const currentTask = await this.findOne(tenantId, userId, id)
@@ -421,6 +426,13 @@ export class TasksService {
       // A reopened task must not keep its completion timestamp (AC 34).
       if (status !== 'COMPLETED' && currentTask.status === 'COMPLETED') {
         data.completedAt = null
+      }
+      // ...and the mirror case: updateTask is a second, independent completion
+      // path alongside completeTask. Without this, a task completed via
+      // updateTask(status: COMPLETED) is COMPLETED with completedAt = null,
+      // which breaks every "when was this done" read (reports, timeline).
+      if (status === 'COMPLETED' && currentTask.status !== 'COMPLETED') {
+        data.completedAt = now
       }
     }
 
@@ -470,6 +482,13 @@ export class TasksService {
     }
 
     await this.writeAudit(tenantId, userId, 'UPDATE', updatedTask.id)
+
+    // Story 4.2: updateTask(status: COMPLETED) is a second, independent
+    // completion path that bypasses complete()'s idempotency guard (AC 20) —
+    // log TASK_COMPLETED here, guarded so the two paths cannot double-fire.
+    if (currentTask.status !== 'COMPLETED' && input.status === 'COMPLETED') {
+      await this.logTaskCompleted(tenantId, userId, updatedTask)
+    }
 
     return updatedTask
   }
@@ -539,7 +558,62 @@ export class TasksService {
 
     await this.writeAudit(tenantId, userId, 'UPDATE', updatedTask.id)
 
+    // Story 4.2: auto-log the completion (AC 19). Uses logSafe — a logging
+    // failure never fails the task mutation.
+    await this.logTaskCompleted(tenantId, userId, updatedTask)
+
     return updatedTask
+  }
+
+  /**
+   * Auto-log TASK_COMPLETED (AC 19-22). Contact resolution, in order:
+   * Task.contactId → Task.dealId → Deal.contactId → skip silently, log
+   * nothing (AC 21 — a task attached to neither has nowhere to log and the
+   * task mutation must still succeed). Suppressed when the acting user's
+   * `logTaskCompleted` preference is off (AC 22).
+   */
+  private async logTaskCompleted(
+    tenantId: string,
+    userId: string,
+    task: TaskListItem,
+  ): Promise<void> {
+    if (!(await this.activityLogPreference.isEnabled(tenantId, userId, 'logTaskCompleted'))) {
+      return
+    }
+
+    let contactId = task.contactId
+    if (!contactId && task.dealId) {
+      try {
+        const deal = await this.deals.findOne(tenantId, userId, task.dealId)
+        contactId = deal?.contactId ?? null
+      } catch {
+        // Deal gone or no longer visible — nothing to log; the task mutation
+        // must still succeed (AC 21).
+        return
+      }
+    }
+
+    if (!contactId) {
+      // Task attached to neither a contact nor a deal has nowhere to log.
+      return
+    }
+
+    await this.activity.logSafe({
+      tenantId,
+      contactId,
+      type: 'TASK_COMPLETED',
+      title: `Task completed: ${task.title}`,
+      metadata: {
+        taskId: task.id,
+        priority: task.priority,
+        dueDate: task.dueDate ? task.dueDate.toISOString() : null,
+        assignedTo: task.assignedTo,
+      },
+      source: 'TASK',
+      sourceId: task.id,
+      dedupeKey: `TASK_COMPLETED:${task.id}`,
+      createdBy: userId,
+    })
   }
 
   async delete(tenantId: string, userId: string, id: string): Promise<boolean> {

@@ -1,7 +1,13 @@
 import { UnauthorizedException } from '@nestjs/common'
 
+/* eslint-disable @typescript-eslint/explicit-function-return-type, @typescript-eslint/explicit-module-boundary-types */
+
 import { builder } from '../graphql/schema.builder'
 import type { ActivityService } from './activities.service'
+import type {
+  ActivityLogPreferenceService,
+  ActivityLogPreferenceInput,
+} from './activity-log-preference.service'
 import type { GraphqlContext } from '../graphql/graphql-context'
 import type { JwtPayload } from '../auth/strategies/jwt.strategy'
 
@@ -16,6 +22,11 @@ const ActivityTypeEnum = builder.enumType('ActivityType', {
     CONTACT_CREATED: { value: 'CONTACT_CREATED' as const },
     CONTACT_UPDATED: { value: 'CONTACT_UPDATED' as const },
     CONTACT_OWNER_CHANGED: { value: 'CONTACT_OWNER_CHANGED' as const },
+    // Story 4.2 auto-logged types (AC 36)
+    TASK_COMPLETED: { value: 'TASK_COMPLETED' as const },
+    DEAL_STAGE_CHANGED: { value: 'DEAL_STAGE_CHANGED' as const },
+    MESSAGE_RECEIVED: { value: 'MESSAGE_RECEIVED' as const },
+    MESSAGE_SENT: { value: 'MESSAGE_SENT' as const },
   },
 })
 
@@ -28,6 +39,10 @@ type ActivityTypeValue =
   | 'CONTACT_CREATED'
   | 'CONTACT_UPDATED'
   | 'CONTACT_OWNER_CHANGED'
+  | 'TASK_COMPLETED'
+  | 'DEAL_STAGE_CHANGED'
+  | 'MESSAGE_RECEIVED'
+  | 'MESSAGE_SENT'
 
 // Activity GraphQL type
 type ActivityShape = {
@@ -38,6 +53,7 @@ type ActivityShape = {
   description: string | null
   createdAt: string
   createdBy: string
+  source: string | null
 }
 
 const ActivityRef = builder.objectRef<ActivityShape>('Activity')
@@ -54,6 +70,10 @@ ActivityRef.implement({
     description: t.exposeString('description', { nullable: true }),
     createdAt: t.exposeString('createdAt'),
     createdBy: t.exposeString('createdBy'),
+    // Story 4.2: auto-vs-manual discriminator (AC 3). `metadata` is
+    // deliberately NOT exposed — no JSON scalar is registered in this schema
+    // (AC 5).
+    source: t.exposeString('source', { nullable: true }),
   }),
 })
 
@@ -105,13 +125,56 @@ ContactTimelineResultRef.implement({
   }),
 })
 
+// ─── ActivityLogPreference Type (AC 37) ──────────────────────────────────
+
+type ActivityLogPreferenceShape = {
+  logTaskCompleted: boolean
+  logDealCreated: boolean
+  logDealStageChanged: boolean
+  logMessageSent: boolean
+  logMessageReceived: boolean
+}
+
+const ActivityLogPreferenceRef =
+  builder.objectRef<ActivityLogPreferenceShape>('ActivityLogPreference')
+
+ActivityLogPreferenceRef.implement({
+  fields: (t) => ({
+    logTaskCompleted: t.exposeBoolean('logTaskCompleted'),
+    logDealCreated: t.exposeBoolean('logDealCreated'),
+    logDealStageChanged: t.exposeBoolean('logDealStageChanged'),
+    logMessageSent: t.exposeBoolean('logMessageSent'),
+    logMessageReceived: t.exposeBoolean('logMessageReceived'),
+  }),
+})
+
+const UpdateActivityLogPreferenceInputRef = builder.inputType('UpdateActivityLogPreferenceInput', {
+  fields: (t) => ({
+    logTaskCompleted: t.boolean(),
+    logDealCreated: t.boolean(),
+    logDealStageChanged: t.boolean(),
+    logMessageSent: t.boolean(),
+    logMessageReceived: t.boolean(),
+  }),
+})
+
+// ─── Service Singletons ──────────────────────────────────────────────────
+
 let activityService: ActivityService | undefined
+let activityLogPreferenceService: ActivityLogPreferenceService | undefined
 
 function getActivityService(): ActivityService {
   if (!activityService) {
     throw new Error('ActivityService is not initialized')
   }
   return activityService
+}
+
+function getActivityLogPreferenceService(): ActivityLogPreferenceService {
+  if (!activityLogPreferenceService) {
+    throw new Error('ActivityLogPreferenceService is not initialized')
+  }
+  return activityLogPreferenceService
 }
 
 function requireUser(context: GraphqlContext): JwtPayload {
@@ -161,6 +224,20 @@ builder.queryFields((t) => ({
       }
     },
   }),
+  // Story 4.2 (AC 37-38): gated by requireUser ONLY — no requirePermission.
+  // Reads exactly one row scoped to the caller's own userId; the settings-nav
+  // precedent for per-user preferences is explicit ("every user manages their
+  // own preferences").
+  myActivityLogPreferences: t.field({
+    type: ActivityLogPreferenceRef,
+    resolve: async (_parent, _args, context) => {
+      const user = requireUser(context)
+      return getActivityLogPreferenceService().findMine(
+        user.tenantId,
+        user.userId,
+      ) as unknown as ActivityLogPreferenceShape
+    },
+  }),
 }))
 
 // --- Mutations ---
@@ -182,13 +259,15 @@ builder.mutationFields((t) => ({
         String(args.contactId),
       )
 
-      const result = await getActivityService().log({
+      // Story 4.2 (AC 43): manual notes go through addContactNote so the
+      // service writes the AuditLog row itself (the global AuditInterceptor
+      // never fires for GraphQL mutations — AC 42).
+      const result = await getActivityService().addContactNote({
         tenantId: user.tenantId,
         contactId: String(args.contactId),
-        type: 'NOTE_ADDED',
         title: args.title,
         description: args.description ?? null,
-        createdBy: user.userId,
+        userId: user.userId,
       })
       return {
         id: result.id,
@@ -198,11 +277,31 @@ builder.mutationFields((t) => ({
         description: result.description,
         createdAt: result.createdAt.toISOString(),
         createdBy: result.createdBy,
+        source: result.source,
       }
+    },
+  }),
+  // Story 4.2 (AC 37-38, AC 41): requireUser only; the service writes the
+  // audit row (action UPDATE / entity USER) — see AC 42 for why the
+  // MUTATION_AUDIT_MAP entry alone is not enough.
+  updateActivityLogPreferences: t.field({
+    type: ActivityLogPreferenceRef,
+    args: { input: t.arg({ type: UpdateActivityLogPreferenceInputRef, required: true }) },
+    resolve: async (_parent, args, context) => {
+      const user = requireUser(context)
+      return getActivityLogPreferenceService().updateMine(
+        user.tenantId,
+        user.userId,
+        args.input as ActivityLogPreferenceInput,
+      ) as unknown as ActivityLogPreferenceShape
     },
   }),
 }))
 
-export function registerActivityGraphql(service: ActivityService): void {
+export function registerActivityGraphql(
+  service: ActivityService,
+  preferenceService: ActivityLogPreferenceService,
+): void {
   activityService = service
+  activityLogPreferenceService = preferenceService
 }

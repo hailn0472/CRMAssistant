@@ -43,6 +43,7 @@ const SEGMENT_LABELS: Record<string, string> = {
   competitors: 'Competitors',
   'win-loss': 'Win/Loss',
   reminders: 'Reminders',
+  'activity-logging': 'Activity Logging',
 }
 
 function labelForSegment(segment: string): string {

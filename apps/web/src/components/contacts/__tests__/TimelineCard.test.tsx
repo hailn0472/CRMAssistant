@@ -75,4 +75,36 @@ describe('TimelineCard', () => {
     const timelineLines = container.querySelectorAll('[aria-hidden="true"]')
     expect(timelineLines.length).toBe(1)
   })
+
+  // Story 4.2 — Auto badge (AC 48)
+  it('renders the Auto badge with a text label when source is set (AC 48 / W7, W8)', () => {
+    render(<TimelineCard {...defaultProps} source="TASK" />)
+
+    const badge = screen.getByText('Auto')
+    expect(badge).toBeInTheDocument()
+    // Not purely colour-based: the badge has a readable text label.
+    expect(badge.textContent).toBe('Auto')
+    expect(badge.getAttribute('aria-label')).toBe('Automatically logged from TASK')
+    expect(badge.getAttribute('title')).toBe('Automatically logged from TASK')
+  })
+
+  it('does not render the Auto badge when source is null (W9)', () => {
+    render(<TimelineCard {...defaultProps} source={null} />)
+
+    expect(screen.queryByText('Auto')).not.toBeInTheDocument()
+  })
+
+  it('does not render the Auto badge when source is absent (W10)', () => {
+    render(<TimelineCard {...defaultProps} />)
+
+    expect(screen.queryByText('Auto')).not.toBeInTheDocument()
+  })
+
+  it('uses muted secondary styling for the badge (W11)', () => {
+    render(<TimelineCard {...defaultProps} source="MESSAGE" />)
+
+    const badge = screen.getByText('Auto')
+    expect(badge.className).toContain('bg-slate-100')
+    expect(badge.className).toContain('text-slate-500')
+  })
 })

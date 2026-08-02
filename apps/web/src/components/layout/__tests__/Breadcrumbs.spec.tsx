@@ -74,4 +74,13 @@ describe('Breadcrumbs', () => {
     expect(screen.getByRole('link', { name: 'Settings' })).toHaveAttribute('href', '/settings')
     expect(screen.getByText('Reminders')).toHaveAttribute('aria-current', 'page')
   })
+
+  it('labels the activity-logging segment — not "Chi tiết" (AC 53 / W28)', () => {
+    mockUsePathname.mockReturnValue('/settings/activity-logging')
+
+    render(<Breadcrumbs />)
+    expect(screen.getByRole('link', { name: 'Settings' })).toHaveAttribute('href', '/settings')
+    expect(screen.getByText('Activity Logging')).toHaveAttribute('aria-current', 'page')
+    expect(screen.queryByText('Chi tiết')).not.toBeInTheDocument()
+  })
 })

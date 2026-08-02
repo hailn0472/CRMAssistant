@@ -9,6 +9,10 @@ import {
   Sparkles,
   RefreshCw,
   UserCog,
+  CheckCircle2,
+  ArrowRightLeft,
+  MessageSquare,
+  Send,
   type LucideIcon,
 } from 'lucide-react'
 import type { ActivityTypeValue } from '@/types/activity.types'
@@ -68,6 +72,31 @@ const ICON_CONFIGS: Record<ActivityTypeValue, IconConfig> = {
     color: 'text-indigo-600',
     bgColor: 'bg-indigo-100',
     label: 'Owner Changed',
+  },
+  // Story 4.2 auto-logged types (AC 46)
+  TASK_COMPLETED: {
+    icon: CheckCircle2,
+    color: 'text-emerald-600',
+    bgColor: 'bg-emerald-100',
+    label: 'Task Completed',
+  },
+  DEAL_STAGE_CHANGED: {
+    icon: ArrowRightLeft,
+    color: 'text-orange-600',
+    bgColor: 'bg-orange-100',
+    label: 'Stage Changed',
+  },
+  MESSAGE_RECEIVED: {
+    icon: MessageSquare,
+    color: 'text-sky-600',
+    bgColor: 'bg-sky-100',
+    label: 'Message Received',
+  },
+  MESSAGE_SENT: {
+    icon: Send,
+    color: 'text-sky-600',
+    bgColor: 'bg-sky-100',
+    label: 'Message Sent',
   },
 }
 

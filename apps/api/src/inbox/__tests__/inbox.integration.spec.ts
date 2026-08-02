@@ -92,7 +92,12 @@ describe('Inbox Integration: Conversations + Messages', () => {
 
     const audit = { log: jest.fn() }
     convService = new ConversationsService(prisma as any, audit as any, pubSub)
-    msgService = new MessagesService(prisma as any, pubSub)
+    msgService = new MessagesService(
+      prisma as any,
+      pubSub,
+      { logSafe: jest.fn().mockResolvedValue(null) } as any,
+      { isEnabled: jest.fn().mockResolvedValue(true) } as any,
+    )
   })
 
   // ── Full conversation lifecycle ─────────────────────────

@@ -83,6 +83,11 @@ export const MUTATION_AUDIT_MAP: Record<string, { action: string; entity: string
   createTaskTemplate: { action: 'CREATE', entity: 'TASK_TEMPLATE' },
   updateTaskTemplate: { action: 'UPDATE', entity: 'TASK_TEMPLATE' },
   deleteTaskTemplate: { action: 'DELETE', entity: 'TASK_TEMPLATE' },
+
+  // Activity-log preferences (Story 4.2). Decorative for GraphQL — the
+  // interceptor never fires for mutations in this repo (AC 42) — but kept for
+  // consistency; the service writes the row itself (AC 41).
+  updateActivityLogPreferences: { action: 'UPDATE', entity: 'USER' },
 }
 
 @Injectable()
