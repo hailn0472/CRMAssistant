@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common'
 
 import { PrismaService } from '../prisma/prisma.service'
+import { AuditService } from '../audit/audit.service'
 import { resolveVisibilityFilter } from '../common/guards/visibility-check'
 import { ContactsService } from '../contacts/contacts.service'
 import { DealsService } from '../deals/deals.service'
@@ -165,7 +166,33 @@ export class TasksService {
     private readonly deals: DealsService,
     private readonly taskTemplates: TaskTemplatesService,
     private readonly taskPubSub: TaskPubSubService,
+    private readonly audit: AuditService,
   ) {}
+
+  /**
+   * Service-level audit write. The global AuditInterceptor (registered via
+   * APP_INTERCEPTOR) does NOT wrap GraphQL resolvers in this repo — the
+   * hand-built Pothos schema (builder.toSchema() → GraphQLModule.forRoot)
+   * bypasses the NestJS resolver map, so intercept() never fires for
+   * mutations (verified on the dev stack; NFR9 audit rows for createTask
+   * etc. were missing). Writing here, synchronously inside the mutation,
+   * is the only path that actually produces AuditLog rows.
+   */
+  private writeAudit(
+    tenantId: string,
+    userId: string,
+    action: 'CREATE' | 'UPDATE' | 'DELETE',
+    entityId: string,
+  ): Promise<void> {
+    return this.audit.log({
+      tenantId,
+      userId,
+      action,
+      entity: 'TASK',
+      entityId,
+      details: { mutationName: action },
+    })
+  }
 
   async create(tenantId: string, userId: string, input: CreateTaskInput): Promise<TaskListItem> {
     const title = normalizeTitle(input.title)
@@ -216,6 +243,8 @@ export class TasksService {
     if (assignedTo !== userId) {
       this.taskPubSub.publish(`${PUBSUB_TASK_ASSIGNED}:${tenantId}:${assignedTo}`, createdTask)
     }
+
+    await this.writeAudit(tenantId, userId, 'CREATE', createdTask.id)
 
     return createdTask
   }
@@ -440,6 +469,8 @@ export class TasksService {
       )
     }
 
+    await this.writeAudit(tenantId, userId, 'UPDATE', updatedTask.id)
+
     return updatedTask
   }
 
@@ -475,6 +506,8 @@ export class TasksService {
       this.taskPubSub.publish(`${PUBSUB_TASK_ASSIGNED}:${tenantId}:${assigneeId}`, updatedTask)
     }
 
+    await this.writeAudit(tenantId, userId, 'UPDATE', updatedTask.id)
+
     return updatedTask
   }
 
@@ -503,6 +536,9 @@ export class TasksService {
     }
 
     const updatedTask = await this.findOne(tenantId, userId, id)
+
+    await this.writeAudit(tenantId, userId, 'UPDATE', updatedTask.id)
+
     return updatedTask
   }
 
@@ -518,6 +554,8 @@ export class TasksService {
     if (result.count === 0) {
       throw new NotFoundException('Task not found')
     }
+
+    await this.writeAudit(tenantId, userId, 'DELETE', id)
 
     return true
   }

@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common'
 
 import { PrismaService } from '../prisma/prisma.service'
+import { AuditService } from '../audit/audit.service'
 import type { TaskPriority } from './task-due-status'
 import { isTaskPriority } from './task-due-status'
 import type { Prisma, TaskTemplate } from '@prisma/client'
@@ -106,7 +107,30 @@ function normalizeDefaultDueInDays(value: number | null | undefined): number | n
  */
 @Injectable()
 export class TaskTemplatesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly audit: AuditService,
+  ) {}
+
+  /**
+   * Service-level audit write — see TasksService.writeAudit for why the
+   * global AuditInterceptor never fires for GraphQL mutations in this repo.
+   */
+  private writeAudit(
+    tenantId: string,
+    userId: string,
+    action: 'CREATE' | 'UPDATE' | 'DELETE',
+    entityId: string,
+  ): Promise<void> {
+    return this.audit.log({
+      tenantId,
+      userId,
+      action,
+      entity: 'TASK_TEMPLATE',
+      entityId,
+      details: { mutationName: action },
+    })
+  }
 
   async findMany(
     tenantId: string,
@@ -173,6 +197,8 @@ export class TaskTemplatesService {
       },
     })
 
+    await this.writeAudit(tenantId, userId, 'CREATE', template.id)
+
     return template
   }
 
@@ -231,6 +257,9 @@ export class TaskTemplatesService {
     }
 
     const template = await this.findOneForTenant(tenantId, id)
+
+    await this.writeAudit(tenantId, userId, 'UPDATE', template.id)
+
     return template
   }
 
@@ -245,6 +274,8 @@ export class TaskTemplatesService {
     if (result.count === 0) {
       throw new NotFoundException('Task template not found')
     }
+
+    await this.writeAudit(tenantId, userId, 'DELETE', id)
 
     return true
   }

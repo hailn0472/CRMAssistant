@@ -2,6 +2,7 @@ import { BadRequestException, NotFoundException } from '@nestjs/common'
 
 import { TaskTemplatesService } from '../task-templates.service'
 import type { PrismaService } from '../../prisma/prisma.service'
+import type { AuditService } from '../../audit/audit.service'
 
 type TemplateDelegate = {
   findFirst: jest.Mock
@@ -36,8 +37,16 @@ function makeTemplate(overrides: Record<string, unknown> = {}): Record<string, u
   }
 }
 
-function makeService(prisma: MockPrisma): TaskTemplatesService {
-  return new TaskTemplatesService(prisma as unknown as PrismaService)
+function makeService(prisma: MockPrisma): {
+  service: TaskTemplatesService
+  audit: { log: jest.Mock }
+} {
+  const audit = { log: jest.fn() }
+  const service = new TaskTemplatesService(
+    prisma as unknown as PrismaService,
+    audit as unknown as AuditService,
+  )
+  return { service, audit }
 }
 
 describe('TaskTemplatesService', () => {
@@ -58,7 +67,7 @@ describe('TaskTemplatesService', () => {
 
   describe('findMany()', () => {
     it('returns a paginated connection scoped to the tenant', async () => {
-      const service = makeService(prisma)
+      const { service } = makeService(prisma)
       prisma.taskTemplate.findMany.mockResolvedValue([makeTemplate()])
       prisma.taskTemplate.count.mockResolvedValue(1)
 
@@ -76,7 +85,7 @@ describe('TaskTemplatesService', () => {
     })
 
     it('returns an empty connection when no templates exist', async () => {
-      const service = makeService(prisma)
+      const { service } = makeService(prisma)
       prisma.taskTemplate.findMany.mockResolvedValue([])
       prisma.taskTemplate.count.mockResolvedValue(0)
 
@@ -86,7 +95,7 @@ describe('TaskTemplatesService', () => {
     })
 
     it('takes no userId on reads (tenant-global catalogue, AC 37)', async () => {
-      const service = makeService(prisma)
+      const { service } = makeService(prisma)
       prisma.taskTemplate.findMany.mockResolvedValue([])
       prisma.taskTemplate.count.mockResolvedValue(0)
 
@@ -97,7 +106,7 @@ describe('TaskTemplatesService', () => {
 
   describe('findOneForTenant()', () => {
     it('returns the template when found', async () => {
-      const service = makeService(prisma)
+      const { service } = makeService(prisma)
       prisma.taskTemplate.findFirst.mockResolvedValue(makeTemplate())
 
       const result = await service.findOneForTenant(TENANT, 'template-1')
@@ -106,7 +115,7 @@ describe('TaskTemplatesService', () => {
     })
 
     it('throws NotFoundException for a missing template', async () => {
-      const service = makeService(prisma)
+      const { service } = makeService(prisma)
       prisma.taskTemplate.findFirst.mockResolvedValue(null)
 
       await expect(service.findOneForTenant(TENANT, 'missing')).rejects.toThrow(
@@ -117,7 +126,7 @@ describe('TaskTemplatesService', () => {
 
   describe('create()', () => {
     it('creates a template with the audit columns set to the acting user', async () => {
-      const service = makeService(prisma)
+      const { service, audit } = makeService(prisma)
       prisma.taskTemplate.findFirst.mockResolvedValue(null)
       prisma.taskTemplate.create.mockResolvedValue(makeTemplate())
 
@@ -136,10 +145,18 @@ describe('TaskTemplatesService', () => {
           }),
         }),
       )
+      expect(audit.log).toHaveBeenCalledWith({
+        tenantId: TENANT,
+        userId: USER,
+        action: 'CREATE',
+        entity: 'TASK_TEMPLATE',
+        entityId: 'template-1',
+        details: { mutationName: 'CREATE' },
+      })
     })
 
     it('rejects a duplicate name case-insensitively with ConflictException', async () => {
-      const service = makeService(prisma)
+      const { service } = makeService(prisma)
       prisma.taskTemplate.findFirst.mockResolvedValue(makeTemplate())
 
       await expect(
@@ -149,7 +166,7 @@ describe('TaskTemplatesService', () => {
     })
 
     it('allows the same name in a different tenant', async () => {
-      const service = makeService(prisma)
+      const { service } = makeService(prisma)
       prisma.taskTemplate.findFirst.mockResolvedValue(null)
       prisma.taskTemplate.create.mockResolvedValue(makeTemplate())
 
@@ -166,7 +183,7 @@ describe('TaskTemplatesService', () => {
 
   describe('input validation (normalizers)', () => {
     it('rejects an empty template name (AC 38)', async () => {
-      const service = makeService(prisma)
+      const { service } = makeService(prisma)
       prisma.taskTemplate.findFirst.mockResolvedValue(null)
 
       await expect(
@@ -176,7 +193,7 @@ describe('TaskTemplatesService', () => {
     })
 
     it('rejects a template name longer than 200 characters', async () => {
-      const service = makeService(prisma)
+      const { service } = makeService(prisma)
       prisma.taskTemplate.findFirst.mockResolvedValue(null)
 
       await expect(
@@ -185,7 +202,7 @@ describe('TaskTemplatesService', () => {
     })
 
     it('rejects an empty template title', async () => {
-      const service = makeService(prisma)
+      const { service } = makeService(prisma)
       prisma.taskTemplate.findFirst.mockResolvedValue(null)
 
       await expect(
@@ -194,7 +211,7 @@ describe('TaskTemplatesService', () => {
     })
 
     it('rejects a template title longer than 200 characters', async () => {
-      const service = makeService(prisma)
+      const { service } = makeService(prisma)
       prisma.taskTemplate.findFirst.mockResolvedValue(null)
 
       await expect(
@@ -203,7 +220,7 @@ describe('TaskTemplatesService', () => {
     })
 
     it('rejects a description longer than 5000 characters', async () => {
-      const service = makeService(prisma)
+      const { service } = makeService(prisma)
       prisma.taskTemplate.findFirst.mockResolvedValue(null)
 
       await expect(
@@ -216,7 +233,7 @@ describe('TaskTemplatesService', () => {
     })
 
     it('stores null for a whitespace-only description', async () => {
-      const service = makeService(prisma)
+      const { service } = makeService(prisma)
       prisma.taskTemplate.findFirst.mockResolvedValue(null)
       prisma.taskTemplate.create.mockResolvedValue(makeTemplate())
 
@@ -232,7 +249,7 @@ describe('TaskTemplatesService', () => {
     })
 
     it('accepts an explicit valid defaultPriority', async () => {
-      const service = makeService(prisma)
+      const { service } = makeService(prisma)
       prisma.taskTemplate.findFirst.mockResolvedValue(null)
       prisma.taskTemplate.create.mockResolvedValue(makeTemplate())
 
@@ -250,7 +267,7 @@ describe('TaskTemplatesService', () => {
 
   describe('update()', () => {
     it('updates editable fields and excludes the row under edit from the duplicate check', async () => {
-      const service = makeService(prisma)
+      const { service, audit } = makeService(prisma)
       prisma.taskTemplate.findFirst
         .mockResolvedValueOnce(makeTemplate()) // findOneForTenant (pre-check)
         .mockResolvedValueOnce(null) // duplicate-name check — no other row
@@ -275,10 +292,18 @@ describe('TaskTemplatesService', () => {
         }),
       )
       expect(result.name).toBe('Renamed')
+      expect(audit.log).toHaveBeenCalledWith({
+        tenantId: TENANT,
+        userId: USER,
+        action: 'UPDATE',
+        entity: 'TASK_TEMPLATE',
+        entityId: 'template-1',
+        details: { mutationName: 'UPDATE' },
+      })
     })
 
     it('allows keeping the same name on the row under edit', async () => {
-      const service = makeService(prisma)
+      const { service } = makeService(prisma)
       prisma.taskTemplate.findFirst
         .mockResolvedValueOnce(makeTemplate()) // findOneForTenant (pre-check)
         .mockResolvedValueOnce(null) // duplicate check excludes self
@@ -291,7 +316,7 @@ describe('TaskTemplatesService', () => {
     })
 
     it('rejects renaming to a case-insensitive duplicate of another row', async () => {
-      const service = makeService(prisma)
+      const { service } = makeService(prisma)
       prisma.taskTemplate.findFirst
         .mockResolvedValueOnce(makeTemplate())
         .mockResolvedValueOnce(makeTemplate({ id: 'template-2', name: 'Discovery Call' }))
@@ -302,7 +327,7 @@ describe('TaskTemplatesService', () => {
     })
 
     it('throws NotFoundException for a missing template', async () => {
-      const service = makeService(prisma)
+      const { service } = makeService(prisma)
       prisma.taskTemplate.findFirst.mockResolvedValue(null)
 
       await expect(service.update(TENANT, USER, 'missing', { name: 'X' })).rejects.toThrow(
@@ -311,7 +336,7 @@ describe('TaskTemplatesService', () => {
     })
 
     it('normalises title, description and defaultPriority when provided', async () => {
-      const service = makeService(prisma)
+      const { service } = makeService(prisma)
       prisma.taskTemplate.findFirst
         .mockResolvedValueOnce(makeTemplate()) // findOneForTenant (pre-check)
         .mockResolvedValueOnce(makeTemplate({ title: 'New title', description: 'New desc' })) // re-read
@@ -336,7 +361,7 @@ describe('TaskTemplatesService', () => {
     })
 
     it('clears the description when null is passed', async () => {
-      const service = makeService(prisma)
+      const { service } = makeService(prisma)
       prisma.taskTemplate.findFirst
         .mockResolvedValueOnce(makeTemplate()) // findOneForTenant (pre-check)
         .mockResolvedValueOnce(makeTemplate()) // re-read
@@ -352,7 +377,7 @@ describe('TaskTemplatesService', () => {
     })
 
     it('throws NotFoundException when the update affects zero rows', async () => {
-      const service = makeService(prisma)
+      const { service } = makeService(prisma)
       prisma.taskTemplate.findFirst.mockResolvedValue(makeTemplate()) // findOneForTenant (pre-check)
       prisma.taskTemplate.updateMany.mockResolvedValue({ count: 0 })
 
@@ -364,7 +389,7 @@ describe('TaskTemplatesService', () => {
 
   describe('defaultDueInDays validation (AC 39)', () => {
     it('rejects a negative value', async () => {
-      const service = makeService(prisma)
+      const { service } = makeService(prisma)
       prisma.taskTemplate.findFirst.mockResolvedValue(null)
 
       await expect(
@@ -373,7 +398,7 @@ describe('TaskTemplatesService', () => {
     })
 
     it('rejects a value above 365', async () => {
-      const service = makeService(prisma)
+      const { service } = makeService(prisma)
       prisma.taskTemplate.findFirst.mockResolvedValue(null)
 
       await expect(
@@ -382,7 +407,7 @@ describe('TaskTemplatesService', () => {
     })
 
     it('accepts 0 and 365 as valid bounds', async () => {
-      const service = makeService(prisma)
+      const { service } = makeService(prisma)
       prisma.taskTemplate.findFirst.mockResolvedValue(null)
       prisma.taskTemplate.create.mockResolvedValue(makeTemplate())
 
@@ -393,7 +418,7 @@ describe('TaskTemplatesService', () => {
     })
 
     it('accepts null (no due date)', async () => {
-      const service = makeService(prisma)
+      const { service } = makeService(prisma)
       prisma.taskTemplate.findFirst.mockResolvedValue(null)
       prisma.taskTemplate.create.mockResolvedValue(makeTemplate())
 
@@ -405,7 +430,7 @@ describe('TaskTemplatesService', () => {
     })
 
     it('rejects an invalid defaultPriority', async () => {
-      const service = makeService(prisma)
+      const { service } = makeService(prisma)
       prisma.taskTemplate.findFirst.mockResolvedValue(null)
 
       await expect(
@@ -416,7 +441,7 @@ describe('TaskTemplatesService', () => {
 
   describe('delete()', () => {
     it('soft-deletes the template and returns true', async () => {
-      const service = makeService(prisma)
+      const { service, audit } = makeService(prisma)
       prisma.taskTemplate.findFirst.mockResolvedValue(makeTemplate())
       prisma.taskTemplate.updateMany.mockResolvedValue({ count: 1 })
 
@@ -429,10 +454,18 @@ describe('TaskTemplatesService', () => {
           data: expect.objectContaining({ deletedAt: expect.any(Date) }),
         }),
       )
+      expect(audit.log).toHaveBeenCalledWith({
+        tenantId: TENANT,
+        userId: USER,
+        action: 'DELETE',
+        entity: 'TASK_TEMPLATE',
+        entityId: 'template-1',
+        details: { mutationName: 'DELETE' },
+      })
     })
 
     it('throws NotFoundException when the template is already deleted', async () => {
-      const service = makeService(prisma)
+      const { service } = makeService(prisma)
       prisma.taskTemplate.findFirst.mockResolvedValue(makeTemplate())
       prisma.taskTemplate.updateMany.mockResolvedValue({ count: 0 })
 
@@ -442,7 +475,7 @@ describe('TaskTemplatesService', () => {
     })
 
     it('throws NotFoundException when the template is in another tenant', async () => {
-      const service = makeService(prisma)
+      const { service } = makeService(prisma)
       prisma.taskTemplate.findFirst.mockResolvedValue(null)
 
       await expect(service.delete('other-tenant', USER, 'template-1')).rejects.toThrow(

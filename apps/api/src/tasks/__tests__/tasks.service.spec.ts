@@ -15,6 +15,7 @@ import type { TaskListItem } from '../tasks.service'
 import type { PrismaService } from '../../prisma/prisma.service'
 import type { ContactsService } from '../../contacts/contacts.service'
 import type { DealsService } from '../../deals/deals.service'
+import type { AuditService } from '../../audit/audit.service'
 import type { Prisma } from '@prisma/client'
 
 const mockResolveVisibilityFilter = resolveVisibilityFilter as jest.Mock
@@ -95,19 +96,22 @@ function makeService(prisma: MockPrisma): {
   deals: { findOne: jest.Mock }
   templates: { findOneForTenant: jest.Mock }
   pubsub: { publish: jest.Mock }
+  audit: { log: jest.Mock }
 } {
   const contacts = { findOne: jest.fn() }
   const deals = { findOne: jest.fn() }
   const templates = { findOneForTenant: jest.fn() }
   const pubsub = { publish: jest.fn() }
+  const audit = { log: jest.fn() }
   const service = new TasksService(
     prisma as unknown as PrismaService,
     contacts as unknown as ContactsService,
     deals as unknown as DealsService,
     templates as unknown as TaskTemplatesService,
     pubsub as unknown as TaskPubSubService,
+    audit as unknown as AuditService,
   )
-  return { service, contacts, deals, templates, pubsub }
+  return { service, contacts, deals, templates, pubsub, audit }
 }
 
 describe('TasksService', () => {
@@ -122,7 +126,7 @@ describe('TasksService', () => {
 
   describe('create()', () => {
     it('creates a task scoped to the tenant with all required fields', async () => {
-      const { service } = makeService(prisma)
+      const { service, audit } = makeService(prisma)
       const created = makeTask({ title: '  Follow up with Acme  ' })
       prisma.task.create.mockResolvedValue(created)
       prisma.task.findFirst.mockResolvedValue(created)
@@ -142,6 +146,14 @@ describe('TasksService', () => {
         }),
       )
       expect(result.id).toBe('task-1')
+      expect(audit.log).toHaveBeenCalledWith({
+        tenantId: TENANT,
+        userId: USER,
+        action: 'CREATE',
+        entity: 'TASK',
+        entityId: 'task-1',
+        details: { mutationName: 'CREATE' },
+      })
     })
 
     it('rejects an empty title with BadRequestException', async () => {
@@ -558,7 +570,7 @@ describe('TasksService', () => {
 
   describe('update()', () => {
     it('updates title, status and priority with tri-state semantics', async () => {
-      const { service } = makeService(prisma)
+      const { service, audit } = makeService(prisma)
       const current = makeTask()
       prisma.task.findFirst.mockResolvedValue(current)
       prisma.task.updateMany.mockResolvedValue({ count: 1 })
@@ -580,6 +592,14 @@ describe('TasksService', () => {
           }),
         }),
       )
+      expect(audit.log).toHaveBeenCalledWith({
+        tenantId: TENANT,
+        userId: USER,
+        action: 'UPDATE',
+        entity: 'TASK',
+        entityId: 'task-1',
+        details: { mutationName: 'UPDATE' },
+      })
     })
 
     it('clears completedAt when status moves away from COMPLETED (AC 34)', async () => {
@@ -706,7 +726,7 @@ describe('TasksService', () => {
 
   describe('assign()', () => {
     it('assigns the task to an active user in the same tenant', async () => {
-      const { service, pubsub } = makeService(prisma)
+      const { service, pubsub, audit } = makeService(prisma)
       prisma.task.findFirst
         .mockResolvedValueOnce(makeTask({ assignedTo: USER }))
         .mockResolvedValueOnce(makeTask({ assignedTo: 'user-2' }))
@@ -725,6 +745,14 @@ describe('TasksService', () => {
         `${PUBSUB_TASK_ASSIGNED}:${TENANT}:user-2`,
         expect.anything(),
       )
+      expect(audit.log).toHaveBeenCalledWith({
+        tenantId: TENANT,
+        userId: USER,
+        action: 'UPDATE',
+        entity: 'TASK',
+        entityId: 'task-1',
+        details: { mutationName: 'UPDATE' },
+      })
     })
 
     it('rejects an inactive assignee with BadRequestException', async () => {
@@ -774,7 +802,7 @@ describe('TasksService', () => {
 
   describe('complete()', () => {
     it('stamps status COMPLETED and completedAt', async () => {
-      const { service } = makeService(prisma)
+      const { service, audit } = makeService(prisma)
       prisma.task.findFirst
         .mockResolvedValueOnce(makeTask())
         .mockResolvedValueOnce(
@@ -791,10 +819,18 @@ describe('TasksService', () => {
         }),
       )
       expect(result.status).toBe('COMPLETED')
+      expect(audit.log).toHaveBeenCalledWith({
+        tenantId: TENANT,
+        userId: USER,
+        action: 'UPDATE',
+        entity: 'TASK',
+        entityId: 'task-1',
+        details: { mutationName: 'UPDATE' },
+      })
     })
 
     it('is idempotent — an already-completed task is returned unchanged', async () => {
-      const { service } = makeService(prisma)
+      const { service, audit } = makeService(prisma)
       const completed = makeTask({
         status: 'COMPLETED',
         completedAt: new Date('2026-08-01T00:00:00.000Z'),
@@ -804,6 +840,7 @@ describe('TasksService', () => {
       const result = await service.complete(TENANT, USER, 'task-1')
 
       expect(prisma.task.updateMany).not.toHaveBeenCalled()
+      expect(audit.log).not.toHaveBeenCalled()
       expect(result.completedAt).toEqual(new Date('2026-08-01T00:00:00.000Z'))
     })
 
@@ -818,7 +855,7 @@ describe('TasksService', () => {
 
   describe('delete()', () => {
     it('soft-deletes the task and returns true', async () => {
-      const { service } = makeService(prisma)
+      const { service, audit } = makeService(prisma)
       prisma.task.findFirst.mockResolvedValue(makeTask())
       prisma.task.updateMany.mockResolvedValue({ count: 1 })
 
@@ -831,6 +868,14 @@ describe('TasksService', () => {
           data: expect.objectContaining({ deletedAt: expect.any(Date), updatedBy: USER }),
         }),
       )
+      expect(audit.log).toHaveBeenCalledWith({
+        tenantId: TENANT,
+        userId: USER,
+        action: 'DELETE',
+        entity: 'TASK',
+        entityId: 'task-1',
+        details: { mutationName: 'DELETE' },
+      })
     })
 
     it('throws NotFoundException when the row is already deleted', async () => {

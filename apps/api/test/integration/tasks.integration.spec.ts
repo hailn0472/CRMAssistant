@@ -303,18 +303,19 @@ describe('Task CRUD with templates and assignment (integration)', () => {
   }
 
   // The audit interceptor writes asynchronously (fire-and-forget tap), so poll
-  // briefly instead of racing the mutation response.
+  // briefly instead of racing the mutation response. CI runners are slow — the
+  // 2s window once raced the interceptor here, so allow up to 10s.
   async function findAuditRow(where: {
     tenantId: string
     action: string
     entity: string
   }): Promise<{ entityId: string; userId: string } | null> {
-    for (let attempt = 0; attempt < 20; attempt++) {
+    for (let attempt = 0; attempt < 50; attempt++) {
       const row = await prisma.auditLog.findFirst({ where })
       if (row) {
         return { entityId: row.entityId, userId: row.userId }
       }
-      await new Promise((resolve) => setTimeout(resolve, 100))
+      await new Promise((resolve) => setTimeout(resolve, 200))
     }
     return null
   }
