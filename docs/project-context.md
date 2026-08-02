@@ -354,7 +354,7 @@ model MyDomainModel {
 
 ### As-built module map (check here before creating anything)
 
-**Backend** — `apps/api/src/`: `accounts` (tests only; Account entity deferred 2026-07-29), `activities`, `audit`, `auth`, `common` (guards, interceptors, validation), `contacts`, `contacts-export`, `contacts-import`, `deals`, `facebook`, `graphql`, `health`, `import-export`, `inbox`, `permissions`, `prisma`, `products`, `reports`, `roles`, `segments`, `sharing`, `tags`, `teams`, `users`.
+**Backend** — `apps/api/src/`: `accounts` (tests only; Account entity deferred 2026-07-29), `activities`, `audit`, `auth`, `calendar` (Story 4.3 — Google Calendar & Outlook integration: OAuth adapters, sync engine, per-user `CalendarConnection`, `TaskCalendarEvent` link rows), `common` (guards, interceptors, validation), `contacts`, `contacts-export`, `contacts-import`, `deals`, `facebook`, `graphql`, `health`, `import-export`, `inbox`, `permissions`, `prisma`, `products`, `reports`, `roles`, `segments`, `sharing`, `tags`, `teams`, `users`.
 
 > Note: the architecture doc's directory tree lists `cache/` and `realtime/` modules. **Neither exists.**
 
@@ -813,6 +813,7 @@ describe('ContactService', () => {
 - **Money is `Float`, not `Decimal`.** Round at every write; never round only for display.
 - **Soft delete + `@@unique` is a trap.** `DealStage` has `@@unique([tenantId, name])` while soft-deleting, so a deleted row's name stays reserved forever and re-creating it fails with an opaque `P2002`. For new models prefer **no DB unique constraint** plus a case-insensitive check over `deletedAt: null` rows in the service, throwing a clear `ConflictException`.
 - **Altering an existing table**: new columns must be nullable (existing rows have no value), and every FK needs an explicit `ON DELETE` decision (`RESTRICT` for referenced catalogue rows, `CASCADE` for owned children).
+- **Story 4.3 models**: `CalendarConnection` (per-USER, `@@unique([tenantId, userId, provider])`, tokens encrypted at rest via `common/crypto/token-crypto`, `accessTokenEncrypted` nullable because disconnect nulls both token columns) and `TaskCalendarEvent` (per-task-per-connection link + sync state, `@@unique([tenantId, taskId, calendarConnectionId])`, **no `deletedAt`** — hard-deleted, documented in the schema like `Activity`). `TaskCalendarEvent` is the "no soft delete + unique" exemption, deliberately different from the DealStage trap above.
 - Migration order has caused near-data-loss before (FK constraint created before the data was seeded). Review order of operations, data-migration steps and nullable FKs deliberately.
 
 ## References

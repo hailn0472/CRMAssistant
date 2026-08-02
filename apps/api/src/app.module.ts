@@ -12,6 +12,8 @@ import { StorageModule } from './storage/storage.module'
 import { DealCollaborationModule } from './deal-collaboration/deal-collaboration.module'
 import { DealHealthModule } from './deal-health/deal-health.module'
 import { TasksModule } from './tasks/tasks.module'
+import { CalendarModule } from './calendar/calendar.module'
+import { CalendarTaskBindingModule } from './calendar/calendar-task-binding.module'
 import { RolesModule } from './roles/roles.module'
 import { SegmentsModule } from './segments/segments.module'
 import { TagsModule } from './tags/tags.module'
@@ -45,6 +47,8 @@ import { ReportsModule } from './reports/reports.module'
     DealCollaborationModule,
     DealHealthModule,
     TasksModule,
+    CalendarModule,
+    CalendarTaskBindingModule,
     AppGraphqlModule,
     ContactsModule,
     DealsModule,

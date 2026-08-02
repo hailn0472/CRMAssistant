@@ -44,6 +44,9 @@ const SEGMENT_LABELS: Record<string, string> = {
   'win-loss': 'Win/Loss',
   reminders: 'Reminders',
   'activity-logging': 'Activity Logging',
+  // Story 4.3 calendar settings routes.
+  calendars: 'Calendars',
+  callback: 'Connecting…',
 }
 
 function labelForSegment(segment: string): string {
@@ -57,10 +60,15 @@ interface Crumb {
 
 function buildCrumbs(pathname: string): Crumb[] {
   const segments = pathname.split('/').filter(Boolean)
-  return segments.map((segment, index) => ({
-    label: labelForSegment(segment),
-    href: `/${segments.slice(0, index + 1).join('/')}`,
-  }))
+  if (segments.length === 0) return []
+  const crumbs: Crumb[] = [{ label: 'CRM', href: '/dashboard' }]
+  segments.forEach((segment, index) => {
+    crumbs.push({
+      label: labelForSegment(segment),
+      href: `/${segments.slice(0, index + 1).join('/')}`,
+    })
+  })
+  return crumbs
 }
 
 export function Breadcrumbs({ className }: { className?: string }): React.JSX.Element | null {

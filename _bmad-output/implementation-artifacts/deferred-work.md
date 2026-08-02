@@ -122,9 +122,21 @@
 ## Deferred from: 4-2-automatic-activity-logging-from-integrated-channels (2026-08-02)
 
 - No literal job queue — the epic AC's "asynchronous (background job queue)" is arbitrated to the house primitive `ActivityService.logSafe()` awaited inline inside the mutation (swallowing its own failures so the primary operation never fails), exactly like `ContactsService` auto-logs. `@nestjs/schedule` / `bullmq` / `ioredis` are still not installed; a scheduler deserves its own infrastructure story (4.3, 4.6, 6.5, 6.7, 7.3 assume one).
-- `EMAIL_SENT`, `CALL_MADE` and `MEETING_SCHEDULED` remain producer-less enum members — no email transport, no telephony/CTI, and calendar OAuth is Story 4.3 (sequenced after this one). They stay unused until their integrations land.
+- ~~`EMAIL_SENT`, `CALL_MADE` and `MEETING_SCHEDULED` remain producer-less enum members — no email transport, no telephony/CTI, and calendar OAuth is Story 4.3 (sequenced after this one). They stay unused until their integrations land.~~ — **RESOLVED 2026-08-02 for `MEETING_SCHEDULED`.** Story 4.3 ships the producer: on the first successful calendar push of a task that resolves to a contact, `CalendarSyncService` logs one `MEETING_SCHEDULED` activity (source `CALENDAR`, dedupeKey `MEETING:<taskId>:<calendarConnectionId>`), gated by the `logMeetingScheduled` preference. `EMAIL_SENT` and `CALL_MADE` remain producer-less.
 - Facebook history backfill produces no activities — `MessagesService` skips any message whose `input.sentAt` is set, so a first backfill never emits a burst of thousands of backdated timeline rows.
 - Facebook-side agent replies (echo events, `metadata.source === 'facebook_echo'`) produce no activities — an echo mirrors an outbound message the CRM may have logged under a different `Message.id`, so `MESSAGE:<messageId>` cannot dedupe it. An agent replying from Facebook's own Page inbox (not from the CRM) therefore leaves no timeline trace.
 - `Activity.metadata` is persisted but not exposed over GraphQL — no JSON scalar is registered in the Pothos schema (dates cross as `String`). Stories 4.4 and 6.8 are the future consumers.
 - Deal field-level edits are not logged — only `DEAL_CREATED` and `DEAL_STAGE_CHANGED` are. `updateDeal` fires on trivial edits and would flood the timeline; stage transitions were arbitrated as the high-value deal update.
 - `Activity` remains append-only (no `updatedAt`/`updatedBy`/`deletedAt`) — auto-logged rows are derived records whose originating mutation is already audited (NFR9), so no audit row is written for the activity itself.
+
+## Deferred from: 4-3-calendar-integration-google-calendar-outlook (2026-08-02)
+
+- No literal 15-minute scheduler (cadence arbitration) — the sweep is lazily triggered from the `calendarConnections` query, throttled to at most once per connection per 15 minutes via `CalendarConnection.lastSyncedAt`. A tenant with nobody logged in never syncs.
+- No push webhooks (`events.watch` / Graph `subscriptions`) — inbound latency is bounded by the sweep cadence, not seconds. Both webhook mechanisms expire (Graph calendar subscriptions ≤ 3 days) and would require a scheduler plus a publicly reachable HTTPS callback.
+- No per-user timezone — there is no `User.timezone` column; all events cross as UTC ISO-8601 (`timeZone: 'UTC'`).
+- No `location` field on calendar events — `Task` has no location column (Story 4.1's model).
+- Conflicts are detected, persisted (`conflictDetectedAt`/`conflictSummary`) and surfaced in the task-detail badge, but NOT pushed as notifications — Story 4.8 owns the notification centre.
+- Calendar events are never imported as new CRM tasks — inbound events are matched by `TaskCalendarEvent.externalEventId` only; an event with no link row is ignored.
+- Recurring calendar events are not expanded — a recurring series is treated as a single event; if its start moves, the task's dueDate follows the series head, not each occurrence.
+- No `.env.example` file exists anywhere in this repo despite the wording in `docs/operations/infisical-secret-management.md` — the inventory table was updated; creating a stray `.env.example` is separate hygiene, ledgered here.
+- `accessTokenEncrypted` is nullable (schema says `String?`) so `disconnectCalendar` can null BOTH token columns (AC 19) — a slight deviation from the story's schema table, which listed it as required and contradicted its own AC 19.

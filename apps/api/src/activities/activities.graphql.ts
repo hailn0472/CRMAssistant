@@ -133,6 +133,7 @@ type ActivityLogPreferenceShape = {
   logDealStageChanged: boolean
   logMessageSent: boolean
   logMessageReceived: boolean
+  logMeetingScheduled: boolean
 }
 
 const ActivityLogPreferenceRef =
@@ -145,6 +146,8 @@ ActivityLogPreferenceRef.implement({
     logDealStageChanged: t.exposeBoolean('logDealStageChanged'),
     logMessageSent: t.exposeBoolean('logMessageSent'),
     logMessageReceived: t.exposeBoolean('logMessageReceived'),
+    // Story 4.3 (AC 8): MEETING_SCHEDULED preference gate.
+    logMeetingScheduled: t.exposeBoolean('logMeetingScheduled'),
   }),
 })
 
@@ -155,6 +158,7 @@ const UpdateActivityLogPreferenceInputRef = builder.inputType('UpdateActivityLog
     logDealStageChanged: t.boolean(),
     logMessageSent: t.boolean(),
     logMessageReceived: t.boolean(),
+    logMeetingScheduled: t.boolean(),
   }),
 })
 

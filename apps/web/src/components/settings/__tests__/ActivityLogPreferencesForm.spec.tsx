@@ -38,6 +38,8 @@ const defaultPrefs = {
   logDealStageChanged: true,
   logMessageSent: true,
   logMessageReceived: true,
+  // Story 4.3 (AC 8/47).
+  logMeetingScheduled: true,
 }
 
 function renderForm(
@@ -75,6 +77,8 @@ describe('ActivityLogPreferencesForm', () => {
     expect(screen.getByLabelText('Log deal stage changes')).toHaveAttribute('aria-checked', 'true')
     expect(screen.getByLabelText('Log sent messages')).toHaveAttribute('aria-checked', 'true')
     expect(screen.getByLabelText('Log received messages')).toHaveAttribute('aria-checked', 'true')
+    // Story 4.3 (AC 8): the MEETING_SCHEDULED toggle ships with the form.
+    expect(screen.getByLabelText('Log scheduled meetings')).toHaveAttribute('aria-checked', 'true')
   })
 
   it('reflects persisted off-values in the toggles (W18)', async () => {
@@ -97,6 +101,28 @@ describe('ActivityLogPreferencesForm', () => {
     expect(toggle).toHaveAttribute('aria-checked', 'false')
   })
 
+  it('exposes and persists the logMeetingScheduled toggle (Story 4.3 AC 8/47)', async () => {
+    ;(updateActivityLogPreferences as jest.Mock).mockResolvedValue({
+      ...defaultPrefs,
+      logMeetingScheduled: false,
+    })
+    renderForm()
+
+    const toggle = await screen.findByLabelText('Log scheduled meetings')
+    expect(toggle).toHaveAttribute('aria-checked', 'true')
+
+    fireEvent.click(toggle)
+    expect(toggle).toHaveAttribute('aria-checked', 'false')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save preferences' }))
+
+    await waitFor(() => {
+      expect(updateActivityLogPreferences).toHaveBeenCalledWith(
+        expect.objectContaining({ logMeetingScheduled: false }),
+      )
+    })
+  })
+
   it('submits the changed payload and shows an impact-stating success toast (AC 51 / W20)', async () => {
     ;(updateActivityLogPreferences as jest.Mock).mockResolvedValue({
       ...defaultPrefs,
@@ -116,11 +142,12 @@ describe('ActivityLogPreferencesForm', () => {
         logDealStageChanged: true,
         logMessageSent: true,
         logMessageReceived: false,
+        logMeetingScheduled: true,
       })
     })
     // Success copy states impact, not just "Saved".
     expect(toast.success).toHaveBeenCalledWith(
-      expect.stringContaining('2 of 5 logging rules turned off'),
+      expect.stringContaining('2 of 6 logging rules turned off'),
     )
   })
 
@@ -243,5 +270,21 @@ describe('Settings navigation entry (AC 52 / W27, W28)', () => {
     expect(link).toHaveAttribute('href', '/settings/activity-logging')
     // No roles/permission gating: it renders even with a null user (see above).
     expect(screen.getByRole('link', { name: 'Reminders' })).toBeInTheDocument()
+  })
+
+  it('exposes an ungated Calendars entry next to Activity Logging (Story 4.3 AC 42)', async () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    render(
+      <QueryClientProvider client={queryClient}>
+        <SettingsLayout>
+          <div />
+        </SettingsLayout>
+      </QueryClientProvider>,
+    )
+
+    const link = await screen.findByRole('link', { name: 'Calendars' })
+    expect(link).toHaveAttribute('href', '/settings/calendars')
+    // No roles and no permission — every user manages their own calendars (AC 32).
+    expect(screen.getByRole('link', { name: 'Activity Logging' })).toBeInTheDocument()
   })
 })

@@ -50,4 +50,11 @@ describe('SettingsLayout nav', () => {
 
     expect(screen.getByRole('link', { name: 'Reminders' })).toHaveAttribute('aria-current', 'page')
   })
+
+  it('shows the Calendars nav item for every user — no roles, no permission (Story 4.3 AC 42)', () => {
+    renderLayout()
+
+    const link = screen.getByRole('link', { name: 'Calendars' })
+    expect(link).toHaveAttribute('href', '/settings/calendars')
+  })
 })

@@ -88,6 +88,14 @@ export const MUTATION_AUDIT_MAP: Record<string, { action: string; entity: string
   // interceptor never fires for mutations in this repo (AC 42) — but kept for
   // consistency; the service writes the row itself (AC 41).
   updateActivityLogPreferences: { action: 'UPDATE', entity: 'USER' },
+
+  // Calendar mutations (Story 4.3). Also decorative for GraphQL — the
+  // interceptor never fires — but kept for consistency; the services write
+  // the rows themselves (AC 37-38). There is no double write.
+  connectCalendar: { action: 'CREATE', entity: 'CALENDAR_CONNECTION' },
+  disconnectCalendar: { action: 'DELETE', entity: 'CALENDAR_CONNECTION' },
+  syncTaskToCalendar: { action: 'UPDATE', entity: 'TASK' },
+  syncCalendar: { action: 'UPDATE', entity: 'CALENDAR_CONNECTION' },
 }
 
 @Injectable()

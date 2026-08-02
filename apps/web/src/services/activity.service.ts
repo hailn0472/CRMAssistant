@@ -94,6 +94,7 @@ export type ActivityLogPreference = {
   logDealStageChanged: boolean
   logMessageSent: boolean
   logMessageReceived: boolean
+  logMeetingScheduled: boolean
 }
 
 export type UpdateActivityLogPreferenceInput = Partial<ActivityLogPreference>
@@ -104,6 +105,7 @@ const ACTIVITY_LOG_PREFERENCE_FIELDS = `
   logDealStageChanged
   logMessageSent
   logMessageReceived
+  logMeetingScheduled
 `
 
 export async function getMyActivityLogPreferences(): Promise<ActivityLogPreference> {

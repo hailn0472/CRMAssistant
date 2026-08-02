@@ -9,6 +9,8 @@ import { ContactsService } from '../contacts/contacts.service'
 import { DealsService } from '../deals/deals.service'
 import { TaskTemplatesService } from './task-templates.service'
 import { TaskPubSubService, PUBSUB_TASK_ASSIGNED } from './task-pubsub.service'
+import { CalendarSyncService } from '../calendar/calendar-sync.service'
+import type { CalendarTaskInput } from '../calendar/calendar-sync.service'
 import { isTaskPriority, isTaskStatus, toUtcMidnight } from './task-due-status'
 import type { TaskPriority, TaskStatus } from './task-due-status'
 import type { Prisma } from '@prisma/client'
@@ -171,6 +173,7 @@ export class TasksService {
     private readonly audit: AuditService,
     private readonly activity: ActivityService,
     private readonly activityLogPreference: ActivityLogPreferenceService,
+    private readonly calendarSync: CalendarSyncService,
   ) {}
 
   /**
@@ -196,6 +199,29 @@ export class TasksService {
       entityId,
       details: { mutationName: action },
     })
+  }
+
+  /**
+   * Story 4.3: best-effort calendar push hook (AC 23). `syncTaskSafe` itself
+   * swallows its failures (mirroring ActivityService.logSafe); this guard is
+   * belt and braces so that even a misbehaving sync engine can never fail the
+   * task mutation. Called AFTER the audit write and outside any $transaction.
+   */
+  private async syncCalendarSafe(task: CalendarTaskInput): Promise<void> {
+    try {
+      await this.calendarSync.syncTaskSafe(task)
+    } catch {
+      // Swallowed — the mutation must succeed (AC 23).
+    }
+  }
+
+  /** Story 4.3: best-effort remote removal + link cleanup (AC 23). */
+  private async removeCalendarSafe(task: CalendarTaskInput): Promise<void> {
+    try {
+      await this.calendarSync.removeTaskFromCalendarSafe(task)
+    } catch {
+      // Swallowed — the mutation must succeed (AC 23).
+    }
   }
 
   async create(tenantId: string, userId: string, input: CreateTaskInput): Promise<TaskListItem> {
@@ -249,6 +275,14 @@ export class TasksService {
     }
 
     await this.writeAudit(tenantId, userId, 'CREATE', createdTask.id)
+
+    // Story 4.3: best-effort calendar push (AC 22-23) — after the audit
+    // write, outside any $transaction, and never failing the mutation
+    // (syncTaskSafe swallows its own failures). A task without a dueDate is
+    // not eligible (AC 22).
+    if (createdTask.dueDate) {
+      await this.syncCalendarSafe(createdTask)
+    }
 
     return createdTask
   }
@@ -490,6 +524,26 @@ export class TasksService {
       await this.logTaskCompleted(tenantId, userId, updatedTask)
     }
 
+    // Story 4.3: calendar hooks (AC 22-23) — after the audit write, outside
+    // any $transaction, never failing the mutation. Delete the remote event
+    // when dueDate became null or the status became COMPLETED/CANCELLED;
+    // push when title/description/dueDate changed.
+    const dueDateChanged =
+      (updatedTask.dueDate ?? null)?.getTime() !== (currentTask.dueDate ?? null)?.getTime()
+    const dueDateCleared = currentTask.dueDate !== null && updatedTask.dueDate === null
+    const becameClosed = updatedTask.status === 'COMPLETED' || updatedTask.status === 'CANCELLED'
+    if (becameClosed || dueDateCleared) {
+      await this.removeCalendarSafe(updatedTask)
+    } else if (
+      dueDateChanged ||
+      updatedTask.title !== currentTask.title ||
+      updatedTask.description !== currentTask.description
+    ) {
+      if (updatedTask.dueDate) {
+        await this.syncCalendarSafe(updatedTask)
+      }
+    }
+
     return updatedTask
   }
 
@@ -527,6 +581,16 @@ export class TasksService {
 
     await this.writeAudit(tenantId, userId, 'UPDATE', updatedTask.id)
 
+    // Story 4.3: calendar hooks (AC 23) — delete from the previous assignee's
+    // calendar, create on the new assignee's. Best-effort, after the audit
+    // write, outside any $transaction.
+    if (assigneeId !== currentTask.assignedTo) {
+      await this.removeCalendarSafe(currentTask)
+      if (updatedTask.dueDate) {
+        await this.syncCalendarSafe(updatedTask)
+      }
+    }
+
     return updatedTask
   }
 
@@ -557,6 +621,9 @@ export class TasksService {
     const updatedTask = await this.findOne(tenantId, userId, id)
 
     await this.writeAudit(tenantId, userId, 'UPDATE', updatedTask.id)
+
+    // Story 4.3: delete the remote event and the link row (AC 23). Best-effort.
+    await this.removeCalendarSafe(updatedTask)
 
     // Story 4.2: auto-log the completion (AC 19). Uses logSafe — a logging
     // failure never fails the task mutation.
@@ -618,7 +685,7 @@ export class TasksService {
 
   async delete(tenantId: string, userId: string, id: string): Promise<boolean> {
     // Verify task exists and is visible
-    await this.findOne(tenantId, userId, id)
+    const currentTask = await this.findOne(tenantId, userId, id)
 
     const result = await this.prisma.task.updateMany({
       where: { id, tenantId, deletedAt: null },
@@ -630,6 +697,9 @@ export class TasksService {
     }
 
     await this.writeAudit(tenantId, userId, 'DELETE', id)
+
+    // Story 4.3: delete the remote event and the link row (AC 23). Best-effort.
+    await this.removeCalendarSafe(currentTask)
 
     return true
   }

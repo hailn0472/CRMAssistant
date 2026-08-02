@@ -502,6 +502,7 @@ describe('Automatic activity logging (integration)', () => {
       logDealStageChanged: true,
       logMessageSent: true,
       logMessageReceived: true,
+      logMeetingScheduled: true,
     })
   })
 
