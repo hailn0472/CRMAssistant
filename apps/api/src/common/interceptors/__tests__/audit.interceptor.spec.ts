@@ -1,6 +1,6 @@
 import { of } from 'rxjs'
 import type { CallHandler } from '@nestjs/common'
-import { AuditInterceptor } from '../audit.interceptor'
+import { AuditInterceptor, MUTATION_AUDIT_MAP } from '../audit.interceptor'
 import type { AuditService } from '../../../audit/audit.service'
 
 // Mock GqlExecutionContext
@@ -166,5 +166,98 @@ describe('AuditInterceptor', () => {
         }
       },
     })
+  })
+
+  it('audits snoozeDealReminder as UPDATE/DEAL (AC 42)', (done) => {
+    mockGqlCtx.getInfo.mockReturnValue({
+      fieldName: 'snoozeDealReminder',
+      parentType: { name: 'Mutation' },
+    })
+    mockGqlCtx.getContext.mockReturnValue({
+      req: { headers: {} },
+      user: { userId: 'user-1', tenantId: 'tenant-1' },
+    })
+    mockGqlCtx.getArgs.mockReturnValue({ dealId: 'deal-1', days: 7 })
+
+    const callHandler: CallHandler = { handle: () => of({ id: 'snooze-1' }) }
+    const result$ = interceptor.intercept({} as never, callHandler)
+
+    result$.subscribe({
+      complete: () => {
+        try {
+          expect(auditService.log).toHaveBeenCalledWith(
+            expect.objectContaining({
+              action: 'UPDATE',
+              entity: 'DEAL',
+              entityId: 'snooze-1',
+            }),
+          )
+          done()
+        } catch (err) {
+          done(err)
+        }
+      },
+    })
+  })
+
+  it('audits updateReminderPreferences as UPDATE/USER (AC 42)', (done) => {
+    mockGqlCtx.getInfo.mockReturnValue({
+      fieldName: 'updateReminderPreferences',
+      parentType: { name: 'Mutation' },
+    })
+    mockGqlCtx.getContext.mockReturnValue({
+      req: { headers: {} },
+      user: { userId: 'user-1', tenantId: 'tenant-1' },
+    })
+    mockGqlCtx.getArgs.mockReturnValue({})
+
+    const callHandler: CallHandler = { handle: () => of({ id: 'pref-1' }) }
+    const result$ = interceptor.intercept({} as never, callHandler)
+
+    result$.subscribe({
+      complete: () => {
+        try {
+          expect(auditService.log).toHaveBeenCalledWith(
+            expect.objectContaining({
+              action: 'UPDATE',
+              entity: 'USER',
+              entityId: 'pref-1',
+            }),
+          )
+          done()
+        } catch (err) {
+          done(err)
+        }
+      },
+    })
+  })
+
+  it('carries the three Story 3.7 entries and excludes runDealHealthSweep (AC 42)', () => {
+    expect(MUTATION_AUDIT_MAP['snoozeDealReminder']).toEqual({ action: 'UPDATE', entity: 'DEAL' })
+    expect(MUTATION_AUDIT_MAP['unsnoozeDealReminder']).toEqual({
+      action: 'UPDATE',
+      entity: 'DEAL',
+    })
+    expect(MUTATION_AUDIT_MAP['updateReminderPreferences']).toEqual({
+      action: 'UPDATE',
+      entity: 'USER',
+    })
+    expect(MUTATION_AUDIT_MAP['runDealHealthSweep']).toBeUndefined()
+  })
+
+  it('skips runDealHealthSweep — it is not in the map and returns no id (AC 42)', () => {
+    mockGqlCtx.getInfo.mockReturnValue({
+      fieldName: 'runDealHealthSweep',
+      parentType: { name: 'Mutation' },
+    })
+    mockGqlCtx.getContext.mockReturnValue({
+      req: { headers: {} },
+      user: { userId: 'user-1', tenantId: 'tenant-1' },
+    })
+
+    const callHandler: CallHandler = { handle: () => of({ sweepDate: 'x', dealsEvaluated: 0 }) }
+    interceptor.intercept({} as never, callHandler)
+
+    expect(auditService.log).not.toHaveBeenCalled()
   })
 })

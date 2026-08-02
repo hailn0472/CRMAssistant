@@ -1,10 +1,43 @@
 import { render, screen, within } from '@testing-library/react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 
 import { CommandCenterDashboard } from '../CommandCenterDashboard'
+import { getAtRiskDeals } from '@/services/deal-health.service'
+
+jest.mock('@/services/deal-health.service', () => ({
+  getAtRiskDeals: jest.fn(),
+}))
+
+function renderDashboard(): ReturnType<typeof render> {
+  ;(getAtRiskDeals as jest.Mock).mockResolvedValue({
+    items: [
+      {
+        deal: {
+          id: 'deal-1',
+          title: 'Renewal — Northstar Retail',
+          value: 24500,
+          currency: 'USD',
+          expectedCloseDate: null,
+          owner: { id: 'user-1', firstName: 'Minh', lastName: 'Nguyen' },
+        },
+        health: { status: 'STALE', score: 20, signals: ['NO_ACTIVITY_14D'] },
+      },
+    ],
+    total: 1,
+    page: 1,
+    pageSize: 20,
+  })
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <CommandCenterDashboard />
+    </QueryClientProvider>,
+  )
+}
 
 describe('CommandCenterDashboard component ATDD', () => {
   it('composes the dashboard skeleton sections in priority order', () => {
-    render(<CommandCenterDashboard />)
+    renderDashboard()
 
     const commandCenter = screen.getByRole('heading', { name: /command center/i })
     const priorityQueue = screen.getByRole('region', { name: /priority action queue/i })
@@ -23,7 +56,7 @@ describe('CommandCenterDashboard component ATDD', () => {
   })
 
   it('shows 3 to 5 prioritized action items with reason, urgency, and related records', () => {
-    render(<CommandCenterDashboard />)
+    renderDashboard()
 
     const queue = screen.getByRole('region', { name: /priority action queue/i })
     const actionItems = within(queue).getAllByRole('listitem')
@@ -36,7 +69,7 @@ describe('CommandCenterDashboard component ATDD', () => {
   })
 
   it('marks planned role-specific sections without implying live personalization', () => {
-    render(<CommandCenterDashboard />)
+    renderDashboard()
 
     const roles = ['Sales Rep', 'Sales Manager', 'Admin', 'Support Agent']
 
@@ -48,7 +81,7 @@ describe('CommandCenterDashboard component ATDD', () => {
   })
 
   it('provides readable landmark structure for assistive technology', () => {
-    render(<CommandCenterDashboard />)
+    renderDashboard()
 
     expect(screen.getByRole('heading', { level: 1, name: /command center/i })).toBeInTheDocument()
     expect(screen.getByRole('region', { name: /priority action queue/i })).toBeInTheDocument()
@@ -57,5 +90,25 @@ describe('CommandCenterDashboard component ATDD', () => {
     expect(
       screen.getByRole('region', { name: /first actions|empty dashboard/i }),
     ).toBeInTheDocument()
+  })
+
+  it('mounts the live AtRiskDealsWidget and drops the sample at-risk metric (AC 52)', async () => {
+    renderDashboard()
+
+    // The hardcoded sample entry is gone
+    expect(screen.queryByText('At-risk deals sample')).not.toBeInTheDocument()
+    expect(screen.queryByText('2 demo')).not.toBeInTheDocument()
+
+    // The live widget is mounted and renders its own content
+    expect(await screen.findByText('At-risk deals')).toBeInTheDocument()
+    expect(await screen.findByText('Renewal — Northstar Retail')).toBeInTheDocument()
+  })
+
+  it('keeps the remaining sample metric cards', () => {
+    renderDashboard()
+
+    expect(screen.getByText('Pipeline sample')).toBeInTheDocument()
+    expect(screen.getByText('Follow-ups sample')).toBeInTheDocument()
+    expect(screen.getByText('Team activity sample')).toBeInTheDocument()
   })
 })

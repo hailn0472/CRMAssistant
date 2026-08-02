@@ -100,3 +100,13 @@
 - No storage quota per tenant or per deal, and no total-storage reporting.
 - Comments cannot be edited, threaded or reacted to; the model is a flat chronological list.
 - Document list is unpaginated — a deal with hundreds of attachments loads them all.
+
+## Deferred from: 3-7-automated-deal-reminders-health-alerts (2026-08-01)
+
+- No email transport exists (no nodemailer / Resend / SendGrid / SES anywhere in the repo), so a `DealReminder` row is persisted but no reminder is ever actually delivered. The delivery *intent* stops at the row.
+- No scheduler exists (`@nestjs/schedule` is not installed; "no cron in this codebase" per `schema.prisma:762`). The sweep is lazily triggered from `atRiskDeals` (at most once per tenant per UTC day) plus the ADMIN-gated `runDealHealthSweep` mutation — a tenant whose users never open the dashboard never sweeps, so its reminder history has gaps. Health values shown in the UI are always computed live, so the UI is never stale — only the persisted reminder trail is.
+- `DealReminder.deliveredAt` is always `null` — the column exists so Story 4-8 (Notification Center) can stamp delivery without a migration.
+- `emailFrequency` only gates reminder-row creation — it sends nothing. `DAILY`/`WEEKLY`/`OFF` are behavioural hints for a future delivery layer.
+- The `WEEKLY` Monday (UTC) rule is a placeholder decision — it is the only behavioural meaning `emailFrequency` carries in this story.
+- Health thresholds (`STALE_ACTIVITY_DAYS`, `CRITICAL_ACTIVITY_DAYS`, `CLOSING_SOON_DAYS`, `PROBABILITY_MISMATCH_POINTS`, `AT_RISK_SCORE_THRESHOLD`, `STALE_SCORE_THRESHOLD`) are compile-time constants in `deal-health-score.ts`, not tenant-configurable.
+- Pre-existing audit gap (for awareness only, not introduced here): `createDeal`, `updateDeal`, `deleteDeal` and `moveDealToStage` are absent from `MUTATION_AUDIT_MAP` even though NFR9 requires all CUD operations to be logged — a sweep across deal CRUD is its own change. Also note `unsnoozeDealReminder` is in the map but its boolean result + `dealId`-only args mean the interceptor silently drops the entry (it cannot extract an id); the map entry is kept for consistency and future-proofing.

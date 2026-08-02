@@ -1,16 +1,32 @@
 import { render, screen, within } from '@testing-library/react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 
 import CommandCenterPage from '../page'
+import { getAtRiskDeals } from '@/services/deal-health.service'
+
+jest.mock('@/services/deal-health.service', () => ({
+  getAtRiskDeals: jest.fn(),
+}))
+
+function renderPage(): ReturnType<typeof render> {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  ;(getAtRiskDeals as jest.Mock).mockResolvedValue({ items: [], total: 0, page: 1, pageSize: 20 })
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <CommandCenterPage />
+    </QueryClientProvider>,
+  )
+}
 
 describe('Command Center dashboard page ATDD', () => {
   it('renders the Command Center as the default protected dashboard route', () => {
-    render(<CommandCenterPage />)
+    renderPage()
 
     expect(screen.getByRole('heading', { name: /command center/i })).toBeInTheDocument()
   })
 
   it('shows priority action queue, metric strip, recent activity preview, and role placeholders', () => {
-    render(<CommandCenterPage />)
+    renderPage()
 
     expect(screen.getByRole('region', { name: /priority action queue/i })).toBeInTheDocument()
     expect(screen.getByRole('region', { name: /metric strip/i })).toBeInTheDocument()
@@ -24,14 +40,14 @@ describe('Command Center dashboard page ATDD', () => {
   })
 
   it('labels dashboard fixture content as sample, demo, or planned data', () => {
-    render(<CommandCenterPage />)
+    renderPage()
 
     expect(screen.getAllByText(/sample|demo|planned/i).length).toBeGreaterThanOrEqual(4)
     expect(screen.queryByText(/live metrics|real-time revenue|synced from production/i)).toBeNull()
   })
 
   it('guides empty-dashboard users to import contacts and create a deal safely', () => {
-    render(<CommandCenterPage />)
+    renderPage()
 
     const firstRunRegion = screen.getByRole('region', { name: /first actions|empty dashboard/i })
 
@@ -43,7 +59,7 @@ describe('Command Center dashboard page ATDD', () => {
   })
 
   it('uses specific operational copy instead of decorative marketing language', () => {
-    render(<CommandCenterPage />)
+    renderPage()
 
     expect(
       screen.getAllByText(/follow-up|at-risk deal|contact import|overdue task/i).length,

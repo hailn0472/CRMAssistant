@@ -10,6 +10,7 @@ import { ProductsModule } from './products/products.module'
 import { CompetitorsModule } from './competitors/competitors.module'
 import { StorageModule } from './storage/storage.module'
 import { DealCollaborationModule } from './deal-collaboration/deal-collaboration.module'
+import { DealHealthModule } from './deal-health/deal-health.module'
 import { RolesModule } from './roles/roles.module'
 import { SegmentsModule } from './segments/segments.module'
 import { TagsModule } from './tags/tags.module'
@@ -41,6 +42,7 @@ import { ReportsModule } from './reports/reports.module'
     CompetitorsModule,
     StorageModule,
     DealCollaborationModule,
+    DealHealthModule,
     AppGraphqlModule,
     ContactsModule,
     DealsModule,

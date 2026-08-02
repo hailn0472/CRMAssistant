@@ -9,8 +9,9 @@ import { AuditService } from '../../audit/audit.service'
 /**
  * Maps mutation names to audit action and entity.
  * Convention: mutation names follow camelCase like `createContact`.
+ * Exported for the spec — the interceptor itself reads it as module state.
  */
-const MUTATION_AUDIT_MAP: Record<string, { action: string; entity: string }> = {
+export const MUTATION_AUDIT_MAP: Record<string, { action: string; entity: string }> = {
   // Contact mutations
   createContact: { action: 'CREATE', entity: 'CONTACT' },
   updateContact: { action: 'UPDATE', entity: 'CONTACT' },
@@ -66,6 +67,11 @@ const MUTATION_AUDIT_MAP: Record<string, { action: string; entity: string }> = {
   deleteDealDocument: { action: 'DELETE', entity: 'DEAL' },
   addDealComment: { action: 'UPDATE', entity: 'DEAL' },
   deleteDealComment: { action: 'DELETE', entity: 'DEAL' },
+
+  // Deal health / reminder mutations (Story 3.7)
+  snoozeDealReminder: { action: 'UPDATE', entity: 'DEAL' },
+  unsnoozeDealReminder: { action: 'UPDATE', entity: 'DEAL' },
+  updateReminderPreferences: { action: 'UPDATE', entity: 'USER' },
 }
 
 @Injectable()
