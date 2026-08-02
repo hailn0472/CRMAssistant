@@ -18,6 +18,7 @@ import type { DealsService } from '../../deals/deals.service'
 import type { AuditService } from '../../audit/audit.service'
 import type { ActivityService } from '../../activities/activities.service'
 import type { ActivityLogPreferenceService } from '../../activities/activity-log-preference.service'
+import type { CalendarSyncService } from '../../calendar/calendar-sync.service'
 import type { Prisma } from '@prisma/client'
 
 const mockResolveVisibilityFilter = resolveVisibilityFilter as jest.Mock
@@ -101,6 +102,7 @@ function makeService(prisma: MockPrisma): {
   audit: { log: jest.Mock }
   activity: { logSafe: jest.Mock }
   activityLogPreference: { isEnabled: jest.Mock }
+  calendarSync: { syncTaskSafe: jest.Mock; removeTaskFromCalendarSafe: jest.Mock }
 } {
   const contacts = { findOne: jest.fn() }
   const deals = { findOne: jest.fn() }
@@ -109,6 +111,12 @@ function makeService(prisma: MockPrisma): {
   const audit = { log: jest.fn() }
   const activity = { logSafe: jest.fn().mockResolvedValue(null) }
   const activityLogPreference = { isEnabled: jest.fn().mockResolvedValue(true) }
+  // Story 4.3: the calendar sync hook is best-effort — by default resolves
+  // so hook assertions can observe the calls.
+  const calendarSync = {
+    syncTaskSafe: jest.fn().mockResolvedValue(undefined),
+    removeTaskFromCalendarSafe: jest.fn().mockResolvedValue(undefined),
+  }
   const service = new TasksService(
     prisma as unknown as PrismaService,
     contacts as unknown as ContactsService,
@@ -118,8 +126,19 @@ function makeService(prisma: MockPrisma): {
     audit as unknown as AuditService,
     activity as unknown as ActivityService,
     activityLogPreference as unknown as ActivityLogPreferenceService,
+    calendarSync as unknown as CalendarSyncService,
   )
-  return { service, contacts, deals, templates, pubsub, audit, activity, activityLogPreference }
+  return {
+    service,
+    contacts,
+    deals,
+    templates,
+    pubsub,
+    audit,
+    activity,
+    activityLogPreference,
+    calendarSync,
+  }
 }
 
 describe('TasksService', () => {
@@ -1217,6 +1236,243 @@ describe('TasksService', () => {
           data: expect.objectContaining({ title: 'No due task', priority: 'MEDIUM' }),
         }),
       )
+    })
+  })
+
+  // ── Story 4.3: calendar sync hook sites (AC 22-23, 28, 35) ─────────────
+
+  describe('calendar sync hooks (Story 4.3)', () => {
+    const DUE = new Date('2026-08-05T00:00:00.000Z')
+
+    describe('create()', () => {
+      it('fires syncTaskSafe after the audit write when the task has a dueDate', async () => {
+        const { service, audit, calendarSync } = makeService(prisma)
+        const created = makeTask({ dueDate: DUE })
+        prisma.task.create.mockResolvedValue(created)
+        prisma.task.findFirst.mockResolvedValue(created)
+
+        await service.create(TENANT, USER, { title: 'Task', dueDate: DUE.toISOString() })
+
+        expect(calendarSync.syncTaskSafe).toHaveBeenCalledWith(
+          expect.objectContaining({ id: 'task-1', dueDate: DUE }),
+        )
+        // The hook fires AFTER the audit write (AC 23 ordering).
+        expect(audit.log).toHaveBeenCalled()
+        const auditIndex = audit.log.mock.invocationCallOrder[0] ?? 0
+        const syncIndex = calendarSync.syncTaskSafe.mock.invocationCallOrder[0] ?? 0
+        expect(auditIndex).toBeLessThan(syncIndex)
+      })
+
+      it('does not fire the sync hook for a task without a dueDate', async () => {
+        const { service, calendarSync } = makeService(prisma)
+        const created = makeTask({ dueDate: null })
+        prisma.task.create.mockResolvedValue(created)
+        prisma.task.findFirst.mockResolvedValue(created)
+
+        await service.create(TENANT, USER, { title: 'Task' })
+
+        expect(calendarSync.syncTaskSafe).not.toHaveBeenCalled()
+      })
+
+      it('a rejecting syncTaskSafe never fails the create mutation', async () => {
+        const { service, calendarSync } = makeService(prisma)
+        calendarSync.syncTaskSafe.mockRejectedValue(new Error('calendar down'))
+        const created = makeTask({ dueDate: DUE })
+        prisma.task.create.mockResolvedValue(created)
+        prisma.task.findFirst.mockResolvedValue(created)
+
+        await expect(
+          service.create(TENANT, USER, { title: 'Task', dueDate: DUE.toISOString() }),
+        ).resolves.toMatchObject({ id: 'task-1' })
+      })
+    })
+
+    describe('update()', () => {
+      it('pushes when the title changed', async () => {
+        const { service, calendarSync } = makeService(prisma)
+        const current = makeTask({ dueDate: DUE, title: 'Old title' })
+        const updated = makeTask({ dueDate: DUE, title: 'New title' })
+        prisma.task.findFirst.mockResolvedValueOnce(current).mockResolvedValueOnce(updated)
+        prisma.task.updateMany.mockResolvedValue({ count: 1 })
+
+        await service.update(TENANT, USER, 'task-1', { title: 'New title' })
+
+        expect(calendarSync.syncTaskSafe).toHaveBeenCalledWith(
+          expect.objectContaining({ id: 'task-1', title: 'New title' }),
+        )
+        expect(calendarSync.removeTaskFromCalendarSafe).not.toHaveBeenCalled()
+      })
+
+      it('deletes the remote event when dueDate became null', async () => {
+        const { service, calendarSync } = makeService(prisma)
+        const current = makeTask({ dueDate: DUE })
+        const updated = makeTask({ dueDate: null })
+        prisma.task.findFirst.mockResolvedValueOnce(current).mockResolvedValueOnce(updated)
+        prisma.task.updateMany.mockResolvedValue({ count: 1 })
+
+        await service.update(TENANT, USER, 'task-1', { dueDate: null })
+
+        expect(calendarSync.removeTaskFromCalendarSafe).toHaveBeenCalledWith(
+          expect.objectContaining({ id: 'task-1' }),
+        )
+        expect(calendarSync.syncTaskSafe).not.toHaveBeenCalled()
+      })
+
+      it('deletes the remote event when the status became COMPLETED', async () => {
+        const { service, calendarSync } = makeService(prisma)
+        const current = makeTask({ dueDate: DUE, status: 'TODO' })
+        const updated = makeTask({ dueDate: DUE, status: 'COMPLETED' })
+        prisma.task.findFirst.mockResolvedValueOnce(current).mockResolvedValueOnce(updated)
+        prisma.task.updateMany.mockResolvedValue({ count: 1 })
+
+        await service.update(TENANT, USER, 'task-1', { status: 'COMPLETED' })
+
+        expect(calendarSync.removeTaskFromCalendarSafe).toHaveBeenCalledWith(
+          expect.objectContaining({ id: 'task-1' }),
+        )
+        expect(calendarSync.syncTaskSafe).not.toHaveBeenCalled()
+      })
+
+      it('does not fire any sync call for a priority-only update', async () => {
+        const { service, calendarSync } = makeService(prisma)
+        const current = makeTask({ dueDate: DUE, priority: 'MEDIUM' })
+        const updated = makeTask({ dueDate: DUE, priority: 'URGENT' })
+        prisma.task.findFirst.mockResolvedValueOnce(current).mockResolvedValueOnce(updated)
+        prisma.task.updateMany.mockResolvedValue({ count: 1 })
+
+        await service.update(TENANT, USER, 'task-1', { priority: 'URGENT' })
+
+        expect(calendarSync.syncTaskSafe).not.toHaveBeenCalled()
+        expect(calendarSync.removeTaskFromCalendarSafe).not.toHaveBeenCalled()
+      })
+
+      it('a rejecting syncTaskSafe never fails the update mutation', async () => {
+        const { service, calendarSync } = makeService(prisma)
+        calendarSync.syncTaskSafe.mockRejectedValue(new Error('calendar down'))
+        const current = makeTask({ dueDate: DUE, title: 'Old' })
+        const updated = makeTask({ dueDate: DUE, title: 'New' })
+        prisma.task.findFirst.mockResolvedValueOnce(current).mockResolvedValueOnce(updated)
+        prisma.task.updateMany.mockResolvedValue({ count: 1 })
+
+        await expect(
+          service.update(TENANT, USER, 'task-1', { title: 'New' }),
+        ).resolves.toMatchObject({ id: 'task-1', title: 'New' })
+      })
+    })
+
+    describe('assign()', () => {
+      it('deletes from the previous assignee’s calendar and creates on the new assignee’s', async () => {
+        const { service, calendarSync } = makeService(prisma)
+        const current = makeTask({ dueDate: DUE, assignedTo: 'user-old' })
+        const updated = makeTask({ dueDate: DUE, assignedTo: 'user-new' })
+        prisma.task.findFirst.mockResolvedValueOnce(current).mockResolvedValueOnce(updated)
+        prisma.task.updateMany.mockResolvedValue({ count: 1 })
+        prisma.user.findFirst.mockResolvedValue({ id: 'user-new' })
+
+        await service.assign(TENANT, USER, 'task-1', 'user-new')
+
+        expect(calendarSync.removeTaskFromCalendarSafe).toHaveBeenCalledWith(
+          expect.objectContaining({ id: 'task-1', assignedTo: 'user-old' }),
+        )
+        expect(calendarSync.syncTaskSafe).toHaveBeenCalledWith(
+          expect.objectContaining({ id: 'task-1', assignedTo: 'user-new' }),
+        )
+      })
+
+      it('does not fire sync calls when the assignee is unchanged', async () => {
+        const { service, calendarSync } = makeService(prisma)
+        const task = makeTask({ dueDate: DUE, assignedTo: 'user-old' })
+        prisma.task.findFirst.mockResolvedValue(task)
+        prisma.task.updateMany.mockResolvedValue({ count: 1 })
+        prisma.user.findFirst.mockResolvedValue({ id: 'user-old' })
+
+        await service.assign(TENANT, USER, 'task-1', 'user-old')
+
+        expect(calendarSync.removeTaskFromCalendarSafe).not.toHaveBeenCalled()
+        expect(calendarSync.syncTaskSafe).not.toHaveBeenCalled()
+      })
+
+      it('a rejecting syncTaskSafe never fails the reassignment', async () => {
+        const { service, calendarSync } = makeService(prisma)
+        calendarSync.syncTaskSafe.mockRejectedValue(new Error('calendar down'))
+        const current = makeTask({ dueDate: DUE, assignedTo: 'user-old' })
+        const updated = makeTask({ dueDate: DUE, assignedTo: 'user-new' })
+        prisma.task.findFirst.mockResolvedValueOnce(current).mockResolvedValueOnce(updated)
+        prisma.task.updateMany.mockResolvedValue({ count: 1 })
+        prisma.user.findFirst.mockResolvedValue({ id: 'user-new' })
+
+        await expect(service.assign(TENANT, USER, 'task-1', 'user-new')).resolves.toMatchObject({
+          id: 'task-1',
+        })
+      })
+    })
+
+    describe('complete()', () => {
+      it('deletes the remote event and the link row', async () => {
+        const { service, calendarSync } = makeService(prisma)
+        const task = makeTask({ dueDate: DUE, status: 'TODO' })
+        prisma.task.findFirst.mockResolvedValue(task)
+        prisma.task.updateMany.mockResolvedValue({ count: 1 })
+
+        await service.complete(TENANT, USER, 'task-1', new Date('2026-08-02T10:00:00.000Z'))
+
+        expect(calendarSync.removeTaskFromCalendarSafe).toHaveBeenCalledWith(
+          expect.objectContaining({ id: 'task-1' }),
+        )
+      })
+
+      it('a rejecting removeTaskFromCalendarSafe never fails the completion', async () => {
+        const { service, calendarSync } = makeService(prisma)
+        calendarSync.removeTaskFromCalendarSafe.mockRejectedValue(new Error('calendar down'))
+        prisma.task.findFirst.mockResolvedValue(makeTask({ dueDate: DUE, status: 'TODO' }))
+        prisma.task.updateMany.mockResolvedValue({ count: 1 })
+
+        await expect(
+          service.complete(TENANT, USER, 'task-1', new Date('2026-08-02T10:00:00.000Z')),
+        ).resolves.toMatchObject({ id: 'task-1' })
+      })
+    })
+
+    describe('delete()', () => {
+      it('deletes the remote event and the link row', async () => {
+        const { service, calendarSync } = makeService(prisma)
+        const task = makeTask({ dueDate: DUE })
+        prisma.task.findFirst.mockResolvedValue(task)
+        prisma.task.updateMany.mockResolvedValue({ count: 1 })
+
+        await service.delete(TENANT, USER, 'task-1')
+
+        expect(calendarSync.removeTaskFromCalendarSafe).toHaveBeenCalledWith(
+          expect.objectContaining({ id: 'task-1' }),
+        )
+      })
+
+      it('a rejecting removeTaskFromCalendarSafe never fails the delete', async () => {
+        const { service, calendarSync } = makeService(prisma)
+        calendarSync.removeTaskFromCalendarSafe.mockRejectedValue(new Error('calendar down'))
+        prisma.task.findFirst.mockResolvedValue(makeTask({ dueDate: DUE }))
+        prisma.task.updateMany.mockResolvedValue({ count: 1 })
+
+        await expect(service.delete(TENANT, USER, 'task-1')).resolves.toBe(true)
+      })
+    })
+
+    describe('AC 35 — taskListSelect stays calendar-free', () => {
+      it('never selects calendarEvents or any calendar sync field (no N+1 on task lists)', async () => {
+        const { service } = makeService(prisma)
+        const created = makeTask({ dueDate: DUE })
+        prisma.task.create.mockResolvedValue(created)
+        prisma.task.findFirst.mockResolvedValue(created)
+
+        const result = await service.create(TENANT, USER, {
+          title: 'Task',
+          dueDate: DUE.toISOString(),
+        })
+
+        const select = prisma.task.create.mock.calls[0]?.[0]?.select as Record<string, unknown>
+        expect(select).not.toHaveProperty('calendarEvents')
+        expect(result).not.toHaveProperty('calendarEvents')
+      })
     })
   })
 })

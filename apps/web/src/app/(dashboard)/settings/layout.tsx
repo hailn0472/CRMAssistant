@@ -36,6 +36,9 @@ const settingsNav: SettingsNavItem[] = [
   // No roles and no permission — every user manages their own preferences.
   { label: 'Reminders', href: '/settings/reminders' },
   { label: 'Activity Logging', href: '/settings/activity-logging' },
+  // Story 4.3: per-user calendar connections — no roles, no permission
+  // (per-user preference precedent; AC 32).
+  { label: 'Calendars', href: '/settings/calendars' },
   {
     label: 'Channels',
     href: '/settings/channels',

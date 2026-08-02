@@ -23,6 +23,7 @@ import '../competitors/competitors.graphql'
 import '../deal-collaboration/deal-collaboration.graphql'
 import '../deal-health/deal-health.graphql'
 import '../tasks/tasks.graphql'
+import '../calendar/calendar.graphql'
 import '../reports/reports.graphql'
 import { builder } from './schema.builder'
 

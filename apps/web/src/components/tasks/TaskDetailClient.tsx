@@ -11,6 +11,7 @@ import { Card, CardHeader } from '@/components/ui/card'
 import { deleteTask, completeTask } from '@/services/task.service'
 import { usePermission } from '@/hooks/usePermission'
 import { AssigneePickerDialog } from './AssigneePickerDialog'
+import { TaskCalendarSyncBadge } from './TaskCalendarSyncBadge'
 import {
   TASK_DUE_STATUS_LABELS,
   TASK_PRIORITY_LABELS,
@@ -120,6 +121,9 @@ export function TaskDetailClient({ task }: TaskDetailClientProps): React.JSX.Ele
                   >
                     {TASK_DUE_STATUS_LABELS[dueStatus]}
                   </span>
+                  {/* Story 4.3: calendar sync state (AC 45) — Synced/Pending/
+                      Failed+Retry/Not connected + conflict warning. */}
+                  <TaskCalendarSyncBadge taskId={task.id} />
                 </div>
                 <p className="mt-1 text-sm text-slate-500">
                   {/* AC 9 makes assignedTo non-nullable; null is unreachable

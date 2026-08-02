@@ -22,6 +22,7 @@ const activityLogPreferencesSchema = z.object({
   logDealStageChanged: z.boolean(),
   logMessageSent: z.boolean(),
   logMessageReceived: z.boolean(),
+  logMeetingScheduled: z.boolean(),
 })
 
 type ActivityLogPreferencesValues = z.infer<typeof activityLogPreferencesSchema>
@@ -62,6 +63,13 @@ const TOGGLE_FIELDS: Array<{
     description: 'Log a "Message Received" event when a customer message arrives.',
     ariaLabel: 'Log received messages',
   },
+  {
+    key: 'logMeetingScheduled',
+    label: 'Meeting scheduled',
+    description:
+      'Log a "Meeting Scheduled" event when a task with a due date is pushed to a calendar.',
+    ariaLabel: 'Log scheduled meetings',
+  },
 ]
 
 export function ActivityLogPreferencesForm(): React.JSX.Element {
@@ -88,6 +96,7 @@ export function ActivityLogPreferencesForm(): React.JSX.Element {
       logDealStageChanged: true,
       logMessageSent: true,
       logMessageReceived: true,
+      logMeetingScheduled: true,
     }) as ActivityLogPreferencesValues,
   })
 
@@ -100,7 +109,7 @@ export function ActivityLogPreferencesForm(): React.JSX.Element {
       toast.success(
         disabledCount === 0
           ? 'All activity logging enabled — every channel event will appear on contact timelines.'
-          : `${disabledCount} of 5 logging rules turned off — those events will no longer appear on contact timelines.`,
+          : `${disabledCount} of 6 logging rules turned off — those events will no longer appear on contact timelines.`,
       )
     },
     onError: (error) => {

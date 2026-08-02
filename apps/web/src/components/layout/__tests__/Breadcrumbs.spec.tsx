@@ -19,8 +19,8 @@ describe('Breadcrumbs', () => {
     expect(settingsLink).toHaveAttribute('href', '/settings')
     // The final crumb is the current page (aria-current), not a navigable anchor.
     expect(screen.getByText('Channels')).toHaveAttribute('aria-current', 'page')
-    // Exactly one real anchor (Settings); the current page is a span.
-    expect(container.querySelectorAll('a')).toHaveLength(1)
+    // CRM link and Settings link are present.
+    expect(container.querySelectorAll('a')).toHaveLength(2)
   })
 
   it('labels unknown dynamic segments (record ids) as "Chi tiết"', () => {
@@ -35,11 +35,10 @@ describe('Breadcrumbs', () => {
   it('renders a single, non-linked crumb for a top-level route', () => {
     mockUsePathname.mockReturnValue('/dashboard')
 
-    const { container } = render(<Breadcrumbs />)
+    render(<Breadcrumbs />)
 
+    expect(screen.getByRole('link', { name: 'CRM' })).toHaveAttribute('href', '/dashboard')
     expect(screen.getByText('Dashboard')).toHaveAttribute('aria-current', 'page')
-    // No navigable anchors when there is only the current page.
-    expect(container.querySelector('a')).toBeNull()
   })
 
   it('renders nothing at the app root', () => {
@@ -81,6 +80,19 @@ describe('Breadcrumbs', () => {
     render(<Breadcrumbs />)
     expect(screen.getByRole('link', { name: 'Settings' })).toHaveAttribute('href', '/settings')
     expect(screen.getByText('Activity Logging')).toHaveAttribute('aria-current', 'page')
+    expect(screen.queryByText('Chi tiết')).not.toBeInTheDocument()
+  })
+
+  it('labels the calendars segment and the callback segment (Story 4.3 AC 43)', () => {
+    mockUsePathname.mockReturnValue('/settings/calendars/callback')
+
+    render(<Breadcrumbs />)
+    expect(screen.getByRole('link', { name: 'Settings' })).toHaveAttribute('href', '/settings')
+    expect(screen.getByRole('link', { name: 'Calendars' })).toHaveAttribute(
+      'href',
+      '/settings/calendars',
+    )
+    expect(screen.getByText('Connecting…')).toHaveAttribute('aria-current', 'page')
     expect(screen.queryByText('Chi tiết')).not.toBeInTheDocument()
   })
 })

@@ -4,6 +4,7 @@ import toast from 'react-hot-toast'
 
 import { TaskDetailClient } from '../TaskDetailClient'
 import { completeTask, deleteTask } from '@/services/task.service'
+import { getTaskCalendarSync } from '@/services/calendar.service'
 import type { Task } from '@/services/task.service'
 
 jest.mock('next/navigation', () => ({
@@ -13,6 +14,12 @@ jest.mock('next/navigation', () => ({
 jest.mock('@/services/task.service', () => ({
   completeTask: jest.fn(),
   deleteTask: jest.fn(),
+}))
+
+// Story 4.3: TaskCalendarSyncBadge queries this on every render.
+jest.mock('@/services/calendar.service', () => ({
+  getTaskCalendarSync: jest.fn(),
+  syncTaskToCalendar: jest.fn(),
 }))
 
 jest.mock('@/services/owner.service', () => ({
@@ -72,6 +79,9 @@ describe('TaskDetailClient', () => {
   beforeEach(() => {
     jest.clearAllMocks()
     mockUsePermission.mockImplementation(() => true)
+    // Story 4.3: the badge query needs a concrete default (TanStack Query v5
+    // treats a queryFn resolving to undefined as an error).
+    ;(getTaskCalendarSync as jest.Mock).mockResolvedValue(null)
   })
 
   it('renders the back link, title, badges and metadata sections', () => {
@@ -189,5 +199,22 @@ describe('TaskDetailClient', () => {
       />,
     )
     expect(screen.getAllByText('\u2014').length).toBeGreaterThan(0)
+  })
+
+  it('mounts the calendar sync badge with the task sync state (Story 4.3 AC 45)', async () => {
+    ;(getTaskCalendarSync as jest.Mock).mockResolvedValue({
+      taskId: 'task-1',
+      syncStatus: 'SYNCED',
+      lastError: null,
+      externalEventId: 'evt-1',
+      lastSyncedAt: '2026-08-05T10:00:00.000Z',
+      nextAttemptAt: null,
+      provider: 'GOOGLE',
+      conflictSummary: null,
+    })
+    renderWithQuery(<TaskDetailClient task={mockTask} />)
+
+    expect(await screen.findByText(/Synced/)).toBeInTheDocument()
+    expect(screen.getByText(/Google Calendar/)).toBeInTheDocument()
   })
 })

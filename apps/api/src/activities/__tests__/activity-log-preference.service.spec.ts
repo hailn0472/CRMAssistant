@@ -224,14 +224,16 @@ describe('ActivityLogPreferenceService', () => {
     })
   })
 
-  describe('ActivityLogPreferenceKey vocabulary (AC 17)', () => {
-    it('exactly matches the five UserActivityLogPreference boolean columns', () => {
+  describe('ActivityLogPreferenceKey vocabulary (AC 17, extended Story 4.3 AC 8)', () => {
+    it('exactly matches the six UserActivityLogPreference boolean columns', () => {
       expect(ACTIVITY_LOG_PREFERENCE_KEYS).toEqual([
         'logTaskCompleted',
         'logDealCreated',
         'logDealStageChanged',
         'logMessageSent',
         'logMessageReceived',
+        // Story 4.3 (AC 8): MEETING_SCHEDULED preference gate.
+        'logMeetingScheduled',
       ])
     })
 
