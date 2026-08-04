@@ -19,21 +19,21 @@ describe('TimelineFilter', () => {
     render(<TimelineFilter activeFilter="ALL" onFilterChange={mockOnFilterChange} />)
     const allButton = screen.getByText('All')
     expect(allButton.className).toContain('bg-white')
-    expect(allButton.className).toContain('shadow-sm')
+    expect(allButton.className).toContain('border-[#e6e6eb]')
   })
 
   it('highlights the active filter (SALES)', () => {
     render(<TimelineFilter activeFilter="SALES" onFilterChange={mockOnFilterChange} />)
     const salesButton = screen.getByText('Sales')
     expect(salesButton.className).toContain('bg-white')
-    expect(salesButton.className).toContain('shadow-sm')
+    expect(salesButton.className).toContain('border-[#e6e6eb]')
   })
 
   it('highlights the active filter (SYSTEM)', () => {
     render(<TimelineFilter activeFilter="SYSTEM" onFilterChange={mockOnFilterChange} />)
     const systemButton = screen.getByText('System')
     expect(systemButton.className).toContain('bg-white')
-    expect(systemButton.className).toContain('shadow-sm')
+    expect(systemButton.className).toContain('border-[#e6e6eb]')
   })
 
   it('calls onFilterChange when "Sales" is clicked', () => {
@@ -58,7 +58,7 @@ describe('TimelineFilter', () => {
     render(<TimelineFilter activeFilter="ALL" onFilterChange={mockOnFilterChange} />)
     const salesButton = screen.getByText('Sales')
     const systemButton = screen.getByText('System')
-    expect(salesButton.className).not.toContain('shadow-sm')
-    expect(systemButton.className).not.toContain('shadow-sm')
+    expect(salesButton.className).toContain('border-transparent')
+    expect(systemButton.className).toContain('border-transparent')
   })
 })

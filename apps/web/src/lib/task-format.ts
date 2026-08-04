@@ -121,6 +121,33 @@ export const TASK_DUE_STATUS_LABELS: Record<TaskDueStatus, string> = {
   DONE: 'Completed',
 }
 
+/**
+ * Design-system hex tokens for the task badges, shared by the tasks table and
+ * the task detail screen so one status never renders in two different colours.
+ * Colour is always paired with a text label at the call sites (NFR16).
+ */
+export const TASK_STATUS_DOT_COLOR: Record<TaskStatus, string> = {
+  TODO: '#8c8c96',
+  IN_PROGRESS: '#4f46e5',
+  COMPLETED: '#22a06b',
+  CANCELLED: '#c2860a',
+}
+
+export const TASK_PRIORITY_COLOR: Record<TaskPriority, string> = {
+  URGENT: '#b91c1c',
+  HIGH: '#c2860a',
+  MEDIUM: '#4b4b55',
+  LOW: '#8c8c96',
+}
+
+export const TASK_DUE_COLOR: Record<TaskDueStatus, string> = {
+  NO_DUE_DATE: '#a0a0aa',
+  OVERDUE: '#b91c1c',
+  DUE_TODAY: '#b91c1c',
+  UPCOMING: '#6b6b76',
+  DONE: '#a0a0aa',
+}
+
 /** Maps a task status to a badge class string (colour + text label). */
 export function taskStatusBadgeClass(status: TaskStatus): string {
   switch (status) {

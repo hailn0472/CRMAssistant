@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { useState, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { ChevronLeft, ChevronRight, Plus, Upload, User } from 'lucide-react'
+import { ChevronLeft, ChevronRight, User } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -13,26 +13,25 @@ import { ResponsiveTableWrapper } from '@/components/shared/ResponsiveTableWrapp
 import { TableSkeleton } from '@/components/shared/LoadingSkeleton'
 import { SharedBadge } from '@/components/sharing/SharedBadge'
 import { TagBadge } from '@/components/contacts/TagBadge'
-import { SegmentBuilder } from '@/components/contacts/SegmentBuilder'
-import { ExportButton } from '@/components/contacts/ExportButton'
 import { OwnerCell } from '@/components/contacts/OwnerCell'
 import { BulkAssignDialog } from '@/components/contacts/BulkAssignDialog'
+import { ContactFilterBar, type ContactFilters } from '@/components/contacts/ContactFilterBar'
 import { getContacts } from '@/services/contact.service'
 import { assignContactOwnerBulk } from '@/services/owner.service'
 import { cn } from '@/lib/utils'
-import type { SegmentFilters } from '@/components/contacts/SegmentBuilder'
-import type { ExportFilters } from '@/types/import-export.types'
 
 const PAGE_SIZE = 10
 
 // ─── Pagination ────────────────────────────────────────
 function Pagination({
   page,
+  pageSize,
   totalPages,
   total,
   onChange,
 }: {
   page: number
+  pageSize: number
   totalPages: number
   total: number
   onChange: (p: number) => void
@@ -50,17 +49,20 @@ function Pagination({
   }, [page, totalPages])
 
   return (
-    <div className="flex items-center justify-between text-sm text-slate-500">
-      <span className="text-xs">
-        <strong className="text-slate-700">{total}</strong> contacts
+    <div className="flex items-center justify-between gap-4">
+      <span className="text-[12.5px] text-[#8c8c96]">
+        Showing {Math.min((page - 1) * pageSize + 1, total)}
+        {'–'}
+        {Math.min(page * pageSize, total)} of {total} contacts
       </span>
 
-      <div className="flex items-center gap-1">
+      <div className="flex items-center gap-[5px]">
         <button
           type="button"
+          aria-label="Previous page"
           disabled={page <= 1}
           onClick={() => onChange(page - 1)}
-          className="flex h-8 w-8 items-center justify-center rounded-md text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 disabled:opacity-30 disabled:pointer-events-none"
+          className="flex h-[30px] min-w-[30px] items-center justify-center rounded-lg border border-[#e6e6eb] bg-white px-2 text-[#4b4b55] transition-colors hover:bg-[#f4f4f6] disabled:pointer-events-none disabled:opacity-30"
         >
           <ChevronLeft className="h-4 w-4" />
         </button>
@@ -69,7 +71,7 @@ function Pagination({
           p === 'ellipsis' ? (
             <span
               key={`e${i}`}
-              className="flex h-8 w-6 items-center justify-center text-xs text-slate-300 select-none"
+              className="flex h-[30px] w-6 select-none items-center justify-center px-[3px] text-[12.5px] text-[#b4b4bd]"
             >
               …
             </span>
@@ -79,10 +81,10 @@ function Pagination({
               type="button"
               onClick={() => onChange(p)}
               className={cn(
-                'flex h-8 min-w-[32px] items-center justify-center rounded-md px-2 text-xs font-medium transition-colors',
+                'flex h-[30px] min-w-[30px] items-center justify-center rounded-lg border px-2 text-[12.5px] font-medium transition-colors',
                 p === page
-                  ? 'bg-indigo-600 text-white shadow-sm'
-                  : 'text-slate-500 hover:bg-slate-100 hover:text-slate-700',
+                  ? 'border-[#1b1b1f] bg-[#1b1b1f] text-white font-semibold shadow-none'
+                  : 'border-[#e6e6eb] bg-white text-[#4b4b55] hover:bg-[#f4f4f6]',
               )}
             >
               {p}
@@ -92,9 +94,10 @@ function Pagination({
 
         <button
           type="button"
+          aria-label="Next page"
           disabled={page >= totalPages}
           onClick={() => onChange(page + 1)}
-          className="flex h-8 w-8 items-center justify-center rounded-md text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 disabled:opacity-30 disabled:pointer-events-none"
+          className="flex h-[30px] min-w-[30px] items-center justify-center rounded-lg border border-[#e6e6eb] bg-white px-2 text-[#4b4b55] transition-colors hover:bg-[#f4f4f6] disabled:pointer-events-none disabled:opacity-30"
         >
           <ChevronRight className="h-4 w-4" />
         </button>
@@ -112,103 +115,54 @@ function AvatarCell({
   lastName: string
 }): React.JSX.Element {
   const initials = `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase()
-  const colors = [
-    'from-indigo-500 to-blue-600',
-    'from-emerald-500 to-teal-600',
-    'from-purple-500 to-pink-600',
-    'from-amber-500 to-orange-600',
-  ]
-  const idx = (firstName.charCodeAt(0) + lastName.charCodeAt(0)) % colors.length
   return (
-    <span
-      className={cn(
-        'flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[11px] font-bold text-white shadow-sm',
-        `bg-gradient-to-br ${colors[idx]}`,
-      )}
-    >
+    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#f0f0f3] text-[10.5px] font-semibold text-[#4b4b55]">
       {initials}
     </span>
   )
 }
 
 // ─── Main component ───────────────────────────────────
-export function ContactsTable(): React.JSX.Element {
+type ContactsTableProps = {
+  filters: ContactFilters
+  onFiltersChange: (filters: ContactFilters) => void
+}
+
+export function ContactsTable({ filters, onFiltersChange }: ContactsTableProps): React.JSX.Element {
   const [page, setPage] = useState(1)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [bulkAssignOpen, setBulkAssignOpen] = useState(false)
-  const [filterTags, setFilterTags] = useState<Array<{ id: string; name: string; color: string }>>(
-    [],
-  )
-  const [filterCompany, setFilterCompany] = useState('')
-  const [filterJobTitle, setFilterJobTitle] = useState('')
-  const [filterCreatedAtFrom, setFilterCreatedAtFrom] = useState('')
-  const [filterCreatedAtTo, setFilterCreatedAtTo] = useState('')
-
-  const segmentFilters: SegmentFilters = {
-    tags: filterTags,
-    company: filterCompany,
-    jobTitle: filterJobTitle,
-    createdAtFrom: filterCreatedAtFrom,
-    createdAtTo: filterCreatedAtTo,
-  }
-
-  const exportFilters: ExportFilters = {
-    tags: filterTags.length > 0 ? filterTags.map((t) => t.name) : undefined,
-    company: filterCompany || undefined,
-    jobTitle: filterJobTitle || undefined,
-    createdAtFrom: filterCreatedAtFrom || undefined,
-    createdAtTo: filterCreatedAtTo || undefined,
-  }
-
-  const toolbarActions = (
-    <div className="flex items-center gap-2">
-      {selectedIds.size > 0 ? (
-        <Button
-          variant="outline"
-          className="gap-1.5 border-indigo-200 text-indigo-700 hover:bg-indigo-50"
-          onClick={() => setBulkAssignOpen(true)}
-        >
-          <User className="h-3.5 w-3.5" />
-          Assign Owner ({selectedIds.size})
-        </Button>
-      ) : null}
-      <Button asChild variant="outline" className="gap-1.5">
-        <Link href="/contacts/import">
-          <Upload className="h-3.5 w-3.5" />
-          Import
-        </Link>
-      </Button>
-      <ExportButton filters={exportFilters} />
-      <Button asChild className="gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white">
-        <Link href="/contacts/new">
-          <Plus className="h-3.5 w-3.5" />
-          Create contact
-        </Link>
-      </Button>
-    </div>
-  )
 
   const { data, error, isLoading, refetch } = useQuery({
     queryKey: [
       'contacts',
       page,
-      filterTags.map((t) => t.name),
-      filterCompany,
-      filterJobTitle,
-      filterCreatedAtFrom,
-      filterCreatedAtTo,
+      filters.search,
+      filters.company,
+      filters.jobTitle,
+      filters.owner?.id ?? '',
+      filters.tags.map((t) => t.name),
+      filters.createdAtFrom,
+      filters.createdAtTo,
     ],
     queryFn: () =>
       getContacts(page, PAGE_SIZE, {
-        tags: filterTags.length > 0 ? filterTags.map((t) => t.name) : undefined,
-        company: filterCompany || undefined,
-        jobTitle: filterJobTitle || undefined,
-        createdAtFrom: filterCreatedAtFrom || undefined,
-        createdAtTo: filterCreatedAtTo || undefined,
+        search: filters.search || undefined,
+        company: filters.company || undefined,
+        jobTitle: filters.jobTitle || undefined,
+        ownerId: filters.owner?.id || undefined,
+        tags: filters.tags.length > 0 ? filters.tags.map((t) => t.name) : undefined,
+        createdAtFrom: filters.createdAtFrom || undefined,
+        createdAtTo: filters.createdAtTo || undefined,
       }),
   })
 
-  if (isLoading) return <TableSkeleton rows={5} columns={4} />
+  function handleFiltersChange(next: ContactFilters): void {
+    onFiltersChange(next)
+    setPage(1)
+  }
+
+  if (isLoading) return <TableSkeleton rows={5} columns={6} />
 
   if (error) {
     return (
@@ -219,7 +173,18 @@ export function ContactsTable(): React.JSX.Element {
     )
   }
 
-  if (!data || data.items.length === 0) {
+  const isFiltered =
+    filters.search !== '' ||
+    filters.company !== '' ||
+    filters.jobTitle !== '' ||
+    filters.owner !== null ||
+    filters.createdAtFrom !== '' ||
+    filters.createdAtTo !== '' ||
+    filters.tags.length > 0
+
+  // Only the unfiltered empty result means the workspace is genuinely empty.
+  // A filtered miss keeps the card so the filter bar stays reachable.
+  if ((!data || data.items.length === 0) && !isFiltered) {
     return (
       <EmptyState
         title="No contacts yet"
@@ -238,69 +203,72 @@ export function ContactsTable(): React.JSX.Element {
     )
   }
 
-  const totalPages = Math.max(Math.ceil(data.total / data.pageSize), 1)
+  const items = data?.items ?? []
+  const total = data?.total ?? 0
+  const pageSize = data?.pageSize ?? PAGE_SIZE
+  const totalPages = Math.max(Math.ceil(total / pageSize), 1)
+  const allSelected = items.length > 0 && selectedIds.size === items.length
 
   return (
-    <div className="space-y-4">
-      {/* Workspace Header */}
-      <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-indigo-600">CRM</p>
-          <h1 className="mt-0.5 text-2xl font-semibold tracking-tight text-slate-900">Contacts</h1>
-          <p className="mt-1 text-sm text-slate-500">
-            Manage your customer relationships — filter, export, and edit in place.
-          </p>
-        </div>
-        {toolbarActions}
-      </div>
+    <>
+      <Card className="overflow-hidden rounded-[14px] border border-[#ececf0] bg-white shadow-none">
+        <ContactFilterBar
+          filters={filters}
+          onFiltersChange={handleFiltersChange}
+          trailing={
+            <div className="flex items-center gap-2">
+              {selectedIds.size > 0 ? (
+                <button
+                  type="button"
+                  onClick={() => setBulkAssignOpen(true)}
+                  className="inline-flex h-[34px] items-center gap-1.5 rounded-[9px] border border-indigo-200 bg-white px-3 text-[12.5px] font-medium text-indigo-700 transition-colors hover:bg-indigo-50"
+                >
+                  <User className="h-3.5 w-3.5" />
+                  Assign owner ({selectedIds.size})
+                </button>
+              ) : null}
+              <span className="text-[12.5px] font-medium text-[#8c8c96]">{total} contacts</span>
+            </div>
+          }
+        />
 
-      {/* Filters */}
-      <SegmentBuilder
-        filters={segmentFilters}
-        onFiltersChange={(f) => {
-          setFilterTags(f.tags)
-          setFilterCompany(f.company)
-          setFilterJobTitle(f.jobTitle)
-          setFilterCreatedAtFrom(f.createdAtFrom)
-          setFilterCreatedAtTo(f.createdAtTo)
-          setPage(1)
-        }}
-      />
-
-      {/* Table Card */}
-      <Card className="overflow-hidden border-slate-200 shadow-sm">
         <ResponsiveTableWrapper>
-          <table className="w-full text-left text-sm">
+          <table className="w-full min-w-[1050px] text-left text-[13.5px]">
             <thead>
-              <tr className="border-b border-slate-100 bg-slate-50/80 text-xs font-semibold uppercase tracking-wider text-slate-400">
-                <th className="w-10 py-3 pl-4 pr-2">
+              <tr className="h-[40px] border-b border-[#f2f2f5] bg-[#fafafb] text-[11px] font-semibold uppercase tracking-[0.06em] text-[#8c8c96]">
+                <th className="w-9 py-2.5 pl-[18px] pr-2">
                   <input
                     type="checkbox"
-                    checked={data.items.length > 0 && selectedIds.size === data.items.length}
+                    aria-label="Select all contacts"
+                    checked={allSelected}
                     onChange={() => {
-                      if (selectedIds.size === data.items.length) {
+                      if (allSelected) {
                         setSelectedIds(new Set())
                       } else {
-                        setSelectedIds(new Set(data.items.map((c) => c.id)))
+                        setSelectedIds(new Set(items.map((c) => c.id)))
                       }
                     }}
-                    className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                    className="h-[15px] w-[15px] rounded border-[#e6e6eb] accent-[#1b1b1f]"
                   />
                 </th>
-                <th className="py-3 pl-5 pr-4">Name</th>
-                <th className="py-3 pr-4">Email</th>
-                <th className="py-3 pr-4">Owner</th>
-                <th className="py-3 pr-4">Company</th>
-                <th className="py-3 pr-4">Job Title</th>
-                <th className="py-3 pr-5">Tags</th>
+                <th className="py-2.5 pr-4">Name</th>
+                <th className="py-2.5 pr-4">Email</th>
+                <th className="py-2.5 pr-4">Company</th>
+                <th className="py-2.5 pr-4">Job title</th>
+                <th className="py-2.5 pr-4">Owner</th>
+                <th className="py-2.5 pr-[18px]">Tags</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
-              {data.items.map((contact) => (
-                <tr className="group transition-colors hover:bg-slate-50" key={contact.id}>
-                  <td className="py-3 pl-4 pr-2">
+            <tbody className="divide-y divide-[#f4f4f7]">
+              {items.map((contact) => (
+                <tr
+                  className="group h-[56px] border-b border-[#f4f4f7] transition-colors hover:bg-[#fafafb]"
+                  key={contact.id}
+                >
+                  <td className="py-3 pl-[18px] pr-2">
                     <input
                       type="checkbox"
+                      aria-label={`Select ${contact.firstName} ${contact.lastName}`}
                       checked={selectedIds.has(contact.id)}
                       onChange={() => {
                         const next = new Set(selectedIds)
@@ -311,13 +279,13 @@ export function ContactsTable(): React.JSX.Element {
                         }
                         setSelectedIds(next)
                       }}
-                      className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                      className="h-[15px] w-[15px] rounded border-[#e6e6eb] accent-[#1b1b1f]"
                     />
                   </td>
-                  <td className="py-3 pl-5 pr-4">
+                  <td className="py-3 pr-4">
                     <Link
                       href={`/contacts/${contact.id}`}
-                      className="flex items-center gap-3 font-medium text-slate-900 hover:text-indigo-600 transition-colors"
+                      className="flex min-w-0 items-center gap-2.5 font-medium text-[#1b1b1f] transition-colors hover:text-indigo-600"
                     >
                       <AvatarCell firstName={contact.firstName} lastName={contact.lastName} />
                       <span className="truncate">
@@ -326,40 +294,56 @@ export function ContactsTable(): React.JSX.Element {
                       </span>
                     </Link>
                   </td>
-                  <td className="py-3 pr-4 text-slate-500">{contact.email}</td>
-                  <td className="py-3 pr-4">
+                  <td className="max-w-[260px] truncate py-3 pr-4 text-[13px]">
+                    <a href={`mailto:${contact.email}`} className="text-[#4338ca] hover:underline">
+                      {contact.email}
+                    </a>
+                  </td>
+                  <td className="max-w-[160px] truncate py-3 pr-4 text-[#4b4b55]">
+                    {contact.company ?? <span className="italic text-[#b4b4bd]">&mdash;</span>}
+                  </td>
+                  <td className="max-w-[160px] truncate py-3 pr-4 text-[12.5px] text-[#8c8c96]">
+                    {contact.jobTitle ?? <span className="italic text-[#b4b4bd]">&mdash;</span>}
+                  </td>
+                  <td className="py-3 pr-4 text-[12.5px] text-[#4b4b55]">
                     <OwnerCell ownerId={contact.ownerId} owner={contact.owner} />
                   </td>
-                  <td className="py-3 pr-4 text-slate-500">
-                    {contact.company ?? <span className="italic text-slate-300">—</span>}
-                  </td>
-                  <td className="py-3 pr-4 text-slate-500">
-                    {contact.jobTitle ?? <span className="italic text-slate-300">—</span>}
-                  </td>
-                  <td className="py-3 pr-5">
+                  <td className="py-3 pr-[18px]">
                     <div className="flex flex-wrap gap-1">
                       {contact.tags && contact.tags.length > 0 ? (
                         contact.tags.map((t) => <TagBadge key={t.id} tag={t} />)
                       ) : (
-                        <span className="italic text-slate-300">—</span>
+                        <span className="italic text-slate-300">&mdash;</span>
                       )}
                     </div>
                   </td>
                 </tr>
               ))}
+              {items.length === 0 ? (
+                <tr>
+                  <td
+                    colSpan={7}
+                    className="px-[18px] py-10 text-center text-[13px] text-slate-500"
+                  >
+                    No contacts match these filters.
+                  </td>
+                </tr>
+              ) : null}
             </tbody>
           </table>
         </ResponsiveTableWrapper>
 
-        {/* Pagination */}
-        <div className="border-t border-slate-100 px-5 py-3">
-          <Pagination
-            page={data.page}
-            totalPages={totalPages}
-            total={data.total}
-            onChange={setPage}
-          />
-        </div>
+        {items.length > 0 ? (
+          <div className="border-t border-slate-100 px-[18px] py-3.5">
+            <Pagination
+              page={data?.page ?? page}
+              pageSize={pageSize}
+              totalPages={totalPages}
+              total={total}
+              onChange={setPage}
+            />
+          </div>
+        ) : null}
       </Card>
 
       <BulkAssignDialog
@@ -374,6 +358,6 @@ export function ContactsTable(): React.JSX.Element {
           return result
         }}
       />
-    </div>
+    </>
   )
 }

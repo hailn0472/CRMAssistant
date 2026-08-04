@@ -20,6 +20,14 @@ jest.mock('@/services/tag.service', () => ({
   removeTagFromContact: jest.fn(),
 }))
 
+jest.mock('@/services/owner.service', () => ({
+  searchUsers: jest
+    .fn()
+    .mockResolvedValue([
+      { id: 'user-2', firstName: 'Priya', lastName: 'Raman', email: 'priya@example.com' },
+    ]),
+}))
+
 function renderWithQuery(ui: React.ReactElement): ReturnType<typeof render> {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>)
@@ -85,6 +93,77 @@ describe('ContactForm', () => {
         expect.objectContaining({ company: 'Acme' }),
       )
     })
+  })
+
+  it('submits the note alongside the core fields', async () => {
+    const user = userEvent.setup()
+    ;(createContact as jest.Mock).mockResolvedValue({ id: 'contact-1' })
+    renderWithQuery(<ContactForm />)
+
+    await user.type(screen.getByLabelText(/email/i), 'ada@example.com')
+    await user.type(screen.getByLabelText(/first name/i), 'Ada')
+    await user.type(screen.getByLabelText(/last name/i), 'Lovelace')
+    await user.type(screen.getByLabelText(/note/i), 'Met at the summit')
+    await user.click(screen.getByRole('button', { name: /save contact/i }))
+
+    await waitFor(() => {
+      expect(createContact).toHaveBeenCalledWith(
+        expect.objectContaining({ notes: 'Met at the summit' }),
+      )
+    })
+  })
+
+  it('creates the contact under the selected owner', async () => {
+    const user = userEvent.setup()
+    ;(createContact as jest.Mock).mockResolvedValue({ id: 'contact-1' })
+    renderWithQuery(<ContactForm />)
+
+    await user.type(screen.getByLabelText(/email/i), 'ada@example.com')
+    await user.type(screen.getByLabelText(/first name/i), 'Ada')
+    await user.type(screen.getByLabelText(/last name/i), 'Lovelace')
+    await user.selectOptions(await screen.findByLabelText(/owner/i), 'user-2')
+    await user.click(screen.getByRole('button', { name: /save contact/i }))
+
+    await waitFor(() => {
+      expect(createContact).toHaveBeenCalledWith(expect.objectContaining({ ownerId: 'user-2' }))
+    })
+  })
+
+  it('omits ownerId on update — reassignment goes through the owner picker', async () => {
+    const user = userEvent.setup()
+    ;(updateContact as jest.Mock).mockResolvedValue({ id: 'contact-1' })
+    renderWithQuery(
+      <ContactForm
+        contact={{
+          id: 'contact-1',
+          email: 'ada@example.com',
+          firstName: 'Ada',
+          lastName: 'Lovelace',
+          ownerId: 'user-1',
+          createdAt: '2026-05-13T00:00:00.000Z',
+          updatedAt: '2026-05-13T00:00:00.000Z',
+        }}
+      />,
+    )
+
+    expect(screen.queryByLabelText(/owner/i)).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /save contact/i }))
+
+    await waitFor(() => {
+      expect(updateContact).toHaveBeenCalled()
+    })
+    expect((updateContact as jest.Mock).mock.calls[0][1]).not.toHaveProperty('ownerId')
+  })
+
+  it('calls onCancel instead of rendering a bare submit when embedded', async () => {
+    const user = userEvent.setup()
+    const onCancel = jest.fn()
+    renderWithQuery(<ContactForm onCancel={onCancel} />)
+
+    await user.click(screen.getByRole('button', { name: /cancel/i }))
+
+    expect(onCancel).toHaveBeenCalled()
   })
 
   it('shows server errors inline', async () => {

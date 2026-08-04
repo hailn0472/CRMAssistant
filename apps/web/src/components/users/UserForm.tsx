@@ -5,9 +5,6 @@ import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
 import {
   createUser,
   updateUser,
@@ -36,9 +33,14 @@ type UserFormValues = z.infer<typeof userSchema>
 
 type UserFormProps = {
   user?: User
+  onSaved?: (user: User) => void
+  onCancel?: () => void
 }
 
-export function UserForm({ user }: UserFormProps): React.JSX.Element {
+const inputClass =
+  'h-[38px] w-full rounded-[9px] border border-[#e6e6eb] bg-[#fafafb] px-3 text-[13.5px] text-[#1b1b1f] outline-none transition-colors placeholder:text-[#9b9ba3] focus:border-[#1b1b1f] focus:bg-white disabled:cursor-not-allowed disabled:bg-[#f0f0f3] disabled:text-[#8c8c96]'
+
+export function UserForm({ user, onSaved, onCancel }: UserFormProps): React.JSX.Element {
   const router = useRouter()
   const {
     register,
@@ -59,6 +61,7 @@ export function UserForm({ user }: UserFormProps): React.JSX.Element {
 
   async function onSubmit(values: UserFormValues): Promise<void> {
     try {
+      let savedUser: User
       if (user) {
         const payload: UpdateUserFormData = {
           email: values.email.trim(),
@@ -68,8 +71,7 @@ export function UserForm({ user }: UserFormProps): React.JSX.Element {
           jobTitle: optionalString(values.jobTitle),
           department: optionalString(values.department),
         }
-        const savedUser = await updateUser(user.id, payload)
-        router.push(`/users/${savedUser.id}`)
+        savedUser = await updateUser(user.id, payload)
       } else {
         const payload: CreateUserFormData = {
           email: values.email.trim(),
@@ -79,9 +81,14 @@ export function UserForm({ user }: UserFormProps): React.JSX.Element {
           jobTitle: optionalString(values.jobTitle),
           department: optionalString(values.department),
         }
-        const savedUser = await createUser(payload)
-        router.push(`/users/${savedUser.id}`)
+        savedUser = await createUser(payload)
       }
+
+      if (onSaved) {
+        onSaved(savedUser)
+        return
+      }
+      router.push(`/users/${savedUser.id}`)
       router.refresh()
     } catch (error) {
       setError('root', {
@@ -91,73 +98,145 @@ export function UserForm({ user }: UserFormProps): React.JSX.Element {
   }
 
   return (
-    <Card className="border-slate-200 bg-white text-slate-950 shadow-sm">
-      <CardHeader className="border-b border-slate-100">
-        <CardTitle className="text-lg">{user ? 'Edit user' : 'User details'}</CardTitle>
-      </CardHeader>
-      <CardContent className="pt-6">
-        <form className="grid gap-5 md:grid-cols-2" onSubmit={handleSubmit(onSubmit)}>
-          <Field label="Email" error={errors.email?.message}>
-            <Input
+    <form className="flex min-h-0 flex-1 flex-col" onSubmit={handleSubmit(onSubmit)}>
+      <div className="flex min-h-0 flex-1 flex-col gap-[26px] overflow-y-auto px-6 py-[22px]">
+        <Section title="Identity">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label="First name" required error={errors.firstName?.message}>
+              <input
+                className={inputClass}
+                placeholder="Dana"
+                {...register('firstName')}
+                aria-invalid={Boolean(errors.firstName)}
+              />
+            </Field>
+            <Field label="Last name" required error={errors.lastName?.message}>
+              <input
+                className={inputClass}
+                placeholder="Whitfield"
+                {...register('lastName')}
+                aria-invalid={Boolean(errors.lastName)}
+              />
+            </Field>
+          </div>
+        </Section>
+
+        <Section title="How to reach them">
+          <Field label="Email" required error={errors.email?.message}>
+            <input
+              className={inputClass}
               type="email"
               disabled={Boolean(user)}
+              placeholder="dana@northwind.co"
               {...register('email')}
               aria-invalid={Boolean(errors.email)}
             />
           </Field>
-          <Field label="First name" error={errors.firstName?.message}>
-            <Input {...register('firstName')} aria-invalid={Boolean(errors.firstName)} />
-          </Field>
-          <Field label="Last name" error={errors.lastName?.message}>
-            <Input {...register('lastName')} aria-invalid={Boolean(errors.lastName)} />
-          </Field>
           <Field label="Phone" error={errors.phone?.message}>
-            <Input {...register('phone')} aria-invalid={Boolean(errors.phone)} />
+            <input
+              className={inputClass}
+              placeholder="912 345 678"
+              {...register('phone')}
+              aria-invalid={Boolean(errors.phone)}
+            />
           </Field>
-          <Field label="Job title" error={errors.jobTitle?.message}>
-            <Input {...register('jobTitle')} aria-invalid={Boolean(errors.jobTitle)} />
-          </Field>
-          <Field label="Department" error={errors.department?.message}>
-            <Input {...register('department')} aria-invalid={Boolean(errors.department)} />
-          </Field>
+        </Section>
 
-          {errors.root?.message ? (
-            <p
-              className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 md:col-span-2"
-              role="alert"
-            >
-              {errors.root.message}
-            </p>
-          ) : null}
-
-          <div className="flex items-center justify-end border-t border-slate-100 pt-5 md:col-span-2">
-            <Button
-              disabled={isSubmitting}
-              type="submit"
-              className="bg-slate-950 text-white hover:bg-slate-800"
-            >
-              {isSubmitting ? 'Saving...' : user ? 'Save user' : 'Create user'}
-            </Button>
+        <Section
+          title="Work"
+          hint={
+            user
+              ? undefined
+              : 'Roles are assigned on the user’s profile after the account is created.'
+          }
+        >
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label="Job title" error={errors.jobTitle?.message}>
+              <input
+                className={inputClass}
+                placeholder="VP Operations"
+                {...register('jobTitle')}
+                aria-invalid={Boolean(errors.jobTitle)}
+              />
+            </Field>
+            <Field label="Department" error={errors.department?.message}>
+              <input
+                className={inputClass}
+                placeholder="Sales"
+                {...register('department')}
+                aria-invalid={Boolean(errors.department)}
+              />
+            </Field>
           </div>
-        </form>
-      </CardContent>
-    </Card>
+        </Section>
+
+        {errors.root?.message ? (
+          <p
+            className="rounded-[9px] border border-red-200 bg-red-50 px-3 py-2 text-[13px] text-red-700"
+            role="alert"
+          >
+            {errors.root.message}
+          </p>
+        ) : null}
+      </div>
+
+      <div className="flex items-center justify-end gap-2 border-t border-[#f0f0f4] bg-[#fafafb] px-6 py-3.5">
+        {onCancel ? (
+          <button
+            type="button"
+            onClick={onCancel}
+            className="inline-flex h-9 items-center rounded-[9px] border border-[#e6e6eb] bg-white px-3.5 text-[13px] font-medium text-[#4b4b55] transition-colors hover:bg-[#f4f4f6]"
+          >
+            Cancel
+          </button>
+        ) : null}
+        <button
+          type="submit"
+          disabled={isSubmitting}
+          className="inline-flex h-9 items-center rounded-[9px] border border-[#1b1b1f] bg-[#1b1b1f] px-4 text-[13px] font-semibold text-white transition-colors hover:bg-black disabled:opacity-60"
+        >
+          {isSubmitting ? 'Saving...' : user ? 'Save user' : 'Create user'}
+        </button>
+      </div>
+    </form>
+  )
+}
+
+type SectionProps = {
+  title: string
+  hint?: string
+  children: React.ReactNode
+}
+
+function Section({ title, hint, children }: SectionProps): React.JSX.Element {
+  return (
+    <div className="flex flex-col gap-3.5">
+      <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#a0a0aa]">
+        {title}
+      </div>
+      {children}
+      {hint ? <span className="text-[11.5px] text-[#8c8c96]">{hint}</span> : null}
+    </div>
   )
 }
 
 type FieldProps = {
   label: string
+  required?: boolean
   error?: string
   children: React.ReactNode
 }
 
-function Field({ label, error, children }: FieldProps): React.JSX.Element {
+function Field({ label, required, error, children }: FieldProps): React.JSX.Element {
   return (
-    <label className="grid gap-2 text-sm font-medium text-slate-700">
-      {label}
+    <label className="flex flex-col gap-1.5">
+      <span className="text-[12.5px] font-medium text-[#4b4b55]">
+        {label}
+        {required ? <span className="text-red-700"> *</span> : null}
+      </span>
       {children}
       {error ? (
-        <span className="text-xs font-medium text-red-700" role="alert">
+        <span className="text-[11.5px] font-medium text-red-700" role="alert">
           {error}
         </span>
       ) : null}

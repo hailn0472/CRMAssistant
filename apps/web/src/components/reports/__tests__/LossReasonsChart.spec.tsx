@@ -3,28 +3,6 @@ import { render, screen } from '@testing-library/react'
 import { LossReasonsChart } from '../LossReasonsChart'
 import type { WinLossReasonBucket } from '@/services/win-loss.service'
 
-// Mock recharts — jsdom cannot render SVG. Capture Bar props so the semantic
-// colour map (green = won, red = lost, never violet) is asserted directly.
-const mockBarProps: Array<{ dataKey?: string; fill?: string }> = []
-
-jest.mock('recharts', () => {
-  const React = require('react')
-  return {
-    ResponsiveContainer: ({ children }: { children: React.ReactNode }) => (
-      <div style={{ width: 800, height: 280 }}>{children}</div>
-    ),
-    BarChart: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-    Bar: (props: { dataKey?: string; fill?: string }) => {
-      mockBarProps.push(props)
-      return React.createElement('div')
-    },
-    XAxis: () => React.createElement('div'),
-    YAxis: () => React.createElement('div'),
-    CartesianGrid: () => React.createElement('div'),
-    Tooltip: () => React.createElement('div'),
-  }
-})
-
 const winReasons: WinLossReasonBucket[] = [
   { reason: 'PRICE', count: 2, totalValue: 20000, percentage: 66.7 },
 ]
@@ -33,49 +11,61 @@ const lossReasons: WinLossReasonBucket[] = [
 ]
 
 describe('LossReasonsChart', () => {
-  beforeEach(() => {
-    mockBarProps.length = 0
-  })
-
-  it('renders the card title and aria-label wrapper (AC #32)', () => {
+  it('renders the section title (AC #32)', () => {
     render(<LossReasonsChart winReasons={winReasons} lossReasons={lossReasons} currency="USD" />)
 
     expect(screen.getByText('Win/Loss Reasons')).toBeInTheDocument()
-    expect(screen.getByRole('img')).toHaveAttribute(
-      'aria-label',
-      'Win and loss reasons for closed deals (USD)',
+  })
+
+  it('renders each reason with its human label and won/lost counts as visible text (AC #32)', () => {
+    render(<LossReasonsChart winReasons={winReasons} lossReasons={lossReasons} currency="USD" />)
+
+    // The reason appears with its human label, not the raw enum value
+    expect(screen.getByText('Price')).toBeInTheDocument()
+    // Counts are rendered as readable text, not colour-only
+    expect(screen.getByText('3 deals · 2W / 1L')).toBeInTheDocument()
+  })
+
+  it('uses green for won and red-ish for lost — no violet (AC #32)', () => {
+    const { container } = render(
+      <LossReasonsChart winReasons={winReasons} lossReasons={lossReasons} currency="USD" />,
     )
+
+    const bar = container.querySelectorAll('span[style*="width"]')
+    expect(bar).toHaveLength(2)
+    expect(bar[0]).toHaveClass('bg-[#22a06b]')
+    expect(bar[1]).toHaveClass('bg-[#d98a8a]')
+
+    const html = container.innerHTML
+    expect(/violet|purple/i.test(html)).toBe(false)
   })
 
-  it('mirrors the chart data in an sr-only table (AC #32)', () => {
-    render(<LossReasonsChart winReasons={winReasons} lossReasons={lossReasons} currency="USD" />)
+  it('scales bar widths relative to the busiest reason', () => {
+    const busyWin: WinLossReasonBucket[] = [
+      { reason: 'PRICE', count: 4, totalValue: 1, percentage: 1 },
+      { reason: 'TIMING', count: 2, totalValue: 1, percentage: 1 },
+    ]
+    const { container } = render(
+      <LossReasonsChart winReasons={busyWin} lossReasons={[]} currency="USD" />,
+    )
 
-    const srTable = screen.getByRole('table', { hidden: true })
-    expect(srTable).toHaveClass('sr-only')
-    expect(srTable).toHaveAttribute('aria-label', 'Win and loss reasons for closed deals (USD)')
-    // The reason appears with its human label
-    expect(screen.getAllByText('Price').length).toBeGreaterThanOrEqual(1)
-    // Won and lost counts are mirrored
-    expect(screen.getByText('2')).toBeInTheDocument()
-    expect(screen.getByText('1')).toBeInTheDocument()
+    const bars = container.querySelectorAll('span[style*="width"]')
+    // PRICE (4 of max 4) should be full width, TIMING (2 of max 4) half width
+    expect(bars[0]).toHaveStyle({ width: '100%' })
+    expect(bars[2]).toHaveStyle({ width: '50%' })
   })
 
-  it('uses green for won and red for lost — no violet (AC #32)', () => {
-    render(<LossReasonsChart winReasons={winReasons} lossReasons={lossReasons} currency="USD" />)
-
-    const wonBar = mockBarProps.find((p) => p.dataKey === 'wonCount')
-    const lostBar = mockBarProps.find((p) => p.dataKey === 'lostCount')
-
-    expect(wonBar?.fill).toBe('#16A34A') // green
-    expect(lostBar?.fill).toBe('#DC2626') // red
-
-    const allFills = mockBarProps.map((p) => p.fill).filter(Boolean)
-    expect(allFills.some((fill) => fill && /violet|purple/i.test(fill))).toBe(false)
-  })
-
-  it('renders an empty-state row when there are no reasons', () => {
+  it('renders an empty-state message when there are no reasons', () => {
     render(<LossReasonsChart winReasons={[]} lossReasons={[]} currency="USD" />)
 
     expect(screen.getByText('No reasons recorded')).toBeInTheDocument()
+  })
+
+  it('renders the no-FX disclosure with the report currency', () => {
+    render(<LossReasonsChart winReasons={winReasons} lossReasons={lossReasons} currency="EUR" />)
+
+    expect(
+      screen.getByText('Amounts are summed without currency conversion (EUR).'),
+    ).toBeInTheDocument()
   })
 })

@@ -1,8 +1,15 @@
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 
 import { ContactDetailClient } from '../ContactDetailClient'
+import { getConversations } from '@/services/inbox.service'
 import type { Contact } from '@/services/contact.service'
+
+const mockPush = jest.fn()
+
+jest.mock('next/navigation', () => ({
+  useRouter: () => ({ push: mockPush }),
+}))
 
 jest.mock('@/services/contact.service', () => ({
   updateContact: jest.fn().mockResolvedValue({}),
@@ -15,6 +22,10 @@ jest.mock('@/services/tag.service', () => ({
 
 jest.mock('@/services/owner.service', () => ({
   assignContactOwner: jest.fn().mockResolvedValue({}),
+}))
+
+jest.mock('@/services/inbox.service', () => ({
+  getConversations: jest.fn(),
 }))
 
 // The real ContactTimeline is fully tested in its own spec; here we only need
@@ -61,6 +72,16 @@ function makeContact(overrides: Partial<Contact> = {}): Contact {
 }
 
 describe('ContactDetailClient', () => {
+  beforeEach(() => {
+    jest.clearAllMocks()
+    ;(getConversations as jest.Mock).mockResolvedValue({
+      items: [],
+      total: 0,
+      page: 1,
+      pageSize: 20,
+    })
+  })
+
   function renderClient(contact: Contact = makeContact()): ReturnType<typeof render> {
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     return render(
@@ -99,16 +120,70 @@ describe('ContactDetailClient', () => {
     expect(screen.queryByText('6')).not.toBeInTheDocument()
   })
 
-  it('leaves the Overview and Conversations tabs intact (W16)', () => {
+  it('leaves the Overview tab intact and fetches real conversations for the Conversations tab', async () => {
+    ;(getConversations as jest.Mock).mockResolvedValue({
+      items: [
+        {
+          id: 'conv-1',
+          channel: 'FACEBOOK',
+          status: 'OPEN',
+          lastMessageAt: '2026-01-20T10:00:00.000Z',
+          lastMessagePreview: 'Hi there',
+        },
+      ],
+      total: 1,
+      page: 1,
+      pageSize: 20,
+    })
     renderClient()
 
     // Overview tab: contact info renders.
     expect(screen.getByText('Ada Lovelace')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'ada@example.com' })).toBeInTheDocument()
 
-    // Conversations tab: the ConversationList mock data is untouched.
+    // Conversations tab: real data from getConversations({contactId}), not
+    // the old hardcoded mock array.
     fireEvent.click(screen.getByRole('tab', { name: /conversations/i }))
-    expect(screen.getByText('Báo giá CRM Enterprise')).toBeInTheDocument()
+
+    await waitFor(() => {
+      expect(getConversations).toHaveBeenCalledWith(
+        { page: 1, pageSize: 20 },
+        { contactId: 'contact-1' },
+      )
+    })
+    expect(await screen.findByText('Facebook conversation')).toBeInTheDocument()
+  })
+
+  it('shows the real conversation count as the Conversations tab badge instead of a hardcoded 3', async () => {
+    ;(getConversations as jest.Mock).mockResolvedValue({
+      items: [
+        { id: 'c1', channel: 'FACEBOOK', status: 'OPEN', lastMessageAt: null },
+        { id: 'c2', channel: 'FACEBOOK', status: 'RESOLVED', lastMessageAt: null },
+      ],
+      total: 2,
+      page: 1,
+      pageSize: 20,
+    })
+    renderClient()
+
+    await waitFor(() => {
+      expect(screen.getByRole('tab', { name: /conversations/i })).toHaveTextContent('2')
+    })
+  })
+
+  it('navigates to the real inbox when opening a conversation row', async () => {
+    ;(getConversations as jest.Mock).mockResolvedValue({
+      items: [{ id: 'conv-1', channel: 'FACEBOOK', status: 'OPEN', lastMessageAt: null }],
+      total: 1,
+      page: 1,
+      pageSize: 20,
+    })
+    renderClient()
+
+    fireEvent.click(screen.getByRole('tab', { name: /conversations/i }))
+    fireEvent.click(await screen.findByText('Facebook conversation'))
+
+    expect(mockPush).toHaveBeenCalledWith('/inbox')
   })
 
   it('shows the Activity tab for a non-ADMIN user — tab visibility is not permission-gated (AC 61 / W17)', () => {

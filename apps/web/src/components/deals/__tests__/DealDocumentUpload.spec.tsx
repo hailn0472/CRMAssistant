@@ -44,7 +44,7 @@ describe('DealDocumentUpload', () => {
   it('renders the drop zone with a visible Choose file button and hidden file input', () => {
     render(<DealDocumentUpload dealId="deal-1" />)
 
-    expect(screen.getByText(/drag a document here/i)).toBeInTheDocument()
+    expect(screen.getByText(/Drop contracts and proposals here/i)).toBeInTheDocument()
     const chooseButton = screen.getByRole('button', { name: 'Choose file' })
     expect(chooseButton).toBeInTheDocument()
 
@@ -193,7 +193,7 @@ describe('DealDocumentUpload', () => {
     uploadFile(makePdfFile())
 
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'Choose file' })).toBeDisabled()
+      expect(screen.getByRole('button', { name: 'Uploading...' })).toBeDisabled()
     })
     expect(screen.getByText('Uploading...')).toBeInTheDocument()
 
@@ -224,10 +224,10 @@ describe('DealDocumentUpload', () => {
     const zone = screen.getByRole('button', { name: 'Attach a document' })
 
     fireEvent.dragOver(zone)
-    expect(zone.className).toContain('border-indigo-400 bg-indigo-50')
+    expect(zone.className).toContain('border-[#1b1b1f] bg-[#f7f7f8]')
 
     fireEvent.dragLeave(zone)
-    expect(zone.className).not.toContain('border-indigo-400 bg-indigo-50')
+    expect(zone.className).not.toContain('border-[#1b1b1f] bg-[#f7f7f8]')
   })
 
   it('opens the file picker from the Choose file button and via Enter on the zone', () => {

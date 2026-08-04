@@ -7,6 +7,15 @@ import { getUsers, deactivateUsers } from '@/services/user.service'
 jest.mock('@/services/user.service', () => ({
   getUsers: jest.fn(),
   deactivateUsers: jest.fn(),
+  reactivateUsers: jest.fn(),
+}))
+
+jest.mock('@/services/role.service', () => ({
+  getRoles: jest.fn().mockResolvedValue([]),
+}))
+
+jest.mock('@/services/team.service', () => ({
+  getTeams: jest.fn().mockResolvedValue([]),
 }))
 
 jest.mock('next/navigation', () => ({
@@ -138,7 +147,7 @@ describe('UsersTable', () => {
     expect(screen.getByRole('status')).toBeInTheDocument()
   })
 
-  it('renders "Create user" link', async () => {
+  it('keeps the filter bar reachable when a filter matches nothing', async () => {
     ;(getUsers as jest.Mock).mockResolvedValue({
       total: 1,
       page: 1,
@@ -162,10 +171,15 @@ describe('UsersTable', () => {
         },
       ],
     })
-
     renderWithQueryClient(<UsersTable />)
 
-    expect(await screen.findByRole('link', { name: /create user/i })).toBeInTheDocument()
+    const searchBox = await screen.findByLabelText('Search users')
+    ;(getUsers as jest.Mock).mockResolvedValue({ items: [], total: 0, page: 1, pageSize: 10 })
+    fireEvent.change(searchBox, { target: { value: 'nowhere' } })
+
+    expect(await screen.findByText('No users match these filters.')).toBeInTheDocument()
+    expect(screen.getByLabelText('Search users')).toBeInTheDocument()
+    expect(screen.queryByText('No users yet')).not.toBeInTheDocument()
   })
 
   it('renders pagination with correct page info', async () => {
@@ -196,7 +210,7 @@ describe('UsersTable', () => {
     await screen.findByText('First Last1')
 
     expect(screen.getByText(/Page 1 of 3/)).toBeInTheDocument()
-    expect(screen.getByText(/25 users/)).toBeInTheDocument()
+    expect(screen.getAllByText(/25 users/).length).toBeGreaterThan(0)
   })
 
   it('calls deactivateUsers on bulk deactivate', async () => {

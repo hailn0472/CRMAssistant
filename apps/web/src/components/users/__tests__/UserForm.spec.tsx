@@ -19,12 +19,6 @@ describe('UserForm', () => {
   })
 
   describe('create mode', () => {
-    it('shows "User details" title in create mode', () => {
-      render(<UserForm />)
-
-      expect(screen.getByText('User details')).toBeInTheDocument()
-    })
-
     it('shows "Create user" button label', () => {
       render(<UserForm />)
 
@@ -75,6 +69,32 @@ describe('UserForm', () => {
 
       expect(await screen.findByText('Duplicate email')).toBeInTheDocument()
     })
+
+    it('hands the saved user to onSaved instead of navigating', async () => {
+      const user = userEvent.setup()
+      ;(createUser as jest.Mock).mockResolvedValue({ id: 'user-new' })
+      const onSaved = jest.fn()
+      render(<UserForm onSaved={onSaved} />)
+
+      await user.type(screen.getByLabelText(/email/i), 'ada@example.com')
+      await user.type(screen.getByLabelText(/first name/i), 'Ada')
+      await user.type(screen.getByLabelText(/last name/i), 'Lovelace')
+      await user.click(screen.getByRole('button', { name: /create user/i }))
+
+      await waitFor(() => {
+        expect(onSaved).toHaveBeenCalledWith({ id: 'user-new' })
+      })
+    })
+
+    it('calls onCancel instead of rendering a bare submit when embedded', async () => {
+      const user = userEvent.setup()
+      const onCancel = jest.fn()
+      render(<UserForm onCancel={onCancel} />)
+
+      await user.click(screen.getByRole('button', { name: /cancel/i }))
+
+      expect(onCancel).toHaveBeenCalled()
+    })
   })
 
   describe('edit mode', () => {
@@ -89,12 +109,6 @@ describe('UserForm', () => {
       createdAt: '2026-06-01T00:00:00.000Z',
       updatedAt: '2026-06-01T00:00:00.000Z',
     }
-
-    it('shows "Edit user" title in edit mode', () => {
-      render(<UserForm user={existingUser} />)
-
-      expect(screen.getByText('Edit user')).toBeInTheDocument()
-    })
 
     it('shows "Save user" button label', () => {
       render(<UserForm user={existingUser} />)

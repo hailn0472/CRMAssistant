@@ -463,6 +463,81 @@ describe('TasksService', () => {
     })
   })
 
+  describe('getStats()', () => {
+    it('returns the four workspace counters scoped to the tenant', async () => {
+      const { service } = makeService(prisma)
+      prisma.task.count
+        .mockResolvedValueOnce(168)
+        .mockResolvedValueOnce(6)
+        .mockResolvedValueOnce(3)
+        .mockResolvedValueOnce(42)
+
+      const result = await service.getStats(TENANT, USER)
+
+      expect(result).toEqual({ openTasks: 168, dueToday: 6, overdue: 3, completedThisWeek: 42 })
+      expect(prisma.task.count).toHaveBeenCalledTimes(4)
+      for (const call of prisma.task.count.mock.calls) {
+        expect(call[0].where).toEqual(
+          expect.objectContaining({ tenantId: TENANT, deletedAt: null }),
+        )
+      }
+    })
+
+    it('counts open tasks as TODO or IN_PROGRESS only', async () => {
+      const { service } = makeService(prisma)
+      prisma.task.count.mockResolvedValue(0)
+
+      await service.getStats(TENANT, USER)
+
+      expect(prisma.task.count.mock.calls[0][0].where.status).toEqual({
+        in: ['TODO', 'IN_PROGRESS'],
+      })
+    })
+
+    it('counts due-today and overdue at the UTC day boundary, excluding closed tasks', async () => {
+      const { service } = makeService(prisma)
+      prisma.task.count.mockResolvedValue(0)
+      const now = new Date('2026-08-15T09:30:00.000Z')
+
+      await service.getStats(TENANT, USER, now)
+
+      const dueTodayWhere = prisma.task.count.mock.calls[1][0].where
+      expect(dueTodayWhere.status).toEqual({ in: ['TODO', 'IN_PROGRESS'] })
+      expect(dueTodayWhere.dueDate).toEqual({
+        gte: new Date('2026-08-15T00:00:00.000Z'),
+        lt: new Date('2026-08-16T00:00:00.000Z'),
+      })
+
+      const overdueWhere = prisma.task.count.mock.calls[2][0].where
+      expect(overdueWhere.status).toEqual({ in: ['TODO', 'IN_PROGRESS'] })
+      expect(overdueWhere.dueDate).toEqual({ lt: new Date('2026-08-15T00:00:00.000Z') })
+    })
+
+    it('counts completed-this-week as COMPLETED with completedAt in the trailing 7 days', async () => {
+      const { service } = makeService(prisma)
+      prisma.task.count.mockResolvedValue(0)
+      const now = new Date('2026-08-15T09:30:00.000Z')
+
+      await service.getStats(TENANT, USER, now)
+
+      const where = prisma.task.count.mock.calls[3][0].where
+      expect(where.status).toBe('COMPLETED')
+      expect(where.completedAt).toEqual({ gte: new Date('2026-08-08T09:30:00.000Z') })
+    })
+
+    it('restricts every counter to the visibility scope when restricted', async () => {
+      const { service } = makeService(prisma)
+      mockResolveVisibilityFilter.mockResolvedValue(USER)
+      prisma.task.count.mockResolvedValue(0)
+
+      await service.getStats(TENANT, USER)
+
+      for (const call of prisma.task.count.mock.calls) {
+        expect(call[0].where.assignedTo).toBe(USER)
+      }
+    })
+  })
+
   describe('findMany()', () => {
     it('returns an empty connection with default pagination', async () => {
       const { service } = makeService(prisma)

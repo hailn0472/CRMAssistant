@@ -90,6 +90,13 @@ export type TaskFilter = {
   overdueOnly?: boolean
 }
 
+export type TaskStats = {
+  openTasks: number
+  dueToday: number
+  overdue: number
+  completedThisWeek: number
+}
+
 const TASK_FIELDS = `
   id
   title
@@ -151,6 +158,16 @@ export async function getMyTasks(
     },
   )
   return data.myTasks
+}
+
+export async function getTaskStats(): Promise<TaskStats> {
+  const data = await graphqlRequest<{ taskStats: TaskStats }>(
+    `query TaskStats {
+      taskStats { openTasks dueToday overdue completedThisWeek }
+    }`,
+    {},
+  )
+  return data.taskStats
 }
 
 export async function getTask(id: string): Promise<Task> {

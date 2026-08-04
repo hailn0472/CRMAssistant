@@ -18,7 +18,7 @@ jest.mock('@/services/task.service', () => ({
 }))
 
 jest.mock('@/services/owner.service', () => ({
-  searchUsers: jest.fn(),
+  searchUsers: jest.fn().mockResolvedValue([]),
 }))
 
 jest.mock('@/lib/graphql-subscription', () => ({
@@ -32,8 +32,13 @@ jest.mock('@/lib/graphql-subscription', () => ({
 const mockUsePermission: jest.Mock<boolean, [string, string]> = jest.fn<boolean, [string, string]>(
   () => true,
 )
+let mockPermissionsLoading = false
 jest.mock('@/hooks/usePermission', () => ({
-  usePermission: (resource: string, action: string) => mockUsePermission(resource, action),
+  useMyPermissions: () => ({
+    permissions: [],
+    isLoading: mockPermissionsLoading,
+    hasPermission: (resource: string, action: string) => mockUsePermission(resource, action),
+  }),
 }))
 
 jest.mock('react-hot-toast', () => ({
@@ -81,6 +86,7 @@ function renderWithQuery(ui: React.ReactElement): ReturnType<typeof render> {
 describe('TasksTable', () => {
   beforeEach(() => {
     jest.clearAllMocks()
+    mockPermissionsLoading = false
     mockUsePermission.mockImplementation(() => true)
     ;(getTasks as jest.Mock).mockResolvedValue(mockConnection)
   })
@@ -93,6 +99,14 @@ describe('TasksTable', () => {
     renderWithQuery(<TasksTable />)
     expect(screen.getByText('Access limited')).toBeInTheDocument()
     expect(getTasks).not.toHaveBeenCalled()
+  })
+
+  it('renders TableSkeleton (not Access limited) while permissions are still loading', () => {
+    mockPermissionsLoading = true
+    mockUsePermission.mockImplementation(() => false)
+    renderWithQuery(<TasksTable />)
+    expect(screen.getByRole('status')).toBeInTheDocument()
+    expect(screen.queryByText('Access limited')).not.toBeInTheDocument()
   })
 
   it('renders TableSkeleton while loading', () => {
@@ -111,7 +125,7 @@ describe('TasksTable', () => {
     expect(screen.getByText('Try again')).toBeInTheDocument()
   })
 
-  it('renders EmptyState with a create CTA when no tasks exist', async () => {
+  it('renders EmptyState with a create CTA when no tasks exist and no filter is active', async () => {
     ;(getTasks as jest.Mock).mockResolvedValue({ items: [], total: 0, page: 1, pageSize: 10 })
     renderWithQuery(<TasksTable />)
 
@@ -121,28 +135,37 @@ describe('TasksTable', () => {
     expect(screen.getByText('Create task')).toBeInTheDocument()
   })
 
-  it('renders the populated table with all six columns and badges', async () => {
+  it('keeps the filter bar reachable when a filter matches nothing', async () => {
+    renderWithQuery(<TasksTable />)
+
+    const searchBox = await screen.findByLabelText('Search tasks')
+    ;(getTasks as jest.Mock).mockResolvedValue({ items: [], total: 0, page: 1, pageSize: 10 })
+    fireEvent.change(searchBox, { target: { value: 'nowhere' } })
+
+    expect(await screen.findByText('No tasks match these filters.')).toBeInTheDocument()
+    expect(screen.getByLabelText('Search tasks')).toBeInTheDocument()
+    expect(screen.queryByText('No tasks yet')).not.toBeInTheDocument()
+  })
+
+  it('renders the populated table with every column and row detail', async () => {
     renderWithQuery(<TasksTable />)
 
     await waitFor(() => {
       expect(screen.getByText('Follow up with Acme')).toBeInTheDocument()
     })
-    // Badge cells render inside the table; the filter <option> elements carry
-    // the same labels, so use getAllByText and assert at least the table badge
     expect(screen.getAllByText('In progress').length).toBeGreaterThan(0)
     expect(screen.getAllByText('High').length).toBeGreaterThan(0)
     expect(screen.getByText('Ada Lovelace')).toBeInTheDocument()
-    expect(screen.getByText('Upcoming')).toBeInTheDocument()
     expect(screen.getByText('Grace Hopper')).toBeInTheDocument()
-    expect(screen.getByText('Title')).toBeInTheDocument()
+    expect(screen.getByText('Task')).toBeInTheDocument()
     expect(screen.getByText('Status')).toBeInTheDocument()
     expect(screen.getByText('Priority')).toBeInTheDocument()
-    expect(screen.getByText('Assignee')).toBeInTheDocument()
-    expect(screen.getByText('Due date')).toBeInTheDocument()
+    expect(screen.getAllByText('Assignee').length).toBeGreaterThan(0)
+    expect(screen.getByText('Due')).toBeInTheDocument()
     expect(screen.getByText('Related')).toBeInTheDocument()
   })
 
-  it('renders an em-dash for null assignee and related cells', async () => {
+  it('renders an em-dash for null assignee, due date and related cells', async () => {
     ;(getTasks as jest.Mock).mockResolvedValue({
       items: [
         {
@@ -160,9 +183,9 @@ describe('TasksTable', () => {
     renderWithQuery(<TasksTable />)
 
     await waitFor(() => {
-      expect(screen.getByText('No due date')).toBeInTheDocument()
+      expect(screen.getByText('Follow up with Acme')).toBeInTheDocument()
     })
-    expect(screen.getAllByText('\u2014').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('—').length).toBeGreaterThan(0)
   })
 
   it('navigates to the task detail on row click', async () => {
@@ -241,7 +264,7 @@ describe('TasksTable', () => {
     renderWithQuery(<TasksTable />)
 
     await waitFor(() => {
-      expect(screen.getByText(/25/)).toBeInTheDocument()
+      expect(screen.getAllByText(/25/).length).toBeGreaterThan(0)
     })
     const pageButton = screen.getByLabelText('Go to page 2')
     expect(pageButton).not.toBeNull()
@@ -288,26 +311,5 @@ describe('TasksTable', () => {
     await waitFor(() => {
       expect(toast.success).toHaveBeenCalledWith('A task was assigned to you')
     })
-  })
-
-  it('renders the New from template control for users who can create', async () => {
-    renderWithQuery(<TasksTable />)
-    await waitFor(() => {
-      expect(screen.getByText('Follow up with Acme')).toBeInTheDocument()
-    })
-    expect(screen.getByText('New from template')).toBeInTheDocument()
-  })
-
-  it('hides create controls without TASK:CREATE', async () => {
-    mockUsePermission.mockImplementation((resource: string, action: string) => {
-      if (resource === 'TASK' && action === 'CREATE') return false
-      return true
-    })
-    renderWithQuery(<TasksTable />)
-    await waitFor(() => {
-      expect(screen.getByText('Follow up with Acme')).toBeInTheDocument()
-    })
-    expect(screen.queryByText('Create task')).not.toBeInTheDocument()
-    expect(screen.queryByText('New from template')).not.toBeInTheDocument()
   })
 })

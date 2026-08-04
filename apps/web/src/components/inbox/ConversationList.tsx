@@ -155,32 +155,32 @@ export function ConversationList({
   const totalPages = Math.ceil(total / PAGE_SIZE)
 
   return (
-    <div className={cn('flex flex-col bg-white', className)}>
+    <div className={cn('flex min-h-0 flex-col bg-white', className)}>
       {/* Filters & Search */}
-      <div className="flex flex-col gap-3 border-b border-slate-100 p-4">
+      <div className="flex flex-col gap-[11px] border-b border-[#f2f2f5] px-4 pb-3 pt-3.5">
         {/* Internal chat button */}
         {onStartInternalChat && (
           <button
             type="button"
             onClick={onStartInternalChat}
-            className="flex items-center gap-2 rounded-full bg-indigo-600 px-4 py-2 text-[13px] font-semibold text-white shadow-sm hover:bg-indigo-700 transition-all hover:shadow-md"
+            className="inline-flex h-9 items-center justify-center gap-1.5 rounded-[9px] border border-[#1b1b1f] bg-[#1b1b1f] px-3.5 text-[13px] font-semibold text-white transition-colors hover:bg-black"
           >
             <MessageCircle className="h-4 w-4" />
             New Internal Chat
           </button>
         )}
 
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+        <label className="flex h-[34px] items-center gap-[9px] rounded-[9px] border border-[#e6e6eb] bg-[#fafafb] px-[11px] transition-colors focus-within:border-[#c7c7d1] focus-within:bg-white">
+          <Search className="h-3.5 w-3.5 flex-none text-[#a0a0aa]" />
           <input
             type="text"
-            placeholder="Search conversations..."
+            placeholder="Search conversations"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="h-9 w-full rounded-full border border-slate-200 bg-slate-50/50 pl-9 pr-4 text-[13px] outline-none transition-all focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10"
+            className="min-w-0 flex-1 border-none bg-transparent text-[13px] outline-none"
           />
-        </div>
-        <div className="flex items-center gap-5 px-1 pt-1">
+        </label>
+        <div className="flex items-center gap-1.5">
           {['All', 'Unread', 'Pending', 'Archived'].map((tab) => {
             const isActive =
               (tab === 'Unread' && unreadOnly) ||
@@ -190,6 +190,7 @@ export function ConversationList({
             return (
               <button
                 key={tab}
+                type="button"
                 onClick={() => {
                   if (tab === 'Unread') {
                     setUnreadOnly(true)
@@ -206,14 +207,13 @@ export function ConversationList({
                   }
                 }}
                 className={cn(
-                  'pb-3 text-[13px] font-semibold transition-colors relative',
-                  isActive ? 'text-slate-900' : 'text-slate-500 hover:text-slate-700',
+                  'h-7 rounded-full border px-[11px] text-[12px] font-medium transition-colors',
+                  isActive
+                    ? 'border-[#1b1b1f] bg-[#1b1b1f] text-white'
+                    : 'border-[#e6e6eb] bg-white text-[#4b4b55] hover:border-[#c7c7d1]',
                 )}
               >
                 {tab}
-                {isActive && (
-                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-slate-900 rounded-t-full" />
-                )}
               </button>
             )
           })}
@@ -221,40 +221,40 @@ export function ConversationList({
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="min-h-0 flex-1 overflow-y-auto">
         {loading ? (
           <div className="p-4">
             <InboxSkeleton />
           </div>
         ) : error ? (
           <div className="flex flex-col items-center justify-center gap-3 px-4 py-16 text-center">
-            <div className="rounded-full bg-red-50 p-3 text-red-500">
+            <div className="rounded-full bg-[#fdeceb] p-3 text-[#b91c1c]">
               <MessageCircle className="h-6 w-6" />
             </div>
-            <p className="text-sm font-medium text-slate-800">Oops, something went wrong</p>
-            <p className="text-xs text-slate-500">{error}</p>
+            <p className="text-sm font-medium text-[#1b1b1f]">Oops, something went wrong</p>
+            <p className="text-xs text-[#8c8c96]">{error}</p>
             <button
               type="button"
               onClick={() => fetchConversations(true)}
-              className="mt-2 rounded-full bg-slate-900 px-5 py-2 text-xs font-medium text-white shadow-sm hover:bg-slate-800 transition-transform hover:scale-105 active:scale-95"
+              className="mt-2 rounded-[9px] border border-[#1b1b1f] bg-[#1b1b1f] px-5 py-2 text-xs font-medium text-white transition-colors hover:bg-black"
             >
               Try Again
             </button>
           </div>
         ) : conversations.length === 0 ? (
           <div className="flex flex-col items-center justify-center px-6 py-20 text-center">
-            <div className="rounded-full bg-slate-50 p-4 text-slate-300 mb-4">
+            <div className="rounded-full bg-[#fafafb] p-4 text-[#c7c7d1] mb-4">
               <MessageCircle className="h-8 w-8" />
             </div>
-            <p className="text-[15px] font-bold text-slate-900">All caught up!</p>
-            <p className="mt-1.5 text-sm text-slate-500 max-w-[200px]">
+            <p className="text-[15px] font-bold text-[#1b1b1f]">All caught up!</p>
+            <p className="mt-1.5 text-sm text-[#8c8c96] max-w-[200px]">
               {statusFilter || channelFilter || unreadOnly || assigneeFilter || searchQuery
                 ? 'No conversations match your current filters.'
                 : "When contacts reach out, you'll see them here."}
             </p>
           </div>
         ) : (
-          <ul role="list" className="divide-y divide-slate-100/60">
+          <ul role="list" className="divide-y divide-[#f4f4f7]">
             {conversations.map((conv) => {
               const isSelected = conv.id === selectedId
               const isUnread = conv.unreadCount && conv.unreadCount > 0
@@ -271,12 +271,12 @@ export function ConversationList({
                     type="button"
                     onClick={() => onSelect(conv.id)}
                     className={cn(
-                      'group flex w-full items-start gap-3.5 p-4 text-left transition-all duration-200 relative',
-                      isSelected ? 'bg-blue-50/50' : 'hover:bg-slate-50/80',
+                      'group flex w-full items-start gap-3.5 p-4 text-left transition-colors relative',
+                      isSelected ? 'bg-[#fafafb]' : 'hover:bg-[#fafafb]',
                     )}
                   >
                     {isSelected && (
-                      <div className="absolute left-0 top-0 bottom-0 w-1 bg-blue-600 rounded-r-full shadow-[0_0_8px_rgba(37,99,235,0.4)]" />
+                      <div className="absolute left-0 top-0 bottom-0 w-[2px] bg-[#1b1b1f]" />
                     )}
 
                     <div className="relative mt-0.5">
@@ -289,7 +289,7 @@ export function ConversationList({
                         {init}
                       </div>
                       <div className="absolute -bottom-1 -right-1 rounded-full border-2 border-white bg-white p-0.5 shadow-sm">
-                        <ChannelIcon className="h-3 w-3 text-slate-400" />
+                        <ChannelIcon className="h-3 w-3 text-[#a0a0aa]" />
                       </div>
                     </div>
 
@@ -297,18 +297,13 @@ export function ConversationList({
                       <div className="flex items-center justify-between gap-2">
                         <span
                           className={cn(
-                            'truncate text-[15px] tracking-tight',
-                            isUnread ? 'font-bold text-slate-900' : 'font-semibold text-slate-800',
+                            'truncate text-[13.5px] tracking-tight',
+                            isUnread ? 'font-bold text-[#1b1b1f]' : 'font-semibold text-[#1b1b1f]',
                           )}
                         >
                           {contactName}
                         </span>
-                        <span
-                          className={cn(
-                            'shrink-0 text-[11px] font-medium tracking-wide',
-                            isUnread ? 'text-blue-600' : 'text-slate-400',
-                          )}
-                        >
+                        <span className="shrink-0 text-[11px] text-[#a0a0aa]">
                           {timeAgo(conv.lastMessageAt)}
                         </span>
                       </div>
@@ -316,8 +311,8 @@ export function ConversationList({
                       <div className="mt-1 flex items-start justify-between gap-3">
                         <span
                           className={cn(
-                            'line-clamp-2 text-[13px] leading-relaxed',
-                            isUnread ? 'font-medium text-slate-800' : 'text-slate-500',
+                            'line-clamp-2 text-[12.5px] leading-relaxed',
+                            isUnread ? 'font-medium text-[#1b1b1f]' : 'text-[#8c8c96]',
                           )}
                         >
                           {truncate(
@@ -327,10 +322,16 @@ export function ConversationList({
                           )}
                         </span>
                         {isUnread ? (
-                          <span className="flex h-5 min-w-[20px] shrink-0 items-center justify-center rounded-full bg-blue-600 px-1.5 text-[11px] font-bold text-white shadow-sm">
+                          <span className="flex h-[17px] min-w-[17px] shrink-0 items-center justify-center rounded-full bg-[#1b1b1f] px-1.5 text-[10.5px] font-semibold text-white">
                             {conv.unreadCount! > 99 ? '99+' : conv.unreadCount}
                           </span>
                         ) : null}
+                      </div>
+
+                      <div className="mt-1.5 flex items-center gap-1.5">
+                        <span className="rounded-[5px] bg-[#f4f4f6] px-1.5 py-px text-[10.5px] font-medium text-[#6b6b76]">
+                          {conv.channel}
+                        </span>
                       </div>
                     </div>
                   </button>
@@ -342,23 +343,23 @@ export function ConversationList({
 
         {/* Pagination */}
         {totalPages > 1 && (
-          <div className="flex items-center justify-between border-t border-slate-100 p-4">
+          <div className="flex items-center justify-between border-t border-[#f2f2f5] p-4">
             <button
               type="button"
               disabled={page <= 1}
               onClick={() => setPage((p) => p - 1)}
-              className="rounded-full px-4 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100 disabled:opacity-40 transition-colors"
+              className="rounded-full px-4 py-1.5 text-xs font-medium text-[#4b4b55] hover:bg-[#f4f4f6] disabled:opacity-40 transition-colors"
             >
               Previous
             </button>
-            <span className="text-xs font-medium text-slate-400 bg-slate-50 px-3 py-1 rounded-full">
+            <span className="text-xs font-medium text-[#a0a0aa] bg-[#fafafb] px-3 py-1 rounded-full">
               {page} / {totalPages}
             </span>
             <button
               type="button"
               disabled={page >= totalPages}
               onClick={() => setPage((p) => p + 1)}
-              className="rounded-full px-4 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100 disabled:opacity-40 transition-colors"
+              className="rounded-full px-4 py-1.5 text-xs font-medium text-[#4b4b55] hover:bg-[#f4f4f6] disabled:opacity-40 transition-colors"
             >
               Next
             </button>

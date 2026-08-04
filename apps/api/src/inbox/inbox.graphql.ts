@@ -35,6 +35,11 @@ const ContactSummaryRef = builder
     firstName: string
     lastName: string
     email: string
+    phone?: string | null
+    company?: string | null
+    jobTitle?: string | null
+    addressCity?: string | null
+    addressCountry?: string | null
   }>('ContactSummary')
   .implement({
     fields: (t) => ({
@@ -42,11 +47,26 @@ const ContactSummaryRef = builder
       firstName: t.exposeString('firstName'),
       lastName: t.exposeString('lastName'),
       email: t.exposeString('email'),
+      phone: t.exposeString('phone', { nullable: true }),
+      company: t.exposeString('company', { nullable: true }),
+      jobTitle: t.exposeString('jobTitle', { nullable: true }),
+      addressCity: t.exposeString('addressCity', { nullable: true }),
+      addressCountry: t.exposeString('addressCountry', { nullable: true }),
     }),
   })
 
 type ConversationShape = Conversation & {
-  contact?: { id: string; firstName: string; lastName: string; email: string } | null
+  contact?: {
+    id: string
+    firstName: string
+    lastName: string
+    email: string
+    phone?: string | null
+    company?: string | null
+    jobTitle?: string | null
+    addressCity?: string | null
+    addressCountry?: string | null
+  } | null
   assignedToUser?: { id: string; firstName: string; lastName: string; email: string } | null
   _count?: { messages: number } | null
   lastMessagePreview?: string | null
@@ -225,6 +245,7 @@ const ConversationFilterInputRef = builder.inputType('ConversationFilterInput', 
     status: t.string(),
     assignedTo: t.string(),
     unreadOnly: t.boolean(),
+    contactId: t.string(),
   }),
 })
 
@@ -310,6 +331,7 @@ builder.queryFields((t) => ({
           status: filter.status ?? undefined,
           assignedTo: filter.assignedTo ?? undefined,
           unreadOnly: filter.unreadOnly ?? undefined,
+          contactId: filter.contactId ?? undefined,
         },
         {
           page: args.pagination?.page ?? undefined,

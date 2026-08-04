@@ -9,6 +9,7 @@ import type { Task } from '@/services/task.service'
 
 jest.mock('next/navigation', () => ({
   useRouter: () => ({ push: jest.fn(), refresh: jest.fn() }),
+  useSearchParams: () => new URLSearchParams(),
 }))
 
 jest.mock('@/services/task.service', () => ({
@@ -84,17 +85,28 @@ describe('TaskDetailClient', () => {
     ;(getTaskCalendarSync as jest.Mock).mockResolvedValue(null)
   })
 
-  it('renders the back link, title, badges and metadata sections', () => {
+  it('renders the back link, title, badges and detail sections', () => {
     renderWithQuery(<TaskDetailClient task={mockTask} />)
 
-    expect(screen.getByText('Back to tasks')).toBeInTheDocument()
+    expect(screen.getByText('← Back to tasks')).toBeInTheDocument()
     expect(screen.getByText('Follow up with Acme')).toBeInTheDocument()
-    expect(screen.getByText('In progress')).toBeInTheDocument()
-    expect(screen.getByText('High')).toBeInTheDocument()
+    expect(screen.getAllByText('In progress').length).toBeGreaterThan(0)
+    expect(screen.getByText('High priority')).toBeInTheDocument()
     expect(screen.getByText('Call the lead')).toBeInTheDocument()
-    expect(screen.getByText('Task Details')).toBeInTheDocument()
-    expect(screen.getByText('Related records')).toBeInTheDocument()
-    expect(screen.getByText('Metadata')).toBeInTheDocument()
+    expect(screen.getByText('Description')).toBeInTheDocument()
+    expect(screen.getByText('Activity')).toBeInTheDocument()
+    expect(screen.getByText('Details')).toBeInTheDocument()
+    expect(screen.getByText('Related')).toBeInTheDocument()
+    expect(screen.getByText('Calendar')).toBeInTheDocument()
+  })
+
+  it('builds the activity list from the real task timestamps only', () => {
+    renderWithQuery(<TaskDetailClient task={{ ...mockTask, completedAt: null }} />)
+
+    expect(screen.getByText('Task created')).toBeInTheDocument()
+    expect(screen.getByText('Assigned to Ada Lovelace')).toBeInTheDocument()
+    // Not completed → no completion entry is invented.
+    expect(screen.queryByText('Task completed')).not.toBeInTheDocument()
   })
 
   it('links to the contact and deal detail pages', () => {
@@ -106,34 +118,39 @@ describe('TaskDetailClient', () => {
     expect(dealLink?.getAttribute('href')).toBe('/deals/deal-1')
   })
 
-  it('completes the task with an impact-stating toast', async () => {
+  it('completes the task from the header checkbox with an impact-stating toast', async () => {
     ;(completeTask as jest.Mock).mockResolvedValue({ ...mockTask, status: 'COMPLETED' })
     renderWithQuery(<TaskDetailClient task={mockTask} />)
 
-    fireEvent.click(screen.getByText('Complete'))
+    fireEvent.click(screen.getByRole('button', { name: 'Mark task complete' }))
     await waitFor(() => {
       expect(completeTask).toHaveBeenCalledWith('task-1')
       expect(toast.success).toHaveBeenCalledWith('Task completed and removed from your open list')
     })
   })
 
-  it('hides the Complete button when the task is COMPLETED or CANCELLED', () => {
+  it('hides the complete checkbox when the task is COMPLETED or CANCELLED', () => {
     renderWithQuery(<TaskDetailClient task={{ ...mockTask, status: 'COMPLETED' }} />)
-    expect(screen.queryByText('Complete')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Mark task complete' })).not.toBeInTheDocument()
   })
 
-  it('hides the Complete button for a CANCELLED task', () => {
+  it('hides the complete checkbox for a CANCELLED task', () => {
     renderWithQuery(<TaskDetailClient task={{ ...mockTask, status: 'CANCELLED' }} />)
-    expect(screen.queryByText('Complete')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Mark task complete' })).not.toBeInTheDocument()
   })
 
-  it('gates the Complete button on TASK:UPDATE', () => {
+  it('strikes through the title once the task is completed', () => {
+    renderWithQuery(<TaskDetailClient task={{ ...mockTask, status: 'COMPLETED' }} />)
+    expect(screen.getByText('Follow up with Acme').className).toContain('line-through')
+  })
+
+  it('gates the complete checkbox on TASK:UPDATE', () => {
     mockUsePermission.mockImplementation((resource: string, action: string) => {
       if (resource === 'TASK' && action === 'UPDATE') return false
       return true
     })
     renderWithQuery(<TaskDetailClient task={mockTask} />)
-    expect(screen.queryByText('Complete')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Mark task complete' })).not.toBeInTheDocument()
   })
 
   it('gates the Assign button on TASK:ASSIGN', () => {
@@ -142,7 +159,12 @@ describe('TaskDetailClient', () => {
       return true
     })
     renderWithQuery(<TaskDetailClient task={mockTask} />)
-    expect(screen.queryByText('Assign')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Assign task' })).not.toBeInTheDocument()
+  })
+
+  it('shows the current assignee on the Assign button', () => {
+    renderWithQuery(<TaskDetailClient task={mockTask} />)
+    expect(screen.getByRole('button', { name: 'Assign task' })).toHaveTextContent('Ada Lovelace')
   })
 
   it('gates the Edit link on TASK:UPDATE', () => {
@@ -154,13 +176,20 @@ describe('TaskDetailClient', () => {
     expect(screen.queryByText('Edit')).not.toBeInTheDocument()
   })
 
+  it('opens TaskFormDrawer when Edit button is clicked', async () => {
+    renderWithQuery(<TaskDetailClient task={mockTask} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
+    expect(await screen.findByRole('dialog', { name: 'Edit task' })).toBeInTheDocument()
+  })
+
   it('gates the Delete button on TASK:DELETE', () => {
     mockUsePermission.mockImplementation((resource: string, action: string) => {
       if (resource === 'TASK' && action === 'DELETE') return false
       return true
     })
     renderWithQuery(<TaskDetailClient task={mockTask} />)
-    expect(screen.queryByText('Delete')).not.toBeInTheDocument()
+    expect(screen.queryByText('Delete task')).not.toBeInTheDocument()
   })
 
   it('deletes after a native confirm and navigates back to the list', async () => {
@@ -168,7 +197,7 @@ describe('TaskDetailClient', () => {
     ;(deleteTask as jest.Mock).mockResolvedValue(true)
     renderWithQuery(<TaskDetailClient task={mockTask} />)
 
-    fireEvent.click(screen.getByText('Delete'))
+    fireEvent.click(screen.getByText('Delete task'))
     await waitFor(() => {
       expect(deleteTask).toHaveBeenCalledWith('task-1')
       expect(toast.success).toHaveBeenCalledWith('Task deleted')
@@ -180,7 +209,7 @@ describe('TaskDetailClient', () => {
     const confirmSpy = jest.spyOn(window, 'confirm').mockReturnValue(false)
     renderWithQuery(<TaskDetailClient task={mockTask} />)
 
-    fireEvent.click(screen.getByText('Delete'))
+    fireEvent.click(screen.getByText('Delete task'))
     expect(deleteTask).not.toHaveBeenCalled()
     confirmSpy.mockRestore()
   })

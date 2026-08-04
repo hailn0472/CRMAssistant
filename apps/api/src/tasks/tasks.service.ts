@@ -69,6 +69,16 @@ export type CreateTaskFromTemplateOverrides = {
   title?: string
 }
 
+export type TaskStats = {
+  openTasks: number
+  dueToday: number
+  overdue: number
+  completedThisWeek: number
+}
+
+const OPEN_STATUSES: TaskStatus[] = ['TODO', 'IN_PROGRESS']
+const MS_PER_DAY = 24 * 60 * 60 * 1000
+
 const DEFAULT_PAGE = 1
 const DEFAULT_PAGE_SIZE = 20
 const MAX_PAGE_SIZE = 100
@@ -315,6 +325,43 @@ export class TasksService {
     }
 
     return task
+  }
+
+  /// Aggregate counters for the tasks workspace summary cards. Scoped with
+  /// the same visibility rules as findMany so the totals always match what
+  /// the user can actually list. Day-boundary math mirrors resolveDueStatus
+  /// (toUtcMidnight) so "due today"/"overdue" never disagree with the badges
+  /// rendered per-row in the table.
+  async getStats(tenantId: string, userId: string, now: Date = new Date()): Promise<TaskStats> {
+    const visibilityFilter = await resolveVisibilityFilter(userId, tenantId)
+
+    const scope: Prisma.TaskWhereInput = { tenantId, deletedAt: null }
+    if (visibilityFilter !== undefined) {
+      scope.assignedTo = visibilityFilter as Prisma.TaskWhereInput['assignedTo']
+    }
+
+    const todayStart = toUtcMidnight(now)
+    const todayEnd = new Date(todayStart.getTime() + MS_PER_DAY)
+    const sevenDaysAgo = new Date(now.getTime() - 7 * MS_PER_DAY)
+
+    const [openTasks, dueToday, overdue, completedThisWeek] = await Promise.all([
+      this.prisma.task.count({ where: { ...scope, status: { in: OPEN_STATUSES } } }),
+      this.prisma.task.count({
+        where: {
+          ...scope,
+          status: { in: OPEN_STATUSES },
+          dueDate: { gte: todayStart, lt: todayEnd },
+        },
+      }),
+      this.prisma.task.count({
+        where: { ...scope, status: { in: OPEN_STATUSES }, dueDate: { lt: todayStart } },
+      }),
+      this.prisma.task.count({
+        where: { ...scope, status: 'COMPLETED', completedAt: { gte: sevenDaysAgo } },
+      }),
+    ])
+
+    return { openTasks, dueToday, overdue, completedThisWeek }
   }
 
   async findMany(

@@ -98,9 +98,12 @@ export default function SettingsLayout({
   )
 
   return (
-    <div className="flex flex-col gap-6 lg:flex-row lg:gap-8">
-      <nav aria-label="Settings navigation" className="lg:w-52 lg:shrink-0">
-        <p className="mb-2 px-3 text-[10px] font-bold uppercase tracking-wider text-slate-400/80">
+    <div className="mx-auto grid w-full max-w-[1100px] grid-cols-1 items-start gap-6 lg:grid-cols-[210px_minmax(0,1fr)] lg:gap-8">
+      <nav
+        aria-label="Settings navigation"
+        className="flex flex-col gap-0.5 lg:sticky lg:top-[92px]"
+      >
+        <p className="px-2.5 pb-2 text-[10px] font-semibold uppercase tracking-[0.09em] text-[#a0a0aa]">
           Settings
         </p>
         <ul className="flex flex-row flex-wrap gap-1 lg:flex-col">
@@ -112,10 +115,10 @@ export default function SettingsLayout({
                   href={item.href}
                   aria-current={active ? 'page' : undefined}
                   className={cn(
-                    'flex min-h-9 items-center rounded-md px-3 text-sm font-medium transition-colors',
+                    'flex min-h-9 items-center rounded-lg px-2.5 text-[13.5px] transition-colors',
                     active
-                      ? 'bg-blue-50 text-blue-700'
-                      : 'text-slate-600 hover:bg-slate-100 hover:text-slate-950',
+                      ? 'bg-[#f0f0f3] font-semibold text-[#1b1b1f]'
+                      : 'font-medium text-[#6b6b76] hover:bg-[#f0f0f3] hover:text-[#1b1b1f]',
                   )}
                 >
                   {item.label}

@@ -3,17 +3,15 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Pencil, Trash2, Check, X, Plus } from 'lucide-react'
+import { Pencil, Trash2, Check, X } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 import { getDealLineItems, removeLineItem, updateLineItem } from '@/services/product.service'
 import { formatCurrency } from '@/components/deals/deal-display'
 import { roundMoney, formatDiscount, computeLineItemTotal } from '@/lib/line-item-format'
 import { ResponsiveTableWrapper } from '@/components/shared/ResponsiveTableWrapper'
-import { EmptyState } from '@/components/shared/EmptyState'
 import { ErrorState } from '@/components/shared/ErrorState'
 import { TableSkeleton } from '@/components/shared/LoadingSkeleton'
-import { Button } from '@/components/ui/button'
 import { LineItemDialog } from './LineItemDialog'
 
 type DealLineItemsProps = {
@@ -104,28 +102,36 @@ export function DealLineItems({ dealId, currency }: DealLineItemsProps): React.J
   if (isLoading) return <TableSkeleton />
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-400">Products</h3>
-        <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setDialogOpen(true)}>
-          <Plus className="h-3.5 w-3.5" />
-          Add product
-        </Button>
+    <section className="overflow-hidden rounded-[14px] border border-[#ececf0] bg-white">
+      <div className="flex items-center justify-between gap-3 border-b border-[#f2f2f5] px-[18px] py-[14px]">
+        <h2 className="text-[14px] font-semibold text-[#1b1b1f]">Products</h2>
+        <button
+          type="button"
+          className="h-[30px] rounded-[8px] border border-[#e6e6eb] bg-white px-[11px] text-[12.5px] font-medium text-[#4b4b55] transition-colors hover:bg-[#f4f4f6]"
+          onClick={() => setDialogOpen(true)}
+        >
+          + Add product
+        </button>
       </div>
 
       {error ? (
         <ErrorState message="Failed to load products" />
       ) : !lineItems || lineItems.length === 0 ? (
-        <EmptyState
-          title="No products on this deal yet"
-          description="Add products to track what you are selling in this deal."
-        />
+        <div className="flex items-center gap-[12px] p-[18px]">
+          <span className="block h-[30px] w-[30px] flex-none rounded-[8px] border border-dashed border-[#d8d8e0]" />
+          <div className="flex flex-col gap-0.5">
+            <span className="text-[13px] font-medium text-[#1b1b1f]">No products yet</span>
+            <span className="text-[12px] text-[#8c8c96]">
+              Add line items to track what was quoted.
+            </span>
+          </div>
+        </div>
       ) : (
         <ResponsiveTableWrapper>
           <table className="w-full text-sm">
             <caption className="sr-only">Products on this deal</caption>
             <thead>
-              <tr className="border-b border-slate-200 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">
+              <tr className="border-b border-[#f2f2f5] bg-[#fafafb] text-left text-[11px] font-semibold uppercase tracking-wider text-[#8c8c96]">
                 <th scope="col" className="px-4 py-3">
                   Product
                 </th>
@@ -148,15 +154,18 @@ export function DealLineItems({ dealId, currency }: DealLineItemsProps): React.J
             </thead>
             <tbody>
               {lineItems.map((item) => (
-                <tr key={item.id} className="border-b border-slate-100 hover:bg-slate-50">
+                <tr
+                  key={item.id}
+                  className="border-b border-[#f4f4f7] transition-colors hover:bg-[#fafafb]"
+                >
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">
                       <span>{item.product.name}</span>
                       {!item.product.isActive && (
-                        <span className="text-xs text-slate-400">Inactive</span>
+                        <span className="text-[11.5px] text-[#a0a0aa]">Inactive</span>
                       )}
                       {item.product.currency !== currency && (
-                        <span className="text-xs text-amber-600">
+                        <span className="text-[11.5px] text-[#c2860a]">
                           Priced in {item.product.currency} &mdash; not converted
                         </span>
                       )}
@@ -168,7 +177,7 @@ export function DealLineItems({ dealId, currency }: DealLineItemsProps): React.J
                         type="number"
                         min="0"
                         step="0.01"
-                        className="h-8 w-20 rounded border border-slate-300 px-2 text-sm"
+                        className="h-8 w-20 rounded-[8px] border border-[#e6e6eb] bg-[#fafafb] px-2 text-[13px] outline-none focus:border-[#1b1b1f] focus:bg-white"
                         value={editValues.quantity}
                         onChange={(e) =>
                           setEditValues({
@@ -187,7 +196,7 @@ export function DealLineItems({ dealId, currency }: DealLineItemsProps): React.J
                         type="number"
                         min="0"
                         step="0.01"
-                        className="h-8 w-24 rounded border border-slate-300 px-2 text-sm"
+                        className="h-8 w-24 rounded-[8px] border border-[#e6e6eb] bg-[#fafafb] px-2 text-[13px] outline-none focus:border-[#1b1b1f] focus:bg-white"
                         value={editValues.unitPrice}
                         onChange={(e) =>
                           setEditValues({
@@ -207,7 +216,7 @@ export function DealLineItems({ dealId, currency }: DealLineItemsProps): React.J
                         min="0"
                         max="100"
                         step="0.01"
-                        className="h-8 w-20 rounded border border-slate-300 px-2 text-sm"
+                        className="h-8 w-20 rounded-[8px] border border-[#e6e6eb] bg-[#fafafb] px-2 text-[13px] outline-none focus:border-[#1b1b1f] focus:bg-white"
                         value={editValues.discount}
                         onChange={(e) =>
                           setEditValues({
@@ -238,7 +247,7 @@ export function DealLineItems({ dealId, currency }: DealLineItemsProps): React.J
                         <button
                           type="button"
                           onClick={() => handleEditSave(item.id)}
-                          className="inline-flex h-11 w-11 items-center justify-center rounded text-green-600 hover:bg-green-50"
+                          className="inline-flex h-11 w-11 items-center justify-center rounded-[8px] text-[#22a06b] transition-colors hover:bg-[#f4f4f6]"
                           aria-label="Save"
                         >
                           <Check className="h-4 w-4" />
@@ -246,7 +255,7 @@ export function DealLineItems({ dealId, currency }: DealLineItemsProps): React.J
                         <button
                           type="button"
                           onClick={handleEditCancel}
-                          className="inline-flex h-11 w-11 items-center justify-center rounded text-slate-400 hover:bg-slate-100"
+                          className="inline-flex h-11 w-11 items-center justify-center rounded-[8px] text-[#a0a0aa] transition-colors hover:bg-[#f4f4f6] hover:text-[#1b1b1f]"
                           aria-label="Cancel"
                         >
                           <X className="h-4 w-4" />
@@ -257,7 +266,7 @@ export function DealLineItems({ dealId, currency }: DealLineItemsProps): React.J
                         <button
                           type="button"
                           onClick={() => handleEditStart(item)}
-                          className="inline-flex h-11 w-11 items-center justify-center rounded text-slate-400 hover:bg-slate-100"
+                          className="inline-flex h-11 w-11 items-center justify-center rounded-[8px] text-[#a0a0aa] transition-colors hover:bg-[#f4f4f6] hover:text-[#1b1b1f]"
                           aria-label="Edit line item"
                         >
                           <Pencil className="h-4 w-4" />
@@ -265,7 +274,7 @@ export function DealLineItems({ dealId, currency }: DealLineItemsProps): React.J
                         <button
                           type="button"
                           onClick={() => handleRemove(item.id)}
-                          className="inline-flex h-11 w-11 items-center justify-center rounded text-slate-400 hover:bg-slate-100"
+                          className="inline-flex h-11 w-11 items-center justify-center rounded-[8px] text-[#a0a0aa] transition-colors hover:bg-[#f4f4f6] hover:text-[#1b1b1f]"
                           aria-label="Remove line item"
                         >
                           <Trash2 className="h-4 w-4" />
@@ -277,8 +286,11 @@ export function DealLineItems({ dealId, currency }: DealLineItemsProps): React.J
               ))}
             </tbody>
             <tfoot>
-              <tr className="border-t-2 border-slate-300 font-semibold">
-                <td colSpan={4} className="px-4 py-3 text-right text-sm uppercase text-slate-500">
+              <tr className="border-t border-[#ececf0] font-semibold">
+                <td
+                  colSpan={4}
+                  className="px-4 py-3 text-right text-[11px] font-semibold uppercase tracking-wider text-[#8c8c96]"
+                >
                   Total
                 </td>
                 <td className="px-4 py-3">{formatCurrency(totalSum, currency)}</td>
@@ -295,6 +307,6 @@ export function DealLineItems({ dealId, currency }: DealLineItemsProps): React.J
         open={dialogOpen}
         onOpenChange={setDialogOpen}
       />
-    </div>
+    </section>
   )
 }

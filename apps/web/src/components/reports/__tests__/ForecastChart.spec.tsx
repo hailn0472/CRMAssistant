@@ -7,12 +7,26 @@ import type { ForecastBucket, ForecastGroupBy } from '@/services/forecast.servic
 // Mock recharts — Tooltip renders its content prop to exercise the function
 jest.mock('recharts', () => {
   const React = require('react')
-  const MockTooltip = ({ content }: { content?: React.ComponentType<{active?: boolean; payload?: Array<{value: number; payload: {label: string}}>}> }) =>
-    content ? React.createElement(content, { active: true, payload: [{ value: 50000, payload: { label: 'Aug 2026' } }] }) : React.createElement('div')
+  const MockTooltip = ({
+    content,
+  }: {
+    content?: React.ComponentType<{
+      active?: boolean
+      payload?: Array<{ value: number; payload: { label: string } }>
+    }>
+  }) =>
+    content
+      ? React.createElement(content, {
+          active: true,
+          payload: [{ value: 50000, payload: { label: 'Aug 2026' } }],
+        })
+      : React.createElement('div')
   return {
-    ResponsiveContainer: ({ children }: { children: React.ReactNode }) => React.createElement('div', null, children),
-    LineChart: ({ children }: { children: React.ReactNode }) => React.createElement('div', null, children),
-    Line: () => React.createElement('div'),
+    ResponsiveContainer: ({ children }: { children: React.ReactNode }) =>
+      React.createElement('div', null, children),
+    AreaChart: ({ children }: { children: React.ReactNode }) =>
+      React.createElement('div', null, children),
+    Area: () => React.createElement('div'),
     XAxis: () => React.createElement('div'),
     YAxis: () => React.createElement('div'),
     CartesianGrid: () => React.createElement('div'),
@@ -48,7 +62,7 @@ describe('ForecastChart', () => {
   it('renders card title', () => {
     render(<ForecastChart buckets={mockBuckets} groupBy={GROUP_BY} currency={CURRENCY} />)
 
-    expect(screen.getByText('Forecast Trend')).toBeInTheDocument()
+    expect(screen.getByText('Forecast trend')).toBeInTheDocument()
   })
 
   it('renders aria-label on the chart region', () => {
@@ -86,21 +100,23 @@ describe('ForecastChart', () => {
   it('renders with empty buckets', () => {
     render(<ForecastChart buckets={[]} groupBy={GROUP_BY} currency={CURRENCY} />)
 
-    expect(screen.getByText('Forecast Trend')).toBeInTheDocument()
+    expect(screen.getByText('Forecast trend')).toBeInTheDocument()
     // sr-only table body should be empty
     expect(screen.getAllByRole('row', { hidden: true })).toHaveLength(1) // only header row
   })
 
   it('renders chart with single bucket', () => {
-    const singleBucket: ForecastBucket[] = [{
-      key: '2026-10',
-      label: 'Oct 2026',
-      periodStart: null,
-      periodEnd: null,
-      weightedValue: 0,
-      totalValue: 0,
-      count: 0,
-    }]
+    const singleBucket: ForecastBucket[] = [
+      {
+        key: '2026-10',
+        label: 'Oct 2026',
+        periodStart: null,
+        periodEnd: null,
+        weightedValue: 0,
+        totalValue: 0,
+        count: 0,
+      },
+    ]
     render(<ForecastChart buckets={singleBucket} groupBy={GROUP_BY} currency={CURRENCY} />)
 
     expect(screen.getByText('Oct 2026')).toBeInTheDocument()

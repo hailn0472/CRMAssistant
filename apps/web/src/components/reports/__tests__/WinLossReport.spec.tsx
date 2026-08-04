@@ -21,17 +21,6 @@ jest.mock('@/lib/graphql-subscription', () => ({
   })),
 }))
 
-// Mock recharts — jsdom cannot render SVG
-jest.mock('recharts', () => ({
-  ResponsiveContainer: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  BarChart: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  Bar: () => <div />,
-  XAxis: () => <div />,
-  YAxis: () => <div />,
-  CartesianGrid: () => <div />,
-  Tooltip: () => <div />,
-}))
-
 function renderWithQueryClient(ui: React.ReactElement): void {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>)
@@ -63,6 +52,8 @@ describe('WinLossReport', () => {
   beforeEach(() => {
     jest.clearAllMocks()
     ;(getWinLossAnalysis as jest.Mock).mockResolvedValue(mockAnalysis)
+    global.URL.createObjectURL = jest.fn(() => 'blob:test')
+    global.URL.revokeObjectURL = jest.fn()
   })
 
   it('renders the filter bar with two date inputs defaulting to quarter start → today (AC #30)', async () => {
@@ -165,5 +156,48 @@ describe('WinLossReport', () => {
     // The mocked subscription fires onData immediately; invalidateQueries on
     // ['winLoss'] triggers a refetch — assert the query ran at least once.
     expect(getWinLossAnalysis).toHaveBeenCalled()
+  })
+
+  it('marks "This quarter" active by default, matching the default date range', async () => {
+    renderWithQueryClient(<WinLossReport />)
+    await screen.findAllByText('Won deals')
+
+    expect(screen.getByRole('button', { name: 'This quarter' })).toHaveClass('bg-[#1b1b1f]')
+    expect(screen.getByRole('button', { name: 'Last 30 days' })).not.toHaveClass('bg-[#1b1b1f]')
+  })
+
+  it('selecting a quick range sets both dates and refetches', async () => {
+    renderWithQueryClient(<WinLossReport />)
+    await screen.findAllByText('Won deals')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Last 30 days' }))
+
+    const expectedStart = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
+
+    await waitFor(() => {
+      expect(getWinLossAnalysis).toHaveBeenLastCalledWith(
+        expect.objectContaining({ startDate: expectedStart }),
+      )
+    })
+    expect(screen.getByRole('button', { name: 'Last 30 days' })).toHaveClass('bg-[#1b1b1f]')
+    expect(screen.getByRole('button', { name: 'This quarter' })).not.toHaveClass('bg-[#1b1b1f]')
+  })
+
+  it('disables Export CSV until the analysis has loaded', () => {
+    ;(getWinLossAnalysis as jest.Mock).mockReturnValue(new Promise(() => {}))
+    renderWithQueryClient(<WinLossReport />)
+
+    expect(screen.getByRole('button', { name: 'Export CSV' })).toBeDisabled()
+  })
+
+  it('downloads a CSV when Export CSV is clicked', async () => {
+    renderWithQueryClient(<WinLossReport />)
+
+    const exportButton = await screen.findByRole('button', { name: 'Export CSV' })
+    await waitFor(() => expect(exportButton).toBeEnabled())
+
+    fireEvent.click(exportButton)
+
+    expect(global.URL.createObjectURL).toHaveBeenCalled()
   })
 })

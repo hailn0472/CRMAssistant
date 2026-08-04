@@ -6,7 +6,7 @@ import { Pencil, Plus, Trash2 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 import { getCompetitors, updateCompetitor, deleteCompetitor } from '@/services/competitor.service'
-import { usePermission } from '@/hooks/usePermission'
+import { useMyPermissions } from '@/hooks/usePermission'
 import { ResponsiveTableWrapper } from '@/components/shared/ResponsiveTableWrapper'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { ErrorState } from '@/components/shared/ErrorState'
@@ -21,10 +21,11 @@ export function CompetitorsManager(): React.JSX.Element {
   const [formOpen, setFormOpen] = useState(false)
   const [editingCompetitor, setEditingCompetitor] = useState<Competitor | null>(null)
 
-  const canRead = usePermission('COMPETITOR', 'READ')
-  const canCreate = usePermission('COMPETITOR', 'CREATE')
-  const canUpdate = usePermission('COMPETITOR', 'UPDATE')
-  const canDelete = usePermission('COMPETITOR', 'DELETE')
+  const { hasPermission, isLoading: permissionsLoading } = useMyPermissions()
+  const canRead = hasPermission('COMPETITOR', 'READ')
+  const canCreate = hasPermission('COMPETITOR', 'CREATE')
+  const canUpdate = hasPermission('COMPETITOR', 'UPDATE')
+  const canDelete = hasPermission('COMPETITOR', 'DELETE')
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['competitors'],
@@ -54,6 +55,8 @@ export function CompetitorsManager(): React.JSX.Element {
       toast.error('Failed to delete competitor')
     },
   })
+
+  if (permissionsLoading) return <TableSkeleton />
 
   if (!canRead) {
     return <PermissionLimitedState message="You do not have permission to view competitors." />

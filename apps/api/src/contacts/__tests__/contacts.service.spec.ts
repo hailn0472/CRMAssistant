@@ -214,6 +214,71 @@ describe('ContactsService', () => {
       })
     })
 
+    it('assigns an explicit owner from the same tenant', async () => {
+      const contact = makeContact()
+      prisma.user.findFirst.mockResolvedValue({ id: 'owner-2' })
+      prisma.contact.create.mockResolvedValue(contact)
+
+      await service.create(TENANT_ID, USER_ID, {
+        email: 'ada@example.com',
+        firstName: 'Ada',
+        lastName: 'Lovelace',
+        ownerId: 'owner-2',
+      })
+
+      expect(prisma.user.findFirst).toHaveBeenCalledWith({
+        where: { id: 'owner-2', tenantId: TENANT_ID, deletedAt: null },
+        select: { id: true },
+      })
+      expect(prisma.contact.create.mock.calls[0][0].data.ownerId).toBe('owner-2')
+    })
+
+    it('rejects an owner that does not belong to the tenant', async () => {
+      prisma.user.findFirst.mockResolvedValue(null)
+
+      await expect(
+        service.create(TENANT_ID, USER_ID, {
+          email: 'ada@example.com',
+          firstName: 'Ada',
+          lastName: 'Lovelace',
+          ownerId: 'outsider',
+        }),
+      ).rejects.toThrow(NotFoundException)
+      expect(prisma.contact.create).not.toHaveBeenCalled()
+    })
+
+    it('skips the owner lookup when the creator owns the contact', async () => {
+      prisma.contact.create.mockResolvedValue(makeContact())
+
+      await service.create(TENANT_ID, USER_ID, {
+        email: 'ada@example.com',
+        firstName: 'Ada',
+        lastName: 'Lovelace',
+        ownerId: USER_ID,
+      })
+
+      expect(prisma.user.findFirst).not.toHaveBeenCalled()
+      expect(prisma.contact.create.mock.calls[0][0].data.ownerId).toBe(USER_ID)
+    })
+
+    it('persists the enrichment fields', async () => {
+      prisma.contact.create.mockResolvedValue(makeContact())
+
+      await service.create(TENANT_ID, USER_ID, {
+        email: 'ada@example.com',
+        firstName: 'Ada',
+        lastName: 'Lovelace',
+        notes: 'Met at the summit',
+        source: 'Event',
+        linkedin: 'ada-lovelace',
+      })
+
+      const data = prisma.contact.create.mock.calls[0][0].data
+      expect(data.notes).toBe('Met at the summit')
+      expect(data.source).toBe('Event')
+      expect(data.linkedin).toBe('ada-lovelace')
+    })
+
     it('throws ConflictException for duplicate email in the same tenant', async () => {
       prisma.contact.create.mockRejectedValue(
         new PrismaClientKnownRequestError('Unique constraint failed', {
@@ -608,6 +673,79 @@ describe('ContactsService', () => {
           ]),
         }),
       )
+    })
+  })
+
+  describe('getStats()', () => {
+    it('returns the four workspace counters scoped to the tenant', async () => {
+      prisma.contact.count
+        .mockResolvedValueOnce(237)
+        .mockResolvedValueOnce(18)
+        .mockResolvedValueOnce(64)
+        .mockResolvedValueOnce(9)
+
+      const result = await service.getStats(TENANT_ID, USER_ID)
+
+      expect(result).toEqual({
+        total: 237,
+        addedThisMonth: 18,
+        withOpenDeals: 64,
+        unassigned: 9,
+      })
+      expect(prisma.contact.count).toHaveBeenCalledTimes(4)
+      for (const call of prisma.contact.count.mock.calls) {
+        expect(call[0].where).toEqual(
+          expect.objectContaining({ tenantId: TENANT_ID, deletedAt: null }),
+        )
+      }
+    })
+
+    it('counts additions from the first day of the current month', async () => {
+      prisma.contact.count.mockResolvedValue(0)
+
+      await service.getStats(TENANT_ID, USER_ID)
+
+      const createdAtFilter = prisma.contact.count.mock.calls[1][0].where.createdAt as {
+        gte: Date
+      }
+      expect(createdAtFilter.gte.getDate()).toBe(1)
+      expect(createdAtFilter.gte.getHours()).toBe(0)
+      expect(createdAtFilter.gte.getMonth()).toBe(new Date().getMonth())
+    })
+
+    it('counts open deals as those in neither a won nor a lost stage', async () => {
+      prisma.contact.count.mockResolvedValue(0)
+
+      await service.getStats(TENANT_ID, USER_ID)
+
+      expect(prisma.contact.count.mock.calls[2][0].where.deals).toEqual({
+        some: { deletedAt: null, stage: { isWon: false, isLost: false } },
+      })
+    })
+
+    it('counts contacts owned by the system sentinel or an inactive user as unassigned', async () => {
+      prisma.contact.count.mockResolvedValue(0)
+
+      await service.getStats(TENANT_ID, USER_ID)
+
+      expect(prisma.contact.count.mock.calls[3][0].where.OR).toEqual([
+        { ownerId: 'system' },
+        { owner: { OR: [{ deletedAt: { not: null } }, { isActive: false }] } },
+      ])
+    })
+
+    it('restricts every counter to owned and shared records when visibility is limited', async () => {
+      ;(resolveVisibilityFilter as jest.Mock).mockResolvedValue(USER_ID)
+      ;(resolveSharedRecordIds as jest.Mock).mockResolvedValue(['shared-1'])
+      prisma.contact.count.mockResolvedValue(0)
+
+      await service.getStats(TENANT_ID, USER_ID)
+
+      for (const call of prisma.contact.count.mock.calls) {
+        expect(call[0].where.AND).toEqual([
+          { OR: [{ ownerId: USER_ID }, { id: { in: ['shared-1'] } }] },
+        ])
+      }
     })
   })
 

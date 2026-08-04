@@ -64,9 +64,14 @@ export function CompetitorDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleCancel}>
-      <DialogContent className="sm:max-w-md" aria-describedby={undefined}>
-        <DialogHeader>
-          <DialogTitle>Add competitor</DialogTitle>
+      <DialogContent
+        className="sm:max-w-md rounded-[14px] border-[#ececf0] p-6"
+        aria-describedby={undefined}
+      >
+        <DialogHeader className="pb-3 border-b border-[#f0f0f4]">
+          <DialogTitle className="text-[18px] font-semibold text-[#1b1b1f]">
+            Add competitor
+          </DialogTitle>
         </DialogHeader>
 
         <form
@@ -74,11 +79,11 @@ export function CompetitorDialog({
             e.preventDefault()
             handleSubmit()
           }}
-          className="space-y-4"
+          className="space-y-4 pt-2"
         >
           {/* Competitor search */}
-          <div className="space-y-1">
-            <label className="text-sm font-medium text-slate-700">Competitor</label>
+          <div className="space-y-1.5">
+            <label className="text-[12.5px] font-medium text-[#4b4b55]">Competitor</label>
             <div className="relative">
               <Input
                 placeholder="Search competitors..."
@@ -88,24 +93,27 @@ export function CompetitorDialog({
                   setShowDropdown(true)
                 }}
                 onFocus={() => setShowDropdown(true)}
+                className="h-[38px] rounded-[9px] border-[#e6e6eb] bg-[#fafafb] text-[13.5px] text-[#1b1b1f] focus:border-[#1b1b1f] focus:bg-white"
               />
               {showDropdown && competitorsData && (
-                <div className="absolute z-10 mt-1 max-h-48 w-full overflow-y-auto rounded-md border border-slate-200 bg-white shadow-lg">
+                <div className="absolute z-10 mt-1 max-h-48 w-full overflow-y-auto rounded-[9px] border border-[#e6e6eb] bg-white shadow-lg">
                   {competitorsData.items.length === 0 ? (
-                    <div className="px-3 py-2 text-sm text-slate-500">No competitors found</div>
+                    <div className="px-3 py-2 text-[13px] text-[#8c8c96]">No competitors found</div>
                   ) : (
                     competitorsData.items.map((competitor) => (
                       <button
                         key={competitor.id}
                         type="button"
-                        className={`w-full px-3 py-2 text-left text-sm hover:bg-indigo-50 ${
-                          selectedId === competitor.id ? 'bg-indigo-50 font-medium' : ''
+                        className={`w-full px-3 py-2 text-left text-[13px] hover:bg-[#f4f4f6] ${
+                          selectedId === competitor.id
+                            ? 'bg-[#f4f4f6] font-medium text-[#1b1b1f]'
+                            : 'text-[#4b4b55]'
                         }`}
                         onClick={() => handleCompetitorSelect(competitor.id)}
                       >
                         {competitor.name}
                         {!competitor.isActive && (
-                          <span className="ml-2 text-xs text-slate-400">Inactive</span>
+                          <span className="ml-2 text-[12px] text-[#8c8c96]">Inactive</span>
                         )}
                       </button>
                     ))
@@ -114,7 +122,7 @@ export function CompetitorDialog({
               )}
             </div>
             {!selectedId && (
-              <span className="text-xs text-slate-400">
+              <span className="text-[11.5px] text-[#8c8c96]">
                 Pick a competitor from the list to add it to this deal.
               </span>
             )}
@@ -123,7 +131,7 @@ export function CompetitorDialog({
           {/* Server error */}
           {addMutation.isError && (
             <p
-              className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700"
+              className="rounded-[9px] border border-red-200 bg-red-50 px-3 py-2 text-[13px] text-red-700"
               role="alert"
             >
               {addMutation.error instanceof Error
@@ -132,11 +140,20 @@ export function CompetitorDialog({
             </p>
           )}
 
-          <div className="flex justify-end gap-2 border-t border-slate-100 pt-4">
-            <Button type="button" variant="outline" onClick={handleCancel}>
+          <div className="flex justify-end gap-2 border-t border-[#f0f0f4] pt-4">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleCancel}
+              className="h-[36px] rounded-[9px] border-[#e6e6eb] text-[#4b4b55] hover:bg-[#f4f4f6]"
+            >
               Cancel
             </Button>
-            <Button type="submit" disabled={!selectedId || addMutation.isPending}>
+            <Button
+              type="submit"
+              disabled={!selectedId || addMutation.isPending}
+              className="h-[36px] rounded-[9px] border-[#1b1b1f] bg-[#1b1b1f] text-white hover:bg-black"
+            >
               {addMutation.isPending ? 'Adding...' : 'Add to deal'}
             </Button>
           </div>

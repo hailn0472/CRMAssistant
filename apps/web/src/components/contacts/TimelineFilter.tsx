@@ -18,21 +18,24 @@ export function TimelineFilter({
   onFilterChange,
 }: TimelineFilterProps): React.JSX.Element {
   return (
-    <div className="flex gap-1 rounded-lg bg-slate-100 p-1">
-      {FILTERS.map((filter) => (
-        <button
-          key={filter.key}
-          type="button"
-          onClick={() => onFilterChange(filter.key)}
-          className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-            activeFilter === filter.key
-              ? 'bg-white text-slate-900 shadow-sm'
-              : 'text-slate-500 hover:text-slate-700'
-          }`}
-        >
-          {filter.label}
-        </button>
-      ))}
+    <div className="flex items-center gap-[6px]">
+      {FILTERS.map((filter) => {
+        const isActive = activeFilter === filter.key
+        return (
+          <button
+            key={filter.key}
+            type="button"
+            onClick={() => onFilterChange(filter.key)}
+            className={`h-8 rounded-full border px-3 text-[12px] font-medium transition-colors ${
+              isActive
+                ? 'border-[#e6e6eb] bg-white text-[#1b1b1f]'
+                : 'border-transparent bg-transparent text-[#8c8c96] hover:border-[#e6e6eb]'
+            }`}
+          >
+            {filter.label}
+          </button>
+        )
+      })}
     </div>
   )
 }

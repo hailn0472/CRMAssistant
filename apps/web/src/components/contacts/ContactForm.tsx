@@ -4,14 +4,14 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { useRef, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { z } from 'zod'
 
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
 import { TagSelector } from '@/components/contacts/TagSelector'
 import { createContact, updateContact } from '@/services/contact.service'
 import { addTagToContact } from '@/services/tag.service'
+import { searchUsers } from '@/services/owner.service'
+import { cn } from '@/lib/utils'
 import type { Contact, ContactFormData } from '@/services/contact.service'
 
 type TagShape = { id: string; name: string; color: string }
@@ -23,6 +23,8 @@ const contactSchema = z.object({
   phone: z.string().trim().optional(),
   company: z.string().trim().optional(),
   jobTitle: z.string().trim().optional(),
+  ownerId: z.string().trim().optional(),
+  notes: z.string().trim().optional(),
 })
 
 function optionalString(value: string | undefined): string | null | undefined {
@@ -36,13 +38,25 @@ type ContactFormValues = z.infer<typeof contactSchema>
 
 type ContactFormProps = {
   contact?: Contact
+  /** Called instead of navigating away — used by the slide-over. */
+  onSaved?: (contact: Contact) => void
+  onCancel?: () => void
 }
 
-export function ContactForm({ contact }: ContactFormProps): React.JSX.Element {
+const inputClass =
+  'h-[38px] w-full rounded-[9px] border border-[#e6e6eb] bg-[#fafafb] px-3 text-[13.5px] text-[#1b1b1f] outline-none transition-colors placeholder:text-[#9b9ba3] focus:border-[#1b1b1f] focus:bg-white'
+
+export function ContactForm({ contact, onSaved, onCancel }: ContactFormProps): React.JSX.Element {
   const router = useRouter()
   const [selectedTags, setSelectedTags] = useState<TagShape[]>(contact?.tags ?? [])
   const [contactId] = useState<string | null>(contact?.id ?? null)
   const pendingTagsRef = useRef<TagShape[]>([])
+
+  const { data: owners = [] } = useQuery({
+    queryKey: ['contact-form-owners'],
+    queryFn: () => searchUsers(''),
+  })
+
   const {
     register,
     handleSubmit,
@@ -57,6 +71,8 @@ export function ContactForm({ contact }: ContactFormProps): React.JSX.Element {
       phone: contact?.phone ?? '',
       company: contact?.company ?? '',
       jobTitle: contact?.jobTitle ?? '',
+      ownerId: contact?.ownerId ?? '',
+      notes: contact?.notes ?? '',
     },
   })
 
@@ -69,6 +85,12 @@ export function ContactForm({ contact }: ContactFormProps): React.JSX.Element {
         phone: optionalString(values.phone),
         company: optionalString(values.company),
         jobTitle: optionalString(values.jobTitle),
+        notes: optionalString(values.notes),
+      }
+      // Owner is only settable at creation; existing contacts are reassigned
+      // through the dedicated owner picker on the detail page.
+      if (!contact && values.ownerId) {
+        payload.ownerId = values.ownerId
       }
       const savedContact = contact
         ? await updateContact(contact.id, payload)
@@ -78,6 +100,10 @@ export function ContactForm({ contact }: ContactFormProps): React.JSX.Element {
         await Promise.all(
           pendingTagsRef.current.map((tag) => addTagToContact(savedContact.id, tag.id)),
         )
+      }
+      if (onSaved) {
+        onSaved(savedContact)
+        return
       }
       router.push(`/contacts/${savedContact.id}`)
       router.refresh()
@@ -89,82 +115,169 @@ export function ContactForm({ contact }: ContactFormProps): React.JSX.Element {
   }
 
   return (
-    <Card className="border-slate-200 bg-white text-slate-950 shadow-sm">
-      <CardHeader className="border-b border-slate-100">
-        <CardTitle className="text-lg">{contact ? 'Edit contact' : 'Contact details'}</CardTitle>
-      </CardHeader>
-      <CardContent className="pt-6">
-        <form className="grid gap-5 md:grid-cols-2" onSubmit={handleSubmit(onSubmit)}>
-          <Field label="Email" error={errors.email?.message}>
-            <Input type="email" {...register('email')} aria-invalid={Boolean(errors.email)} />
+    <form className="flex min-h-0 flex-1 flex-col" onSubmit={handleSubmit(onSubmit)}>
+      <div className="flex min-h-0 flex-1 flex-col gap-[26px] overflow-y-auto px-6 py-[22px]">
+        <Section title="Identity">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label="First name" required error={errors.firstName?.message}>
+              <input
+                className={inputClass}
+                placeholder="Dana"
+                {...register('firstName')}
+                aria-invalid={Boolean(errors.firstName)}
+              />
+            </Field>
+            <Field label="Last name" required error={errors.lastName?.message}>
+              <input
+                className={inputClass}
+                placeholder="Whitfield"
+                {...register('lastName')}
+                aria-invalid={Boolean(errors.lastName)}
+              />
+            </Field>
+          </div>
+        </Section>
+
+        <Section title="How to reach them">
+          <Field label="Email" required error={errors.email?.message}>
+            <input
+              className={inputClass}
+              type="email"
+              placeholder="dana@northwind.co"
+              {...register('email')}
+              aria-invalid={Boolean(errors.email)}
+            />
           </Field>
           <Field label="Phone" error={errors.phone?.message}>
-            <Input {...register('phone')} aria-invalid={Boolean(errors.phone)} />
+            <input
+              className={inputClass}
+              placeholder="912 345 678"
+              {...register('phone')}
+              aria-invalid={Boolean(errors.phone)}
+            />
           </Field>
-          <Field label="First name" error={errors.firstName?.message}>
-            <Input {...register('firstName')} aria-invalid={Boolean(errors.firstName)} />
-          </Field>
-          <Field label="Last name" error={errors.lastName?.message}>
-            <Input {...register('lastName')} aria-invalid={Boolean(errors.lastName)} />
-          </Field>
-          <Field label="Company" error={errors.company?.message}>
-            <Input {...register('company')} aria-invalid={Boolean(errors.company)} />
-          </Field>
-          <Field label="Job title" error={errors.jobTitle?.message}>
-            <Input {...register('jobTitle')} aria-invalid={Boolean(errors.jobTitle)} />
-          </Field>
+        </Section>
 
-          <div className="md:col-span-2">
-            <label className="grid gap-2 text-sm font-medium text-slate-700">
-              Tags
-              <TagSelector
-                contactId={contactId}
-                selectedTags={selectedTags}
-                onTagsChange={(tags) => {
-                  setSelectedTags(tags)
-                  pendingTagsRef.current = tags
-                }}
+        <Section title="Work">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label="Company" error={errors.company?.message}>
+              <input
+                className={inputClass}
+                placeholder="Northwind"
+                {...register('company')}
+                aria-invalid={Boolean(errors.company)}
               />
-            </label>
+            </Field>
+            <Field label="Job title" error={errors.jobTitle?.message}>
+              <input
+                className={inputClass}
+                placeholder="VP Operations"
+                {...register('jobTitle')}
+                aria-invalid={Boolean(errors.jobTitle)}
+              />
+            </Field>
           </div>
+          {contact ? null : (
+            <Field label="Owner" error={errors.ownerId?.message}>
+              <select className={cn(inputClass, 'cursor-pointer')} {...register('ownerId')}>
+                <option value="">Assign to me</option>
+                {owners.map((owner) => (
+                  <option key={owner.id} value={owner.id}>
+                    {`${owner.firstName} ${owner.lastName}`.trim() || owner.email}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          )}
+        </Section>
 
-          {errors.root?.message ? (
-            <p
-              className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 md:col-span-2"
-              role="alert"
-            >
-              {errors.root.message}
-            </p>
-          ) : null}
+        <Section title="Tags" hint="Tags drive segment filters and automations.">
+          <TagSelector
+            contactId={contactId}
+            selectedTags={selectedTags}
+            onTagsChange={(tags) => {
+              setSelectedTags(tags)
+              pendingTagsRef.current = tags
+            }}
+          />
+        </Section>
 
-          <div className="flex items-center justify-end border-t border-slate-100 pt-5 md:col-span-2">
-            <Button
-              disabled={isSubmitting}
-              type="submit"
-              className="bg-slate-950 text-white hover:bg-slate-800"
-            >
-              {isSubmitting ? 'Saving...' : 'Save contact'}
-            </Button>
-          </div>
-        </form>
-      </CardContent>
-    </Card>
+        <Field label="Note" error={errors.notes?.message}>
+          <textarea
+            rows={3}
+            placeholder="Context from the first conversation…"
+            className="w-full resize-y rounded-[9px] border border-[#e6e6eb] bg-[#fafafb] px-3 py-2.5 text-[13.5px] text-[#1b1b1f] outline-none transition-colors placeholder:text-[#9b9ba3] focus:border-[#1b1b1f] focus:bg-white"
+            {...register('notes')}
+          />
+        </Field>
+
+        {errors.root?.message ? (
+          <p
+            className="rounded-[9px] border border-red-200 bg-red-50 px-3 py-2 text-[13px] text-red-700"
+            role="alert"
+          >
+            {errors.root.message}
+          </p>
+        ) : null}
+      </div>
+
+      <div className="flex items-center justify-end gap-2 border-t border-[#f0f0f4] bg-white px-6 py-[16px]">
+        {onCancel ? (
+          <button
+            type="button"
+            onClick={onCancel}
+            className="inline-flex h-[36px] items-center rounded-[9px] border border-[#e6e6eb] bg-white px-3.5 text-[13px] font-medium text-[#4b4b55] transition-colors hover:bg-[#f4f4f6]"
+          >
+            Cancel
+          </button>
+        ) : null}
+        <button
+          type="submit"
+          disabled={isSubmitting}
+          className="inline-flex h-[36px] items-center rounded-[9px] border border-[#1b1b1f] bg-[#1b1b1f] px-4 text-[13px] font-semibold text-white transition-colors hover:bg-black disabled:opacity-60"
+        >
+          {isSubmitting ? 'Saving...' : 'Save contact'}
+        </button>
+      </div>
+    </form>
+  )
+}
+
+type SectionProps = {
+  title: string
+  hint?: string
+  children: React.ReactNode
+}
+
+function Section({ title, hint, children }: SectionProps): React.JSX.Element {
+  return (
+    <div className="flex flex-col gap-3.5">
+      <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#a0a0aa]">
+        {title}
+      </div>
+      {children}
+      {hint ? <span className="text-[11.5px] text-[#8c8c96]">{hint}</span> : null}
+    </div>
   )
 }
 
 type FieldProps = {
   label: string
+  required?: boolean
   error?: string
   children: React.ReactNode
 }
 
-function Field({ label, error, children }: FieldProps): React.JSX.Element {
+function Field({ label, required, error, children }: FieldProps): React.JSX.Element {
   return (
-    <label className="grid gap-2 text-sm font-medium text-slate-700">
-      {label}
+    <label className="flex flex-col gap-1.5">
+      <span className="text-[12.5px] font-medium text-[#4b4b55]">
+        {label}
+        {required ? <span className="text-[#b91c1c]"> *</span> : null}
+      </span>
       {children}
       {error ? (
-        <span className="text-xs font-medium text-red-700" role="alert">
+        <span className="text-[11.5px] font-medium text-red-700" role="alert">
           {error}
         </span>
       ) : null}

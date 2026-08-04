@@ -67,47 +67,44 @@ export function TimelineCard({
     : description
 
   return (
-    <div className="relative flex gap-4 pb-6">
-      {/* Timeline line */}
-      {!isLast && (
-        <div className="absolute left-5 top-10 bottom-0 w-0.5 bg-slate-200" aria-hidden="true" />
-      )}
-
-      {/* Icon */}
-      <div className="relative z-10 flex-shrink-0">
+    <div className="flex gap-3 pb-[18px]">
+      {/* Icon + connecting line */}
+      <div className="flex flex-none flex-col items-center gap-[5px] pt-[3px]">
         <ActivityIcon type={type} size="sm" />
+        {!isLast && (
+          <div className="w-px flex-1 bg-[#ececf0]" aria-hidden="true" style={{ minHeight: 10 }} />
+        )}
       </div>
 
-      {/* Content card */}
-      <div className="flex-1 rounded-lg border border-slate-200 bg-white p-4 shadow-sm transition-shadow hover:shadow-md">
-        <div className="flex items-start justify-between gap-2">
-          <h4 className="text-sm font-semibold text-slate-900">{title}</h4>
+      {/* Content */}
+      <div className="flex min-w-0 flex-1 flex-col gap-[3px]">
+        <div className="flex flex-wrap items-center gap-[9px]">
+          <span className="text-[13.5px] font-medium text-[#1b1b1f]">{title}</span>
+          {source !== null && (
+            <span
+              title={`Automatically logged from ${source}`}
+              aria-label={`Automatically logged from ${source}`}
+              className="rounded-[5px] bg-[#f4f4f6] px-[6px] py-px text-[10.5px] font-semibold text-[#6b6b76]"
+            >
+              Auto
+            </span>
+          )}
           <time
-            className="flex-shrink-0 text-xs text-slate-400"
+            className="ml-auto flex-none text-[11.5px] text-[#a0a0aa]"
             title={new Date(createdAt).toLocaleString()}
           >
             {relativeTime}
           </time>
         </div>
 
-        {source !== null && (
-          <span
-            title={`Automatically logged from ${source}`}
-            aria-label={`Automatically logged from ${source}`}
-            className="mt-1 inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500"
-          >
-            Auto
-          </span>
-        )}
-
         {displayDescription && (
-          <p className="mt-1 text-sm text-slate-600">
+          <p className="text-[13px] leading-[1.55] text-[#4b4b55]">
             {displayDescription}
             {descriptionTruncated && (
               <button
                 type="button"
                 onClick={() => setShowFullDescription(true)}
-                className="ml-1 text-blue-600 hover:text-blue-700"
+                className="ml-1 text-[#4338ca] hover:underline"
               >
                 Show more
               </button>
@@ -115,7 +112,7 @@ export function TimelineCard({
           </p>
         )}
 
-        <p className="mt-1 text-xs text-slate-400">by {createdBy}</p>
+        <span className="text-[11.5px] text-[#a0a0aa]">by {createdBy}</span>
       </div>
     </div>
   )

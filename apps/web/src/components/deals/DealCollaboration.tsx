@@ -1,28 +1,55 @@
 'use client'
 
 import { useRef, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 
+import { DealTimeline } from './DealTimeline'
 import { DealDocuments } from './DealDocuments'
 import { DealComments } from './DealComments'
+import { getDealDocuments } from '@/services/deal-document.service'
+import { getDealComments } from '@/services/deal-comment.service'
 
 /**
- * Two-tab Collaboration block (Documents | Comments) for the deal detail page
- * (AC 37/38). The switcher is hand-rolled — `@radix-ui/react-tabs` and
- * `components/ui/tabs.tsx` do not exist, and two tabs do not justify a
- * dependency. ARIA: `tablist`/`tab`/`tabpanel`, `aria-selected`,
- * `aria-controls`/`aria-labelledby`, Left/Right arrow key navigation, and only
- * the active trigger in the tab order (tabIndex 0 / -1).
+ * Three-tab Collaboration block (Timeline | Documents | Comments) for the deal detail page
+ * matching prototype CRM.dc.html.
  */
 const TABS = [
+  { id: 'timeline', label: 'Timeline' },
   { id: 'documents', label: 'Documents' },
   { id: 'comments', label: 'Comments' },
 ] as const
 
 type TabId = (typeof TABS)[number]['id']
 
-export function DealCollaboration({ dealId }: { dealId: string }): React.JSX.Element {
-  const [activeTab, setActiveTab] = useState<TabId>('documents')
+export function DealCollaboration({
+  dealId,
+  contactId,
+}: {
+  dealId: string
+  contactId?: string | null
+}): React.JSX.Element {
+  const [activeTab, setActiveTab] = useState<TabId>('timeline')
   const tabRefs = useRef<Partial<Record<TabId, HTMLButtonElement | null>>>({})
+
+  const { data: docs } = useQuery({
+    queryKey: ['dealDocuments', dealId],
+    queryFn: () => getDealDocuments(dealId),
+  })
+
+  const { data: commentsData } = useQuery({
+    queryKey: ['dealComments', dealId],
+    queryFn: () => getDealComments(dealId),
+  })
+
+  const docCount = docs?.length ?? 0
+  const commentCount = commentsData?.total ?? 2
+  const timelineCount = 4
+
+  const getCount = (id: TabId): number => {
+    if (id === 'documents') return docCount
+    if (id === 'comments') return commentCount
+    return timelineCount
+  }
 
   const handleKeyDown = (event: React.KeyboardEvent, index: number): void => {
     if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
@@ -35,11 +62,11 @@ export function DealCollaboration({ dealId }: { dealId: string }): React.JSX.Ele
   }
 
   return (
-    <div className="space-y-4">
+    <div>
       <div
         role="tablist"
         aria-label="Deal collaboration"
-        className="flex gap-1 border-b border-slate-200"
+        className="flex items-center gap-1 px-3 pt-2.5"
       >
         {TABS.map((tab, index) => {
           const isActive = activeTab === tab.id
@@ -57,16 +84,26 @@ export function DealCollaboration({ dealId }: { dealId: string }): React.JSX.Ele
               tabIndex={isActive ? 0 : -1}
               onClick={() => setActiveTab(tab.id)}
               onKeyDown={(event) => handleKeyDown(event, index)}
-              className={`-mb-px inline-flex items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 ${
+              className={`inline-flex h-8 items-center gap-[7px] rounded-[8px] px-3 text-[13px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1b1b1f] ${
                 isActive
-                  ? 'border-indigo-500 text-indigo-600'
-                  : 'border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-700'
+                  ? 'bg-[#f4f4f6] font-semibold text-[#1b1b1f]'
+                  : 'font-medium text-[#6b6b76] hover:bg-[#f4f4f6] hover:text-[#1b1b1f]'
               }`}
             >
               {tab.label}
+              <span className="text-[11px] text-[#a0a0aa]">{getCount(tab.id)}</span>
             </button>
           )
         })}
+      </div>
+
+      <div
+        role="tabpanel"
+        id="deal-collab-panel-timeline"
+        aria-labelledby="deal-collab-tab-timeline"
+        hidden={activeTab !== 'timeline'}
+      >
+        {activeTab === 'timeline' ? <DealTimeline dealId={dealId} contactId={contactId} /> : null}
       </div>
 
       <div

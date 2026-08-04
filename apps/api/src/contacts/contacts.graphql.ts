@@ -176,6 +176,7 @@ const CreateContactInputRef = builder.inputType('CreateContactInput', {
     phone: t.string(),
     company: t.string(),
     jobTitle: t.string(),
+    ownerId: t.string(),
     // Enrichment fields
     linkedin: t.string(),
     twitter: t.string(),
@@ -217,6 +218,7 @@ const ContactFilterInputRef = builder.inputType('ContactFilterInput', {
     search: t.string(),
     company: t.string(),
     jobTitle: t.string(),
+    ownerId: t.string(),
     tags: t.stringList(),
     createdAtFrom: t.string(),
     createdAtTo: t.string(),
@@ -229,6 +231,44 @@ const ContactPaginationInputRef = builder.inputType('ContactPaginationInput', {
     pageSize: t.int(),
   }),
 })
+
+const ContactStatsRef = builder
+  .objectRef<Awaited<ReturnType<ContactsService['getStats']>>>('ContactStats')
+  .implement({
+    fields: (t) => ({
+      total: t.exposeInt('total'),
+      addedThisMonth: t.exposeInt('addedThisMonth'),
+      withOpenDeals: t.exposeInt('withOpenDeals'),
+      unassigned: t.exposeInt('unassigned'),
+    }),
+  })
+
+const ENRICHMENT_FIELDS = [
+  'linkedin',
+  'twitter',
+  'addressStreet',
+  'addressCity',
+  'addressCountry',
+  'department',
+  'timezone',
+  'language',
+  'source',
+  'notes',
+] as const
+
+/// Only forwards the enrichment keys the mutation actually sent, so an omitted
+/// field stays untouched while an explicit null clears it.
+function enrichmentPatch(
+  input: Record<string, unknown>,
+): Partial<Record<(typeof ENRICHMENT_FIELDS)[number], string | null>> {
+  const patch: Partial<Record<(typeof ENRICHMENT_FIELDS)[number], string | null>> = {}
+  for (const field of ENRICHMENT_FIELDS) {
+    if (Object.prototype.hasOwnProperty.call(input, field)) {
+      patch[field] = (input[field] as string | null | undefined) ?? null
+    }
+  }
+  return patch
+}
 
 let contactsService: ContactsService | undefined
 
@@ -281,6 +321,7 @@ builder.queryFields((t) => ({
           search: args.filter?.search ?? undefined,
           company: args.filter?.company ?? undefined,
           jobTitle: args.filter?.jobTitle ?? undefined,
+          ownerId: args.filter?.ownerId ?? undefined,
           tags: args.filter?.tags ?? undefined,
           createdAtFrom: args.filter?.createdAtFrom ?? undefined,
           createdAtTo: args.filter?.createdAtTo ?? undefined,
@@ -290,6 +331,13 @@ builder.queryFields((t) => ({
           pageSize: args.pagination?.pageSize ?? undefined,
         },
       )
+    },
+  }),
+  contactStats: t.field({
+    type: ContactStatsRef,
+    resolve: async (_parent, _args, context) => {
+      const user = requireUser(context)
+      return getContactsService().getStats(user.tenantId, user.userId)
     },
   }),
 }))
@@ -308,6 +356,17 @@ builder.mutationFields((t) => ({
         phone: args.input.phone ?? undefined,
         company: args.input.company ?? undefined,
         jobTitle: args.input.jobTitle ?? undefined,
+        ownerId: args.input.ownerId ?? undefined,
+        linkedin: args.input.linkedin ?? undefined,
+        twitter: args.input.twitter ?? undefined,
+        addressStreet: args.input.addressStreet ?? undefined,
+        addressCity: args.input.addressCity ?? undefined,
+        addressCountry: args.input.addressCountry ?? undefined,
+        department: args.input.department ?? undefined,
+        timezone: args.input.timezone ?? undefined,
+        language: args.input.language ?? undefined,
+        source: args.input.source ?? undefined,
+        notes: args.input.notes ?? undefined,
       })
     },
   }),
@@ -333,6 +392,7 @@ builder.mutationFields((t) => ({
         jobTitle: Object.prototype.hasOwnProperty.call(args.input, 'jobTitle')
           ? args.input.jobTitle
           : undefined,
+        ...enrichmentPatch(args.input),
       })
     },
   }),

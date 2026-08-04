@@ -1,11 +1,16 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 
 import { DealsTable } from '../DealsTable'
-import { getDeals } from '@/services/deal.service'
+import { getDeals, getDealStages } from '@/services/deal.service'
 
 jest.mock('@/services/deal.service', () => ({
   getDeals: jest.fn(),
+  getDealStages: jest.fn().mockResolvedValue([]),
+}))
+
+jest.mock('@/services/owner.service', () => ({
+  searchUsers: jest.fn().mockResolvedValue([]),
 }))
 
 // Mock ResizeObserver for ResponsiveTableWrapper
@@ -32,6 +37,93 @@ describe('DealsTable', () => {
     renderWithQueryClient(<DealsTable />)
 
     expect(await screen.findByText('No deals yet')).toBeInTheDocument()
+  })
+
+  it('keeps the filter bar reachable when a filter matches nothing', async () => {
+    ;(getDeals as jest.Mock).mockResolvedValue({
+      total: 1,
+      page: 1,
+      pageSize: 10,
+      items: [
+        {
+          id: 'deal-1',
+          title: 'Big Deal',
+          value: 50000,
+          currency: 'USD',
+          probability: 10,
+          stageId: 'stage-1',
+          contactId: 'contact-1',
+          ownerId: 'user-1',
+          stage: { id: 'stage-1', name: 'Qualified', color: '#10B981' },
+          contact: null,
+          owner: null,
+          expectedCloseDate: null,
+          actualCloseDate: null,
+          createdAt: '2026-05-13T00:00:00.000Z',
+          updatedAt: '2026-05-13T00:00:00.000Z',
+        },
+      ],
+    })
+    renderWithQueryClient(<DealsTable />)
+
+    const searchBox = await screen.findByLabelText('Search deals')
+    ;(getDeals as jest.Mock).mockResolvedValue({ items: [], total: 0, page: 1, pageSize: 10 })
+    fireEvent.change(searchBox, { target: { value: 'nowhere' } })
+
+    expect(await screen.findByText('No deals match these filters.')).toBeInTheDocument()
+    expect(screen.getByLabelText('Search deals')).toBeInTheDocument()
+    expect(screen.queryByText('No deals yet')).not.toBeInTheDocument()
+  })
+
+  it('applies the selected stage to the deals query', async () => {
+    ;(getDealStages as jest.Mock).mockResolvedValue([
+      {
+        id: 'stage-1',
+        name: 'Qualified',
+        order: 0,
+        probability: 30,
+        isWon: false,
+        isLost: false,
+        color: '#10B981',
+      },
+    ])
+    ;(getDeals as jest.Mock).mockResolvedValue({
+      total: 1,
+      page: 1,
+      pageSize: 10,
+      items: [
+        {
+          id: 'deal-1',
+          title: 'Big Deal',
+          value: 50000,
+          currency: 'USD',
+          probability: 10,
+          stageId: 'stage-1',
+          contactId: 'contact-1',
+          ownerId: 'user-1',
+          stage: { id: 'stage-1', name: 'Qualified', color: '#10B981' },
+          contact: null,
+          owner: null,
+          expectedCloseDate: null,
+          actualCloseDate: null,
+          createdAt: '2026-05-13T00:00:00.000Z',
+          updatedAt: '2026-05-13T00:00:00.000Z',
+        },
+      ],
+    })
+    renderWithQueryClient(<DealsTable />)
+    await screen.findByText('Big Deal')
+
+    fireEvent.click(screen.getByRole('button', { name: /^Stage/ }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Qualified' }))
+
+    await waitFor(() => {
+      expect(getDeals).toHaveBeenLastCalledWith(
+        1,
+        10,
+        expect.objectContaining({ stageId: 'stage-1' }),
+      )
+    })
   })
 
   it('renders deals in a table', async () => {
@@ -212,7 +304,7 @@ describe('DealsTable', () => {
 
     // Wait for pagination to appear: page 1 button is active (highlighted)
     const page1Btn = await screen.findByRole('button', { name: '1' })
-    expect(page1Btn).toHaveClass('bg-slate-900')
+    expect(page1Btn).toHaveClass('bg-[#1b1b1f]')
     expect(screen.getByRole('button', { name: '2' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '3' })).toBeInTheDocument()
   })
@@ -288,14 +380,14 @@ describe('DealsTable', () => {
 
     // Wait for page 1 button to appear (pagination rendered)
     const page1Btn = await screen.findByRole('button', { name: '1' })
-    expect(page1Btn).toHaveClass('bg-slate-900')
+    expect(page1Btn).toHaveClass('bg-[#1b1b1f]')
 
     // Click page 2
     fireEvent.click(screen.getByRole('button', { name: '2' }))
 
     // Page 2 should now be active
     const page2Btn = await screen.findByRole('button', { name: '2' })
-    expect(page2Btn).toHaveClass('bg-slate-900')
+    expect(page2Btn).toHaveClass('bg-[#1b1b1f]')
   })
 
   it('renders stage badge with name', async () => {

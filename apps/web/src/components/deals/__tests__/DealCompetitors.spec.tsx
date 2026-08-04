@@ -56,7 +56,7 @@ describe('DealCompetitors', () => {
     renderWithQuery(<DealCompetitors dealId="deal-1" />)
 
     const header = await screen.findByText('Competitors')
-    expect(header.className).toBe('text-sm font-semibold uppercase tracking-wider text-slate-400')
+    expect(header.tagName).toBe('H2')
     expect(getDealCompetitors).toHaveBeenCalledWith('deal-1')
   })
 
@@ -70,7 +70,7 @@ describe('DealCompetitors', () => {
     ;(getDealCompetitors as jest.Mock).mockResolvedValue([])
     renderWithQuery(<DealCompetitors dealId="deal-1" />)
 
-    expect(await screen.findByText('No competitors on this deal yet')).toBeInTheDocument()
+    expect(await screen.findByText(/No competitors/)).toBeInTheDocument()
   })
 
   it('renders the error state when the query fails (AC #25)', async () => {

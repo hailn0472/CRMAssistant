@@ -1,6 +1,5 @@
 import * as React from 'react'
 import { Slot } from '@radix-ui/react-slot'
-import { ChevronRight } from 'lucide-react'
 
 import { cn } from '@/lib/utils'
 
@@ -70,10 +69,10 @@ function BreadcrumbSeparator({
     <li
       role="presentation"
       aria-hidden="true"
-      className={cn('[&>svg]:size-3.5', className)}
+      className={cn('text-[13px] text-[#8c8c96] opacity-50 select-none', className)}
       {...props}
     >
-      {children ?? <ChevronRight />}
+      {children ?? '/'}
     </li>
   )
 }

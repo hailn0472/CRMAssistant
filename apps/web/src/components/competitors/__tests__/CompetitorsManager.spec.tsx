@@ -29,16 +29,16 @@ jest.mock('react-hot-toast', () => ({
   error: jest.fn(),
 }))
 
-jest.mock('@/hooks/usePermission', () => ({
-  usePermission: jest.fn(),
-  useMyPermissions: jest.fn(() => ({
-    permissions: [],
-    isLoading: false,
-    hasPermission: () => false,
-  })),
-}))
+const mockHasPermission = jest.fn()
+let mockPermissionsLoading = false
 
-import { usePermission } from '@/hooks/usePermission'
+jest.mock('@/hooks/usePermission', () => ({
+  useMyPermissions: () => ({
+    permissions: [],
+    isLoading: mockPermissionsLoading,
+    hasPermission: mockHasPermission,
+  }),
+}))
 
 const mockCompetitors = {
   items: [
@@ -76,14 +76,23 @@ function renderWithQuery(ui) {
 describe('CompetitorsManager', () => {
   beforeEach(() => {
     jest.clearAllMocks()
-    usePermission.mockImplementation(() => true)
+    mockPermissionsLoading = false
+    mockHasPermission.mockImplementation(() => true)
     getCompetitors.mockResolvedValue(mockCompetitors)
   })
 
   it('renders PermissionLimitedState when user lacks COMPETITOR:READ (AC #29)', () => {
-    usePermission.mockImplementation(() => false)
+    mockHasPermission.mockImplementation(() => false)
     renderWithQuery(<CompetitorsManager />)
     expect(screen.getByText('Access limited')).toBeInTheDocument()
+  })
+
+  it('renders TableSkeleton (not Access limited) while permissions are still loading', () => {
+    mockPermissionsLoading = true
+    mockHasPermission.mockImplementation(() => false)
+    renderWithQuery(<CompetitorsManager />)
+    expect(screen.getByRole('status')).toBeInTheDocument()
+    expect(screen.queryByText('Access limited')).not.toBeInTheDocument()
   })
 
   it('renders the competitor list with name, website, strengths, weaknesses and status (AC #29)', async () => {
@@ -98,7 +107,7 @@ describe('CompetitorsManager', () => {
   })
 
   it('shows the Add competitor button only with COMPETITOR:CREATE (AC #29)', async () => {
-    usePermission.mockImplementation((resource, action) => action !== 'CREATE')
+    mockHasPermission.mockImplementation((resource, action) => action !== 'CREATE')
     renderWithQuery(<CompetitorsManager />)
 
     await screen.findByText('Acme Corp')

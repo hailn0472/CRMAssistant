@@ -3,20 +3,17 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useForm } from 'react-hook-form'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { z } from 'zod'
 
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
 import {
   createTask,
   updateTask,
   createTaskFromTemplate,
   getTaskTemplates,
 } from '@/services/task.service'
-import { getContacts } from '@/services/contact.service'
+import { getContact, getContacts } from '@/services/contact.service'
 import { getDeals } from '@/services/deal.service'
 import { searchUsers } from '@/services/owner.service'
 import {
@@ -25,6 +22,7 @@ import {
   TASK_STATUSES,
   TASK_STATUS_LABELS,
 } from '@/lib/task-format'
+import { cn } from '@/lib/utils'
 import type { Task } from '@/services/task.service'
 
 const taskSchema = z.object({
@@ -42,12 +40,29 @@ type TaskFormValues = z.infer<typeof taskSchema>
 
 type TaskFormProps = {
   task?: Task
+  /** Overrides the ?fromTemplate=1 search param — used when rendered in a drawer. */
+  fromTemplate?: boolean
+  /** Overrides the ?contactId= search param — used when rendered in a drawer
+   * (e.g. Inbox's "New task" action prefilling the current conversation's contact). */
+  initialContactId?: string
+  onSaved?: (task: Task) => void
+  onCancel?: () => void
 }
 
-export function TaskForm({ task }: TaskFormProps): React.JSX.Element {
+const inputClass =
+  'h-[38px] w-full rounded-[9px] border border-[#e6e6eb] bg-[#fafafb] px-3 text-[13.5px] text-[#1b1b1f] outline-none transition-colors placeholder:text-[#9b9ba3] focus:border-[#1b1b1f] focus:bg-white'
+
+export function TaskForm({
+  task,
+  fromTemplate,
+  initialContactId,
+  onSaved,
+  onCancel,
+}: TaskFormProps): React.JSX.Element {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const fromTemplate = searchParams.get('fromTemplate') === '1'
+  const isFromTemplate = fromTemplate ?? searchParams.get('fromTemplate') === '1'
+  const prefillContactId = task ? undefined : initialContactId ?? searchParams.get('contactId')
 
   const [contactSearch, setContactSearch] = useState('')
   const [showContactDropdown, setShowContactDropdown] = useState(false)
@@ -60,7 +75,7 @@ export function TaskForm({ task }: TaskFormProps): React.JSX.Element {
   const { data: templates } = useQuery({
     queryKey: ['taskTemplates'],
     queryFn: () => getTaskTemplates(1, 100),
-    enabled: fromTemplate,
+    enabled: isFromTemplate && !task,
   })
 
   const { data: contactsData } = useQuery({
@@ -81,6 +96,12 @@ export function TaskForm({ task }: TaskFormProps): React.JSX.Element {
     enabled: showAssigneeDropdown,
   })
 
+  const { data: prefillContact } = useQuery({
+    queryKey: ['contact', prefillContactId],
+    queryFn: () => getContact(prefillContactId!),
+    enabled: !!prefillContactId,
+  })
+
   const {
     register,
     handleSubmit,
@@ -97,10 +118,16 @@ export function TaskForm({ task }: TaskFormProps): React.JSX.Element {
       priority: task?.priority ?? 'MEDIUM',
       dueDate: task?.dueDate ? new Date(task.dueDate).toISOString().split('T')[0] : '',
       assignedTo: task?.assignedTo ?? '',
-      contactId: task?.contactId ?? '',
+      contactId: task?.contactId ?? prefillContactId ?? '',
       dealId: task?.dealId ?? '',
     },
   })
+
+  useEffect(() => {
+    if (prefillContact) {
+      setContactSearch(`${prefillContact.firstName} ${prefillContact.lastName}`)
+    }
+  }, [prefillContact])
 
   const selectedContactId = watch('contactId')
   const selectedDealId = watch('dealId')
@@ -121,12 +148,16 @@ export function TaskForm({ task }: TaskFormProps): React.JSX.Element {
       let savedTask: Task
       if (task) {
         savedTask = await updateTask(task.id, payload)
-      } else if (fromTemplate && templateId) {
+      } else if (isFromTemplate && templateId) {
         savedTask = await createTaskFromTemplate(templateId, payload)
       } else {
         savedTask = await createTask(payload)
       }
 
+      if (onSaved) {
+        onSaved(savedTask)
+        return
+      }
       router.push(`/tasks/${savedTask.id}`)
       router.refresh()
     } catch (error) {
@@ -137,87 +168,81 @@ export function TaskForm({ task }: TaskFormProps): React.JSX.Element {
   }
 
   return (
-    <Card className="border-slate-200 bg-white text-slate-950 shadow-sm">
-      <CardHeader className="border-b border-slate-100">
-        <CardTitle className="text-lg">{task ? 'Edit task' : 'Create task'}</CardTitle>
-      </CardHeader>
-      <CardContent className="pt-6">
-        <form className="grid gap-5 md:grid-cols-2" onSubmit={handleSubmit(onSubmit)}>
-          {!task && fromTemplate ? (
-            <Field label="Template" error={errors.title?.message}>
+    <form className="flex min-h-0 flex-1 flex-col" onSubmit={handleSubmit(onSubmit)}>
+      <div className="flex min-h-0 flex-1 flex-col gap-[26px] overflow-y-auto px-6 py-[22px]">
+        {!task && isFromTemplate ? (
+          <Section title="Template">
+            <select
+              value={templateId}
+              onChange={(e) => setTemplateId(e.target.value)}
+              className={cn(inputClass, 'cursor-pointer')}
+              aria-label="Task template"
+            >
+              <option value="">Select a template</option>
+              {templates?.items.map((template) => (
+                <option key={template.id} value={template.id}>
+                  {template.name}
+                </option>
+              ))}
+            </select>
+          </Section>
+        ) : null}
+
+        <Section title="Task details">
+          <Field label="Title" required error={errors.title?.message}>
+            <input
+              className={inputClass}
+              placeholder="Enter task title"
+              {...register('title')}
+              aria-invalid={Boolean(errors.title)}
+            />
+          </Field>
+
+          <Field label="Description" error={errors.description?.message}>
+            <input
+              className={inputClass}
+              placeholder="Enter task description"
+              {...register('description')}
+              aria-invalid={Boolean(errors.description)}
+            />
+          </Field>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label="Status" error={errors.status?.message}>
               <select
-                value={templateId}
-                onChange={(e) => setTemplateId(e.target.value)}
-                className="flex min-h-[44px] w-full rounded-md border border-slate-300 bg-white px-3 py-1 text-sm shadow-sm transition-colors focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
-                aria-label="Task template"
+                {...register('status')}
+                aria-invalid={Boolean(errors.status)}
+                className={cn(inputClass, 'cursor-pointer')}
               >
-                <option value="">Select a template</option>
-                {templates?.items.map((template) => (
-                  <option key={template.id} value={template.id}>
-                    {template.name}
+                {TASK_STATUSES.map((status) => (
+                  <option key={status} value={status}>
+                    {TASK_STATUS_LABELS[status]}
                   </option>
                 ))}
               </select>
             </Field>
-          ) : null}
 
-          <Field label="Title" error={undefined}>
-            <Input
-              {...register('title')}
-              aria-invalid={Boolean(errors.title)}
-              aria-describedby={errors.title ? 'task-title-error' : undefined}
-              placeholder="Enter task title"
-            />
-            {errors.title ? (
-              <span id="task-title-error" className="text-xs font-medium text-red-700" role="alert">
-                {errors.title.message}
-              </span>
-            ) : null}
-          </Field>
+            <Field label="Priority" error={errors.priority?.message}>
+              <select
+                {...register('priority')}
+                aria-invalid={Boolean(errors.priority)}
+                className={cn(inputClass, 'cursor-pointer')}
+              >
+                {TASK_PRIORITIES.map((priority) => (
+                  <option key={priority} value={priority}>
+                    {TASK_PRIORITY_LABELS[priority]}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          </div>
+        </Section>
 
-          <Field label="Description" error={errors.description?.message}>
-            <Input
-              {...register('description')}
-              aria-invalid={Boolean(errors.description)}
-              placeholder="Enter task description"
-            />
-          </Field>
-
-          <Field label="Status" error={errors.status?.message}>
-            <select
-              {...register('status')}
-              aria-invalid={Boolean(errors.status)}
-              className="flex min-h-[44px] w-full rounded-md border border-slate-300 bg-white px-3 py-1 text-sm shadow-sm transition-colors focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
-            >
-              {TASK_STATUSES.map((status) => (
-                <option key={status} value={status}>
-                  {TASK_STATUS_LABELS[status]}
-                </option>
-              ))}
-            </select>
-          </Field>
-
-          <Field label="Priority" error={errors.priority?.message}>
-            <select
-              {...register('priority')}
-              aria-invalid={Boolean(errors.priority)}
-              className="flex min-h-[44px] w-full rounded-md border border-slate-300 bg-white px-3 py-1 text-sm shadow-sm transition-colors focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
-            >
-              {TASK_PRIORITIES.map((priority) => (
-                <option key={priority} value={priority}>
-                  {TASK_PRIORITY_LABELS[priority]}
-                </option>
-              ))}
-            </select>
-          </Field>
-
-          <Field label="Due date" error={errors.dueDate?.message}>
-            <Input type="date" {...register('dueDate')} aria-invalid={Boolean(errors.dueDate)} />
-          </Field>
-
+        <Section title="Assignment & timeline">
           <Field label="Assignee" error={errors.assignedTo?.message}>
             <div className="relative">
-              <Input
+              <input
+                className={inputClass}
                 placeholder="Search users..."
                 value={assigneeSearch}
                 onChange={(e) => {
@@ -228,17 +253,20 @@ export function TaskForm({ task }: TaskFormProps): React.JSX.Element {
                 aria-label="Search assignee"
               />
               {showAssigneeDropdown && assigneeResults ? (
-                <div className="absolute z-10 mt-1 max-h-48 w-full overflow-y-auto rounded-md border border-slate-200 bg-white shadow-lg">
+                <div className="absolute z-10 mt-1 max-h-48 w-full overflow-y-auto rounded-[9px] border border-[#e6e6eb] bg-white shadow-lg">
                   {assigneeResults.length === 0 ? (
-                    <div className="px-3 py-2 text-sm text-slate-500">No users found</div>
+                    <div className="px-3 py-2 text-[13px] text-[#8c8c96]">No users found</div>
                   ) : (
                     assigneeResults.map((user) => (
                       <button
                         key={user.id}
                         type="button"
-                        className={`block w-full px-3 py-2 text-left text-sm hover:bg-indigo-50 ${
-                          selectedAssigneeId === user.id ? 'bg-indigo-50 font-medium' : ''
-                        }`}
+                        className={cn(
+                          'block w-full px-3 py-2 text-left text-[13px] hover:bg-[#f4f4f6]',
+                          selectedAssigneeId === user.id
+                            ? 'bg-[#f4f4f6] font-medium text-[#1b1b1f]'
+                            : 'text-[#4b4b55]',
+                        )}
                         onClick={() => {
                           setValue('assignedTo', user.id, { shouldValidate: true })
                           setAssigneeSearch(`${user.firstName} ${user.lastName}`)
@@ -246,7 +274,7 @@ export function TaskForm({ task }: TaskFormProps): React.JSX.Element {
                         }}
                       >
                         {user.firstName} {user.lastName}
-                        <span className="ml-2 text-xs text-slate-400">{user.email}</span>
+                        <span className="ml-2 text-[12px] text-[#8c8c96]">{user.email}</span>
                       </button>
                     ))
                   )}
@@ -256,9 +284,21 @@ export function TaskForm({ task }: TaskFormProps): React.JSX.Element {
             <input type="hidden" {...register('assignedTo')} />
           </Field>
 
+          <Field label="Due date" error={errors.dueDate?.message}>
+            <input
+              type="date"
+              className={inputClass}
+              {...register('dueDate')}
+              aria-invalid={Boolean(errors.dueDate)}
+            />
+          </Field>
+        </Section>
+
+        <Section title="Related records">
           <Field label="Contact" error={errors.contactId?.message}>
             <div className="relative">
-              <Input
+              <input
+                className={inputClass}
                 placeholder="Search contacts..."
                 value={contactSearch}
                 onChange={(e) => {
@@ -269,17 +309,20 @@ export function TaskForm({ task }: TaskFormProps): React.JSX.Element {
                 aria-label="Search contacts"
               />
               {showContactDropdown && contactsData ? (
-                <div className="absolute z-10 mt-1 max-h-48 w-full overflow-y-auto rounded-md border border-slate-200 bg-white shadow-lg">
+                <div className="absolute z-10 mt-1 max-h-48 w-full overflow-y-auto rounded-[9px] border border-[#e6e6eb] bg-white shadow-lg">
                   {contactsData.items.length === 0 ? (
-                    <div className="px-3 py-2 text-sm text-slate-500">No contacts found</div>
+                    <div className="px-3 py-2 text-[13px] text-[#8c8c96]">No contacts found</div>
                   ) : (
                     contactsData.items.map((contact) => (
                       <button
                         key={contact.id}
                         type="button"
-                        className={`block w-full px-3 py-2 text-left text-sm hover:bg-indigo-50 ${
-                          selectedContactId === contact.id ? 'bg-indigo-50 font-medium' : ''
-                        }`}
+                        className={cn(
+                          'block w-full px-3 py-2 text-left text-[13px] hover:bg-[#f4f4f6]',
+                          selectedContactId === contact.id
+                            ? 'bg-[#f4f4f6] font-medium text-[#1b1b1f]'
+                            : 'text-[#4b4b55]',
+                        )}
                         onClick={() => {
                           setValue('contactId', contact.id, { shouldValidate: true })
                           setContactSearch(`${contact.firstName} ${contact.lastName}`)
@@ -287,7 +330,7 @@ export function TaskForm({ task }: TaskFormProps): React.JSX.Element {
                         }}
                       >
                         {contact.firstName} {contact.lastName}
-                        <span className="ml-2 text-xs text-slate-400">{contact.email}</span>
+                        <span className="ml-2 text-[12px] text-[#8c8c96]">{contact.email}</span>
                       </button>
                     ))
                   )}
@@ -299,7 +342,8 @@ export function TaskForm({ task }: TaskFormProps): React.JSX.Element {
 
           <Field label="Deal" error={errors.dealId?.message}>
             <div className="relative">
-              <Input
+              <input
+                className={inputClass}
                 placeholder="Search deals..."
                 value={dealSearch}
                 onChange={(e) => {
@@ -310,17 +354,20 @@ export function TaskForm({ task }: TaskFormProps): React.JSX.Element {
                 aria-label="Search deals"
               />
               {showDealDropdown && dealsData ? (
-                <div className="absolute z-10 mt-1 max-h-48 w-full overflow-y-auto rounded-md border border-slate-200 bg-white shadow-lg">
+                <div className="absolute z-10 mt-1 max-h-48 w-full overflow-y-auto rounded-[9px] border border-[#e6e6eb] bg-white shadow-lg">
                   {dealsData.items.length === 0 ? (
-                    <div className="px-3 py-2 text-sm text-slate-500">No deals found</div>
+                    <div className="px-3 py-2 text-[13px] text-[#8c8c96]">No deals found</div>
                   ) : (
                     dealsData.items.map((deal) => (
                       <button
                         key={deal.id}
                         type="button"
-                        className={`block w-full px-3 py-2 text-left text-sm hover:bg-indigo-50 ${
-                          selectedDealId === deal.id ? 'bg-indigo-50 font-medium' : ''
-                        }`}
+                        className={cn(
+                          'block w-full px-3 py-2 text-left text-[13px] hover:bg-[#f4f4f6]',
+                          selectedDealId === deal.id
+                            ? 'bg-[#f4f4f6] font-medium text-[#1b1b1f]'
+                            : 'text-[#4b4b55]',
+                        )}
                         onClick={() => {
                           setValue('dealId', deal.id, { shouldValidate: true })
                           setDealSearch(deal.title)
@@ -336,44 +383,73 @@ export function TaskForm({ task }: TaskFormProps): React.JSX.Element {
             </div>
             <input type="hidden" {...register('dealId')} />
           </Field>
+        </Section>
 
-          {errors.root?.message ? (
-            <p
-              className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 md:col-span-2"
-              role="alert"
-            >
-              {errors.root.message}
-            </p>
-          ) : null}
+        {errors.root?.message ? (
+          <p
+            className="rounded-[9px] border border-[#f0d5d5] bg-[#fdf2f2] px-3 py-2 text-[13px] text-[#b91c1c]"
+            role="alert"
+          >
+            {errors.root.message}
+          </p>
+        ) : null}
+      </div>
 
-          <div className="flex items-center justify-end border-t border-slate-100 pt-5 md:col-span-2">
-            <Button
-              disabled={isSubmitting}
-              type="submit"
-              className="bg-slate-950 text-white hover:bg-slate-800"
-            >
-              {isSubmitting ? 'Saving...' : task ? 'Update task' : 'Create task'}
-            </Button>
-          </div>
-        </form>
-      </CardContent>
-    </Card>
+      <div className="flex items-center justify-end gap-2 border-t border-[#f0f0f4] bg-[#fafafb] px-6 py-3.5">
+        {onCancel ? (
+          <button
+            type="button"
+            onClick={onCancel}
+            className="inline-flex h-9 items-center rounded-[9px] border border-[#e6e6eb] bg-white px-3.5 text-[13px] font-medium text-[#4b4b55] transition-colors hover:bg-[#f4f4f6]"
+          >
+            Cancel
+          </button>
+        ) : null}
+        <button
+          type="submit"
+          disabled={isSubmitting}
+          className="inline-flex h-9 items-center rounded-[9px] border border-[#1b1b1f] bg-[#1b1b1f] px-4 text-[13px] font-semibold text-white transition-colors hover:bg-black disabled:opacity-60"
+        >
+          {isSubmitting ? 'Saving...' : task ? 'Update task' : 'Create task'}
+        </button>
+      </div>
+    </form>
+  )
+}
+
+type SectionProps = {
+  title: string
+  children: React.ReactNode
+}
+
+function Section({ title, children }: SectionProps): React.JSX.Element {
+  return (
+    <div className="flex flex-col gap-3.5">
+      <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#a0a0aa]">
+        {title}
+      </div>
+      {children}
+    </div>
   )
 }
 
 type FieldProps = {
   label: string
+  required?: boolean
   error?: string
   children: React.ReactNode
 }
 
-function Field({ label, error, children }: FieldProps): React.JSX.Element {
+function Field({ label, required, error, children }: FieldProps): React.JSX.Element {
   return (
-    <label className="grid gap-2 text-sm font-medium text-slate-700">
-      {label}
+    <label className="flex flex-col gap-1.5">
+      <span className="text-[12.5px] font-medium text-[#4b4b55]">
+        {label}
+        {required ? <span className="text-[#b91c1c]"> *</span> : null}
+      </span>
       {children}
       {error ? (
-        <span className="text-xs font-medium text-red-700" role="alert">
+        <span className="text-[11.5px] font-medium text-[#b91c1c]" role="alert">
           {error}
         </span>
       ) : null}

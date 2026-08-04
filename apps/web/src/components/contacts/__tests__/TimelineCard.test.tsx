@@ -104,7 +104,7 @@ describe('TimelineCard', () => {
     render(<TimelineCard {...defaultProps} source="MESSAGE" />)
 
     const badge = screen.getByText('Auto')
-    expect(badge.className).toContain('bg-slate-100')
-    expect(badge.className).toContain('text-slate-500')
+    expect(badge.className).toContain('bg-[#f4f4f6]')
+    expect(badge.className).toContain('text-[#6b6b76]')
   })
 })

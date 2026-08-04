@@ -129,6 +129,20 @@ describe('AssigneePickerDialog', () => {
     })
   })
 
+  it('marks the currently assigned teammate in the list', async () => {
+    ;(searchUsers as jest.Mock).mockResolvedValue([
+      ...mockUsers,
+      { id: 'user-1', firstName: 'Ada', lastName: 'Lovelace', email: 'ada@local', avatar: null },
+    ])
+    renderWithQuery(<AssigneePickerDialog task={mockTask} open onOpenChange={jest.fn()} />)
+
+    // mockTask.assignedTo is user-1 (Ada) — only that row carries the check.
+    expect(await screen.findByLabelText('Currently assigned')).toBeInTheDocument()
+    expect(screen.getByText('Ada Lovelace').closest('button')).toContainElement(
+      screen.getByLabelText('Currently assigned'),
+    )
+  })
+
   it('closes via the cancel button', () => {
     const onOpenChange = jest.fn()
     renderWithQuery(<AssigneePickerDialog task={mockTask} open onOpenChange={onOpenChange} />)

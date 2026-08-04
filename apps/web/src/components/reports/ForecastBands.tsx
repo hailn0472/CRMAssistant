@@ -1,7 +1,6 @@
 'use client'
 
 import { formatCurrency } from '@/components/deals/deal-display'
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import type { ForecastBand } from '@/services/forecast.service'
 
 interface ForecastBandsProps {
@@ -12,31 +11,15 @@ interface ForecastBandsProps {
 }
 
 const BAND_CONFIG = [
-  {
-    key: 'commit',
-    label: 'Commit',
-    description: 'Probability ≥ 75% — high-confidence deals',
-    color: 'bg-green-50 border-green-200',
-    textColor: 'text-green-800',
-    band: null as ForecastBand | null,
-  },
+  { key: 'commit', label: 'Commit', note: 'Probability ≥ 75% — high confidence', dot: '#22a06b' },
   {
     key: 'bestCase',
-    label: 'Best Case',
-    description: 'Probability ≥ 50% — likely to close',
-    color: 'bg-blue-50 border-blue-200',
-    textColor: 'text-blue-800',
-    band: null as ForecastBand | null,
+    label: 'Best case',
+    note: 'Probability ≥ 50% — likely to close',
+    dot: '#4f46e5',
   },
-  {
-    key: 'pipeline',
-    label: 'Pipeline',
-    description: 'All deals in range',
-    color: 'bg-slate-50 border-slate-200',
-    textColor: 'text-slate-800',
-    band: null as ForecastBand | null,
-  },
-]
+  { key: 'pipeline', label: 'Pipeline', note: 'All deals in range', dot: '#a0a0aa' },
+] as const
 
 export function ForecastBands({
   commit,
@@ -51,38 +34,46 @@ export function ForecastBands({
   ]
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-      {bands.map((config) => {
-        const b = config.band!
-        return (
-          <Card key={config.key} className={`${config.color}`}>
-            <CardHeader className="pb-2">
-              <CardTitle className={`text-lg ${config.textColor}`}>{config.label}</CardTitle>
-              <p className="text-xs text-slate-500">{config.description}</p>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-2">
-                <div>
-                  <span className="text-xs text-slate-500">Weighted Value</span>
-                  <p className={`text-xl font-bold ${config.textColor}`}>
-                    {formatCurrency(b.weightedValue, currency)}
-                  </p>
-                </div>
-                <div className="flex gap-4 text-sm">
-                  <div>
-                    <span className="text-xs text-slate-500">Total Value</span>
-                    <p className="font-medium">{formatCurrency(b.totalValue, currency)}</p>
-                  </div>
-                  <div>
-                    <span className="text-xs text-slate-500">Deals</span>
-                    <p className="font-medium">{b.count}</p>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        )
-      })}
+    <div className="grid grid-cols-1 gap-3.5 md:grid-cols-3">
+      {bands.map((config) => (
+        <div
+          key={config.key}
+          className="flex flex-col gap-3.5 rounded-[14px] border border-[#ececf0] bg-white px-5 py-[18px]"
+        >
+          <div className="flex flex-col gap-1">
+            <div className="flex items-center gap-2">
+              <span
+                className="block h-[7px] w-[7px] shrink-0 rounded-full"
+                style={{ background: config.dot }}
+              />
+              <h3 className="text-[14.5px] font-semibold text-[#1b1b1f]">{config.label}</h3>
+            </div>
+            <p className="text-[12.5px] text-[#8c8c96]">{config.note}</p>
+          </div>
+
+          <div className="flex flex-col gap-0.5">
+            <span className="text-[11.5px] text-[#8c8c96]">Weighted value</span>
+            <span className="text-[26px] font-semibold tracking-[-0.025em] text-[#1b1b1f]">
+              {formatCurrency(config.band.weightedValue, currency)}
+            </span>
+          </div>
+
+          <div className="flex gap-7 border-t border-[#f2f2f5] pt-3">
+            <div className="flex flex-col gap-0.5">
+              <span className="text-[11.5px] text-[#8c8c96]">Total value</span>
+              <span className="font-mono text-[13.5px] font-medium text-[#1b1b1f]">
+                {formatCurrency(config.band.totalValue, currency)}
+              </span>
+            </div>
+            <div className="flex flex-col gap-0.5">
+              <span className="text-[11.5px] text-[#8c8c96]">Deals</span>
+              <span className="font-mono text-[13.5px] font-medium text-[#1b1b1f]">
+                {config.band.count}
+              </span>
+            </div>
+          </div>
+        </div>
+      ))}
     </div>
   )
 }

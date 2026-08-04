@@ -90,11 +90,14 @@ export function DealMetricsCards(): React.JSX.Element {
 
   if (isLoading) {
     return (
-      <div className="grid grid-cols-1 divide-y divide-slate-100 rounded-2xl border border-slate-200 bg-white sm:grid-cols-2 sm:divide-y-0 sm:divide-x lg:grid-cols-4 animate-pulse">
+      <div className="grid animate-pulse grid-cols-1 gap-[1px] overflow-hidden rounded-[12px] border border-[#ececf0] bg-[#ececf0] sm:grid-cols-2 lg:grid-cols-4">
         {Array.from({ length: 4 }).map((_, i) => (
-          <div key={i} className="p-5 flex flex-col justify-between h-[88px]">
-            <div className="h-3 w-24 bg-slate-100 rounded" />
-            <div className="h-7 w-20 bg-slate-200 rounded mt-2" />
+          <div
+            key={i}
+            className="flex h-[76px] flex-col justify-between bg-white px-[18px] py-[16px]"
+          >
+            <div className="h-3 w-24 rounded bg-slate-100" />
+            <div className="mt-2 h-6 w-16 rounded bg-slate-200" />
           </div>
         ))}
       </div>
@@ -102,13 +105,11 @@ export function DealMetricsCards(): React.JSX.Element {
   }
 
   return (
-    <div className="grid grid-cols-1 divide-y divide-slate-100 rounded-2xl border border-slate-200 bg-white sm:grid-cols-2 sm:divide-y-0 sm:divide-x lg:grid-cols-4">
+    <div className="grid grid-cols-1 gap-[1px] overflow-hidden rounded-[12px] border border-[#ececf0] bg-[#ececf0] sm:grid-cols-2 lg:grid-cols-4">
       {metrics.map((item) => (
-        <div key={item.label} className="p-5 flex flex-col justify-between">
-          <span className="text-[11.5px] font-medium text-slate-400 uppercase tracking-wider">
-            {item.label}
-          </span>
-          <span className="text-[26px] font-bold tracking-tight text-slate-900 mt-1">
+        <div key={item.label} className="flex flex-col gap-[6px] bg-white px-[18px] py-[16px]">
+          <span className="text-[11.5px] font-medium text-[#8c8c96]">{item.label}</span>
+          <span className="text-[21px] font-semibold tracking-[-0.02em] text-[#1b1b1f]">
             {item.value}
           </span>
         </div>

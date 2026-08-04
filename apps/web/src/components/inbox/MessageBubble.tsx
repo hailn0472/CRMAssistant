@@ -53,13 +53,13 @@ function DeliveryStatusIcon({
 
   switch (status) {
     case 'sending':
-      return <Loader2 className="h-[13px] w-[13px] text-blue-200 animate-spin" strokeWidth={2.5} />
+      return <Loader2 className="h-[13px] w-[13px] text-white/60 animate-spin" strokeWidth={2.5} />
     case 'sent':
-      return <Check className="h-[14px] w-[14px] text-blue-200/70" strokeWidth={2.5} />
+      return <Check className="h-[14px] w-[14px] text-white/50" strokeWidth={2.5} />
     case 'delivered':
-      return <CheckCheck className="h-[14px] w-[14px] text-blue-200/70" strokeWidth={2.5} />
+      return <CheckCheck className="h-[14px] w-[14px] text-white/50" strokeWidth={2.5} />
     case 'seen':
-      return <CheckCheck className="h-[14px] w-[14px] text-blue-200" strokeWidth={2.5} />
+      return <CheckCheck className="h-[14px] w-[14px] text-white/90" strokeWidth={2.5} />
   }
 }
 
@@ -87,7 +87,7 @@ export function MessageBubble({
   if (isSystem) {
     return (
       <div className="flex justify-center py-4">
-        <span className="rounded-full bg-slate-100/80 px-4 py-1.5 text-[11px] font-semibold tracking-wide text-slate-500 shadow-sm backdrop-blur-sm border border-slate-200/50">
+        <span className="rounded-full bg-[#f4f4f6] px-4 py-1.5 text-[11px] font-semibold tracking-wide text-[#8c8c96] border border-[#ececf0]">
           {message.content}
         </span>
       </div>
@@ -96,18 +96,16 @@ export function MessageBubble({
 
   if (isInternalNote) {
     return (
-      <div className="flex w-full justify-start mb-1.5">
-        <div className="relative max-w-[85%] rounded-2xl rounded-tl-sm border border-amber-200 bg-amber-50 px-4 py-3 text-amber-950 shadow-sm">
+      <div className="flex w-full justify-center mb-1.5">
+        <div className="relative max-w-[74%] rounded-[12px] border border-[#f0dfae] bg-[#fdf6e7] px-3.5 py-2.5 text-[#5c4a12]">
           <div className="mb-2">
             <InternalNoteBadge />
           </div>
-          <p className="whitespace-pre-wrap break-words text-[13px] leading-relaxed italic">
+          <p className="whitespace-pre-wrap break-words text-[13.5px] leading-relaxed italic">
             {message.content}
           </p>
-          <div className="mt-1.5 flex items-center gap-1.5">
-            <span className="text-[10px] font-medium leading-none tracking-tight text-amber-400">
-              {timeAgo(message.sentAt)}
-            </span>
+          <div className="mt-1.5 flex items-center gap-1.5 justify-center">
+            <span className="text-[11px] text-[#a08a3f]">{timeAgo(message.sentAt)}</span>
           </div>
         </div>
       </div>
@@ -125,14 +123,14 @@ export function MessageBubble({
       >
         <div
           className={cn(
-            'relative max-w-[75%] px-4 py-3 transition-all hover:shadow-sm',
+            'relative max-w-[74%] px-3.5 py-2.5 transition-colors',
             isMine
-              ? 'rounded-2xl rounded-tr-sm bg-gradient-to-br from-blue-500 to-blue-600 text-white shadow-md'
-              : 'rounded-2xl rounded-tl-sm bg-white border border-slate-100 text-slate-800 shadow-[0_2px_10px_-4px_rgba(0,0,0,0.05)]',
+              ? 'rounded-[12px] rounded-tr-[4px] bg-[#1b1b1f] text-white'
+              : 'rounded-[12px] rounded-tl-[4px] bg-white border border-[#ececf0] text-[#1b1b1f]',
             isSending && 'opacity-80',
           )}
         >
-          <p className="whitespace-pre-wrap break-words text-[14px] leading-relaxed">
+          <p className="whitespace-pre-wrap break-words text-[13.5px] leading-relaxed">
             {message.content}
           </p>
           <div
@@ -143,8 +141,8 @@ export function MessageBubble({
           >
             <span
               className={cn(
-                'text-[10px] font-medium leading-none tracking-tight',
-                isMine ? 'text-blue-200' : 'text-slate-400',
+                'text-[11px] font-medium leading-none tracking-tight',
+                isMine ? 'text-white/60' : 'text-[#a0a0aa]',
               )}
             >
               {timeAgo(message.sentAt)}
@@ -161,11 +159,11 @@ export function MessageBubble({
         <div className="flex justify-end pr-1 mb-1.5">
           <span
             className={cn(
-              'text-[10px] font-medium tracking-tight transition-all duration-300',
-              deliveryStatus === 'sending' && 'text-slate-400 animate-pulse',
-              deliveryStatus === 'sent' && 'text-slate-400',
-              deliveryStatus === 'delivered' && 'text-slate-500',
-              deliveryStatus === 'seen' && 'text-blue-500',
+              'text-[10px] font-medium tracking-tight transition-colors',
+              deliveryStatus === 'sending' && 'text-[#a0a0aa] animate-pulse',
+              deliveryStatus === 'sent' && 'text-[#a0a0aa]',
+              deliveryStatus === 'delivered' && 'text-[#8c8c96]',
+              deliveryStatus === 'seen' && 'text-[#1b1b1f]',
             )}
           >
             {STATUS_LABELS[deliveryStatus]}
@@ -177,10 +175,10 @@ export function MessageBubble({
       {showSeenAvatar && seenByName && (
         <div className="flex justify-end pr-1 mb-1 items-center gap-1">
           <div
-            className="h-4 w-4 rounded-full bg-gradient-to-br from-indigo-500 to-blue-600 flex items-center justify-center shadow-sm ring-1 ring-white"
+            className="h-4 w-4 rounded-full bg-[#f0f0f3] flex items-center justify-center ring-1 ring-white"
             title={`Đã xem bởi ${seenByName}`}
           >
-            <span className="text-[7px] font-bold text-white leading-none">
+            <span className="text-[7px] font-bold text-[#4b4b55] leading-none">
               {seenByName
                 .split(' ')
                 .map((n) => n.charAt(0))

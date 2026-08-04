@@ -22,16 +22,16 @@ jest.mock('@/services/product.service', () => ({
   updateProduct: jest.fn(),
 }))
 
-jest.mock('@/hooks/usePermission', () => ({
-  usePermission: jest.fn(),
-  useMyPermissions: jest.fn(() => ({
-    permissions: [],
-    isLoading: false,
-    hasPermission: () => false,
-  })),
-}))
+const mockHasPermission = jest.fn()
+let mockPermissionsLoading = false
 
-import { usePermission } from '@/hooks/usePermission'
+jest.mock('@/hooks/usePermission', () => ({
+  useMyPermissions: () => ({
+    permissions: [],
+    isLoading: mockPermissionsLoading,
+    hasPermission: mockHasPermission,
+  }),
+}))
 
 const mockProducts = {
   items: [
@@ -69,14 +69,23 @@ function renderWithQuery(ui) {
 describe('ProductsManager', () => {
   beforeEach(() => {
     jest.clearAllMocks()
-    usePermission.mockImplementation(() => true)
+    mockPermissionsLoading = false
+    mockHasPermission.mockImplementation(() => true)
     getProducts.mockResolvedValue(mockProducts)
   })
 
   it('renders PermissionLimitedState when user lacks PRODUCT:READ', () => {
-    usePermission.mockImplementation(() => false)
+    mockHasPermission.mockImplementation(() => false)
     renderWithQuery(<ProductsManager />)
     expect(screen.getByText('Access limited')).toBeInTheDocument()
+  })
+
+  it('renders TableSkeleton (not Access limited) while permissions are still loading', () => {
+    mockPermissionsLoading = true
+    mockHasPermission.mockImplementation(() => false)
+    renderWithQuery(<ProductsManager />)
+    expect(screen.getByRole('status')).toBeInTheDocument()
+    expect(screen.queryByText('Access limited')).not.toBeInTheDocument()
   })
 
   it('renders TableSkeleton while loading', () => {
@@ -135,7 +144,7 @@ describe('ProductsManager', () => {
   })
 
   it('hides Add product button without PRODUCT:CREATE', async () => {
-    usePermission.mockImplementation((resource, action) => {
+    mockHasPermission.mockImplementation((resource, action) => {
       if (resource === 'PRODUCT' && action === 'READ') return true
       return false
     })

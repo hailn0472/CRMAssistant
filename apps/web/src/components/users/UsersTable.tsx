@@ -5,23 +5,45 @@ import { useCallback, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card } from '@/components/ui/card'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { ErrorState } from '@/components/shared/ErrorState'
 import { ResponsiveTableWrapper } from '@/components/shared/ResponsiveTableWrapper'
 import { TableSkeleton } from '@/components/shared/LoadingSkeleton'
 import { getUsers, deactivateUsers, reactivateUsers } from '@/services/user.service'
+import { UserFilterBar, emptyUserFilters, type UserFilters } from '@/components/users/UserFilterBar'
 
 const PAGE_SIZE = 10
+
+const STATUS_COLOR: Record<'active' | 'deactivated', string> = {
+  active: '#22a06b',
+  deactivated: '#b91c1c',
+}
+
+function userInitials(firstName: string, lastName: string): string {
+  return `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase()
+}
+
+function formatLastLogin(lastLoginAt?: string | null): string {
+  return lastLoginAt ? new Date(lastLoginAt).toLocaleDateString() : 'Never'
+}
 
 export function UsersTable(): React.JSX.Element {
   const [page, setPage] = useState(1)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
-  const { data, error, isLoading, refetch } = useQuery({
-    queryKey: ['users', page],
-    queryFn: () => getUsers(page, PAGE_SIZE),
-  })
+  const [filters, setFilters] = useState<UserFilters>(emptyUserFilters)
   const queryClient = useQueryClient()
+
+  const { data, error, isLoading, refetch } = useQuery({
+    queryKey: ['users', page, filters],
+    queryFn: () =>
+      getUsers(page, PAGE_SIZE, {
+        search: filters.search || undefined,
+        isActive: filters.status === '' ? undefined : filters.status === 'active',
+        roleId: filters.role?.id || undefined,
+        teamId: filters.team?.id || undefined,
+      }),
+  })
 
   const clearSelection = useCallback(() => setSelectedIds(new Set()), [])
 
@@ -51,6 +73,7 @@ export function UsersTable(): React.JSX.Element {
     await deactivateUsers(Array.from(selectedIds))
     clearSelection()
     queryClient.invalidateQueries({ queryKey: ['users'] })
+    queryClient.invalidateQueries({ queryKey: ['users-stats'] })
   }
 
   async function handleBulkReactivate(): Promise<void> {
@@ -58,6 +81,12 @@ export function UsersTable(): React.JSX.Element {
     await reactivateUsers(Array.from(selectedIds))
     clearSelection()
     queryClient.invalidateQueries({ queryKey: ['users'] })
+    queryClient.invalidateQueries({ queryKey: ['users-stats'] })
+  }
+
+  function handleFiltersChange(next: UserFilters): void {
+    setFilters(next)
+    setPage(1)
   }
 
   if (isLoading) {
@@ -69,13 +98,16 @@ export function UsersTable(): React.JSX.Element {
     return <ErrorState message={errorMessage} onRetry={() => refetch()} />
   }
 
-  if (!data || data.items.length === 0) {
+  const isFiltered =
+    filters.search !== '' || filters.role !== null || filters.status !== '' || filters.team !== null
+
+  if ((!data || data.items.length === 0) && !isFiltered) {
     return (
       <EmptyState
         title="No users yet"
         description="Invite team members to start collaborating."
         action={
-          <Button asChild className="bg-slate-950 text-white hover:bg-slate-800">
+          <Button asChild className="bg-[#1b1b1f] text-white hover:bg-black">
             <Link href="/users/new">Create user</Link>
           </Button>
         }
@@ -83,143 +115,181 @@ export function UsersTable(): React.JSX.Element {
     )
   }
 
-  const totalPages = Math.max(Math.ceil(data.total / data.pageSize), 1)
+  const items = data?.items ?? []
+  const total = data?.total ?? 0
+  const pageSize = data?.pageSize ?? PAGE_SIZE
+  const totalPages = Math.max(Math.ceil(total / pageSize), 1)
+  const currentPage = data?.page ?? page
+  const allSelected = items.length > 0 && selectedIds.size === items.length
 
   return (
-    <Card className="border-slate-200 bg-white text-slate-950 shadow-sm">
-      <CardHeader className="flex-row items-center justify-between space-y-0">
-        <CardTitle className="text-lg">Users</CardTitle>
-        <Button asChild className="bg-slate-950 text-white hover:bg-slate-800">
-          <Link href="/users/new">Create user</Link>
-        </Button>
-      </CardHeader>
-      <CardContent>
-        {selectedIds.size > 0 ? (
-          <div className="mb-4 flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm">
-            <span className="font-medium text-slate-700">{selectedIds.size} selected</span>
-            <Button type="button" variant="outline" size="sm" onClick={handleBulkDeactivate}>
-              Deactivate
-            </Button>
-            <Button type="button" variant="outline" size="sm" onClick={handleBulkReactivate}>
-              Reactivate
-            </Button>
-            <Button type="button" variant="ghost" size="sm" onClick={clearSelection}>
-              Clear
-            </Button>
-          </div>
-        ) : null}
+    <Card className="overflow-hidden rounded-[14px] border border-[#ececf0] bg-white shadow-none">
+      <UserFilterBar
+        filters={filters}
+        onFiltersChange={handleFiltersChange}
+        trailing={<span className="text-[12.5px] font-medium text-[#8c8c96]">{total} users</span>}
+      />
 
-        <ResponsiveTableWrapper>
-          <table className="w-full text-left text-sm">
-            <thead className="border-b border-slate-200 bg-slate-50 text-slate-600">
-              <tr>
-                <th className="py-3 pr-4 pl-4 font-medium">
-                  <input
-                    type="checkbox"
-                    aria-label="Select all"
-                    checked={selectedIds.size === data.items.length && data.items.length > 0}
-                    onChange={toggleSelectAll}
-                  />
-                </th>
-                <th className="sticky left-0 z-10 bg-slate-50 py-3 pr-4 pl-4 font-medium shadow-[2px_0_4px_-2px_rgba(0,0,0,0.06)]">
-                  Name
-                </th>
-                <th className="py-3 pr-4 font-medium">Email</th>
-                <th className="py-3 pr-4 font-medium">Roles</th>
-                <th className="py-3 pr-4 font-medium">Status</th>
-                <th className="py-3 pr-4 font-medium">Last login</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {data.items.map((user) => (
-                <tr className="group hover:bg-slate-50" key={user.id}>
-                  <td className="py-3 pr-4 pl-4">
-                    <input
-                      type="checkbox"
-                      aria-label={`Select ${user.firstName} ${user.lastName}`}
-                      checked={selectedIds.has(user.id)}
-                      onChange={() => toggleSelect(user.id)}
-                    />
-                  </td>
-                  <td className="sticky left-0 z-10 bg-white py-3 pr-4 pl-4 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.06)] group-hover:bg-slate-50">
-                    <Link
-                      className="font-medium text-blue-700 hover:text-blue-800 hover:underline"
-                      href={`/users/${user.id}`}
-                    >
-                      {user.firstName} {user.lastName}
-                    </Link>
-                  </td>
-                  <td className="py-3 pr-4 text-slate-600">{user.email}</td>
-                  <td className="py-3 pr-4">
-                    <div className="flex flex-wrap gap-1">
-                      {user.roles && user.roles.length > 0 ? (
-                        user.roles.map((r) => <RoleBadge key={r.id} role={r.name} />)
-                      ) : (
-                        <span className="text-xs text-slate-400">No roles</span>
-                      )}
-                    </div>
-                  </td>
-                  <td className="py-3 pr-4">
-                    <StatusBadge isActive={user.isActive} />
-                  </td>
-                  <td className="py-3 pr-4 text-slate-600">
-                    {user.lastLoginAt ? new Date(user.lastLoginAt).toLocaleDateString() : 'Never'}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </ResponsiveTableWrapper>
-        <div className="mt-5 flex items-center justify-between text-sm text-slate-600">
-          <span>
-            Page {data.page} of {totalPages} · {data.total} users
+      {selectedIds.size > 0 ? (
+        <div className="flex items-center gap-2.5 border-b border-[#f2f2f5] bg-[#fafafb] px-[18px] py-2.5">
+          <span className="text-[12.5px] font-medium text-[#4b4b55]">
+            {selectedIds.size} selected
           </span>
-          <div className="flex gap-2">
-            <Button
-              disabled={page === 1}
-              onClick={() => setPage((current) => current - 1)}
+          <button
+            type="button"
+            onClick={() => void handleBulkDeactivate()}
+            className="inline-flex h-8 items-center rounded-[8px] border border-[#e6e6eb] bg-white px-2.5 text-[12px] font-medium text-[#4b4b55] transition-colors hover:bg-[#f4f4f6]"
+          >
+            Deactivate
+          </button>
+          <button
+            type="button"
+            onClick={() => void handleBulkReactivate()}
+            className="inline-flex h-8 items-center rounded-[8px] border border-[#e6e6eb] bg-white px-2.5 text-[12px] font-medium text-[#4b4b55] transition-colors hover:bg-[#f4f4f6]"
+          >
+            Reactivate
+          </button>
+          <button
+            type="button"
+            onClick={clearSelection}
+            className="text-[12px] text-[#8c8c96] hover:text-[#1b1b1f]"
+          >
+            Clear
+          </button>
+        </div>
+      ) : null}
+
+      <ResponsiveTableWrapper>
+        <table className="w-full min-w-[1050px] text-left text-[13.5px]">
+          <thead>
+            <tr className="border-b border-[#f2f2f5] bg-[#fafafb] text-[11px] font-semibold uppercase tracking-wider text-[#8c8c96]">
+              <th className="w-9 py-2.5 pl-[18px] pr-2">
+                <input
+                  type="checkbox"
+                  aria-label="Select all"
+                  checked={allSelected}
+                  onChange={toggleSelectAll}
+                  className="h-[15px] w-[15px] rounded border-[#d8d8e0] accent-[#1b1b1f]"
+                />
+              </th>
+              <th className="py-2.5 pr-4">Name</th>
+              <th className="py-2.5 pr-4">Email</th>
+              <th className="py-2.5 pr-4">Role</th>
+              <th className="py-2.5 pr-4">Status</th>
+              <th className="py-2.5 pr-[18px]">Last login</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-[#f4f4f7]">
+            {items.length === 0 ? (
+              <tr>
+                <td colSpan={6} className="px-[18px] py-10 text-center text-[13px] text-[#8c8c96]">
+                  No users match these filters.
+                </td>
+              </tr>
+            ) : (
+              items.map((user) => {
+                const statusKey = user.isActive ? 'active' : 'deactivated'
+                return (
+                  <tr key={user.id} className="transition-colors hover:bg-[#fafafb]">
+                    <td className="py-3 pl-[18px] pr-2">
+                      <input
+                        type="checkbox"
+                        aria-label={`Select ${user.firstName} ${user.lastName}`}
+                        checked={selectedIds.has(user.id)}
+                        onChange={() => toggleSelect(user.id)}
+                        className="h-[15px] w-[15px] rounded border-[#d8d8e0] accent-[#1b1b1f]"
+                      />
+                    </td>
+                    <td className="py-3 pr-4">
+                      <Link
+                        href={`/users/${user.id}`}
+                        className="flex min-w-0 items-center gap-2.5 transition-colors hover:text-indigo-600"
+                      >
+                        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#f0f0f3] text-[10.5px] font-semibold text-[#4b4b55]">
+                          {userInitials(user.firstName, user.lastName)}
+                        </span>
+                        <span className="flex min-w-0 flex-col">
+                          <span className="truncate font-medium text-[#1b1b1f]">
+                            {user.firstName} {user.lastName}
+                          </span>
+                          {user.team ? (
+                            <span className="truncate text-[11.5px] text-[#a0a0aa]">
+                              {user.team.name}
+                            </span>
+                          ) : null}
+                        </span>
+                      </Link>
+                    </td>
+                    <td className="max-w-[260px] truncate py-3 pr-4 text-[13px]">
+                      <a href={`mailto:${user.email}`} className="text-indigo-600 hover:underline">
+                        {user.email}
+                      </a>
+                    </td>
+                    <td className="py-3 pr-4">
+                      <div className="flex flex-wrap gap-1">
+                        {user.roles && user.roles.length > 0 ? (
+                          user.roles.map((r) => <RoleBadge key={r.id} role={r.name} />)
+                        ) : (
+                          <span className="text-[12px] italic text-[#c0c0c8]">No roles</span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="py-3 pr-4">
+                      <span
+                        className="inline-flex items-center gap-1.5 text-[12px] font-medium"
+                        style={{ color: STATUS_COLOR[statusKey] }}
+                      >
+                        <span
+                          className="block h-1.5 w-1.5 rounded-full"
+                          style={{ background: STATUS_COLOR[statusKey] }}
+                        />
+                        {statusKey === 'active' ? 'Active' : 'Deactivated'}
+                      </span>
+                    </td>
+                    <td className="py-3 pr-[18px] font-mono text-[12px] text-[#8c8c96]">
+                      {formatLastLogin(user.lastLoginAt)}
+                    </td>
+                  </tr>
+                )
+              })
+            )}
+          </tbody>
+        </table>
+      </ResponsiveTableWrapper>
+
+      {items.length > 0 ? (
+        <div className="flex items-center justify-between gap-4 border-t border-[#f2f2f5] px-[18px] py-3.5">
+          <span className="text-[12.5px] text-[#8c8c96]">
+            Page {currentPage} of {totalPages} · {total} users
+          </span>
+          <div className="flex items-center gap-[5px]">
+            <button
               type="button"
-              variant="outline"
+              disabled={currentPage <= 1}
+              onClick={() => setPage(currentPage - 1)}
+              className="inline-flex h-[30px] items-center rounded-[8px] border border-[#e6e6eb] bg-white px-2.5 text-[12.5px] font-medium text-[#4b4b55] transition-colors hover:bg-[#f4f4f6] disabled:cursor-not-allowed disabled:border-[#f0f0f3] disabled:bg-[#fafafb] disabled:text-[#c0c0c8]"
             >
               Previous
-            </Button>
-            <Button
-              disabled={page >= totalPages}
-              onClick={() => setPage((current) => current + 1)}
+            </button>
+            <button
               type="button"
-              variant="outline"
+              disabled={currentPage >= totalPages}
+              onClick={() => setPage(currentPage + 1)}
+              className="inline-flex h-[30px] items-center rounded-[8px] border border-[#e6e6eb] bg-white px-2.5 text-[12.5px] font-medium text-[#4b4b55] transition-colors hover:bg-[#f4f4f6] disabled:cursor-not-allowed disabled:border-[#f0f0f3] disabled:bg-[#fafafb] disabled:text-[#c0c0c8]"
             >
               Next
-            </Button>
+            </button>
           </div>
         </div>
-      </CardContent>
+      ) : null}
     </Card>
   )
 }
 
 function RoleBadge({ role }: { role: string }): React.JSX.Element {
-  const color =
-    role === 'ADMIN'
-      ? 'bg-purple-100 text-purple-800'
-      : role === 'MANAGER'
-        ? 'bg-blue-100 text-blue-800'
-        : 'bg-slate-100 text-slate-700'
   return (
-    <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${color}`}>
+    <span className="inline-flex items-center rounded-[6px] border border-[#ececf0] bg-[#f4f4f6] px-2 py-0.5 text-[11.5px] font-medium text-[#4b4b55]">
       {role.replace('_', ' ')}
-    </span>
-  )
-}
-
-function StatusBadge({ isActive }: { isActive: boolean }): React.JSX.Element {
-  return (
-    <span
-      className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-        isActive ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'
-      }`}
-    >
-      {isActive ? 'Active' : 'Deactivated'}
     </span>
   )
 }

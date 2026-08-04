@@ -31,3 +31,67 @@ export function formatAxisTick(label: string): string {
   }
   return label
 }
+
+type ForecastCsvBucket = {
+  label: string
+  weightedValue: number
+  totalValue: number
+  count: number
+}
+
+type ForecastCsvBand = {
+  weightedValue: number
+  totalValue: number
+  count: number
+}
+
+function escapeCsvField(value: string): string {
+  if (value.includes(',') || value.includes('"') || value.includes('\n')) {
+    return `"${value.replace(/"/g, '""')}"`
+  }
+  return value
+}
+
+/**
+ * Renders the sales forecast (per-period buckets plus the three summary
+ * bands) as a CSV string for the "Export CSV" download — pure so it stays
+ * unit-testable without touching the DOM/Blob APIs.
+ */
+export function salesForecastToCsv(forecast: {
+  buckets: ForecastCsvBucket[]
+  commit: ForecastCsvBand
+  bestCase: ForecastCsvBand
+  pipeline: ForecastCsvBand
+}): string {
+  const headers = ['Period', 'Weighted value', 'Total value', 'Deals']
+  const bucketRows = forecast.buckets.map((b) => [
+    b.label,
+    String(b.weightedValue),
+    String(b.totalValue),
+    String(b.count),
+  ])
+  const bandRows = [
+    [
+      'Commit',
+      String(forecast.commit.weightedValue),
+      String(forecast.commit.totalValue),
+      String(forecast.commit.count),
+    ],
+    [
+      'Best case',
+      String(forecast.bestCase.weightedValue),
+      String(forecast.bestCase.totalValue),
+      String(forecast.bestCase.count),
+    ],
+    [
+      'Pipeline',
+      String(forecast.pipeline.weightedValue),
+      String(forecast.pipeline.totalValue),
+      String(forecast.pipeline.count),
+    ],
+  ]
+
+  return [headers, ...bucketRows, [], ...bandRows]
+    .map((row) => row.map(escapeCsvField).join(','))
+    .join('\n')
+}

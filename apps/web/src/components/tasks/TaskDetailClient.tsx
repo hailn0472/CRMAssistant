@@ -4,23 +4,18 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import toast from 'react-hot-toast'
-import { ArrowLeft, Check, Pencil, Trash2, UserPlus } from 'lucide-react'
+import { Check } from 'lucide-react'
 
-import { Button } from '@/components/ui/button'
-import { Card, CardHeader } from '@/components/ui/card'
 import { deleteTask, completeTask } from '@/services/task.service'
 import { usePermission } from '@/hooks/usePermission'
 import { AssigneePickerDialog } from './AssigneePickerDialog'
 import { TaskCalendarSyncBadge } from './TaskCalendarSyncBadge'
+import { TaskFormDrawer } from './TaskFormDrawer'
 import {
-  TASK_DUE_STATUS_LABELS,
   TASK_PRIORITY_LABELS,
+  TASK_STATUS_DOT_COLOR,
   TASK_STATUS_LABELS,
   formatDueDate,
-  resolveDueStatus,
-  taskDueBadgeClass,
-  taskPriorityBadgeClass,
-  taskStatusBadgeClass,
 } from '@/lib/task-format'
 import { cn } from '@/lib/utils'
 import type { Task } from '@/services/task.service'
@@ -29,21 +24,70 @@ type TaskDetailClientProps = {
   task: Task
 }
 
+const PRIORITY_BADGE_STYLE: Record<string, { color: string; bg: string; border: string }> = {
+  LOW: { color: '#4b4b55', bg: '#f4f4f6', border: '#ececf0' },
+  MEDIUM: { color: '#2563eb', bg: '#eff6ff', border: '#dbeafe' },
+  HIGH: { color: '#c2860a', bg: '#fdf6e7', border: '#f0e2c0' },
+  URGENT: { color: '#b91c1c', bg: '#fdf2f2', border: '#f0d5d5' },
+}
+
+function initials(first: string, last: string): string {
+  return `${first.charAt(0)}${last.charAt(0)}`.toUpperCase()
+}
+
+function getOverdueDays(dueDateStr?: string | null): number | null {
+  if (!dueDateStr) return null
+  const due = new Date(dueDateStr)
+  const now = new Date()
+  due.setHours(0, 0, 0, 0)
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  const diffTime = today.getTime() - due.getTime()
+  const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24))
+  return diffDays > 0 ? diffDays : null
+}
+
+/**
+ * Derived from the task record itself — every entry is a real timestamp we
+ * already hold. There is no task-scoped activity API (contactTimeline is
+ * contact-scoped), so nothing here is invented.
+ */
+function buildActivity(task: Task): Array<{ dot: string; title: string; meta: string }> {
+  const entries: Array<{ dot: string; title: string; meta: string }> = [
+    { dot: '#8c8c96', title: 'Task created', meta: formatDueDate(task.createdAt) },
+  ]
+  if (task.assignee) {
+    entries.push({
+      dot: '#4f46e5',
+      title: `Assigned to ${task.assignee.firstName} ${task.assignee.lastName}`,
+      meta: task.assignee.email,
+    })
+  }
+  if (task.completedAt) {
+    entries.push({
+      dot: '#22a06b',
+      title: 'Task completed',
+      meta: formatDueDate(task.completedAt),
+    })
+  }
+  return entries
+}
+
 export function TaskDetailClient({ task }: TaskDetailClientProps): React.JSX.Element {
   const router = useRouter()
   const [deleting, setDeleting] = useState(false)
   const [completing, setCompleting] = useState(false)
   const [assignOpen, setAssignOpen] = useState(false)
+  const [editOpen, setEditOpen] = useState(false)
 
   const canUpdate = usePermission('TASK', 'UPDATE')
   const canAssign = usePermission('TASK', 'ASSIGN')
   const canDelete = usePermission('TASK', 'DELETE')
 
-  const dueStatus = resolveDueStatus(
-    { status: task.status, dueDate: task.dueDate ? new Date(task.dueDate) : null },
-    new Date(),
-  )
   const isClosed = task.status === 'COMPLETED' || task.status === 'CANCELLED'
+  const isDone = task.status === 'COMPLETED'
+  const overdueDays = !isClosed ? getOverdueDays(task.dueDate) : null
+  const activity = buildActivity(task)
+  const priorityStyle = PRIORITY_BADGE_STYLE[task.priority] ?? PRIORITY_BADGE_STYLE['LOW']
 
   const handleComplete = async (): Promise<void> => {
     setCompleting(true)
@@ -74,197 +118,224 @@ export function TaskDetailClient({ task }: TaskDetailClientProps): React.JSX.Ele
   }
 
   return (
-    <div className="space-y-6 p-6 text-slate-950">
-      <div className="flex items-center gap-3">
-        <Link
-          href="/tasks"
-          className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 transition-colors"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Back to tasks
-        </Link>
-      </div>
+    <div className="mx-auto w-full max-w-[1180px] px-7 pb-12 pt-[26px]">
+      <Link
+        href="/tasks"
+        className="mb-4 inline-flex items-center gap-[7px] text-[12.5px] text-[#8c8c96] transition-colors hover:text-[#1b1b1f] hover:no-underline"
+      >
+        ← Back to tasks
+      </Link>
 
-      <Card className="border-slate-200 bg-white shadow-sm">
-        <CardHeader className="border-b border-slate-100 px-6 py-5">
-          <div className="flex items-start justify-between gap-4">
-            <div className="flex items-center gap-4">
-              <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-blue-600 text-lg font-bold text-white shadow-sm">
-                {task.title.charAt(0).toUpperCase()}
-              </div>
-              <div>
-                <div className="flex flex-wrap items-center gap-3">
-                  <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
-                    {task.title}
-                  </h1>
-                  <span
-                    className={cn(
-                      'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium',
-                      taskStatusBadgeClass(task.status),
-                    )}
-                  >
-                    {TASK_STATUS_LABELS[task.status]}
-                  </span>
-                  <span
-                    className={cn(
-                      'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium',
-                      taskPriorityBadgeClass(task.priority),
-                    )}
-                  >
-                    {TASK_PRIORITY_LABELS[task.priority]}
-                  </span>
-                  <span
-                    className={cn(
-                      'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium',
-                      taskDueBadgeClass(dueStatus),
-                    )}
-                  >
-                    {TASK_DUE_STATUS_LABELS[dueStatus]}
-                  </span>
-                  {/* Story 4.3: calendar sync state (AC 45) — Synced/Pending/
-                      Failed+Retry/Not connected + conflict warning. */}
-                  <TaskCalendarSyncBadge taskId={task.id} />
-                </div>
-                <p className="mt-1 text-sm text-slate-500">
-                  {/* AC 9 makes assignedTo non-nullable; null is unreachable
-                      in normal flow and would indicate a data integrity issue. */}
-                  {task.assignee
-                    ? `Assigned to ${task.assignee.firstName} ${task.assignee.lastName}`
-                    : 'Unassigned'}
-                  {task.dueDate ? ` · Due ${formatDueDate(task.dueDate)}` : ''}
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              {canUpdate && !isClosed ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="h-11 gap-1.5"
-                  onClick={handleComplete}
-                  disabled={completing}
-                >
-                  <Check className="h-3.5 w-3.5" />
-                  {completing ? 'Completing...' : 'Complete'}
-                </Button>
-              ) : null}
-              {canAssign ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="h-11 gap-1.5"
-                  onClick={() => setAssignOpen(true)}
-                >
-                  <UserPlus className="h-3.5 w-3.5" />
-                  Assign
-                </Button>
-              ) : null}
-              {canUpdate ? (
-                <Button
-                  variant="default"
-                  size="sm"
-                  className="h-11 gap-1.5"
-                  onClick={() => router.push(`/tasks/${task.id}/edit`)}
-                >
-                  <Pencil className="h-3.5 w-3.5" />
-                  Edit
-                </Button>
-              ) : null}
-              {canDelete ? (
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  className="h-11 gap-1.5"
-                  onClick={handleDelete}
-                  disabled={deleting}
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                  {deleting ? 'Deleting...' : 'Delete'}
-                </Button>
-              ) : null}
-            </div>
-          </div>
-        </CardHeader>
+      <div className="mb-[22px] flex flex-wrap items-start justify-between gap-6">
+        <div className="flex min-w-0 items-start gap-[13px]">
+          {canUpdate && !isClosed ? (
+            <button
+              type="button"
+              onClick={handleComplete}
+              disabled={completing}
+              aria-label="Mark task complete"
+              title="Mark task complete"
+              className="mt-[5px] flex h-[22px] w-[22px] flex-none items-center justify-center rounded-[6px] border-[1.5px] border-[#d8d8e0] bg-white text-white text-[12px] transition-colors hover:border-[#1b1b1f] disabled:opacity-50"
+            />
+          ) : (
+            <span
+              aria-hidden="true"
+              className={cn(
+                'mt-[5px] flex h-[22px] w-[22px] flex-none items-center justify-center rounded-[6px] border-[1.5px] text-[12px]',
+                isDone
+                  ? 'border-[#22a06b] bg-[#22a06b] text-white'
+                  : 'border-[#d8d8e0] bg-white text-[#c7c7d1]',
+              )}
+            >
+              {isDone ? <Check className="h-3.5 w-3.5" strokeWidth={3} /> : null}
+            </span>
+          )}
 
-        <div className="grid grid-cols-1 gap-6 p-6 md:grid-cols-2">
-          <div className="space-y-4">
-            <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-400">
-              Task Details
-            </h3>
-            <div className="space-y-3">
-              <DetailRow label="Description">
-                {task.description ? (
-                  <span className="text-slate-700">{task.description}</span>
-                ) : (
-                  <span className="italic text-slate-300">&mdash;</span>
-                )}
-              </DetailRow>
-              <DetailRow label="Due date">
-                {task.dueDate ? (
-                  <span className="text-slate-700">{formatDueDate(task.dueDate)}</span>
-                ) : (
-                  <span className="italic text-slate-300">&mdash;</span>
-                )}
-              </DetailRow>
-              {task.completedAt ? (
-                <DetailRow label="Completed at">
-                  <span className="text-slate-700">{formatDueDate(task.completedAt)}</span>
-                </DetailRow>
+          <div className="flex min-w-0 flex-col gap-2">
+            <h1
+              className={cn(
+                'm-0 text-[23px] font-semibold tracking-[-0.025em]',
+                isDone ? 'text-[#8c8c96] line-through' : 'text-[#1b1b1f]',
+              )}
+            >
+              {task.title}
+            </h1>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="inline-flex items-center gap-[6px] rounded-full bg-[#f4f4f6] py-[3px] pl-2 pr-2.5 text-[11.5px] font-medium text-[#4b4b55]">
+                <span
+                  className="block h-[5px] w-[5px] rounded-full"
+                  style={{ background: TASK_STATUS_DOT_COLOR[task.status] }}
+                />
+                {TASK_STATUS_LABELS[task.status]}
+              </span>
+              <span
+                className="inline-flex items-center rounded-full px-2.5 py-[3px] text-[11.5px] font-semibold"
+                style={{
+                  color: priorityStyle.color,
+                  backgroundColor: priorityStyle.bg,
+                  border: `1px solid ${priorityStyle.border}`,
+                }}
+              >
+                {TASK_PRIORITY_LABELS[task.priority]} priority
+              </span>
+              {overdueDays !== null ? (
+                <span className="inline-flex items-center rounded-full border border-[#f0d5d5] bg-[#fdf2f2] px-2.5 py-[3px] text-[11.5px] font-semibold text-[#b91c1c]">
+                  Overdue by {overdueDays} {overdueDays === 1 ? 'day' : 'days'}
+                </span>
               ) : null}
-            </div>
-          </div>
-
-          <div className="space-y-4">
-            <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-400">
-              Related records
-            </h3>
-            <div className="space-y-3">
-              <DetailRow label="Contact">
-                {task.contact ? (
-                  <Link
-                    href={`/contacts/${task.contact.id}`}
-                    className="text-indigo-600 hover:underline"
-                  >
-                    {task.contact.firstName} {task.contact.lastName}
-                  </Link>
-                ) : (
-                  <span className="italic text-slate-300">&mdash;</span>
-                )}
-              </DetailRow>
-              <DetailRow label="Deal">
-                {task.deal ? (
-                  <Link href={`/deals/${task.deal.id}`} className="text-indigo-600 hover:underline">
-                    {task.deal.title}
-                  </Link>
-                ) : (
-                  <span className="italic text-slate-300">&mdash;</span>
-                )}
-              </DetailRow>
-            </div>
-          </div>
-
-          <div className="space-y-4">
-            <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-400">
-              Metadata
-            </h3>
-            <div className="space-y-3">
-              <MetaItem label="Created by" value={task.createdBy} />
-              <MetaItem label="Created" value={formatDueDate(task.createdAt)} />
-              <MetaItem label="Last updated" value={formatDueDate(task.updatedAt)} />
+              <span className="text-[12.5px] text-[#8c8c96]">
+                {task.dueDate ? `Due ${formatDueDate(task.dueDate)}` : 'No due date'}
+                {task.assignee
+                  ? ` · ${task.assignee.firstName} ${task.assignee.lastName}`
+                  : ' · Unassigned'}
+              </span>
             </div>
           </div>
         </div>
-      </Card>
+
+        <div className="flex flex-none items-center gap-2">
+          {canAssign ? (
+            <button
+              type="button"
+              onClick={() => setAssignOpen(true)}
+              aria-label="Assign task"
+              className="inline-flex h-9 items-center gap-2 rounded-[9px] border border-[#e6e6eb] bg-white px-3.5 text-[13px] font-medium text-[#4b4b55] transition-colors hover:bg-[#f4f4f6]"
+            >
+              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#f0f0f3] text-[9px] font-semibold text-[#4b4b55]">
+                {task.assignee ? initials(task.assignee.firstName, task.assignee.lastName) : '?'}
+              </span>
+              {task.assignee ? `${task.assignee.firstName} ${task.assignee.lastName}` : 'Assign'}
+              <span className="text-[9px] text-[#b4b4bd]">▾</span>
+            </button>
+          ) : null}
+          {canUpdate ? (
+            <button
+              type="button"
+              onClick={() => setEditOpen(true)}
+              className="inline-flex h-9 items-center rounded-[9px] border border-[#1b1b1f] bg-[#1b1b1f] px-3.5 text-[13px] font-semibold text-white transition-colors hover:bg-black"
+            >
+              Edit
+            </button>
+          ) : null}
+          <button
+            type="button"
+            aria-label="More options"
+            className="flex h-9 w-9 items-center justify-center rounded-[9px] border border-[#e6e6eb] bg-white text-[15px] tracking-[1px] text-[#8c8c96] transition-colors hover:bg-[#f4f4f6]"
+          >
+            ···
+          </button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
+        <div className="flex min-w-0 flex-col gap-4">
+          <section className="flex flex-col gap-[9px] rounded-[14px] border border-[#ececf0] bg-white px-5 py-[18px]">
+            <h2 className="m-0 text-[14px] font-semibold text-[#1b1b1f]">Description</h2>
+            {task.description ? (
+              <p className="m-0 text-[13.5px] leading-[1.6] text-[#4b4b55]">{task.description}</p>
+            ) : (
+              <p className="m-0 text-[13.5px] text-[#a0a0aa]">&mdash;</p>
+            )}
+          </section>
+
+          <section className="flex flex-col gap-3.5 rounded-[14px] border border-[#ececf0] bg-white px-5 py-[18px]">
+            <h2 className="m-0 text-[14px] font-semibold text-[#1b1b1f]">Activity</h2>
+            {activity.map((entry) => (
+              <div key={entry.title} className="flex gap-3">
+                <span
+                  className="mt-[5px] block h-2 w-2 flex-none rounded-full"
+                  style={{ background: entry.dot }}
+                />
+                <div className="flex min-w-0 flex-col gap-0.5">
+                  <span className="text-[13px] font-medium text-[#1b1b1f]">{entry.title}</span>
+                  <span className="text-[12px] text-[#8c8c96]">{entry.meta}</span>
+                </div>
+              </div>
+            ))}
+          </section>
+        </div>
+
+        <aside className="flex min-w-0 flex-col gap-4">
+          <section className="flex flex-col gap-3 rounded-[14px] border border-[#ececf0] bg-white px-[18px] py-4">
+            <h2 className="m-0 text-[14px] font-semibold text-[#1b1b1f]">Details</h2>
+            <DetailRow label="Status">{TASK_STATUS_LABELS[task.status]}</DetailRow>
+            <DetailRow label="Priority">{TASK_PRIORITY_LABELS[task.priority]}</DetailRow>
+            <DetailRow label="Assignee">
+              {task.assignee
+                ? `${task.assignee.firstName} ${task.assignee.lastName}`
+                : 'Unassigned'}
+            </DetailRow>
+            <DetailRow label="Due date">
+              {task.dueDate ? formatDueDate(task.dueDate) : <Dash />}
+            </DetailRow>
+            {task.completedAt ? (
+              <DetailRow label="Completed at">{formatDueDate(task.completedAt)}</DetailRow>
+            ) : null}
+          </section>
+
+          <section className="flex flex-col gap-3 rounded-[14px] border border-[#ececf0] bg-white px-[18px] py-4">
+            <h2 className="m-0 text-[14px] font-semibold text-[#1b1b1f]">Related</h2>
+            {task.contact ? (
+              <RelatedRow
+                initials={initials(task.contact.firstName, task.contact.lastName)}
+                href={`/contacts/${task.contact.id}`}
+                name={`${task.contact.firstName} ${task.contact.lastName}`}
+                caption="Contact"
+              />
+            ) : (
+              <EmptyRelated label="No contact linked" />
+            )}
+            {task.deal ? (
+              <RelatedRow
+                initials={task.deal.title.slice(0, 2).toUpperCase()}
+                href={`/deals/${task.deal.id}`}
+                name={task.deal.title}
+                caption="Deal"
+              />
+            ) : (
+              <EmptyRelated label="No deal linked" actionLink="#" actionText="Link a deal" />
+            )}
+          </section>
+
+          <section className="flex flex-col gap-[10px] rounded-[14px] border border-[#ececf0] bg-white px-[18px] py-4">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex flex-col gap-0.5">
+                <h2 className="m-0 text-[14px] font-semibold text-[#1b1b1f]">Calendar</h2>
+                <TaskCalendarSyncBadge taskId={task.id} />
+              </div>
+            </div>
+
+            <div className="mt-1 flex flex-col gap-2 border-t border-[#f2f2f5] pt-2.5">
+              <MetaRow label="Created" value={formatDueDate(task.createdAt)} />
+              <MetaRow label="Last updated" value={formatDueDate(task.updatedAt)} />
+              {canDelete ? (
+                <button
+                  type="button"
+                  onClick={handleDelete}
+                  disabled={deleting}
+                  className="mt-1 inline-flex h-8 items-center self-start rounded-[8px] border border-[#e6e6eb] bg-white px-3 text-[12.5px] font-medium text-[#b91c1c] transition-colors hover:border-[#f0d5d5] hover:bg-[#fdf2f2] disabled:opacity-60"
+                >
+                  {deleting ? 'Deleting...' : 'Delete task'}
+                </button>
+              ) : null}
+            </div>
+          </section>
+        </aside>
+      </div>
 
       <AssigneePickerDialog
         task={task}
         open={assignOpen}
         onOpenChange={(open) => setAssignOpen(open)}
       />
+
+      <TaskFormDrawer open={editOpen} onOpenChange={setEditOpen} task={task} />
     </div>
   )
+}
+
+function Dash(): React.JSX.Element {
+  return <span className="text-[#a0a0aa]">&mdash;</span>
 }
 
 function DetailRow({
@@ -275,18 +346,73 @@ function DetailRow({
   children: React.ReactNode
 }): React.JSX.Element {
   return (
-    <div className="flex items-start justify-between gap-4">
-      <dt className="text-sm font-medium text-slate-500">{label}</dt>
-      <dd className="text-right text-sm">{children}</dd>
+    <div className="flex items-baseline justify-between gap-3.5 text-[13px]">
+      <span className="flex-none text-[#8c8c96]">{label}</span>
+      <span className="truncate text-right font-medium text-[#1b1b1f]">{children}</span>
     </div>
   )
 }
 
-function MetaItem({ label, value }: { label: string; value: string }): React.JSX.Element {
+function MetaRow({ label, value }: { label: string; value: string }): React.JSX.Element {
   return (
-    <div className="flex items-center justify-between gap-4">
-      <span className="text-sm font-medium text-slate-500">{label}</span>
-      <span className="text-sm text-slate-700">{value}</span>
+    <div className="flex items-baseline justify-between gap-3.5 text-[12.5px]">
+      <span className="text-[#8c8c96]">{label}</span>
+      <span className="font-mono text-[#1b1b1f]">{value}</span>
+    </div>
+  )
+}
+
+function RelatedRow({
+  initials: init,
+  href,
+  name,
+  caption,
+}: {
+  initials: string
+  href: string
+  name: string
+  caption: string
+}): React.JSX.Element {
+  return (
+    <div className="flex items-center gap-[11px]">
+      <span className="flex h-[30px] w-[30px] flex-none items-center justify-center rounded-full bg-[#f0f0f3] text-[10.5px] font-semibold text-[#4b4b55]">
+        {init}
+      </span>
+      <div className="flex min-w-0 flex-col gap-px">
+        <Link
+          href={href}
+          className="truncate text-[13px] font-medium text-[#1b1b1f] hover:underline"
+        >
+          {name}
+        </Link>
+        <span className="text-[11.5px] text-[#a0a0aa]">{caption}</span>
+      </div>
+    </div>
+  )
+}
+
+function EmptyRelated({
+  label,
+  actionLink,
+  actionText,
+}: {
+  label: string
+  actionLink?: string
+  actionText?: string
+}): React.JSX.Element {
+  return (
+    <div className="flex items-center gap-[11px]">
+      <span className="block h-[30px] w-[30px] flex-none rounded-[8px] border border-dashed border-[#d8d8e0]" />
+      <div className="flex min-w-0 flex-col gap-px">
+        <span className="text-[13px] font-medium text-[#8c8c96]">{label}</span>
+        {actionLink && actionText ? (
+          <Link href={actionLink} className="text-[11.5px] text-[#4338ca] hover:underline">
+            {actionText}
+          </Link>
+        ) : (
+          <span className="text-[11.5px] text-[#a0a0aa]">&mdash;</span>
+        )}
+      </div>
     </div>
   )
 }

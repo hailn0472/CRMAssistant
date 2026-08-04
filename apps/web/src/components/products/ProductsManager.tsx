@@ -6,7 +6,7 @@ import { Pencil, Plus } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 import { getProducts, updateProduct } from '@/services/product.service'
-import { usePermission } from '@/hooks/usePermission'
+import { useMyPermissions } from '@/hooks/usePermission'
 import { formatCurrency } from '@/components/deals/deal-display'
 import { ResponsiveTableWrapper } from '@/components/shared/ResponsiveTableWrapper'
 import { EmptyState } from '@/components/shared/EmptyState'
@@ -22,9 +22,10 @@ export function ProductsManager(): React.JSX.Element {
   const [formOpen, setFormOpen] = useState(false)
   const [editingProduct, setEditingProduct] = useState<Product | null>(null)
 
-  const canRead = usePermission('PRODUCT', 'READ')
-  const canCreate = usePermission('PRODUCT', 'CREATE')
-  const canUpdate = usePermission('PRODUCT', 'UPDATE')
+  const { hasPermission, isLoading: permissionsLoading } = useMyPermissions()
+  const canRead = hasPermission('PRODUCT', 'READ')
+  const canCreate = hasPermission('PRODUCT', 'CREATE')
+  const canUpdate = hasPermission('PRODUCT', 'UPDATE')
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['products'],
@@ -43,6 +44,8 @@ export function ProductsManager(): React.JSX.Element {
       toast.error('Failed to update product')
     },
   })
+
+  if (permissionsLoading) return <TableSkeleton />
 
   if (!canRead) {
     return <PermissionLimitedState message="You do not have permission to view products." />

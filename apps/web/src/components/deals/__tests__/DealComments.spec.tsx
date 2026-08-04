@@ -152,7 +152,7 @@ describe('DealComments', () => {
 
     await waitFor(() => {
       const mention = screen.getByText('@Grace Hopper')
-      expect(mention.className).toContain('bg-indigo-50')
+      expect(mention.className).toMatch(/bg-\[#f0f0f3\]|bg-indigo-50/)
     })
     expect(screen.queryByText('@[Grace Hopper](user-2)')).not.toBeInTheDocument()
   })
@@ -252,12 +252,12 @@ describe('DealComments', () => {
     expect(screen.queryByRole('button', { name: 'Comment' })).not.toBeInTheDocument()
   })
 
-  it('renders EmptyState when there are no comments', async () => {
+  it('renders composer when there are no comments', async () => {
     getDealComments.mockResolvedValue({ items: [], total: 0, page: 1, pageSize: 50 })
     renderComments()
 
     await waitFor(() => {
-      expect(screen.getByText('No comments yet')).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Comment' })).toBeInTheDocument()
     })
   })
 

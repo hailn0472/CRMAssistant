@@ -6,10 +6,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { z } from 'zod'
 import toast from 'react-hot-toast'
 
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { ErrorState, FormSkeleton } from '@/components/shared'
-import { cn } from '@/lib/utils'
 import {
   getMyActivityLogPreferences,
   updateActivityLogPreferences,
@@ -138,59 +135,54 @@ export function ActivityLogPreferencesForm(): React.JSX.Element {
   }
 
   return (
-    <Card className="max-w-[560px] border-slate-200 shadow-sm">
-      <CardHeader>
-        <CardTitle className="text-slate-950">Activity Logging Preferences</CardTitle>
-        <CardDescription>
-          Choose which automatic events appear on contact timelines. Auto-logged events are marked
-          with an &quot;Auto&quot; badge.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-5">
-          <div className="space-y-4">
-            {TOGGLE_FIELDS.map((toggle) => (
-              <Controller
-                key={toggle.key}
-                control={control}
-                name={toggle.key}
-                render={({ field }) => (
-                  <div className="flex items-center justify-between gap-4">
-                    <div>
-                      <p className="text-sm font-medium text-slate-800">{toggle.label}</p>
-                      <p className="text-xs text-slate-500">{toggle.description}</p>
-                    </div>
-                    <button
-                      type="button"
-                      role="switch"
-                      aria-checked={field.value}
-                      aria-label={toggle.ariaLabel}
-                      onClick={() => field.onChange(!field.value)}
-                      className={cn(
-                        'relative inline-flex w-[44px] h-[24px] shrink-0 rounded-full transition-colors',
-                        field.value ? 'bg-indigo-600' : 'bg-slate-300',
-                      )}
-                    >
-                      <span
-                        className={cn(
-                          'absolute top-[2px] h-5 w-5 rounded-full bg-white shadow transition-transform',
-                          field.value ? 'translate-x-[20px]' : 'translate-x-[2px]',
-                        )}
-                      />
-                    </button>
+    <section className="max-w-[560px] rounded-[14px] border border-[#ececf0] bg-white px-[22px] py-5">
+      <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-[18px]">
+        <div className="flex flex-col">
+          {TOGGLE_FIELDS.map((toggle) => (
+            <Controller
+              key={toggle.key}
+              control={control}
+              name={toggle.key}
+              render={({ field }) => (
+                <div className="flex items-center gap-5 border-b border-[#f4f4f7] py-3.5">
+                  <div className="flex min-w-0 flex-col gap-0.5">
+                    <span className="text-[13.5px] font-medium text-[#1b1b1f]">{toggle.label}</span>
+                    <span className="text-[12px] text-[#8c8c96]">{toggle.description}</span>
                   </div>
-                )}
-              />
-            ))}
-          </div>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={field.value}
+                    aria-label={toggle.ariaLabel}
+                    onClick={() => field.onChange(!field.value)}
+                    className="ml-auto flex h-[24px] w-[44px] shrink-0 items-center rounded-full border p-[2px] transition-colors"
+                    style={{
+                      background: field.value ? '#1b1b1f' : '#ececf0',
+                      borderColor: field.value ? '#1b1b1f' : '#e0e0e6',
+                      justifyContent: field.value ? 'flex-end' : 'flex-start',
+                    }}
+                  >
+                    <span className="block h-[17px] w-[17px] rounded-full bg-white shadow-[0_1px_2px_rgba(20,20,26,0.2)]" />
+                  </button>
+                </div>
+              )}
+            />
+          ))}
+        </div>
 
-          <div className="flex justify-end border-t border-slate-100 pt-4">
-            <Button type="submit" disabled={isSubmitting} className="h-11">
-              {isSubmitting ? 'Saving...' : 'Save preferences'}
-            </Button>
-          </div>
-        </form>
-      </CardContent>
-    </Card>
+        <div className="flex items-center justify-between gap-4">
+          <span className="text-[12px] text-[#a0a0aa]">
+            Auto-logged events carry an &quot;Auto&quot; badge on the timeline.
+          </span>
+          <button
+            type="submit"
+            disabled={isSubmitting}
+            className="inline-flex h-9 shrink-0 items-center rounded-[9px] border border-[#1b1b1f] bg-[#1b1b1f] px-4 text-[13px] font-semibold text-white transition-colors hover:bg-black disabled:opacity-60"
+          >
+            {isSubmitting ? 'Saving...' : 'Save preferences'}
+          </button>
+        </div>
+      </form>
+    </section>
   )
 }

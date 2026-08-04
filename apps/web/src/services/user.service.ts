@@ -24,6 +24,13 @@ export type UserConnection = {
   pageSize: number
 }
 
+export type UserStats = {
+  total: number
+  active: number
+  deactivated: number
+  admins: number
+}
+
 export type CreateUserFormData = {
   email: string
   firstName: string
@@ -128,7 +135,7 @@ export async function getUser(id: string): Promise<User> {
 export async function getUsers(
   page: number,
   pageSize: number,
-  filter?: { search?: string; isActive?: boolean },
+  filter?: { search?: string; isActive?: boolean; roleId?: string; teamId?: string },
 ): Promise<UserConnection> {
   const data = await graphqlRequest<{ users: UserConnection }>(
     `query Users($filter: UserFilterInput, $pagination: UserPaginationInput) {
@@ -142,6 +149,16 @@ export async function getUsers(
     { filter: filter || undefined, pagination: { page, pageSize } },
   )
   return data.users
+}
+
+export async function getUserStats(): Promise<UserStats> {
+  const data = await graphqlRequest<{ userStats: UserStats }>(
+    `query UserStats {
+      userStats { total active deactivated admins }
+    }`,
+    {},
+  )
+  return data.userStats
 }
 
 export async function createUser(input: CreateUserFormData): Promise<User> {

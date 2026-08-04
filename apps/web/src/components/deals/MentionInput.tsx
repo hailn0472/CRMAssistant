@@ -13,6 +13,8 @@ type MentionInputProps = {
   onChange: (value: string) => void
   disabled?: boolean
   placeholder?: string
+  rows?: number
+  className?: string
 }
 
 type MentionAttempt = {
@@ -54,6 +56,8 @@ export function MentionInput({
   onChange,
   disabled = false,
   placeholder = 'Write a comment...',
+  rows = 3,
+  className,
 }: MentionInputProps): React.JSX.Element {
   const [pickerOpen, setPickerOpen] = useState(false)
   const [mentionStart, setMentionStart] = useState(0)
@@ -141,6 +145,9 @@ export function MentionInput({
       ? `mention-option-${candidates[highlightIndex % candidates.length]!.id}`
       : undefined
 
+  const defaultClasses =
+    'w-full resize-y rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100 disabled:opacity-60'
+
   return (
     <div className="relative">
       <textarea
@@ -150,7 +157,7 @@ export function MentionInput({
         onKeyDown={handleKeyDown}
         onBlur={closePicker}
         disabled={disabled}
-        rows={3}
+        rows={rows}
         placeholder={placeholder}
         aria-label="Comment"
         role="combobox"
@@ -158,7 +165,7 @@ export function MentionInput({
         aria-haspopup="listbox"
         aria-controls="deal-comment-mention-listbox"
         aria-activedescendant={activeOptionId}
-        className="w-full resize-y rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100 disabled:opacity-60"
+        className={className ?? defaultClasses}
       />
 
       {pickerOpen ? (

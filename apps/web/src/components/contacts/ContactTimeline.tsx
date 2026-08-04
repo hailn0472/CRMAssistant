@@ -170,19 +170,19 @@ export function ContactTimeline({ contactId }: ContactTimelineProps): React.JSX.
   // Loading skeleton
   if (isLoading) {
     return (
-      <div className="space-y-4">
-        <div className="h-6 w-48 animate-pulse rounded bg-slate-200" />
+      <div className="flex flex-col gap-4">
+        <div className="h-6 w-48 animate-pulse rounded-[6px] bg-[#f2f2f5]" />
         <div className="flex gap-2">
-          <div className="h-8 w-16 animate-pulse rounded bg-slate-200" />
-          <div className="h-8 w-16 animate-pulse rounded bg-slate-200" />
-          <div className="h-8 w-16 animate-pulse rounded bg-slate-200" />
+          <div className="h-7 w-16 animate-pulse rounded-full bg-[#f2f2f5]" />
+          <div className="h-7 w-16 animate-pulse rounded-full bg-[#f2f2f5]" />
+          <div className="h-7 w-16 animate-pulse rounded-full bg-[#f2f2f5]" />
         </div>
         {Array.from({ length: 3 }).map((_, i) => (
-          <div key={i} className="flex gap-4">
-            <div className="h-8 w-8 animate-pulse rounded-full bg-slate-200" />
-            <div className="flex-1 space-y-2 rounded-lg border p-4">
-              <div className="h-4 w-3/4 animate-pulse rounded bg-slate-200" />
-              <div className="h-3 w-1/2 animate-pulse rounded bg-slate-200" />
+          <div key={i} className="flex gap-3">
+            <div className="h-[9px] w-[9px] flex-none animate-pulse rounded-full bg-[#f2f2f5]" />
+            <div className="flex-1 space-y-2">
+              <div className="h-4 w-3/4 animate-pulse rounded-[6px] bg-[#f2f2f5]" />
+              <div className="h-3 w-1/2 animate-pulse rounded-[6px] bg-[#f2f2f5]" />
             </div>
           </div>
         ))}
@@ -193,12 +193,12 @@ export function ContactTimeline({ contactId }: ContactTimelineProps): React.JSX.
   // Error state
   if (error) {
     return (
-      <div className="rounded-lg border border-red-200 bg-red-50 p-6 text-center">
-        <p className="text-sm text-red-600">{error}</p>
+      <div className="rounded-[11px] border border-[#f0d5d5] bg-[#fdf2f2] p-6 text-center">
+        <p className="text-[13px] text-[#b91c1c]">{error}</p>
         <button
           type="button"
           onClick={loadTimeline}
-          className="mt-3 rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700"
+          className="mt-3 inline-flex h-9 items-center rounded-[9px] border border-[#1b1b1f] bg-[#1b1b1f] px-4 text-[13px] font-semibold text-white transition-colors hover:bg-black"
         >
           Retry
         </button>
@@ -209,22 +209,22 @@ export function ContactTimeline({ contactId }: ContactTimelineProps): React.JSX.
   // Empty state
   if (totalCount === 0) {
     return (
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h3 className="text-lg font-semibold text-slate-900">Activity Timeline</h3>
+      <div className="flex flex-col gap-4">
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="text-[14px] font-semibold text-[#1b1b1f]">Activity timeline</h2>
           <button
             type="button"
             onClick={() => setShowComposer(!showComposer)}
-            className="rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700"
+            className="inline-flex h-8 items-center rounded-[9px] border border-[#1b1b1f] bg-[#1b1b1f] px-3 text-[12px] font-semibold text-white transition-colors hover:bg-black"
           >
-            Add Note
+            {showComposer ? 'Cancel' : 'Add note'}
           </button>
         </div>
 
         {showComposer && <NoteComposer onSubmit={handleAddNote} isSubmitting={isAddingNote} />}
 
-        <div className="rounded-lg border border-dashed border-slate-300 p-8 text-center">
-          <p className="text-sm text-slate-500">
+        <div className="rounded-[11px] border border-dashed border-[#d8d8e0] p-8 text-center">
+          <p className="text-[13px] text-[#8c8c96]">
             No activity recorded yet — log your first interaction
           </p>
         </div>
@@ -234,30 +234,31 @@ export function ContactTimeline({ contactId }: ContactTimelineProps): React.JSX.
 
   // Main timeline
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h3 className="text-lg font-semibold text-slate-900">
-          Activity Timeline
-          <span className="ml-2 text-sm font-normal text-slate-400">
-            ({totalCount} {totalCount === 1 ? 'activity' : 'activities'})
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-baseline gap-[9px]">
+          <h2 className="text-[14px] font-semibold text-[#1b1b1f]">Activity timeline</h2>
+          <span className="text-[12px] text-[#a0a0aa]">
+            {totalCount} {totalCount === 1 ? 'activity' : 'activities'}
           </span>
-        </h3>
-        <button
-          type="button"
-          onClick={() => setShowComposer(!showComposer)}
-          className="rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700"
-        >
-          {showComposer ? 'Cancel' : 'Add Note'}
-        </button>
+        </div>
+        <div className="flex items-center gap-[7px]">
+          <TimelineFilter activeFilter={filter} onFilterChange={setFilter} />
+          <button
+            type="button"
+            onClick={() => setShowComposer(!showComposer)}
+            className="inline-flex h-8 items-center rounded-[9px] border border-[#1b1b1f] bg-[#1b1b1f] px-3 text-[12px] font-semibold text-white transition-colors hover:bg-black"
+          >
+            {showComposer ? 'Cancel' : 'Add note'}
+          </button>
+        </div>
       </div>
 
       {showComposer && <NoteComposer onSubmit={handleAddNote} isSubmitting={isAddingNote} />}
 
-      <TimelineFilter activeFilter={filter} onFilterChange={setFilter} />
-
-      <div className="mt-4">
+      <div>
         {filteredActivities.length === 0 ? (
-          <p className="py-4 text-center text-sm text-slate-400">
+          <p className="py-4 text-center text-[13px] text-[#a0a0aa]">
             No {filter === 'SALES' ? 'sales' : 'system'} activities
           </p>
         ) : (
@@ -282,8 +283,8 @@ export function ContactTimeline({ contactId }: ContactTimelineProps): React.JSX.
           <div ref={sentinelRef} className="py-4 text-center">
             {isLoadingMore ? (
               <div className="flex items-center justify-center gap-2">
-                <div className="h-4 w-4 animate-spin rounded-full border-2 border-slate-300 border-t-blue-600" />
-                <span className="text-sm text-slate-400">Loading more...</span>
+                <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-[#e6e6eb] border-t-[#1b1b1f]" />
+                <span className="text-[12.5px] text-[#a0a0aa]">Loading more...</span>
               </div>
             ) : (
               <div className="h-4" />
@@ -292,7 +293,7 @@ export function ContactTimeline({ contactId }: ContactTimelineProps): React.JSX.
         )}
 
         {!pageInfo.hasNextPage && activities.length > 0 && (
-          <p className="py-4 text-center text-sm text-slate-400">No more activities</p>
+          <p className="py-4 text-center text-[12.5px] text-[#a0a0aa]">No more activities</p>
         )}
       </div>
     </div>

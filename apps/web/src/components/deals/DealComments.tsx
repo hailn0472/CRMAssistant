@@ -14,10 +14,8 @@ import {
 import type { DealComment } from '@/services/deal-comment.service'
 import { GraphqlSubscriptionClient } from '@/lib/graphql-subscription'
 import { parseCommentSegments } from '@/lib/mention-parse'
-import { EmptyState } from '@/components/shared/EmptyState'
 import { ErrorState } from '@/components/shared/ErrorState'
 import { LoadingSkeleton } from '@/components/shared/LoadingSkeleton'
-import { Button } from '@/components/ui/button'
 import { usePermission } from '@/hooks/usePermission'
 import { useAuthStore } from '@/stores/auth.store'
 import { MentionInput } from './MentionInput'
@@ -118,86 +116,77 @@ export function DealComments({ dealId }: { dealId: string }): React.JSX.Element 
   const comments = connection?.items ?? []
 
   return (
-    <div className="space-y-4">
-      <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-400">Comments</h3>
-
+    <div className="flex flex-col gap-3.5 px-[18px] pt-[14px] pb-[18px]">
       {error ? (
         <ErrorState message="Failed to load comments" />
-      ) : comments.length === 0 ? (
-        <EmptyState
-          title="No comments yet"
-          description="Discuss this deal with your team. Use @ to mention a colleague."
-        />
       ) : (
-        <ul className="space-y-4">
-          {comments.map((comment) => (
-            <li key={comment.id} className="flex gap-3">
-              <div
-                aria-hidden="true"
-                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-sm font-semibold text-indigo-700"
-              >
-                {(
-                  comment.author.firstName.charAt(0) + comment.author.lastName.charAt(0)
-                ).toUpperCase()}
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="flex items-baseline justify-between gap-2">
-                  <p className="text-sm font-medium text-slate-900">
+        comments.map((comment) => (
+          <div key={comment.id} className="flex gap-[11px]">
+            <span className="flex h-[28px] w-[28px] flex-none items-center justify-center rounded-full bg-[#f0f0f3] text-[10.5px] font-semibold text-[#4b4b55]">
+              {(
+                comment.author.firstName.charAt(0) + comment.author.lastName.charAt(0)
+              ).toUpperCase()}
+            </span>
+            <div className="flex min-w-0 flex-1 flex-col gap-[3px]">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-[13px] font-semibold text-[#1b1b1f]">
                     {comment.author.firstName} {comment.author.lastName}
-                    <span className="ml-2 text-xs font-normal text-slate-400">
-                      {formatRelativeTime(comment.createdAt)}
-                    </span>
-                  </p>
-                  {comment.userId === currentUserId ? (
-                    <button
-                      type="button"
-                      aria-label={`Delete your comment`}
-                      onClick={() => handleDelete(comment)}
-                      className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  ) : null}
+                  </span>
+                  <span className="text-[11.5px] text-[#a0a0aa]">
+                    {formatRelativeTime(comment.createdAt)}
+                  </span>
                 </div>
-                <p className="mt-0.5 whitespace-pre-wrap break-words text-sm leading-6 text-slate-700">
-                  {parseCommentSegments(comment.comment, comment.mentionedUsers).map(
-                    (segment, index) =>
-                      segment.type === 'mention' ? (
-                        <span
-                          key={index}
-                          className="rounded bg-indigo-50 px-1 font-medium text-indigo-600"
-                        >
-                          {segment.text}
-                        </span>
-                      ) : (
-                        <span key={index}>{segment.text}</span>
-                      ),
-                  )}
-                </p>
+                {comment.userId === currentUserId ? (
+                  <button
+                    type="button"
+                    aria-label="Delete your comment"
+                    onClick={() => handleDelete(comment)}
+                    className="text-[#a0a0aa] transition-colors hover:text-red-600"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                ) : null}
               </div>
-            </li>
-          ))}
-        </ul>
+              <p className="m-0 text-[13px] leading-[1.55] text-[#4b4b55]">
+                {parseCommentSegments(comment.comment, comment.mentionedUsers).map(
+                  (segment, index) =>
+                    segment.type === 'mention' ? (
+                      <span
+                        key={index}
+                        className="rounded bg-[#f0f0f3] px-1 font-medium text-[#1b1b1f]"
+                      >
+                        {segment.text}
+                      </span>
+                    ) : (
+                      <span key={index}>{segment.text}</span>
+                    ),
+                )}
+              </p>
+            </div>
+          </div>
+        ))
       )}
 
       {canComment ? (
-        <div className="space-y-2 border-t border-slate-100 pt-4">
+        <div className="flex flex-col gap-2 rounded-[11px] border border-[#e6e6eb] bg-[#fafafb] p-[10px_12px] transition-colors focus-within:border-[#1b1b1f] focus-within:bg-white">
           <MentionInput
             dealId={dealId}
             value={draft}
             onChange={setDraft}
             disabled={addMutation.isPending}
+            placeholder="Add a comment for your team…"
+            rows={2}
+            className="w-full resize-none border-none bg-transparent p-0 text-[13px] text-[#1b1b1f] outline-none placeholder:text-[#a0a0aa]"
           />
-          <div className="flex justify-end">
-            <Button
-              type="button"
-              size="sm"
-              onClick={handleSubmit}
-              disabled={addMutation.isPending || draft.trim().length === 0}
-            >
-              {addMutation.isPending ? 'Posting...' : 'Comment'}
-            </Button>
-          </div>
+          <button
+            type="button"
+            onClick={handleSubmit}
+            disabled={addMutation.isPending || draft.trim().length === 0}
+            className="self-end h-8 px-3.5 rounded-[9px] border border-[#1b1b1f] bg-[#1b1b1f] text-white text-[12.5px] font-semibold transition-colors hover:bg-black disabled:opacity-50"
+          >
+            {addMutation.isPending ? 'Posting...' : 'Comment'}
+          </button>
         </div>
       ) : null}
     </div>

@@ -93,7 +93,6 @@ describe('DealDocuments', () => {
     await waitFor(() => {
       expect(screen.getByText('contract.pdf')).toBeInTheDocument()
     })
-    expect(screen.getByText('Documents')).toBeInTheDocument()
     expect(screen.getByText('Documents attached to this deal').tagName).toBe('CAPTION')
   })
 
@@ -110,12 +109,12 @@ describe('DealDocuments', () => {
     expect(screen.getByText('1.0 MB')).toBeInTheDocument()
   })
 
-  it('renders EmptyState when there are no documents', async () => {
+  it('renders upload box when there are no documents', async () => {
     getDealDocuments.mockResolvedValue([])
     renderWithQuery(<DealDocuments dealId="deal-1" />)
 
     await waitFor(() => {
-      expect(screen.getByText('No documents yet')).toBeInTheDocument()
+      expect(screen.getByText('Choose file')).toBeInTheDocument()
     })
   })
 

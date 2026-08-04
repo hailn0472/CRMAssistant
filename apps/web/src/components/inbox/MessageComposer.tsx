@@ -109,7 +109,7 @@ export function MessageComposer({
   }
 
   return (
-    <div className="bg-white border-t border-slate-100 p-4 transition-all z-10">
+    <div className="bg-white p-4">
       {isFacebookConversation && (
         <div className="mx-auto mb-2 max-w-4xl">
           <button
@@ -118,8 +118,8 @@ export function MessageComposer({
             className={cn(
               'flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-semibold transition-colors',
               showFacebookOptions
-                ? 'bg-blue-100 text-blue-700 border border-blue-200'
-                : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50',
+                ? 'bg-[#f4f4f6] text-[#1b1b1f] border border-[#e6e6eb]'
+                : 'text-[#a0a0aa] hover:text-[#4b4b55] hover:bg-[#fafafb]',
             )}
           >
             <MessageSquarePlus className="h-3.5 w-3.5" />
@@ -127,22 +127,22 @@ export function MessageComposer({
           </button>
 
           {showFacebookOptions && (
-            <div className="mt-2 space-y-3 rounded-xl border border-slate-200 bg-slate-50/60 p-3">
+            <div className="mt-2 space-y-3 rounded-[11px] border border-[#e6e6eb] bg-[#fafafb] p-3">
               <div>
-                <p className="mb-1.5 text-xs font-semibold text-slate-600">Quick replies</p>
+                <p className="mb-1.5 text-xs font-semibold text-[#4b4b55]">Quick replies</p>
                 {quickReplies.length > 0 && (
                   <div className="mb-2 flex flex-wrap gap-1.5">
                     {quickReplies.map((qr, i) => (
                       <span
                         key={`${qr.payload}-${i}`}
-                        className="flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-2.5 py-0.5 text-xs font-medium text-blue-700"
+                        className="flex items-center gap-1 rounded-full border border-[#e6e6eb] bg-white px-2.5 py-0.5 text-xs font-medium text-[#1b1b1f]"
                       >
                         {qr.title}
                         <button
                           type="button"
                           aria-label={`Remove quick reply ${qr.title}`}
                           onClick={() => removeQuickReply(i)}
-                          className="text-blue-500 hover:text-blue-800"
+                          className="text-[#8c8c96] hover:text-[#1b1b1f]"
                         >
                           <X className="h-3 w-3" />
                         </button>
@@ -162,12 +162,12 @@ export function MessageComposer({
                       }
                     }}
                     placeholder="e.g., Yes please"
-                    className="h-8 flex-1 rounded-full border border-slate-200 bg-white px-3 text-xs outline-none focus:border-blue-400"
+                    className="h-8 flex-1 rounded-full border border-[#e6e6eb] bg-white px-3 text-xs outline-none focus:border-[#1b1b1f]"
                   />
                   <button
                     type="button"
                     onClick={addQuickReply}
-                    className="rounded-full bg-slate-900 px-3 py-1 text-xs font-medium text-white hover:bg-slate-800"
+                    className="rounded-full bg-[#1b1b1f] px-3 py-1 text-xs font-medium text-white hover:bg-black"
                   >
                     Add
                   </button>
@@ -175,7 +175,7 @@ export function MessageComposer({
               </div>
 
               <div>
-                <p className="mb-1.5 text-xs font-semibold text-slate-600">
+                <p className="mb-1.5 text-xs font-semibold text-[#4b4b55]">
                   Template (button / generic — JSON)
                 </p>
                 <textarea
@@ -186,9 +186,9 @@ export function MessageComposer({
                   }}
                   placeholder={'{"template_type":"button","text":"Choose an option","buttons":[]}'}
                   rows={2}
-                  className="w-full rounded-lg border border-slate-200 bg-white p-2 font-mono text-xs outline-none focus:border-blue-400"
+                  className="w-full rounded-lg border border-[#e6e6eb] bg-white p-2 font-mono text-xs outline-none focus:border-[#1b1b1f]"
                 />
-                {templateError && <p className="mt-1 text-xs text-red-600">{templateError}</p>}
+                {templateError && <p className="mt-1 text-xs text-[#b91c1c]">{templateError}</p>}
               </div>
             </div>
           )}
@@ -197,17 +197,15 @@ export function MessageComposer({
 
       <div
         className={cn(
-          'relative flex items-end gap-2 rounded-2xl bg-white p-2 transition-all duration-300 max-w-4xl mx-auto',
-          isFocused
-            ? 'shadow-md ring-2 ring-blue-500/20 border-blue-300'
-            : 'shadow-sm border border-slate-200',
+          'relative flex items-end gap-2 rounded-[11px] bg-white p-2 max-w-4xl mx-auto border transition-colors',
+          isFocused ? 'border-[#1b1b1f]' : 'border-[#e6e6eb]',
         )}
       >
         <div className="flex shrink-0 items-center gap-1 pb-1 pl-1">
           <button
             type="button"
             disabled={disabled}
-            className="rounded-full p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors disabled:opacity-50"
+            className="rounded-[7px] p-2 text-[#6b6b76] hover:bg-[#f4f4f6] transition-colors disabled:opacity-50"
             title="Attach file"
           >
             <Paperclip className="h-5 w-5" />
@@ -215,7 +213,7 @@ export function MessageComposer({
           <button
             type="button"
             disabled={disabled}
-            className="hidden sm:block rounded-full p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors disabled:opacity-50"
+            className="hidden sm:block rounded-[7px] p-2 text-[#6b6b76] hover:bg-[#f4f4f6] transition-colors disabled:opacity-50"
             title="Attach image"
           >
             <FileImage className="h-5 w-5" />
@@ -233,14 +231,14 @@ export function MessageComposer({
           onFocus={() => setIsFocused(true)}
           onBlur={() => setIsFocused(false)}
           disabled={disabled || sending}
-          className="max-h-[120px] min-h-[24px] flex-1 resize-none bg-transparent py-2.5 px-2 text-[15px] text-slate-900 placeholder:text-slate-400 focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+          className="max-h-[120px] min-h-[24px] flex-1 resize-none bg-transparent py-2.5 px-2 text-[13.5px] text-[#1b1b1f] placeholder:text-[#a0a0aa] focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
         />
 
         <div className="flex shrink-0 items-center gap-2 pb-1 pr-1">
           <button
             type="button"
             disabled={disabled}
-            className="rounded-full p-2 text-slate-400 hover:bg-slate-100 hover:text-amber-500 transition-colors disabled:opacity-50"
+            className="rounded-[7px] p-2 text-[#6b6b76] hover:bg-[#f4f4f6] transition-colors disabled:opacity-50"
             title="Insert emoji"
           >
             <Smile className="h-5 w-5" />
@@ -251,30 +249,23 @@ export function MessageComposer({
             disabled={!content.trim() || sending || disabled}
             onClick={handleSend}
             className={cn(
-              'flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition-all duration-300',
+              'flex h-9 items-center gap-1.5 rounded-[9px] px-3.5 text-[12.5px] font-semibold transition-colors',
               content.trim() && !disabled && !sending
-                ? 'bg-blue-600 text-white shadow-md hover:bg-blue-700 hover:shadow-lg hover:-translate-y-0.5 active:translate-y-0'
-                : 'bg-slate-100 text-slate-400 cursor-not-allowed',
+                ? 'border border-[#1b1b1f] bg-[#1b1b1f] text-white hover:bg-black'
+                : 'border border-[#e6e6eb] bg-[#fafafb] text-[#a0a0aa] cursor-not-allowed',
             )}
           >
             {sending ? (
               <span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
             ) : (
-              <Send className="h-4 w-4 ml-0.5" />
+              <Send className="h-4 w-4" />
             )}
+            {sending ? 'Sending...' : 'Send'}
           </button>
         </div>
       </div>
-      <div className="mt-2 text-center text-[11px] text-slate-400 font-medium">
-        Press{' '}
-        <kbd className="rounded bg-slate-100 px-1.5 py-0.5 font-sans shadow-sm border border-slate-200">
-          Enter
-        </kbd>{' '}
-        to send,{' '}
-        <kbd className="rounded bg-slate-100 px-1.5 py-0.5 font-sans shadow-sm border border-slate-200">
-          Shift + Enter
-        </kbd>{' '}
-        for new line
+      <div className="mt-2 text-center text-[11px] text-[#a0a0aa]">
+        Enter to send · Shift+Enter for a new line
       </div>
     </div>
   )

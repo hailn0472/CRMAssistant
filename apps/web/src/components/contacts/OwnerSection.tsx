@@ -1,13 +1,10 @@
 'use client'
 
 import { useState, useCallback } from 'react'
-import { Pencil, User, Loader2 } from 'lucide-react'
+import { User, Loader2 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
-import { Button } from '@/components/ui/button'
-import { Card, CardContent } from '@/components/ui/card'
 import { OwnerPickerDialog } from '@/components/contacts/OwnerPickerDialog'
-import { cn } from '@/lib/utils'
 import type { OwnerData } from '@/components/contacts/OwnerCell'
 
 type OwnerSectionProps = {
@@ -20,15 +17,6 @@ type OwnerSectionProps = {
 
 function getInitials(firstName: string, lastName: string): string {
   return `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase()
-}
-
-function getAvatarColor(name: string): string {
-  const colors = ['bg-indigo-500', 'bg-emerald-500', 'bg-sky-500', 'bg-amber-500']
-  let hash = 0
-  for (let i = 0; i < name.length; i++) {
-    hash = name.charCodeAt(i) + ((hash << 5) - hash)
-  }
-  return colors[Math.abs(hash) % colors.length]
 }
 
 export function OwnerSection({
@@ -66,65 +54,55 @@ export function OwnerSection({
 
   return (
     <>
-      <Card>
-        <CardContent className="p-4">
-          <div className="flex items-center justify-between">
-            {isAssigning ? (
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-400">
-                  <Loader2 className="h-5 w-5 animate-spin" />
-                </div>
-                <div>
-                  <div className="text-xs font-medium text-slate-500">Owner</div>
-                  <div className="flex items-center gap-1.5 text-sm text-slate-400">
-                    <Loader2 className="h-3 w-3 animate-spin" />
-                    Assigning...
-                  </div>
-                </div>
+      <section className="rounded-[14px] border border-[#ececf0] bg-white px-[18px] py-4">
+        <div className="flex items-center justify-between gap-3">
+          {isAssigning ? (
+            <div className="flex items-center gap-[11px]">
+              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#f0f0f3] text-[#a0a0aa]">
+                <Loader2 className="h-4 w-4 animate-spin" />
               </div>
-            ) : isUnassigned ? (
-              <div className="flex items-center gap-3">
-                <span className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-400">
-                  <User className="h-5 w-5" />
+              <div className="flex flex-col gap-px">
+                <span className="text-[11.5px] text-[#a0a0aa]">Owner</span>
+                <span className="flex items-center gap-1.5 text-[13px] text-[#a0a0aa]">
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  Assigning...
                 </span>
-                <div>
-                  <div className="text-xs font-medium text-slate-500">Owner</div>
-                  <div className="text-sm text-slate-400">Unassigned</div>
-                </div>
               </div>
-            ) : (
-              <div className="flex items-center gap-3">
-                <span
-                  className={cn(
-                    'flex h-10 w-10 items-center justify-center rounded-full text-sm font-medium text-white',
-                    getAvatarColor(fullName),
-                  )}
-                >
-                  {getInitials(owner.firstName, owner.lastName)}
-                </span>
-                <div>
-                  <div className="text-xs font-medium text-slate-500">Owner</div>
-                  <div className="text-sm font-medium text-slate-800">{fullName}</div>
-                  <div className="text-xs text-slate-400">{owner.email}</div>
-                </div>
+            </div>
+          ) : isUnassigned ? (
+            <div className="flex items-center gap-[11px]">
+              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#f0f0f3] text-[#a0a0aa]">
+                <User className="h-4 w-4" />
+              </span>
+              <div className="flex flex-col gap-px">
+                <span className="text-[11.5px] text-[#a0a0aa]">Owner</span>
+                <span className="text-[13px] text-[#8c8c96]">Unassigned</span>
               </div>
-            )}
+            </div>
+          ) : (
+            <div className="flex items-center gap-[11px]">
+              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#f0f0f3] text-[11px] font-semibold text-[#4b4b55]">
+                {getInitials(owner.firstName, owner.lastName)}
+              </span>
+              <div className="flex min-w-0 flex-col gap-px">
+                <span className="text-[13px] font-medium text-[#1b1b1f]">{fullName}</span>
+                <span className="truncate text-[11.5px] text-[#a0a0aa]">Owner · {owner.email}</span>
+              </div>
+            </div>
+          )}
 
-            {canUpdate ? (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setDialogOpen(true)}
-                disabled={isAssigning}
-                className="text-slate-400 hover:text-slate-600"
-              >
-                <Pencil className="h-4 w-4" />
-                <span className="ml-1">Edit</span>
-              </Button>
-            ) : null}
-          </div>
-        </CardContent>
-      </Card>
+          {canUpdate ? (
+            <button
+              type="button"
+              onClick={() => setDialogOpen(true)}
+              disabled={isAssigning}
+              className="flex-none text-[12px] text-[#4338ca] transition-colors hover:underline disabled:opacity-50"
+            >
+              Change
+            </button>
+          ) : null}
+        </div>
+      </section>
 
       <OwnerPickerDialog
         open={dialogOpen}

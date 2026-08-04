@@ -2,10 +2,21 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, fireEvent } from '@testing-library/react'
 
 import { ContactsTable } from '../ContactsTable'
+import { emptyContactFilters } from '../ContactFilterBar'
 import { getContacts } from '@/services/contact.service'
 
 jest.mock('@/services/contact.service', () => ({
   getContacts: jest.fn(),
+}))
+
+jest.mock('@/services/segment.service', () => ({
+  getSavedSegments: jest.fn().mockResolvedValue([]),
+  createSegment: jest.fn(),
+}))
+
+jest.mock('@/services/owner.service', () => ({
+  searchUsers: jest.fn().mockResolvedValue([]),
+  assignContactOwnerBulk: jest.fn(),
 }))
 
 // Mock ResizeObserver for ResponsiveTableWrapper
@@ -16,9 +27,13 @@ class ResizeObserverMock {
 }
 global.ResizeObserver = ResizeObserverMock as unknown as typeof ResizeObserver
 
-function renderWithQueryClient(ui: React.ReactElement): void {
+function renderTable(filters = emptyContactFilters): void {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>)
+  render(
+    <QueryClientProvider client={queryClient}>
+      <ContactsTable filters={filters} onFiltersChange={jest.fn()} />
+    </QueryClientProvider>,
+  )
 }
 
 describe('ContactsTable', () => {
@@ -29,9 +44,19 @@ describe('ContactsTable', () => {
   it('renders empty state when no contacts exist', async () => {
     ;(getContacts as jest.Mock).mockResolvedValue({ items: [], total: 0, page: 1, pageSize: 10 })
 
-    renderWithQueryClient(<ContactsTable />)
+    renderTable()
 
     expect(await screen.findByText('No contacts yet')).toBeInTheDocument()
+  })
+
+  it('keeps the filter bar reachable when a filter matches nothing', async () => {
+    ;(getContacts as jest.Mock).mockResolvedValue({ items: [], total: 0, page: 1, pageSize: 10 })
+
+    renderTable({ ...emptyContactFilters, company: 'Nowhere' })
+
+    expect(await screen.findByText('No contacts match these filters.')).toBeInTheDocument()
+    expect(screen.getByPlaceholderText('Search name or email')).toBeInTheDocument()
+    expect(screen.queryByText('No contacts yet')).not.toBeInTheDocument()
   })
 
   it('renders contacts in a table', async () => {
@@ -51,7 +76,7 @@ describe('ContactsTable', () => {
       ],
     })
 
-    renderWithQueryClient(<ContactsTable />)
+    renderTable()
 
     expect(await screen.findByText('Ada Lovelace')).toBeInTheDocument()
     expect(screen.getByText('ada@example.com')).toBeInTheDocument()
@@ -75,7 +100,7 @@ describe('ContactsTable', () => {
       ],
     })
 
-    renderWithQueryClient(<ContactsTable />)
+    renderTable()
 
     await screen.findByText('Ada Lovelace')
 
@@ -85,7 +110,7 @@ describe('ContactsTable', () => {
   it('renders error state with retry button when loading fails', async () => {
     ;(getContacts as jest.Mock).mockRejectedValue(new Error('Network down'))
 
-    renderWithQueryClient(<ContactsTable />)
+    renderTable()
 
     expect(await screen.findByRole('alert')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /try again/i })).toBeInTheDocument()
@@ -94,7 +119,7 @@ describe('ContactsTable', () => {
   it('clicking retry button refetches contacts', async () => {
     ;(getContacts as jest.Mock).mockRejectedValue(new Error('Network down'))
 
-    renderWithQueryClient(<ContactsTable />)
+    renderTable()
 
     const retryButton = await screen.findByRole('button', { name: /try again/i })
 
@@ -136,11 +161,11 @@ describe('ContactsTable', () => {
       items,
     })
 
-    renderWithQueryClient(<ContactsTable />)
+    renderTable()
 
     // Wait for pagination to appear: page 1 button is active
     const page1Btn = await screen.findByRole('button', { name: '1' })
-    expect(page1Btn).toHaveClass('bg-indigo-600')
+    expect(page1Btn).toHaveClass('bg-[#1b1b1f]')
     expect(screen.getByRole('button', { name: '2' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '3' })).toBeInTheDocument()
   })
@@ -174,17 +199,17 @@ describe('ContactsTable', () => {
         })),
       })
 
-    renderWithQueryClient(<ContactsTable />)
+    renderTable()
 
     // Wait for page 1 button to appear (pagination rendered)
     const page1Btn = await screen.findByRole('button', { name: '1' })
-    expect(page1Btn).toHaveClass('bg-indigo-600')
+    expect(page1Btn).toHaveClass('bg-[#1b1b1f]')
 
     // Click page 2
     fireEvent.click(screen.getByRole('button', { name: '2' }))
 
     // Page 2 should now be active
     const page2Btn = await screen.findByRole('button', { name: '2' })
-    expect(page2Btn).toHaveClass('bg-indigo-600')
+    expect(page2Btn).toHaveClass('bg-[#1b1b1f]')
   })
 })

@@ -2,12 +2,10 @@
 
 import { useCallback, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { UploadCloud } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 import { uploadDealDocument } from '@/services/deal-document.service'
 import { validateDocumentFile } from '@/lib/deal-document-format'
-import { Button } from '@/components/ui/button'
 
 /**
  * Drag-and-drop upload zone with a mandatory non-drag alternative: a visible
@@ -121,22 +119,35 @@ export function DealDocumentUpload({ dealId }: { dealId: string }): React.JSX.El
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
-        className={`flex items-center justify-center gap-2 rounded-xl border-2 border-dashed px-4 py-6 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 ${
+        className={`flex flex-wrap items-center gap-3.5 rounded-[12px] border-[1.5px] border-dashed p-6 transition-colors ${
           isDragOver
-            ? 'border-indigo-400 bg-indigo-50'
-            : 'border-slate-300 bg-white hover:border-indigo-300'
+            ? 'border-[#1b1b1f] bg-[#f7f7f8]'
+            : 'border-[#d8d8e0] bg-[#fafafb] hover:border-[#1b1b1f] hover:bg-[#f7f7f8]'
         } ${pending ? 'cursor-wait opacity-60' : 'cursor-pointer'}`}
       >
-        <UploadCloud className="h-5 w-5 text-slate-400" aria-hidden="true" />
-        <span className="text-slate-600">
-          {pending ? (
-            'Uploading...'
-          ) : (
-            <>
-              Drag a document here or <span className="font-medium text-indigo-600">browse</span>
-            </>
-          )}
+        <span className="flex h-[38px] w-[38px] flex-none items-center justify-center rounded-[10px] border border-[#ececf0] bg-white">
+          <span className="mt-[3px] block h-[12px] w-[12px] rotate-45 border-l-2 border-t-2 border-[#4b4b55]" />
         </span>
+        <div className="flex min-w-0 flex-col gap-[3px]">
+          <span className="text-[13.5px] font-semibold text-[#1b1b1f]">
+            Drop contracts and proposals here
+          </span>
+          <span className="text-[12px] text-[#8c8c96]">
+            or <span className="underline hover:text-[#1b1b1f]">browse files</span> · PDF, DOCX,
+            XLSX up to 25 MB
+          </span>
+        </div>
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation()
+            handleBrowseClick()
+          }}
+          disabled={pending}
+          className="ml-auto h-[34px] flex-none rounded-[9px] border border-[#1b1b1f] bg-[#1b1b1f] px-3.5 text-[12.5px] font-semibold text-white transition-colors hover:bg-black disabled:opacity-50"
+        >
+          {pending ? 'Uploading...' : 'Choose file'}
+        </button>
       </div>
 
       <input
@@ -149,20 +160,8 @@ export function DealDocumentUpload({ dealId }: { dealId: string }): React.JSX.El
         tabIndex={-1}
       />
 
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        onClick={handleBrowseClick}
-        disabled={pending}
-        className="gap-1.5"
-      >
-        <UploadCloud className="h-3.5 w-3.5" />
-        Choose file
-      </Button>
-
       {error ? (
-        <p role="alert" className="text-xs font-medium text-red-700">
+        <p role="alert" className="mt-2 text-xs font-medium text-red-700">
           {error}
         </p>
       ) : null}

@@ -62,3 +62,83 @@ export function startOfCurrentQuarterUtc(now: Date = new Date()): Date {
 export function todayUtc(now: Date = new Date()): Date {
   return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
 }
+
+/** 30 days before today (UTC, start of day) — the "Last 30 days" quick range. */
+export function startOfLast30DaysUtc(now: Date = new Date()): Date {
+  const today = todayUtc(now)
+  return new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000)
+}
+
+/** First day of the current UTC year — the "This year" quick range. */
+export function startOfCurrentYearUtc(now: Date = new Date()): Date {
+  return new Date(Date.UTC(now.getUTCFullYear(), 0, 1))
+}
+
+type WinLossCsvReasonBucket = { reason: string; count: number; totalValue: number }
+type WinLossCsvCompetitor = {
+  competitorName: string
+  wonCount: number
+  lostCount: number
+  winRate: number
+  totalValue: number
+}
+
+function escapeCsvField(value: string): string {
+  if (value.includes(',') || value.includes('"') || value.includes('\n')) {
+    return `"${value.replace(/"/g, '""')}"`
+  }
+  return value
+}
+
+/**
+ * Renders the win/loss analysis (summary, reasons, competitors) as a CSV
+ * string for the "Export CSV" download — pure so it stays unit-testable
+ * without touching the DOM/Blob APIs.
+ */
+export function winLossAnalysisToCsv(analysis: {
+  wonCount: number
+  lostCount: number
+  winRate: number
+  wonValue: number
+  lostValue: number
+  winReasons: WinLossCsvReasonBucket[]
+  lossReasons: WinLossCsvReasonBucket[]
+  competitors: WinLossCsvCompetitor[]
+}): string {
+  const summary = [
+    ['Won deals', String(analysis.wonCount)],
+    ['Lost deals', String(analysis.lostCount)],
+    ['Win rate', formatWinRate(analysis.winRate)],
+    ['Won value', String(analysis.wonValue)],
+    ['Lost value', String(analysis.lostValue)],
+  ]
+
+  const reasonHeader = ['Reason', 'Outcome', 'Count', 'Total value']
+  const reasonRows = [
+    ...analysis.winReasons.map((r) => [
+      formatReasonLabel(r.reason),
+      'Won',
+      String(r.count),
+      String(r.totalValue),
+    ]),
+    ...analysis.lossReasons.map((r) => [
+      formatReasonLabel(r.reason),
+      'Lost',
+      String(r.count),
+      String(r.totalValue),
+    ]),
+  ]
+
+  const competitorHeader = ['Competitor', 'Won', 'Lost', 'Win rate', 'Total value']
+  const competitorRows = analysis.competitors.map((c) => [
+    c.competitorName,
+    String(c.wonCount),
+    String(c.lostCount),
+    formatWinRate(c.winRate),
+    String(c.totalValue),
+  ])
+
+  return [...summary, [], reasonHeader, ...reasonRows, [], competitorHeader, ...competitorRows]
+    .map((row) => row.map(escapeCsvField).join(','))
+    .join('\n')
+}

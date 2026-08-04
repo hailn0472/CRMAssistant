@@ -45,41 +45,42 @@ export function NoteComposer({
   )
 
   return (
-    <form onSubmit={handleSubmit} className="rounded-lg border border-slate-200 bg-white p-4">
+    <form
+      onSubmit={handleSubmit}
+      className="flex flex-col gap-2 rounded-[11px] border border-[#e6e6eb] bg-[#fafafb] p-3 transition-colors focus-within:border-[#1b1b1f] focus-within:bg-white"
+    >
       <textarea
         value={text}
         onChange={(e) => setText(e.target.value)}
         onKeyDown={handleKeyDown}
         placeholder="Add a note... (Ctrl+Enter to submit)"
-        className="w-full resize-none rounded-md border border-slate-200 p-3 text-sm text-slate-900 placeholder-slate-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+        className="w-full resize-none border-none bg-transparent text-[13px] text-[#1b1b1f] outline-none placeholder:text-[#a0a0aa]"
         rows={3}
         maxLength={MAX_NOTE_LENGTH + 50}
         disabled={isSubmitting}
         aria-label="Note text"
       />
 
-      <div className="mt-2 flex items-center justify-between">
+      <div className="flex items-center justify-between">
         <span
-          className={`text-xs ${
+          className={`text-[11.5px] ${
             isOverLimit
-              ? 'text-red-600 font-semibold'
+              ? 'font-semibold text-[#b91c1c]'
               : isNearLimit
-                ? 'text-amber-600'
-                : 'text-slate-400'
+                ? 'text-[#c2860a]'
+                : 'text-[#a0a0aa]'
           }`}
         >
           {charCount}/{MAX_NOTE_LENGTH}
         </span>
 
-        <div className="flex gap-2">
-          <button
-            type="submit"
-            disabled={!isValid || isSubmitting}
-            className="rounded-md bg-blue-600 px-4 py-1.5 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {isSubmitting ? 'Saving...' : 'Save'}
-          </button>
-        </div>
+        <button
+          type="submit"
+          disabled={!isValid || isSubmitting}
+          className="inline-flex h-8 items-center rounded-[9px] border border-[#1b1b1f] bg-[#1b1b1f] px-3.5 text-[12.5px] font-semibold text-white transition-colors hover:bg-black disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {isSubmitting ? 'Saving...' : 'Save'}
+        </button>
       </div>
     </form>
   )

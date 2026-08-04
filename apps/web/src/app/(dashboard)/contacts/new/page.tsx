@@ -1,9 +1,10 @@
-import { ContactForm } from '@/components/contacts/ContactForm'
+import { ContactFormPanel } from '@/components/contacts/ContactFormPanel'
+import { QueryProvider } from '@/components/contacts/QueryProvider'
 
 export default function NewContactPage(): React.JSX.Element {
   return (
-    <>
-<ContactForm />
-    </>
+    <QueryProvider>
+      <ContactFormPanel />
+    </QueryProvider>
   )
 }

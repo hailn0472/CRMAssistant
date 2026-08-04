@@ -1,9 +1,7 @@
 'use client'
 
 import { useCallback, useRef, useState } from 'react'
-
-import { Button } from '@/components/ui/button'
-import { Card, CardContent } from '@/components/ui/card'
+import { Upload } from 'lucide-react'
 
 export type ImportDropZoneProps = {
   onFileSelected: (file: File) => void
@@ -108,88 +106,93 @@ export function ImportDropZone({
   }, [])
 
   return (
-    <div>
-      <Card
-        className={`border-2 border-dashed transition-colors ${
+    <section className="rounded-2xl border border-slate-200 bg-white p-5">
+      <div
+        className={`flex flex-col items-center gap-3.5 rounded-xl border-[1.5px] border-dashed px-6 py-[38px] text-center transition-colors ${
           isDragOver
-            ? 'border-blue-500 bg-blue-50'
+            ? 'border-slate-900 bg-slate-50'
             : error
-              ? 'border-red-300 bg-red-50'
+              ? 'border-red-300 bg-red-50/60'
               : selectedFile
-                ? 'border-green-300 bg-green-50'
-                : 'border-slate-300 bg-white'
+                ? 'border-emerald-300 bg-emerald-50/50'
+                : 'border-slate-300 bg-slate-50/80 hover:border-slate-900 hover:bg-slate-50'
         }`}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
       >
-        <CardContent className="flex flex-col items-center justify-center gap-4 py-12">
-          {selectedFile ? (
-            <>
-              <div className="flex items-center gap-2 text-sm text-slate-700">
-                <span className="font-medium">{selectedFile.name}</span>
-                <span className="text-slate-400">({(selectedFile.size / 1024).toFixed(1)} KB)</span>
-              </div>
-              {isLoading ? (
-                <p className="text-sm text-slate-500" role="status">
-                  Analyzing file&hellip;
-                </p>
-              ) : (
-                <div className="flex gap-2">
-                  <Button variant="outline" size="sm" onClick={handleClear}>
-                    Remove
-                  </Button>
-                </div>
-              )}
-            </>
-          ) : (
-            <>
-              <div className="text-slate-500">
-                <svg
-                  className="mx-auto h-12 w-12"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={1.5}
-                    d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
-                  />
-                </svg>
-              </div>
-              <p className="text-sm text-slate-600">
+        {selectedFile ? (
+          <>
+            <div className="flex items-center gap-2 text-[13.5px] text-slate-700">
+              <span className="font-medium">{selectedFile.name}</span>
+              <span className="text-slate-400">({(selectedFile.size / 1024).toFixed(1)} KB)</span>
+            </div>
+            {isLoading ? (
+              <p className="text-[12.5px] text-slate-500" role="status">
+                Analyzing file&hellip;
+              </p>
+            ) : (
+              <button
+                type="button"
+                onClick={handleClear}
+                className="inline-flex h-[34px] items-center rounded-lg border border-slate-200 bg-white px-3.5 text-[12.5px] font-medium text-slate-600 transition-colors hover:bg-slate-100"
+              >
+                Remove
+              </button>
+            )}
+          </>
+        ) : (
+          <>
+            <span className="flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200 bg-white">
+              <Upload className="h-[18px] w-[18px] text-slate-600" />
+            </span>
+            <div className="flex flex-col gap-1.5">
+              <div className="text-[14.5px] font-semibold text-slate-900">Drop your CSV here</div>
+              <div className="text-[12.5px] text-slate-500">
                 Drag and drop a CSV file here, or{' '}
                 <button
-                  className="font-medium text-blue-700 hover:text-blue-800 hover:underline"
+                  className="font-medium text-indigo-600 hover:underline"
                   onClick={handleBrowseClick}
                   type="button"
                 >
                   browse files
-                </button>
-              </p>
-              <p className="text-xs text-slate-400">Accepted formats: .csv, .tsv (max 10MB)</p>
-              <input
-                accept=".csv,.tsv"
-                className="hidden"
-                data-testid="file-input"
-                onChange={handleInputChange}
-                ref={inputRef}
-                type="file"
-              />
-              <Button className="mt-2" size="sm" variant="outline" onClick={onDownloadTemplate}>
+                </button>{' '}
+                &middot; .csv, .tsv up to 10 MB
+              </div>
+            </div>
+            <input
+              accept=".csv,.tsv"
+              className="hidden"
+              data-testid="file-input"
+              onChange={handleInputChange}
+              ref={inputRef}
+              type="file"
+            />
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleBrowseClick}
+                className="inline-flex h-[34px] items-center rounded-lg border border-slate-900 bg-slate-900 px-3.5 text-[12.5px] font-semibold text-white transition-colors hover:bg-black"
+              >
+                Choose file
+              </button>
+              <button
+                type="button"
+                onClick={onDownloadTemplate}
+                className="inline-flex h-[34px] items-center rounded-lg border border-slate-200 bg-white px-3.5 text-[12.5px] font-medium text-slate-600 transition-colors hover:bg-slate-100"
+              >
                 Download template CSV
-              </Button>
-            </>
-          )}
-        </CardContent>
-      </Card>
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+
       {error && (
-        <p className="mt-2 text-sm text-red-600" role="alert">
+        <p className="mt-3 text-[12.5px] text-red-600" role="alert">
           {error}
         </p>
       )}
-    </div>
+    </section>
   )
 }

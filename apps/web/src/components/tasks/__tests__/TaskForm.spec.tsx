@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 
 import { TaskForm } from '../TaskForm'
 import { createTask, updateTask } from '@/services/task.service'
+import { getContact } from '@/services/contact.service'
 import type { Task } from '@/services/task.service'
 
 jest.mock('next/navigation', () => ({
@@ -21,6 +22,7 @@ jest.mock('@/services/task.service', () => ({
 
 jest.mock('@/services/contact.service', () => ({
   getContacts: jest.fn().mockResolvedValue({ items: [], total: 0, page: 1, pageSize: 20 }),
+  getContact: jest.fn(),
 }))
 
 jest.mock('@/services/deal.service', () => ({
@@ -113,7 +115,7 @@ describe('TaskForm', () => {
     expect(screen.getByPlaceholderText('Enter task title')).toHaveValue('Follow up with Acme')
     expect(screen.getByPlaceholderText('Enter task description')).toHaveValue('Call the lead')
     expect(screen.getByLabelText('Due date')).toHaveValue('2026-08-05')
-    expect(screen.getByText('Edit task')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Update task' })).toBeInTheDocument()
   })
 
   it('submits edit mode through updateTask', async () => {
@@ -162,6 +164,65 @@ describe('TaskForm', () => {
 
     await waitFor(() => {
       expect(searchUsers).toHaveBeenCalledWith('Ada')
+    })
+  })
+
+  it('hands the saved task to onSaved instead of navigating', async () => {
+    ;(createTask as jest.Mock).mockResolvedValue({ ...mockTask, id: 'task-new' })
+    const onSaved = jest.fn()
+    renderWithQuery(<TaskForm onSaved={onSaved} />)
+
+    fireEvent.change(screen.getByPlaceholderText('Enter task title'), {
+      target: { value: 'New task' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Create task' }))
+
+    await waitFor(() => {
+      expect(onSaved).toHaveBeenCalledWith(expect.objectContaining({ id: 'task-new' }))
+    })
+    expect(mockRouter.push).not.toHaveBeenCalled()
+  })
+
+  it('calls onCancel instead of rendering a bare submit when embedded', () => {
+    const onCancel = jest.fn()
+    renderWithQuery(<TaskForm onCancel={onCancel} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+
+    expect(onCancel).toHaveBeenCalled()
+  })
+
+  it('shows the template selector when fromTemplate is explicitly true, ignoring the URL', () => {
+    renderWithQuery(<TaskForm fromTemplate />)
+
+    expect(screen.getByLabelText('Task template')).toBeInTheDocument()
+  })
+
+  it('does not show the template selector in edit mode even when fromTemplate is true', () => {
+    renderWithQuery(<TaskForm task={mockTask} fromTemplate />)
+
+    expect(screen.queryByLabelText('Task template')).not.toBeInTheDocument()
+  })
+
+  it('prefills the contact field from initialContactId and submits it', async () => {
+    ;(getContact as jest.Mock).mockResolvedValue({
+      id: 'contact-9',
+      firstName: 'Dana',
+      lastName: 'Whitfield',
+      email: 'dana@northwind.com',
+    })
+    ;(createTask as jest.Mock).mockResolvedValue({ ...mockTask, id: 'task-new' })
+    renderWithQuery(<TaskForm initialContactId="contact-9" />)
+
+    expect(await screen.findByDisplayValue('Dana Whitfield')).toBeInTheDocument()
+
+    fireEvent.change(screen.getByPlaceholderText('Enter task title'), {
+      target: { value: 'Follow up' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Create task' }))
+
+    await waitFor(() => {
+      expect(createTask).toHaveBeenCalledWith(expect.objectContaining({ contactId: 'contact-9' }))
     })
   })
 })

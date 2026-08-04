@@ -8,7 +8,17 @@ export type Conversation = {
   assignedTo?: string | null
   lastMessageAt?: string | null
   lastMessagePreview?: string | null
-  contact?: { id: string; firstName: string; lastName: string; email: string } | null
+  contact?: {
+    id: string
+    firstName: string
+    lastName: string
+    email: string
+    phone?: string | null
+    company?: string | null
+    jobTitle?: string | null
+    addressCity?: string | null
+    addressCountry?: string | null
+  } | null
   assignedToUser?: { id: string; firstName: string; lastName: string; email: string } | null
   unreadCount?: number | null
   createdAt: string
@@ -66,6 +76,7 @@ export type ConversationFilter = {
   status?: string
   assignedTo?: string
   unreadOnly?: boolean
+  contactId?: string
 }
 
 export type SendMessageInput = {
@@ -101,7 +112,7 @@ const CONVERSATION_FIELDS = `
   assignedTo
   lastMessageAt
   lastMessagePreview
-  contact { id firstName lastName email }
+  contact { id firstName lastName email phone company jobTitle addressCity addressCountry }
   assignedToUser { id firstName lastName email }
   unreadCount
   createdAt

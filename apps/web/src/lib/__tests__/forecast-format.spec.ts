@@ -1,4 +1,9 @@
-import { formatVariance, accuracyBand, formatAxisTick } from '../forecast-format'
+import {
+  formatVariance,
+  accuracyBand,
+  formatAxisTick,
+  salesForecastToCsv,
+} from '../forecast-format'
 
 describe('forecast-format', () => {
   describe('formatVariance', () => {
@@ -57,6 +62,35 @@ describe('forecast-format', () => {
 
     it('returns first word for multi-word labels', () => {
       expect(formatAxisTick('Alice Smith')).toBe('Alice')
+    })
+  })
+
+  describe('salesForecastToCsv', () => {
+    const forecast = {
+      buckets: [{ label: 'Aug 2026', weightedValue: 50000, totalValue: 100000, count: 3 }],
+      commit: { weightedValue: 30000, totalValue: 60000, count: 2 },
+      bestCase: { weightedValue: 50000, totalValue: 100000, count: 3 },
+      pipeline: { weightedValue: 80000, totalValue: 150000, count: 5 },
+    }
+
+    it('renders a header row, one row per bucket, then the three bands', () => {
+      const csv = salesForecastToCsv(forecast)
+      const lines = csv.split('\n')
+
+      expect(lines[0]).toBe('Period,Weighted value,Total value,Deals')
+      expect(lines[1]).toBe('Aug 2026,50000,100000,3')
+      expect(lines[2]).toBe('')
+      expect(lines[3]).toBe('Commit,30000,60000,2')
+      expect(lines[4]).toBe('Best case,50000,100000,3')
+      expect(lines[5]).toBe('Pipeline,80000,150000,5')
+    })
+
+    it('quotes fields containing a comma', () => {
+      const csv = salesForecastToCsv({
+        ...forecast,
+        buckets: [{ label: 'Aug, 2026', weightedValue: 1, totalValue: 1, count: 1 }],
+      })
+      expect(csv).toContain('"Aug, 2026"')
     })
   })
 })

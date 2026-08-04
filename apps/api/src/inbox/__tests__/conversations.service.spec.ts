@@ -171,6 +171,16 @@ describe('ConversationsService', () => {
       )
     })
 
+    it('filters by contactId', async () => {
+      await service.findMany(TENANT_ID, { contactId: 'contact-1' })
+
+      expect(prisma.conversation.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ contactId: 'contact-1' }),
+        }),
+      )
+    })
+
     it('filters by unassigned conversations', async () => {
       await service.findMany(TENANT_ID, { assignedTo: 'unassigned' })
 

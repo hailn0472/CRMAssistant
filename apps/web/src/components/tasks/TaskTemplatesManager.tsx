@@ -11,7 +11,7 @@ import {
   deleteTaskTemplate,
   getTaskTemplates,
 } from '@/services/task.service'
-import { usePermission } from '@/hooks/usePermission'
+import { useMyPermissions } from '@/hooks/usePermission'
 import { ResponsiveTableWrapper } from '@/components/shared/ResponsiveTableWrapper'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { ErrorState } from '@/components/shared/ErrorState'
@@ -28,10 +28,11 @@ export function TaskTemplatesManager(): React.JSX.Element {
   const [formOpen, setFormOpen] = useState(false)
   const [editingTemplate, setEditingTemplate] = useState<TaskTemplate | null>(null)
 
-  const canRead = usePermission('TASK', 'READ')
-  const canCreate = usePermission('TASK', 'CREATE')
-  const canUpdate = usePermission('TASK', 'UPDATE')
-  const canDelete = usePermission('TASK', 'DELETE')
+  const { hasPermission, isLoading: permissionsLoading } = useMyPermissions()
+  const canRead = hasPermission('TASK', 'READ')
+  const canCreate = hasPermission('TASK', 'CREATE')
+  const canUpdate = hasPermission('TASK', 'UPDATE')
+  const canDelete = hasPermission('TASK', 'DELETE')
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['taskTemplates'],
@@ -63,6 +64,8 @@ export function TaskTemplatesManager(): React.JSX.Element {
       toast.error('Failed to delete task template')
     },
   })
+
+  if (permissionsLoading) return <TableSkeleton rows={5} columns={4} />
 
   if (!canRead) {
     return <PermissionLimitedState message="You do not have permission to view task templates." />

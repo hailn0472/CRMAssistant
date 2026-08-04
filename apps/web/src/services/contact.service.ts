@@ -39,6 +39,13 @@ export type ContactConnection = {
   pageSize: number
 }
 
+export type ContactStats = {
+  total: number
+  addedThisMonth: number
+  withOpenDeals: number
+  unassigned: number
+}
+
 export type ContactFormData = {
   email: string
   firstName: string
@@ -46,6 +53,8 @@ export type ContactFormData = {
   phone?: string | null
   company?: string | null
   jobTitle?: string | null
+  /// Create only — existing contacts are reassigned via assignContactOwner.
+  ownerId?: string
   // Enrichment fields
   linkedin?: string | null
   twitter?: string | null
@@ -95,6 +104,7 @@ export async function getContacts(
     search?: string
     company?: string
     jobTitle?: string
+    ownerId?: string
     tags?: string[]
     createdAtFrom?: string
     createdAtTo?: string
@@ -104,6 +114,7 @@ export async function getContacts(
     filter?.search ||
       filter?.company ||
       filter?.jobTitle ||
+      filter?.ownerId ||
       (filter?.tags && filter.tags.length > 0) ||
       filter?.createdAtFrom ||
       filter?.createdAtTo,
@@ -124,6 +135,17 @@ export async function getContacts(
   )
 
   return data.contacts
+}
+
+export async function getContactStats(): Promise<ContactStats> {
+  const data = await graphqlRequest<{ contactStats: ContactStats }>(
+    `query ContactStats {
+      contactStats { total addedThisMonth withOpenDeals unassigned }
+    }`,
+    {},
+  )
+
+  return data.contactStats
 }
 
 export async function getContact(id: string): Promise<Contact> {

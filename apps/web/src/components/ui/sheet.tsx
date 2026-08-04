@@ -1,6 +1,7 @@
 'use client'
 
 import * as React from 'react'
+import { createPortal } from 'react-dom'
 
 import { cn } from '@/lib/utils'
 
@@ -91,6 +92,11 @@ function SheetContent({
 }: React.HTMLAttributes<HTMLDivElement>): React.ReactElement | null {
   const { open, setOpen, triggerRef } = useSheetContext()
   const contentRef = React.useRef<HTMLDivElement>(null)
+  const [mounted, setMounted] = React.useState(false)
+
+  React.useEffect(() => {
+    setMounted(true)
+  }, [])
 
   React.useEffect(() => {
     if (!open) {
@@ -107,11 +113,11 @@ function SheetContent({
     }
   }, [open, triggerRef])
 
-  if (!open) {
+  if (!open || !mounted) {
     return null
   }
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-50 flex justify-end bg-slate-950/20">
       <div
         ref={contentRef}
@@ -160,7 +166,8 @@ function SheetContent({
       >
         {children}
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }
 

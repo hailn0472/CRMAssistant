@@ -52,6 +52,9 @@ function makeTasksService(): jest.Mocked<TasksService> {
     create: jest.fn().mockResolvedValue(mockTask),
     findOne: jest.fn().mockResolvedValue(mockTask),
     findMany: jest.fn().mockResolvedValue({ items: [mockTask], total: 1, page: 1, pageSize: 20 }),
+    getStats: jest
+      .fn()
+      .mockResolvedValue({ openTasks: 0, dueToday: 0, overdue: 0, completedThisWeek: 0 }),
     buildTaskWhere: jest.fn(),
     update: jest.fn().mockResolvedValue(mockTask),
     assign: jest.fn().mockResolvedValue(mockTask),
@@ -99,6 +102,8 @@ describe('tasks.graphql', () => {
     expect(sdl).toContain('task(id: ID!)')
     expect(sdl).toContain('tasks(filter:')
     expect(sdl).toContain('myTasks(filter:')
+    expect(sdl).toContain('taskStats: TaskStats')
+    expect(sdl).toContain('type TaskStats')
     expect(sdl).toContain('taskTemplates(pagination:')
     expect(sdl).toContain('taskTemplate(id: ID!)')
     expect(sdl).toContain('createTask(input: CreateTaskInput!)')

@@ -7,25 +7,29 @@ import type { GraphqlContext } from '../graphql/graphql-context'
 import type { JwtPayload } from '../auth/strategies/jwt.strategy'
 
 // 2FA types
-const Enable2FAResultRef = builder.objectRef<{
-  secret: string
-  qrCodeDataUrl: string
-  backupCodes: string[]
-}>('Enable2FAResult').implement({
-  fields: (t) => ({
-    secret: t.exposeString('secret'),
-    qrCodeDataUrl: t.exposeString('qrCodeDataUrl'),
-    backupCodes: t.exposeStringList('backupCodes'),
-  }),
-})
+const Enable2FAResultRef = builder
+  .objectRef<{
+    secret: string
+    qrCodeDataUrl: string
+    backupCodes: string[]
+  }>('Enable2FAResult')
+  .implement({
+    fields: (t) => ({
+      secret: t.exposeString('secret'),
+      qrCodeDataUrl: t.exposeString('qrCodeDataUrl'),
+      backupCodes: t.exposeStringList('backupCodes'),
+    }),
+  })
 
-const Verify2FAResultRef = builder.objectRef<{
-  success: boolean
-}>('Verify2FAResult').implement({
-  fields: (t) => ({
-    success: t.exposeBoolean('success'),
-  }),
-})
+const Verify2FAResultRef = builder
+  .objectRef<{
+    success: boolean
+  }>('Verify2FAResult')
+  .implement({
+    fields: (t) => ({
+      success: t.exposeBoolean('success'),
+    }),
+  })
 
 const TenantSettingsRef = builder.objectRef<{ enforce2FA: boolean }>('TenantSettings').implement({
   fields: (t) => ({
@@ -149,8 +153,21 @@ const UserFilterInputRef = builder.inputType('UserFilterInput', {
   fields: (t) => ({
     search: t.string(),
     isActive: t.boolean(),
+    roleId: t.string(),
+    teamId: t.string(),
   }),
 })
+
+const UserStatsRef = builder
+  .objectRef<Awaited<ReturnType<UsersService['getStats']>>>('UserStats')
+  .implement({
+    fields: (t) => ({
+      total: t.exposeInt('total'),
+      active: t.exposeInt('active'),
+      deactivated: t.exposeInt('deactivated'),
+      admins: t.exposeInt('admins'),
+    }),
+  })
 
 const UserPaginationInputRef = builder.inputType('UserPaginationInput', {
   fields: (t) => ({
@@ -212,6 +229,8 @@ builder.queryFields((t) => ({
         {
           search: args.filter?.search ?? undefined,
           isActive: args.filter?.isActive ?? undefined,
+          roleId: args.filter?.roleId ?? undefined,
+          teamId: args.filter?.teamId ?? undefined,
         },
         {
           page: args.pagination?.page ?? undefined,
@@ -222,6 +241,13 @@ builder.queryFields((t) => ({
       const userIds = connection.items.map((item) => item.id)
       context.rolesBatchCache = await getUsersService().getUserRolesBatch(user.tenantId, userIds)
       return connection
+    },
+  }),
+  userStats: t.field({
+    type: UserStatsRef,
+    resolve: async (_parent, _args, context) => {
+      const user = requireUser(context)
+      return getUsersService().getStats(user.tenantId)
     },
   }),
 }))

@@ -2,6 +2,7 @@ import {
   getMe,
   getUser,
   getUsers,
+  getUserStats,
   createUser,
   updateUser,
   updateProfile,
@@ -60,6 +61,29 @@ describe('userService', () => {
       const result = await getUsers(1, 10)
 
       expect(result).toEqual(connection)
+    })
+
+    it('should pass roleId and teamId through to the filter variable', async () => {
+      const connection = { items: [], total: 0, page: 1, pageSize: 10 }
+      mockFetch.mockResolvedValue(jsonResponse({ data: { users: connection } }))
+
+      await getUsers(1, 10, { roleId: 'role-1', teamId: 'team-1' })
+
+      const body = JSON.parse(mockFetch.mock.calls[0]![1].body as string) as {
+        variables: { filter: unknown }
+      }
+      expect(body.variables.filter).toEqual({ roleId: 'role-1', teamId: 'team-1' })
+    })
+  })
+
+  describe('getUserStats', () => {
+    it('should return the four workspace counters', async () => {
+      const stats = { total: 6, active: 4, deactivated: 2, admins: 1 }
+      mockFetch.mockResolvedValue(jsonResponse({ data: { userStats: stats } }))
+
+      const result = await getUserStats()
+
+      expect(result).toEqual(stats)
     })
   })
 

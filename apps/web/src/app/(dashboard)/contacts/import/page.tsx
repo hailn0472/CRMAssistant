@@ -9,7 +9,6 @@ import { ImportDropZone } from '@/components/contacts/ImportDropZone'
 import { ImportPreview } from '@/components/contacts/ImportPreview'
 import { ImportProgress } from '@/components/contacts/ImportProgress'
 import { ImportResult } from '@/components/contacts/ImportResult'
-import { Button } from '@/components/ui/button'
 import {
   downloadTemplate,
   getImportStatus,
@@ -26,6 +25,28 @@ import type {
 type WizardStep = 'upload' | 'preview' | 'importing' | 'result'
 
 const POLL_INTERVAL_MS = 1000
+
+const STEPS: Array<{ key: WizardStep; label: string }> = [
+  { key: 'upload', label: 'Upload' },
+  { key: 'preview', label: 'Preview' },
+  { key: 'importing', label: 'Import' },
+  { key: 'result', label: 'Result' },
+]
+
+const IMPORT_COLUMNS = [
+  { name: 'email', required: true },
+  { name: 'firstName', required: true },
+  { name: 'lastName', required: true },
+  { name: 'phone', required: false },
+  { name: 'company', required: false },
+  { name: 'jobTitle', required: false },
+]
+
+const UPLOAD_TIPS = [
+  'First row must be a header row.',
+  'Use UTF-8 encoding for accented names.',
+  'Separate multiple tags with a semicolon.',
+]
 
 const EMPTY_PROGRESS: ImportProgressState = {
   batch: 0,
@@ -205,40 +226,106 @@ export default function ImportPage(): React.JSX.Element {
     setProgress(EMPTY_PROGRESS)
   }, [abortInFlight])
 
+  const stepIndex = STEPS.findIndex((s) => s.key === step)
+
   return (
-    <div className="mx-auto max-w-3xl space-y-6 py-8">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900">Import Contacts</h1>
-          <p className="text-sm text-slate-500">
-            Upload a CSV file to bulk-import contacts into your CRM
+    <div className="mx-auto w-full max-w-[1100px] space-y-[18px]">
+      <div className="flex flex-wrap items-end justify-between gap-6">
+        <div className="flex flex-col gap-1">
+          <h1 className="text-[28px] font-bold tracking-tight text-slate-900">Import contacts</h1>
+          <p className="max-w-[56ch] text-[13.5px] text-slate-500">
+            Upload a CSV and map its columns. Nothing is saved until you confirm the preview.
           </p>
         </div>
-        <Button asChild variant="outline">
-          <Link href="/contacts">Back to Contacts</Link>
-        </Button>
+        <Link
+          href="/contacts"
+          className="inline-flex h-9 items-center rounded-lg border border-slate-200 bg-white px-3.5 text-[13px] font-medium text-slate-600 transition-colors hover:bg-slate-50"
+        >
+          Back to contacts
+        </Link>
       </div>
 
       {/* Step indicator */}
-      <div className="flex items-center gap-2 text-sm text-slate-500">
-        <span className={step === 'upload' ? 'font-medium text-slate-900' : ''}>Upload</span>
-        <span>&rarr;</span>
-        <span className={step === 'preview' ? 'font-medium text-slate-900' : ''}>Preview</span>
-        <span>&rarr;</span>
-        <span className={step === 'importing' ? 'font-medium text-slate-900' : ''}>Import</span>
-        <span>&rarr;</span>
-        <span className={step === 'result' ? 'font-medium text-slate-900' : ''}>Result</span>
-      </div>
+      <ol className="flex flex-wrap items-center rounded-xl border border-slate-200 bg-white px-[18px] py-3.5">
+        {STEPS.map((s, index) => {
+          const isDone = index < stepIndex
+          const isCurrent = index === stepIndex
+          return (
+            <li key={s.key} className="flex items-center gap-2.5 pr-[18px]">
+              <span
+                aria-hidden
+                className={`flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full border text-[11px] font-semibold ${
+                  isCurrent
+                    ? 'border-slate-900 bg-slate-900 text-white'
+                    : isDone
+                      ? 'border-slate-900 bg-white text-slate-900'
+                      : 'border-slate-200 bg-slate-50 text-slate-400'
+                }`}
+              >
+                {isDone ? '✓' : index + 1}
+              </span>
+              <span
+                aria-current={isCurrent ? 'step' : undefined}
+                className={`text-[13px] ${
+                  isCurrent ? 'font-semibold text-slate-900' : 'font-medium text-slate-500'
+                }`}
+              >
+                {s.label}
+              </span>
+              {index < STEPS.length - 1 ? (
+                <span aria-hidden className="block h-px w-[26px] bg-slate-200" />
+              ) : null}
+            </li>
+          )
+        })}
+      </ol>
 
-      {/* Step Content */}
-      {step === 'upload' && (
-        <ImportDropZone
-          isLoading={isLoading}
-          onDownloadTemplate={handleDownloadTemplate}
-          onFileSelected={handleFileSelected}
-        />
-      )}
+      {step === 'upload' ? (
+        <div className="grid items-start gap-4 lg:grid-cols-[1.55fr_1fr]">
+          <ImportDropZone
+            isLoading={isLoading}
+            onDownloadTemplate={handleDownloadTemplate}
+            onFileSelected={handleFileSelected}
+          />
+
+          <aside className="flex flex-col gap-4">
+            <section className="rounded-2xl border border-slate-200 bg-white px-5 py-[18px]">
+              <h2 className="mb-3 text-[13.5px] font-semibold text-slate-900">Required columns</h2>
+              <div className="flex flex-col gap-2.5">
+                {IMPORT_COLUMNS.map((column) => (
+                  <div
+                    key={column.name}
+                    className="flex items-center justify-between gap-3 text-[12.5px]"
+                  >
+                    <span className="font-mono text-slate-900">{column.name}</span>
+                    <span
+                      className={`text-[11.5px] font-medium ${
+                        column.required ? 'text-slate-900' : 'text-slate-400'
+                      }`}
+                    >
+                      {column.required ? 'Required' : 'Optional'}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </section>
+
+            <section className="rounded-2xl border border-slate-200 bg-white px-5 py-[18px]">
+              <h2 className="mb-2.5 text-[13.5px] font-semibold text-slate-900">
+                Before you upload
+              </h2>
+              <div className="flex flex-col gap-2 text-[12.5px] text-slate-600">
+                {UPLOAD_TIPS.map((tip) => (
+                  <div key={tip} className="flex gap-2">
+                    <span className="text-slate-300">&mdash;</span>
+                    <span>{tip}</span>
+                  </div>
+                ))}
+              </div>
+            </section>
+          </aside>
+        </div>
+      ) : null}
 
       {step === 'preview' && preview && (
         <ImportPreview

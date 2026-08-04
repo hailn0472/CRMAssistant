@@ -67,7 +67,7 @@ describe('CalendarConnectionsPanel (Story 4.3 AC 4/19/40/44)', () => {
     const badge = await screen.findByText('Connected')
     expect(badge).toBeInTheDocument()
     // Colour is paired with the text label, not colour alone.
-    expect(badge.className).toContain('text-emerald-700')
+    expect(badge).toHaveStyle({ color: '#22a06b' })
     expect(badge.textContent).toBe('Connected')
   })
 
@@ -78,7 +78,7 @@ describe('CalendarConnectionsPanel (Story 4.3 AC 4/19/40/44)', () => {
     renderPanel()
 
     const degraded = await screen.findByText('Degraded')
-    expect(degraded.className).toContain('text-amber-700')
+    expect(degraded).toHaveStyle({ color: '#c2860a' })
     expect(screen.getByText('reconnect required')).toBeInTheDocument()
   })
 

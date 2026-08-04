@@ -82,7 +82,7 @@ describe('DealLineItems', () => {
     renderWithQuery(<DealLineItems dealId="deal-1" currency="USD" />)
 
     await waitFor(() => {
-      expect(screen.getByText('No products on this deal yet')).toBeInTheDocument()
+      expect(screen.getByText(/No products/)).toBeInTheDocument()
     })
   })
 
@@ -170,7 +170,7 @@ describe('DealLineItems', () => {
       expect(screen.getByText('Consulting')).toBeInTheDocument()
     })
 
-    const addBtns = screen.getAllByText('Add product')
+    const addBtns = screen.getAllByText(/Add product/)
     fireEvent.click(addBtns[0])
 
     await waitFor(() => {

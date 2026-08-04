@@ -15,7 +15,7 @@ describe('ForecastBands', () => {
     render(<ForecastBands {...defaultProps} />)
 
     expect(screen.getByText('Commit')).toBeInTheDocument()
-    expect(screen.getByText('Best Case')).toBeInTheDocument()
+    expect(screen.getByText('Best case')).toBeInTheDocument()
     expect(screen.getByText('Pipeline')).toBeInTheDocument()
   })
 

@@ -29,15 +29,15 @@ const PROVIDER_LABELS: Record<CalendarProvider, string> = {
 
 function getStatusInfo(connection: CalendarConnection | undefined): {
   label: string
-  className: string
+  color: string
 } {
   if (!connection || connection.status === 'DISCONNECTED') {
-    return { label: 'Not connected', className: 'bg-slate-50 text-slate-600 border-slate-200' }
+    return { label: 'Not connected', color: '#a0a0aa' }
   }
   if (connection.status === 'REAUTH_REQUIRED' || connection.lastSyncError) {
-    return { label: 'Degraded', className: 'bg-amber-50 text-amber-700 border-amber-200' }
+    return { label: 'Degraded', color: '#c2860a' }
   }
-  return { label: 'Connected', className: 'bg-emerald-50 text-emerald-700 border-emerald-200' }
+  return { label: 'Connected', color: '#22a06b' }
 }
 
 function formatLastSynced(iso: string | null): string {
@@ -116,15 +116,13 @@ export function CalendarConnectionsPanel(): React.JSX.Element {
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-lg font-semibold tracking-tight text-slate-900">Calendars</h2>
-          <p className="mt-1 text-sm text-slate-600">
-            Connect your Google Calendar or Outlook Calendar so CRM tasks appear there — and edits
-            made in either place flow back to the other.
-          </p>
-        </div>
+    <div className="flex flex-col gap-[22px]">
+      <div className="flex flex-col gap-1">
+        <h1 className="text-[24px] font-semibold tracking-[-0.025em] text-[#1b1b1f]">Calendars</h1>
+        <p className="max-w-[60ch] text-[13.5px] text-[#77777f]">
+          Connect your Google Calendar or Outlook Calendar so CRM tasks appear there — and edits
+          made in either place flow back to the other.
+        </p>
       </div>
 
       {isLoading && <TableSkeleton rows={2} columns={3} />}
@@ -145,41 +143,48 @@ export function CalendarConnectionsPanel(): React.JSX.Element {
       )}
 
       {!isLoading && !error && (
-        <div className="rounded-lg border border-slate-200 bg-white shadow-sm">
+        <section className="overflow-hidden rounded-[14px] border border-[#ececf0] bg-white">
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead className="border-b border-slate-200 bg-slate-50 text-slate-600">
-                <tr>
-                  <th className="py-3 pr-4 pl-4 font-medium">Calendar</th>
-                  <th className="py-3 pr-4 font-medium">Status</th>
-                  <th className="py-3 pr-4 font-medium">Last synced</th>
-                  <th className="py-3 pr-4 font-medium">Actions</th>
+            <table className="w-full min-w-[640px] text-left text-[13.5px]">
+              <thead>
+                <tr className="border-b border-[#f2f2f5] bg-[#fafafb] text-[11px] font-semibold uppercase tracking-wider text-[#8c8c96]">
+                  <th className="py-2.5 pl-[22px] pr-4">Calendar</th>
+                  <th className="py-2.5 pr-4">Status</th>
+                  <th className="py-2.5 pr-4">Last synced</th>
+                  <th className="py-2.5 pr-[22px]">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
+              <tbody className="divide-y divide-[#f4f4f7]">
                 {CALENDAR_PROVIDERS.map((provider) => {
                   const connection = connections?.find((c) => c.provider === provider)
                   const status = getStatusInfo(connection)
                   const connected = Boolean(connection && connection.status !== 'DISCONNECTED')
                   return (
-                    <tr key={provider} className="group hover:bg-slate-50">
-                      <td className="py-3 pr-4 pl-4 font-medium text-slate-900">
+                    <tr key={provider} className="transition-colors hover:bg-[#fafafb]">
+                      <td className="py-3 pl-[22px] pr-4 font-medium text-[#1b1b1f]">
                         {PROVIDER_LABELS[provider]}
                       </td>
                       <td className="py-3 pr-4">
                         <span
-                          className={`inline-block rounded-full border px-2.5 py-0.5 text-xs font-medium ${status.className}`}
+                          className="inline-flex items-center gap-1.5 text-[12px] font-medium"
+                          style={{ color: status.color }}
                         >
+                          <span
+                            className="block h-1.5 w-1.5 rounded-full"
+                            style={{ background: status.color }}
+                          />
                           {status.label}
                         </span>
                         {connection?.lastSyncError ? (
-                          <p className="mt-1 text-xs text-amber-700">{connection.lastSyncError}</p>
+                          <p className="mt-1 text-[11.5px] text-[#c2860a]">
+                            {connection.lastSyncError}
+                          </p>
                         ) : null}
                       </td>
-                      <td className="py-3 pr-4 text-slate-600">
+                      <td className="py-3 pr-4 font-mono text-[12px] text-[#8c8c96]">
                         {formatLastSynced(connection?.lastSyncedAt ?? null)}
                       </td>
-                      <td className="py-3 pr-4">
+                      <td className="py-3 pr-[22px]">
                         {connected && connection ? (
                           <div className="flex items-center gap-2">
                             <Button
@@ -187,7 +192,7 @@ export function CalendarConnectionsPanel(): React.JSX.Element {
                               size="sm"
                               onClick={() => handleSyncNow(provider)}
                               disabled={syncMutation.isPending}
-                              className="gap-1.5"
+                              className="gap-1.5 rounded-[8px] border-[#e6e6eb] text-[#4b4b55] hover:bg-[#f4f4f6]"
                             >
                               <RefreshCw className="h-3.5 w-3.5" />
                               Sync now
@@ -197,7 +202,7 @@ export function CalendarConnectionsPanel(): React.JSX.Element {
                               size="sm"
                               onClick={() => handleDisconnect(connection)}
                               disabled={disconnectMutation.isPending}
-                              className="gap-1.5 text-red-600 hover:bg-red-50"
+                              className="gap-1.5 rounded-[8px] border-red-200 text-red-600 hover:bg-red-50"
                             >
                               <Unplug className="h-3.5 w-3.5" />
                               Disconnect
@@ -208,7 +213,7 @@ export function CalendarConnectionsPanel(): React.JSX.Element {
                             variant="outline"
                             size="sm"
                             onClick={() => handleConnect(provider)}
-                            className="gap-1.5"
+                            className="gap-1.5 rounded-[8px] border-[#e6e6eb] text-[#4b4b55] hover:bg-[#f4f4f6]"
                           >
                             <Calendar className="h-3.5 w-3.5" />
                             Connect
@@ -221,7 +226,7 @@ export function CalendarConnectionsPanel(): React.JSX.Element {
               </tbody>
             </table>
           </div>
-        </div>
+        </section>
       )}
     </div>
   )

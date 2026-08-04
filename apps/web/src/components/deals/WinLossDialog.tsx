@@ -129,30 +129,35 @@ export function WinLossDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-md" aria-describedby={undefined}>
-        <DialogHeader>
-          <DialogTitle>Record win/loss reason</DialogTitle>
+      <DialogContent
+        className="sm:max-w-md rounded-[14px] border-[#ececf0] p-6"
+        aria-describedby={undefined}
+      >
+        <DialogHeader className="pb-3 border-b border-[#f0f0f4]">
+          <DialogTitle className="text-[18px] font-semibold text-[#1b1b1f]">
+            Record win/loss reason
+          </DialogTitle>
         </DialogHeader>
 
         <form
           onSubmit={handleSubmit((values) => recordMutation.mutate(values))}
-          className="space-y-4"
+          className="space-y-4 pt-2"
         >
-          <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm">
-            <span className="text-slate-500">Moving this deal to</span>{' '}
-            <span className="font-semibold text-slate-900">{stageName}</span>
-            {isWon && <span className="ml-1 text-green-600">(won)</span>}
-            {isLost && <span className="ml-1 text-red-600">(lost)</span>}
+          <div className="rounded-[9px] border border-[#e6e6eb] bg-[#fafafb] px-3.5 py-2.5 text-[13px]">
+            <span className="text-[#8c8c96]">Moving this deal to</span>{' '}
+            <span className="font-semibold text-[#1b1b1f]">{stageName}</span>
+            {isWon && <span className="ml-1 text-emerald-600 font-medium">(won)</span>}
+            {isLost && <span className="ml-1 text-red-600 font-medium">(lost)</span>}
           </div>
 
           {/* Reason */}
-          <div className="space-y-1">
-            <label className="text-sm font-medium text-slate-700" htmlFor="win-loss-reason">
+          <div className="space-y-1.5">
+            <label className="text-[12.5px] font-medium text-[#4b4b55]" htmlFor="win-loss-reason">
               Reason
             </label>
             <select
               id="win-loss-reason"
-              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-base md:text-sm"
+              className="flex h-[38px] w-full rounded-[9px] border border-[#e6e6eb] bg-[#fafafb] px-3 py-1 text-[13.5px] text-[#1b1b1f] transition-colors focus:border-[#1b1b1f] focus:bg-white focus:outline-none"
               {...register('reason')}
               aria-invalid={Boolean(errors.reason)}
             >
@@ -164,7 +169,7 @@ export function WinLossDialog({
               ))}
             </select>
             {errors.reason && (
-              <span className="text-xs font-medium text-red-700" role="alert">
+              <span className="text-[11.5px] font-medium text-red-700" role="alert">
                 {errors.reason.message}
               </span>
             )}
@@ -172,8 +177,8 @@ export function WinLossDialog({
 
           {/* Competitor picker — only for COMPETITOR */}
           {selectedReason === 'COMPETITOR' && (
-            <div className="space-y-1">
-              <label className="text-sm font-medium text-slate-700">Competitor</label>
+            <div className="space-y-1.5">
+              <label className="text-[12.5px] font-medium text-[#4b4b55]">Competitor</label>
               <div className="relative">
                 <Input
                   placeholder="Search competitors..."
@@ -183,18 +188,23 @@ export function WinLossDialog({
                     setShowDropdown(true)
                   }}
                   onFocus={() => setShowDropdown(true)}
+                  className="h-[38px] rounded-[9px] border-[#e6e6eb] bg-[#fafafb] text-[13.5px] text-[#1b1b1f] focus:border-[#1b1b1f] focus:bg-white"
                 />
                 {showDropdown && competitorsData && (
-                  <div className="absolute z-10 mt-1 max-h-48 w-full overflow-y-auto rounded-md border border-slate-200 bg-white shadow-lg">
+                  <div className="absolute z-10 mt-1 max-h-48 w-full overflow-y-auto rounded-[9px] border border-[#e6e6eb] bg-white shadow-lg">
                     {competitorsData.items.length === 0 ? (
-                      <div className="px-3 py-2 text-sm text-slate-500">No competitors found</div>
+                      <div className="px-3 py-2 text-[13px] text-[#8c8c96]">
+                        No competitors found
+                      </div>
                     ) : (
                       competitorsData.items.map((competitor) => (
                         <button
                           key={competitor.id}
                           type="button"
-                          className={`w-full px-3 py-2 text-left text-sm hover:bg-indigo-50 ${
-                            selectedCompetitorId === competitor.id ? 'bg-indigo-50 font-medium' : ''
+                          className={`w-full px-3 py-2 text-left text-[13px] hover:bg-[#f4f4f6] ${
+                            selectedCompetitorId === competitor.id
+                              ? 'bg-[#f4f4f6] font-medium text-[#1b1b1f]'
+                              : 'text-[#4b4b55]'
                           }`}
                           onClick={() => handleCompetitorSelect(competitor.id)}
                         >
@@ -207,7 +217,7 @@ export function WinLossDialog({
               </div>
               <input type="hidden" {...register('competitorId')} />
               {errors.competitorId && (
-                <span className="text-xs font-medium text-red-700" role="alert">
+                <span className="text-[11.5px] font-medium text-red-700" role="alert">
                   {errors.competitorId.message}
                 </span>
               )}
@@ -216,20 +226,20 @@ export function WinLossDialog({
 
           {/* Note — required for OTHER */}
           {selectedReason === 'OTHER' && (
-            <div className="space-y-1">
-              <label className="text-sm font-medium text-slate-700" htmlFor="win-loss-note">
+            <div className="space-y-1.5">
+              <label className="text-[12.5px] font-medium text-[#4b4b55]" htmlFor="win-loss-note">
                 Note
               </label>
               <textarea
                 id="win-loss-note"
                 rows={3}
-                className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-base md:text-sm"
+                className="flex w-full rounded-[9px] border border-[#e6e6eb] bg-[#fafafb] px-3 py-2.5 text-[13.5px] text-[#1b1b1f] outline-none transition-colors focus:border-[#1b1b1f] focus:bg-white"
                 placeholder="Explain why this deal was won or lost..."
                 {...register('note')}
                 aria-invalid={Boolean(errors.note)}
               />
               {errors.note && (
-                <span className="text-xs font-medium text-red-700" role="alert">
+                <span className="text-[11.5px] font-medium text-red-700" role="alert">
                   {errors.note.message}
                 </span>
               )}
@@ -239,7 +249,7 @@ export function WinLossDialog({
           {/* Server error */}
           {recordMutation.isError && (
             <p
-              className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700"
+              className="rounded-[9px] border border-red-200 bg-red-50 px-3 py-2 text-[13px] text-red-700"
               role="alert"
             >
               {recordMutation.error instanceof Error
@@ -248,11 +258,20 @@ export function WinLossDialog({
             </p>
           )}
 
-          <div className="flex justify-end gap-2 border-t border-slate-100 pt-4">
-            <Button type="button" variant="outline" onClick={handleClose}>
+          <div className="flex justify-end gap-2 border-t border-[#f0f0f4] pt-4">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleClose}
+              className="h-[36px] rounded-[9px] border-[#e6e6eb] text-[#4b4b55] hover:bg-[#f4f4f6]"
+            >
               Cancel
             </Button>
-            <Button type="submit" disabled={recordMutation.isPending}>
+            <Button
+              type="submit"
+              disabled={recordMutation.isPending}
+              className="h-[36px] rounded-[9px] border-[#1b1b1f] bg-[#1b1b1f] text-white hover:bg-black"
+            >
               {recordMutation.isPending ? 'Saving...' : confirmLabel}
             </Button>
           </div>

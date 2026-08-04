@@ -44,11 +44,20 @@ export type UpdateProfileInput = {
 export type UserFilterInput = {
   search?: string
   isActive?: boolean
+  roleId?: string
+  teamId?: string
 }
 
 export type UserPaginationInput = {
   page?: number
   pageSize?: number
+}
+
+export type UserStats = {
+  total: number
+  active: number
+  deactivated: number
+  admins: number
 }
 
 const DEFAULT_PAGE = 1
@@ -253,6 +262,24 @@ export class UsersService {
     return user
   }
 
+  /// Aggregate counters for the users workspace summary cards. Scoped to the
+  /// tenant only — user visibility is never restricted per-caller here,
+  /// unlike Contact/Task, since managing the user directory itself is an
+  /// admin-facing surface.
+  async getStats(tenantId: string): Promise<UserStats> {
+    const scope: Prisma.UserWhereInput = { tenantId, deletedAt: null }
+
+    const [total, active, admins] = await Promise.all([
+      this.prisma.user.count({ where: scope }),
+      this.prisma.user.count({ where: { ...scope, isActive: true } }),
+      this.prisma.user.count({
+        where: { ...scope, userRoles: { some: { role: { name: 'ADMIN' } } } },
+      }),
+    ])
+
+    return { total, active, deactivated: total - active, admins }
+  }
+
   async findMany(
     tenantId: string,
     filter: UserFilterInput = {},
@@ -267,6 +294,8 @@ export class UsersService {
       tenantId,
       deletedAt: null,
       ...(isActive !== undefined ? { isActive } : {}),
+      ...(filter.teamId ? { teamId: filter.teamId } : {}),
+      ...(filter.roleId ? { userRoles: { some: { roleId: filter.roleId } } } : {}),
       ...(search
         ? {
             OR: [
@@ -389,7 +418,10 @@ export class UsersService {
     return await this.findOne(tenantId, id)
   }
 
-  async enable2FA(tenantId: string, userId: string): Promise<{
+  async enable2FA(
+    tenantId: string,
+    userId: string,
+  ): Promise<{
     secret: string
     qrCodeDataUrl: string
     backupCodes: string[]
@@ -418,7 +450,11 @@ export class UsersService {
     return { secret, qrCodeDataUrl, backupCodes }
   }
 
-  async verify2FA(tenantId: string, userId: string, code: string): Promise<{
+  async verify2FA(
+    tenantId: string,
+    userId: string,
+    code: string,
+  ): Promise<{
     success: boolean
   }> {
     const user = await this.findOne(tenantId, userId)
@@ -485,7 +521,11 @@ export class UsersService {
     return true
   }
 
-  async regenerateBackupCodes(tenantId: string, userId: string, password: string): Promise<string[]> {
+  async regenerateBackupCodes(
+    tenantId: string,
+    userId: string,
+    password: string,
+  ): Promise<string[]> {
     const passwordValid = await this.authService.verifyPassword(userId, password)
     if (!passwordValid) {
       throw new UnauthorizedException('Mật khẩu không đúng')
@@ -518,7 +558,11 @@ export class UsersService {
     return backupCodes
   }
 
-  async updateTenantSettings(tenantId: string, userId: string, enforce2FA: boolean): Promise<{ enforce2FA: boolean }> {
+  async updateTenantSettings(
+    tenantId: string,
+    userId: string,
+    enforce2FA: boolean,
+  ): Promise<{ enforce2FA: boolean }> {
     // Verify user is ADMIN
     const userRoles = await this.getUserRoles(tenantId, userId)
     const roleNames = userRoles.map((r) => r.name)

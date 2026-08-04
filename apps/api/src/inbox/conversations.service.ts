@@ -16,6 +16,7 @@ export type ConversationFilterInput = {
   status?: string
   assignedTo?: string
   unreadOnly?: boolean
+  contactId?: string
 }
 
 export type ConversationPaginationInput = {
@@ -49,7 +50,17 @@ export class ConversationsService {
       where: { id: conversationId, tenantId, deletedAt: null },
       include: {
         contact: {
-          select: { id: true, firstName: true, lastName: true, email: true },
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+            phone: true,
+            company: true,
+            jobTitle: true,
+            addressCity: true,
+            addressCountry: true,
+          },
         },
         assignedToUser: {
           select: { id: true, firstName: true, lastName: true, email: true },
@@ -92,6 +103,10 @@ export class ConversationsService {
       where.assignedTo = filter.assignedTo
     }
 
+    if (filter.contactId) {
+      where.contactId = filter.contactId
+    }
+
     // Unread filter: count messages NOT sent by current user that haven't been read
     if (filter.unreadOnly) {
       where.messages = {
@@ -110,7 +125,17 @@ export class ConversationsService {
         take: pageSize,
         include: {
           contact: {
-            select: { id: true, firstName: true, lastName: true, email: true },
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              email: true,
+              phone: true,
+              company: true,
+              jobTitle: true,
+              addressCity: true,
+              addressCountry: true,
+            },
           },
           assignedToUser: {
             select: { id: true, firstName: true, lastName: true, email: true },

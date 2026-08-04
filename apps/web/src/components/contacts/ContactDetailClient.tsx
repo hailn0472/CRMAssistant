@@ -1,85 +1,47 @@
 'use client'
 
 import { useState, useCallback } from 'react'
+import { useRouter } from 'next/navigation'
+import { useQuery } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
-import {
-  Pencil,
-  Share2,
-  MoreHorizontal,
-  Mail,
-  Phone,
-  User,
-  Clock,
-  Globe,
-  MessageSquare,
-  Plus,
-  CheckCircle2,
-  Circle,
-  Check,
-  X,
-  type LucideIcon,
-} from 'lucide-react'
+import { Pencil, Check, X } from 'lucide-react'
 
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
+import { OwnerSection } from '@/components/contacts/OwnerSection'
 import { TagBadge } from '@/components/contacts/TagBadge'
 import { TagSelector } from '@/components/contacts/TagSelector'
-import { OwnerSection } from '@/components/contacts/OwnerSection'
+import { ContactFormDrawer } from '@/components/contacts/ContactFormDrawer'
 import { addTagToContact, removeTagFromContact } from '@/services/tag.service'
 import { updateContact } from '@/services/contact.service'
 import { assignContactOwner } from '@/services/owner.service'
+import { getConversations } from '@/services/inbox.service'
 import { ContactTimeline } from '@/components/contacts/ContactTimeline'
 import { cn } from '@/lib/utils'
 import type { Contact } from '@/services/contact.service'
 
-// ─── Types ────────────────────────────────────────────
 type TabId = 'overview' | 'activity' | 'conversations'
 
-interface Tab {
-  id: TabId
-  label: string
-  icon: LucideIcon
-  badge?: string
+const TABS: Array<{ id: TabId; label: string }> = [
+  { id: 'overview', label: 'Overview' },
+  { id: 'activity', label: 'Activity' },
+  { id: 'conversations', label: 'Conversations' },
+]
+
+const CHANNEL_LABELS: Record<string, string> = {
+  FACEBOOK: 'Facebook',
+  LIVE_CHAT: 'Live Chat',
+  INTERNAL: 'Internal',
 }
 
-const TABS: Tab[] = [
-  { id: 'overview', label: 'Overview', icon: User },
-  // Story 4.2 (AC 49): the hardcoded badge '6' is gone — the real timeline
-  // (ContactTimeline) renders its own totalCount header.
-  { id: 'activity', label: 'Activity', icon: Clock },
-  { id: 'conversations', label: 'Conversations', icon: MessageSquare, badge: '3' },
-]
+const CONVERSATION_STATUS: Record<string, { label: string; color: string }> = {
+  OPEN: { label: 'Open', color: '#4f46e5' },
+  PENDING: { label: 'Pending', color: '#c2860a' },
+  RESOLVED: { label: 'Resolved', color: '#22a06b' },
+  ARCHIVED: { label: 'Archived', color: '#8c8c96' },
+}
 
-const CONVERSATIONS = [
-  {
-    title: 'Báo giá CRM Enterprise',
-    channel: 'Facebook',
-    channelIcon: MessageSquare,
-    channelColor: 'bg-blue-100 text-blue-600',
-    lastMessage: 'Today at 14:32',
-    messageCount: '12 messages',
-    status: 'Open' as const,
-  },
-  {
-    title: 'Demo product tour',
-    channel: 'Live Chat',
-    channelIcon: MessageSquare,
-    channelColor: 'bg-emerald-100 text-emerald-600',
-    lastMessage: '10 Jan 2026',
-    messageCount: '24 messages',
-    status: 'Resolved' as const,
-  },
-  {
-    title: 'Follow-up: Proposal feedback',
-    channel: 'Email',
-    channelIcon: Mail,
-    channelColor: 'bg-indigo-100 text-indigo-600',
-    lastMessage: '5 Jan 2026',
-    messageCount: undefined,
-    status: 'Resolved' as const,
-  },
-]
+function initials(firstName: string, lastName: string): string {
+  return `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase()
+}
 
 // ─── Inline Edit Field ────────────────────────────────
 function InlineEditField({
@@ -104,6 +66,7 @@ function InlineEditField({
   const handleSave = useCallback(async () => {
     setSaving(true)
     try {
+      // Partial-field PATCH; the mutation's real input type is a full ContactFormData shape.
       await updateContact(contactId, { [fieldKey]: inputVal.trim() || null } as any)
       onSave(fieldKey, inputVal.trim())
       toast.success(`${label} updated`)
@@ -118,7 +81,7 @@ function InlineEditField({
   if (editing) {
     const InputTag = multiline ? 'textarea' : 'input'
     return (
-      <div className="flex items-start gap-2">
+      <div className="flex min-w-0 flex-1 items-start gap-1.5">
         <InputTag
           autoFocus
           value={inputVal}
@@ -127,23 +90,25 @@ function InlineEditField({
             if (e.key === 'Enter' && !multiline) handleSave()
             if (e.key === 'Escape') setEditing(false)
           }}
-          className="h-8 w-full rounded-md border border-slate-300 px-2.5 text-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+          className="h-8 w-full rounded-[7px] border border-[#e6e6eb] bg-[#fafafb] px-2.5 text-[13px] text-[#1b1b1f] outline-none transition-colors focus:border-[#1b1b1f] focus:bg-white"
           placeholder={`Enter ${label.toLowerCase()}`}
           rows={multiline ? 3 : undefined}
         />
-        <div className="flex gap-1 shrink-0 pt-0.5">
+        <div className="flex shrink-0 gap-1 pt-0.5">
           <button
             type="button"
             onClick={handleSave}
             disabled={saving}
-            className="flex h-7 w-7 items-center justify-center rounded-md bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50"
+            aria-label={`Save ${label}`}
+            className="flex h-7 w-7 items-center justify-center rounded-[7px] text-[#22a06b] transition-colors hover:bg-[#f4f4f6] disabled:opacity-50"
           >
             <Check className="h-3.5 w-3.5" />
           </button>
           <button
             type="button"
             onClick={() => setEditing(false)}
-            className="flex h-7 w-7 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+            aria-label={`Cancel editing ${label}`}
+            className="flex h-7 w-7 items-center justify-center rounded-[7px] text-[#a0a0aa] transition-colors hover:bg-[#f4f4f6]"
           >
             <X className="h-3.5 w-3.5" />
           </button>
@@ -153,22 +118,57 @@ function InlineEditField({
   }
 
   return (
-    <div className="flex min-w-0 flex-1 items-center gap-2">
+    <>
+      <span className={cn('truncate text-[13.5px]', value ? 'text-[#1b1b1f]' : 'text-[#c7c7d1]')}>
+        {value || '—'}
+      </span>
       {value ? (
-        <span className="text-sm font-medium text-slate-900">{value}</span>
+        <button
+          type="button"
+          aria-label={`Edit ${label}`}
+          className="invisible shrink-0 text-[#8c8c96] opacity-0 transition-opacity hover:text-[#1b1b1f] group-hover:visible group-hover:opacity-100"
+          onClick={() => {
+            setInputVal(value ?? '')
+            setEditing(true)
+          }}
+        >
+          <Pencil className="h-3 w-3" />
+        </button>
       ) : (
-        <span className="italic text-slate-300">—</span>
+        <button
+          type="button"
+          className="shrink-0 text-[12px] text-[#4338ca] hover:underline"
+          onClick={() => {
+            setInputVal('')
+            setEditing(true)
+          }}
+        >
+          Add
+        </button>
       )}
-      <button
-        type="button"
-        className="invisible ml-auto shrink-0 rounded-full bg-indigo-50 px-2.5 py-0.5 text-[11px] font-medium text-indigo-600 opacity-0 transition-all group-hover:visible group-hover:opacity-100 hover:bg-indigo-100"
-        onClick={() => {
-          setInputVal(value ?? '')
-          setEditing(true)
-        }}
-      >
-        <Pencil className="h-3 w-3" />
-      </button>
+    </>
+  )
+}
+
+// ─── Field Row (mock's 130px-label grid row) ──────────
+function FieldRow({
+  label,
+  children,
+  tall,
+}: {
+  label: string
+  children: React.ReactNode
+  tall?: boolean
+}): React.JSX.Element {
+  return (
+    <div
+      className={cn(
+        'group grid grid-cols-[130px_minmax(0,1fr)_auto] items-center gap-3.5 border-b border-[#f4f4f7] px-[18px] last:border-0',
+        tall ? 'min-h-[46px] py-2' : 'h-[46px]',
+      )}
+    >
+      <span className="text-[11px] font-semibold tracking-[0.06em] text-[#a0a0aa]">{label}</span>
+      {children}
     </div>
   )
 }
@@ -176,169 +176,61 @@ function InlineEditField({
 // ─── Profile Header ───────────────────────────────────
 function ProfileHeader({
   contact,
-  onSave,
+  onEdit,
 }: {
   contact: Contact
-  onSave: (k: string, v: string) => void
+  onEdit: () => void
 }): React.JSX.Element {
-  const initials = `${contact.firstName.charAt(0)}${contact.lastName.charAt(0)}`.toUpperCase()
-  const [editing, setEditing] = useState(false)
-  const [firstName, setFirstName] = useState(contact.firstName)
-  const [lastName, setLastName] = useState(contact.lastName)
-  const [saving, setSaving] = useState(false)
-
-  const handleSaveName = useCallback(async () => {
-    if (!firstName.trim() || !lastName.trim()) {
-      toast.error('Name fields are required')
-      return
-    }
-    setSaving(true)
-    try {
-      await updateContact(contact.id, {
-        firstName: firstName.trim(),
-        lastName: lastName.trim(),
-      } as any)
-      onSave('firstName', firstName.trim())
-      onSave('lastName', lastName.trim())
-      toast.success('Name updated')
-      setEditing(false)
-    } catch {
-      toast.error('Failed to update name')
-    } finally {
-      setSaving(false)
-    }
-  }, [contact.id, firstName, lastName, onSave])
-
   const fullName = `${contact.firstName} ${contact.lastName}`
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-6 sm:p-8">
-      <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:gap-6">
-        <div className="relative flex h-[68px] w-[68px] shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-blue-600 text-2xl font-bold text-white shadow-sm">
-          {initials}
-          <span className="absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full border-2 border-white bg-emerald-500" />
+    <div className="mb-5 flex flex-wrap items-start justify-between gap-6">
+      <div className="flex min-w-0 items-start gap-3.5">
+        <div className="flex h-[46px] w-[46px] flex-none items-center justify-center rounded-full bg-[#f0f0f3] text-[14px] font-semibold text-[#4b4b55]">
+          {initials(contact.firstName, contact.lastName)}
         </div>
+        <div className="flex min-w-0 flex-col gap-[7px]">
+          <h1 className="text-[24px] font-semibold tracking-[-0.025em] text-[#1b1b1f]">
+            {fullName}
+          </h1>
 
-        <div className="min-w-0 flex-1">
-          {editing ? (
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-              <input
-                autoFocus
-                value={firstName}
-                onChange={(e) => setFirstName(e.target.value)}
-                className="h-9 rounded-md border border-slate-300 px-3 text-lg font-semibold focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
-                placeholder="First name"
-              />
-              <input
-                value={lastName}
-                onChange={(e) => setLastName(e.target.value)}
-                className="h-9 rounded-md border border-slate-300 px-3 text-lg font-semibold focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
-                placeholder="Last name"
-              />
-              <div className="flex gap-1">
-                <button
-                  type="button"
-                  onClick={handleSaveName}
-                  disabled={saving}
-                  className="flex h-8 w-8 items-center justify-center rounded-md bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50"
-                >
-                  <Check className="h-4 w-4" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setEditing(false)}
-                  className="flex h-8 w-8 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-600"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              </div>
-            </div>
-          ) : (
-            <h1 className="text-2xl font-semibold tracking-tight text-slate-900">{fullName}</h1>
-          )}
-          {contact.jobTitle ? (
-            <p className="mt-0.5 text-base text-slate-600">
-              {contact.jobTitle}
-              {contact.company ? <span> at {contact.company}</span> : null}
-            </p>
-          ) : null}
-
-          <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1.5 text-sm text-slate-500">
-            <span className="inline-flex items-center gap-1.5">
-              <Mail className="h-3.5 w-3.5 text-slate-400" />
-              <a href={`mailto:${contact.email}`} className="text-indigo-600 hover:underline">
-                {contact.email}
-              </a>
-            </span>
-            {contact.phone ? (
-              <span className="inline-flex items-center gap-1.5">
-                <Phone className="h-3.5 w-3.5 text-slate-400" />
-                {contact.phone}
-              </span>
-            ) : null}
+          <div className="flex flex-wrap items-center gap-3 text-[13px] text-[#77777f]">
+            <a
+              href={`mailto:${contact.email}`}
+              className="text-[13px] text-[#4338ca] hover:underline"
+            >
+              {contact.email}
+            </a>
             {contact.owner ? (
-              <span className="inline-flex items-center gap-1.5">
-                <User className="h-3.5 w-3.5 text-slate-400" />
-                Owner:{' '}
-                <span className="text-indigo-600">
-                  {contact.owner.firstName} {contact.owner.lastName}
+              <>
+                <span className="text-[#d8d8e0]">·</span>
+                <span>
+                  Owner {contact.owner.firstName} {contact.owner.lastName}
                 </span>
-              </span>
+              </>
             ) : null}
-            <span className="inline-flex items-center gap-1.5">
-              <Clock className="h-3.5 w-3.5 text-slate-400" />
-              Updated {new Date(contact.updatedAt).toLocaleDateString()}
-            </span>
+            <span className="text-[#d8d8e0]">·</span>
+            <span>Updated {new Date(contact.updatedAt).toLocaleDateString()}</span>
           </div>
         </div>
-
-        <div className="flex shrink-0 gap-2">
-          <Button
-            variant="default"
-            size="sm"
-            className="gap-1.5"
-            onClick={() => setEditing(!editing)}
-          >
-            <Pencil className="h-3.5 w-3.5" />
-            {editing ? 'Cancel' : 'Edit name'}
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            className="gap-1.5"
-            onClick={() => toast.success('Share feature coming soon')}
-          >
-            <Share2 className="h-3.5 w-3.5" />
-            Share
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-9 w-9"
-            onClick={() => toast.success('More actions coming soon')}
-          >
-            <MoreHorizontal className="h-4 w-4" />
-          </Button>
-        </div>
       </div>
-    </div>
-  )
-}
 
-// ─── Detail Row ───────────────────────────────────────
-function DetailRow({
-  label,
-  children,
-}: {
-  label: string
-  children: React.ReactNode
-}): React.JSX.Element {
-  return (
-    <div className="group flex items-start gap-4 border-b border-slate-100 px-6 py-3.5 last:border-b-0">
-      <span className="w-[110px] shrink-0 pt-0.5 text-xs font-semibold uppercase tracking-wider text-slate-400">
-        {label}
-      </span>
-      {children}
+      <div className="flex flex-none items-center gap-2">
+        <button
+          type="button"
+          onClick={() => toast.success('Sharing is not available yet')}
+          className="inline-flex h-9 items-center rounded-[9px] border border-[#e6e6eb] bg-white px-3.5 text-[13px] font-medium text-[#4b4b55] transition-colors hover:bg-[#f4f4f6]"
+        >
+          Share
+        </button>
+        <button
+          type="button"
+          onClick={onEdit}
+          className="inline-flex h-9 items-center rounded-[9px] border border-[#1b1b1f] bg-[#1b1b1f] px-3.5 text-[13px] font-semibold text-white transition-colors hover:bg-black"
+        >
+          Edit
+        </button>
+      </div>
     </div>
   )
 }
@@ -383,20 +275,20 @@ function TagsSection({
   )
 
   return (
-    <div className="space-y-3 px-6 py-4">
-      <div className="flex flex-wrap items-center gap-1.5">
+    <section className="flex flex-col gap-3 rounded-[14px] border border-[#ececf0] bg-white px-[18px] py-4">
+      <h2 className="text-[14px] font-semibold text-[#1b1b1f]">Tags</h2>
+      <div className="flex flex-wrap items-center gap-[7px]">
         {tags && tags.length > 0 ? (
           tags.map((t) => <TagBadge key={t.id} tag={t} onRemove={handleRemoveTag} />)
         ) : (
-          <span className="text-sm italic text-slate-300">No tags</span>
+          <span className="text-[12.5px] text-[#a0a0aa]">No tags yet</span>
         )}
         <button
           type="button"
-          className="inline-flex items-center gap-1 rounded-full border border-dashed border-slate-300 px-2.5 py-1 text-[11px] font-medium text-slate-400 transition-colors hover:border-indigo-400 hover:text-indigo-600"
-          onClick={() => setShowSelector(!showSelector)}
+          className="inline-flex h-7 items-center rounded-full border border-dashed border-[#d8d8e0] px-[11px] text-[12px] font-medium text-[#4b4b55] transition-colors hover:border-[#1b1b1f] hover:bg-[#fafafb]"
+          onClick={() => setShowSelector((v) => !v)}
         >
-          <Plus className="h-3 w-3" />
-          {showSelector ? 'Cancel' : 'Add tag'}
+          {showSelector ? 'Cancel' : '+ Add tag'}
         </button>
       </div>
       {showSelector ? (
@@ -410,85 +302,58 @@ function TagsSection({
           }}
         />
       ) : null}
-    </div>
+    </section>
   )
 }
 
-// ─── Quick Info Card ──────────────────────────────────
+// ─── Quick Info ────────────────────────────────────────
 function QuickInfoCard({ contact }: { contact: Contact }): React.JSX.Element {
   const items = [
-    {
-      label: 'Owner',
-      value: contact.owner ? `${contact.owner.firstName} ${contact.owner.lastName}` : '—',
-    },
     { label: 'Created', value: new Date(contact.createdAt).toLocaleDateString() },
     { label: 'Updated', value: new Date(contact.updatedAt).toLocaleDateString() },
-    { label: 'Sharing', value: 'Not shared', highlight: true },
+    { label: 'Company', value: contact.company || '—' },
+    { label: 'Job title', value: contact.jobTitle || '—' },
   ]
   return (
-    <Card>
-      <CardHeader className="border-b border-slate-100 px-5 py-3.5">
-        <CardTitle className="flex items-center gap-2 text-sm font-semibold text-slate-900">
-          <Clock className="h-4 w-4 text-slate-400" />
-          Quick Info
-        </CardTitle>
-      </CardHeader>
-      <div className="grid grid-cols-2 divide-x divide-y divide-slate-100">
+    <section className="flex flex-col gap-3.5 rounded-[14px] border border-[#ececf0] bg-white px-[18px] py-4">
+      {contact.owner ? (
+        <div className="flex items-center gap-[11px]">
+          <span className="flex h-8 w-8 flex-none items-center justify-center rounded-full bg-[#f0f0f3] text-[11px] font-semibold text-[#4b4b55]">
+            {initials(contact.owner.firstName, contact.owner.lastName)}
+          </span>
+          <div className="flex min-w-0 flex-col gap-px">
+            <span className="truncate text-[13px] font-medium text-[#1b1b1f]">
+              {contact.owner.firstName} {contact.owner.lastName}
+            </span>
+            <span className="truncate text-[11.5px] text-[#a0a0aa]">Owner</span>
+          </div>
+        </div>
+      ) : null}
+      <div
+        className={cn(
+          'grid grid-cols-2 gap-3',
+          contact.owner && 'border-t border-[#f2f2f5] pt-3.5',
+        )}
+      >
         {items.map((item) => (
-          <div key={item.label} className="px-5 py-3.5">
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+          <div key={item.label} className="flex flex-col gap-[3px]">
+            <span className="text-[11px] font-semibold tracking-[0.06em] text-[#a0a0aa]">
               {item.label}
-            </p>
-            <p
-              className={cn(
-                'mt-0.5 text-sm font-medium',
-                item.highlight ? 'text-emerald-600' : 'text-slate-900',
-              )}
-            >
-              {item.value}
-            </p>
+            </span>
+            <span className="truncate text-[13px] font-medium text-[#1b1b1f]">{item.value}</span>
           </div>
         ))}
       </div>
-    </Card>
+    </section>
   )
 }
 
-// ─── Channels ─────────────────────────────────────────
-function ChannelsCard(): React.JSX.Element {
-  return (
-    <Card>
-      <CardHeader className="border-b border-slate-100 px-5 py-3.5">
-        <CardTitle className="flex items-center gap-2 text-sm font-semibold text-slate-900">
-          <Globe className="h-4 w-4 text-slate-400" />
-          Connected Channels
-        </CardTitle>
-      </CardHeader>
-      <div className="flex flex-wrap gap-2 px-5 py-4">
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-100 px-3 py-1 text-xs font-medium text-blue-700">
-          <MessageSquare className="h-3.5 w-3.5" />
-          Facebook
-        </span>
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-indigo-100 px-3 py-1 text-xs font-medium text-indigo-700">
-          <Mail className="h-3.5 w-3.5" />
-          Email
-        </span>
-        <button
-          type="button"
-          className="inline-flex items-center gap-1 rounded-full border border-dashed border-slate-300 px-3 py-1 text-xs font-medium text-slate-400 transition-colors hover:border-indigo-400 hover:text-indigo-600"
-          onClick={() => toast.success('Connect channel feature coming soon')}
-        >
-          <Plus className="h-3 w-3" />
-          Connect
-        </button>
-      </div>
-    </Card>
-  )
-}
-
-// ─── Enrichment Progress ──────────────────────────────
-function EnrichmentProgress({ contact }: { contact: Contact }): React.JSX.Element {
-  const enrichmentFields = [
+// ─── Profile completeness ──────────────────────────────
+function CompletenessCard({ contact }: { contact: Contact }): React.JSX.Element {
+  const fields = [
+    contact.phone,
+    contact.company,
+    contact.jobTitle,
     contact.linkedin,
     contact.twitter,
     contact.addressStreet,
@@ -498,86 +363,132 @@ function EnrichmentProgress({ contact }: { contact: Contact }): React.JSX.Elemen
     contact.timezone,
     contact.language,
     contact.source,
-    contact.notes,
   ]
-  const filled = enrichmentFields.filter(Boolean).length
-  const total = enrichmentFields.length
+  const filled = fields.filter(Boolean).length
+  const total = fields.length
   const pct = Math.round((filled / total) * 100)
 
   return (
-    <Card className="border-indigo-200 bg-gradient-to-br from-indigo-50/60 to-white">
-      <CardHeader className="border-b border-indigo-100 px-5 py-3.5">
-        <CardTitle className="flex items-center gap-2 text-sm font-semibold text-indigo-700">
-          <CheckCircle2 className="h-4 w-4" />
-          Enrichment Progress
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="px-5 py-4">
-        <div className="flex items-center justify-between text-xs text-slate-500">
-          <span>Profile completeness</span>
-          <span className="font-semibold text-indigo-600">{pct}%</span>
-        </div>
-        <div className="mt-1.5 h-2 rounded-full bg-slate-200">
-          <div
-            className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-indigo-400 transition-all"
-            style={{ width: `${pct}%` }}
-          />
-        </div>
-        <div className="mt-3 flex gap-4 text-xs">
-          <span className="inline-flex items-center gap-1 text-emerald-600">
-            <Circle className="h-2 w-2 fill-emerald-500" />
-            {filled} filled
-          </span>
-          <span className="inline-flex items-center gap-1 text-slate-400">
-            <Circle className="h-2 w-2 fill-slate-300" />
-            {total - filled} missing
-          </span>
-        </div>
-      </CardContent>
-    </Card>
+    <section className="flex flex-col gap-3 rounded-[14px] border border-[#ececf0] bg-white px-[18px] py-4">
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="text-[14px] font-semibold text-[#1b1b1f]">Profile completeness</h2>
+        <span className="font-mono text-[13px] font-medium text-[#1b1b1f]">{pct}%</span>
+      </div>
+      <span className="block h-2 overflow-hidden rounded-[5px] bg-[#f2f2f5]">
+        <span className="block h-full bg-[#1b1b1f]" style={{ width: `${pct}%` }} />
+      </span>
+      <div className="flex items-center gap-3.5 text-[12px] text-[#8c8c96]">
+        <span className="flex items-center gap-1.5">
+          <span className="block h-[5px] w-[5px] rounded-full bg-[#22a06b]" />
+          {filled} filled
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="block h-[5px] w-[5px] rounded-full bg-[#d8d8e0]" />
+          {total - filled} missing
+        </span>
+      </div>
+    </section>
+  )
+}
+
+// ─── Connected channels ─────────────────────────────────
+// Derived from the contact's real conversations — there is no separate
+// "connected channels" concept in the backend, so this reflects the actual
+// distinct channels the contact has messaged through, not a fixed list.
+function ChannelsCard({ channels }: { channels: string[] }): React.JSX.Element {
+  return (
+    <section className="flex flex-col gap-3 rounded-[14px] border border-[#ececf0] bg-white px-[18px] py-4">
+      <h2 className="text-[14px] font-semibold text-[#1b1b1f]">Connected channels</h2>
+      <div className="flex flex-wrap items-center gap-[7px]">
+        {channels.length === 0 ? (
+          <span className="text-[12.5px] text-[#a0a0aa]">No conversations yet</span>
+        ) : (
+          channels.map((channel) => (
+            <span
+              key={channel}
+              className="inline-flex h-7 items-center gap-[7px] rounded-full border border-[#e6e6eb] bg-[#fafafb] px-[11px] text-[12px] font-medium text-[#4b4b55]"
+            >
+              <span className="block h-[5px] w-[5px] rounded-full bg-[#22a06b]" />
+              {CHANNEL_LABELS[channel] ?? channel}
+            </span>
+          ))
+        )}
+      </div>
+    </section>
   )
 }
 
 // ─── Conversations ────────────────────────────────────
-function ConversationList(): React.JSX.Element {
+function ConversationsPanel({ contactId }: { contactId: string }): React.JSX.Element {
+  const router = useRouter()
+  const { data, isLoading } = useQuery({
+    queryKey: ['contact-conversations', contactId],
+    queryFn: () => getConversations({ page: 1, pageSize: 20 }, { contactId }),
+  })
+
+  const items = data?.items ?? []
+
   return (
-    <div className="divide-y divide-slate-100">
-      {CONVERSATIONS.map((conv, i) => (
-        <div
-          key={i}
-          className="flex cursor-pointer items-center gap-4 px-6 py-4 transition-colors hover:bg-slate-50"
-          onClick={() => toast.success('Open conversation coming soon')}
+    <section className="max-w-[840px] overflow-hidden rounded-[14px] border border-[#ececf0] bg-white">
+      <div className="flex items-center justify-between gap-3 border-b border-[#f2f2f5] px-[18px] py-2.5">
+        <h2 className="text-[14px] font-semibold text-[#1b1b1f]">Conversations</h2>
+        <button
+          type="button"
+          onClick={() => router.push('/inbox')}
+          className="inline-flex h-9 items-center rounded-[9px] border border-[#1b1b1f] bg-[#1b1b1f] px-3 text-[12.5px] font-semibold text-white transition-colors hover:bg-black"
         >
-          <div
-            className={cn(
-              'flex h-9 w-9 shrink-0 items-center justify-center rounded-lg',
-              conv.channelColor,
-            )}
-          >
-            <conv.channelIcon className="h-4 w-4" />
-          </div>
-          <div className="min-w-0 flex-1">
-            <p className="text-sm font-medium text-slate-900">{conv.title}</p>
-            <p className="text-xs text-slate-400">
-              {conv.channel} · Last message: {conv.lastMessage}
-              {conv.messageCount ? ` · ${conv.messageCount}` : null}
-            </p>
-          </div>
-          <Badge
-            variant={
-              conv.status === 'Open'
-                ? 'warning'
-                : conv.status === 'Resolved'
-                  ? 'success'
-                  : 'neutral'
-            }
-            className="shrink-0 text-[11px]"
-          >
-            {conv.status}
-          </Badge>
-        </div>
-      ))}
-    </div>
+          Open inbox
+        </button>
+      </div>
+
+      {isLoading ? (
+        <p className="px-[18px] py-6 text-[13px] text-[#a0a0aa]">Loading conversations…</p>
+      ) : items.length === 0 ? (
+        <p className="px-[18px] py-6 text-[13px] text-[#a0a0aa]">No conversations yet.</p>
+      ) : (
+        items.map((conv) => {
+          const status = CONVERSATION_STATUS[conv.status] ?? {
+            label: conv.status,
+            color: '#8c8c96',
+          }
+          const title = CHANNEL_LABELS[conv.channel] ?? conv.channel
+          const meta = conv.lastMessageAt
+            ? `Last message ${new Date(conv.lastMessageAt).toLocaleString()}`
+            : 'No messages yet'
+          return (
+            <button
+              key={conv.id}
+              type="button"
+              onClick={() => router.push('/inbox')}
+              className="flex w-full items-center gap-[13px] border-b border-[#f4f4f7] px-[18px] py-3.5 text-left transition-colors last:border-0 hover:bg-[#fafafb]"
+            >
+              <span className="flex h-8 w-8 flex-none items-center justify-center rounded-[9px] border border-[#ececf0] bg-[#fafafb] text-[10.5px] font-semibold text-[#6b6b76]">
+                {title.slice(0, 2).toUpperCase()}
+              </span>
+              <div className="flex min-w-0 flex-col gap-px">
+                <span className="truncate text-[13.5px] font-medium text-[#1b1b1f]">
+                  {title} conversation
+                </span>
+                <span className="truncate text-[12px] text-[#8c8c96]">
+                  {meta}
+                  {conv.lastMessagePreview ? ` · ${conv.lastMessagePreview}` : ''}
+                </span>
+              </div>
+              <span
+                className="ml-auto inline-flex flex-none items-center gap-1.5 rounded-full py-[3px] pl-2 pr-2.5 text-[11.5px] font-medium"
+                style={{ color: status.color, background: `${status.color}1a` }}
+              >
+                <span
+                  className="block h-[5px] w-[5px] rounded-full"
+                  style={{ background: status.color }}
+                />
+                {status.label}
+              </span>
+            </button>
+          )
+        })
+      )}
+    </section>
   )
 }
 
@@ -586,6 +497,16 @@ export function ContactDetailClient({ contact }: { contact: Contact }): React.JS
   const [activeTab, setActiveTab] = useState<TabId>('overview')
   const [localContact, setLocalContact] = useState(contact)
   const [, setRefreshKey] = useState(0)
+  const [editOpen, setEditOpen] = useState(false)
+
+  const { data: conversationsData } = useQuery({
+    queryKey: ['contact-conversations', contact.id],
+    queryFn: () => getConversations({ page: 1, pageSize: 20 }, { contactId: contact.id }),
+  })
+  const conversationCount = conversationsData?.total
+  const connectedChannels = Array.from(
+    new Set((conversationsData?.items ?? []).map((c) => c.channel)),
+  )
 
   const refreshContact = useCallback(() => {
     setRefreshKey((k) => k + 1)
@@ -600,13 +521,20 @@ export function ContactDetailClient({ contact }: { contact: Contact }): React.JS
   }, [])
 
   return (
-    <div className="space-y-5">
-      <ProfileHeader contact={localContact} onSave={handleEnrichSave} />
+    <div className="mx-auto w-full max-w-[1240px]">
+      <a
+        href="/contacts"
+        className="mb-4 inline-flex items-center gap-[7px] text-[12.5px] text-[#8c8c96] transition-colors hover:text-[#1b1b1f]"
+      >
+        ← Back to contacts
+      </a>
 
-      {/* Tabs */}
-      <div className="flex gap-1 rounded-lg bg-slate-100 p-1">
+      <ProfileHeader contact={localContact} onEdit={() => setEditOpen(true)} />
+
+      <div className="mb-5 flex items-center gap-1 border-b border-[#ececf0]">
         {TABS.map((tab) => {
           const isActive = activeTab === tab.id
+          const badge = tab.id === 'conversations' ? conversationCount : undefined
           return (
             <button
               key={tab.id}
@@ -615,22 +543,16 @@ export function ContactDetailClient({ contact }: { contact: Contact }): React.JS
               aria-selected={isActive}
               onClick={() => setActiveTab(tab.id)}
               className={cn(
-                'flex items-center gap-1.5 rounded-md px-3.5 py-2 text-sm font-medium transition-all',
+                'flex h-[38px] items-center gap-[7px] border-b-2 px-3 text-[13.5px] transition-colors',
                 isActive
-                  ? 'bg-white text-slate-900 shadow-sm'
-                  : 'text-slate-500 hover:text-slate-800',
+                  ? 'border-[#1b1b1f] font-semibold text-[#1b1b1f]'
+                  : 'border-transparent font-medium text-[#8c8c96] hover:text-[#1b1b1f]',
               )}
             >
-              <tab.icon className="h-4 w-4" />
               {tab.label}
-              {tab.badge ? (
-                <span
-                  className={cn(
-                    'ml-1 rounded-full px-2 py-0.5 text-[11px] font-semibold',
-                    isActive ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-200 text-slate-500',
-                  )}
-                >
-                  {tab.badge}
+              {badge ? (
+                <span className="rounded-full bg-[#f0f0f3] px-[7px] py-px text-[11px] font-semibold text-[#6b6b76]">
+                  {badge}
                 </span>
               ) : null}
             </button>
@@ -640,149 +562,137 @@ export function ContactDetailClient({ contact }: { contact: Contact }): React.JS
 
       {/* ── Overview Tab ── */}
       {activeTab === 'overview' ? (
-        <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1fr_340px]">
-          <div className="space-y-5">
-            {/* Contact Information — tất cả field đều inline-editable */}
-            <Card>
-              <CardHeader className="border-b border-slate-100 px-6 py-3.5">
-                <CardTitle className="flex items-center gap-2 text-sm font-semibold text-slate-900">
-                  <User className="h-4 w-4 text-slate-400" />
-                  Contact Information
-                </CardTitle>
-              </CardHeader>
-              <div className="divide-y divide-slate-100">
-                <DetailRow label="Email">
-                  <InlineEditField
-                    label="Email"
-                    value={localContact.email}
-                    fieldKey="email"
-                    contactId={localContact.id}
-                    onSave={handleEnrichSave}
-                  />
-                </DetailRow>
-                <DetailRow label="Phone">
-                  <InlineEditField
-                    label="Phone"
-                    value={localContact.phone}
-                    fieldKey="phone"
-                    contactId={localContact.id}
-                    onSave={handleEnrichSave}
-                  />
-                </DetailRow>
-                <DetailRow label="Company">
-                  <InlineEditField
-                    label="Company"
-                    value={localContact.company}
-                    fieldKey="company"
-                    contactId={localContact.id}
-                    onSave={handleEnrichSave}
-                  />
-                </DetailRow>
-                <DetailRow label="Job Title">
-                  <InlineEditField
-                    label="Job Title"
-                    value={localContact.jobTitle}
-                    fieldKey="jobTitle"
-                    contactId={localContact.id}
-                    onSave={handleEnrichSave}
-                  />
-                </DetailRow>
-                <DetailRow label="Department">
-                  <InlineEditField
-                    label="Department"
-                    value={localContact.department}
-                    fieldKey="department"
-                    contactId={localContact.id}
-                    onSave={handleEnrichSave}
-                  />
-                </DetailRow>
+        <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,1fr)_330px]">
+          <div className="flex min-w-0 flex-col gap-4">
+            <section className="overflow-hidden rounded-[14px] border border-[#ececf0] bg-white">
+              <div className="flex items-center justify-between gap-3 border-b border-[#f2f2f5] px-[18px] py-[14px]">
+                <h2 className="text-[14px] font-semibold text-[#1b1b1f]">Contact information</h2>
               </div>
-            </Card>
+              <FieldRow label="Email">
+                <span className="truncate text-[13.5px] text-[#1b1b1f]">{localContact.email}</span>
+                <span />
+              </FieldRow>
+              <FieldRow label="Phone">
+                <InlineEditField
+                  label="Phone"
+                  value={localContact.phone}
+                  fieldKey="phone"
+                  contactId={localContact.id}
+                  onSave={handleEnrichSave}
+                />
+              </FieldRow>
+              <FieldRow label="Company">
+                <InlineEditField
+                  label="Company"
+                  value={localContact.company}
+                  fieldKey="company"
+                  contactId={localContact.id}
+                  onSave={handleEnrichSave}
+                />
+              </FieldRow>
+              <FieldRow label="Job title">
+                <InlineEditField
+                  label="Job title"
+                  value={localContact.jobTitle}
+                  fieldKey="jobTitle"
+                  contactId={localContact.id}
+                  onSave={handleEnrichSave}
+                />
+              </FieldRow>
+              <FieldRow label="Department">
+                <InlineEditField
+                  label="Department"
+                  value={localContact.department}
+                  fieldKey="department"
+                  contactId={localContact.id}
+                  onSave={handleEnrichSave}
+                />
+              </FieldRow>
+            </section>
 
-            {/* Enriched Information */}
-            <Card>
-              <CardHeader className="border-b border-slate-100 px-6 py-3.5">
-                <CardTitle className="flex items-center gap-2 text-sm font-semibold text-slate-900">
-                  <Globe className="h-4 w-4 text-slate-400" />
-                  Enriched Information
-                </CardTitle>
-              </CardHeader>
-              <div className="divide-y divide-slate-100">
-                <DetailRow label="LinkedIn">
-                  <InlineEditField
-                    label="LinkedIn"
-                    value={localContact.linkedin}
-                    fieldKey="linkedin"
-                    contactId={localContact.id}
-                    onSave={handleEnrichSave}
-                  />
-                </DetailRow>
-                <DetailRow label="Twitter / X">
-                  <InlineEditField
-                    label="Twitter"
-                    value={localContact.twitter}
-                    fieldKey="twitter"
-                    contactId={localContact.id}
-                    onSave={handleEnrichSave}
-                  />
-                </DetailRow>
-                <DetailRow label="Address">
-                  <InlineEditField
-                    label="Address"
-                    value={[
-                      localContact.addressStreet,
-                      localContact.addressCity,
-                      localContact.addressCountry,
-                    ]
-                      .filter(Boolean)
-                      .join(', ')}
-                    fieldKey="addressStreet"
-                    contactId={localContact.id}
-                    onSave={handleEnrichSave}
-                  />
-                </DetailRow>
-                <DetailRow label="Timezone">
-                  <InlineEditField
-                    label="Timezone"
-                    value={localContact.timezone}
-                    fieldKey="timezone"
-                    contactId={localContact.id}
-                    onSave={handleEnrichSave}
-                  />
-                </DetailRow>
-                <DetailRow label="Language">
-                  <InlineEditField
-                    label="Language"
-                    value={localContact.language}
-                    fieldKey="language"
-                    contactId={localContact.id}
-                    onSave={handleEnrichSave}
-                  />
-                </DetailRow>
-                <DetailRow label="Source">
-                  <InlineEditField
-                    label="Source"
-                    value={localContact.source}
-                    fieldKey="source"
-                    contactId={localContact.id}
-                    onSave={handleEnrichSave}
-                  />
-                </DetailRow>
-                <DetailRow label="Notes">
-                  <InlineEditField
-                    label="Notes"
-                    value={localContact.notes}
-                    fieldKey="notes"
-                    contactId={localContact.id}
-                    onSave={handleEnrichSave}
-                    multiline
-                  />
-                </DetailRow>
+            <section className="overflow-hidden rounded-[14px] border border-[#ececf0] bg-white">
+              <div className="flex items-start justify-between gap-3 border-b border-[#f2f2f5] px-[18px] py-[14px]">
+                <div className="flex flex-col gap-[3px]">
+                  <h2 className="text-[14px] font-semibold text-[#1b1b1f]">Enriched information</h2>
+                  <span className="text-[12px] text-[#8c8c96]">
+                    Fill these in manually — there is no automatic enrichment provider configured.
+                  </span>
+                </div>
               </div>
-            </Card>
+              <FieldRow label="LinkedIn">
+                <InlineEditField
+                  label="LinkedIn"
+                  value={localContact.linkedin}
+                  fieldKey="linkedin"
+                  contactId={localContact.id}
+                  onSave={handleEnrichSave}
+                />
+              </FieldRow>
+              <FieldRow label="Twitter / X">
+                <InlineEditField
+                  label="Twitter"
+                  value={localContact.twitter}
+                  fieldKey="twitter"
+                  contactId={localContact.id}
+                  onSave={handleEnrichSave}
+                />
+              </FieldRow>
+              <FieldRow label="Address">
+                <InlineEditField
+                  label="Address"
+                  value={[
+                    localContact.addressStreet,
+                    localContact.addressCity,
+                    localContact.addressCountry,
+                  ]
+                    .filter(Boolean)
+                    .join(', ')}
+                  fieldKey="addressStreet"
+                  contactId={localContact.id}
+                  onSave={handleEnrichSave}
+                />
+              </FieldRow>
+              <FieldRow label="Timezone">
+                <InlineEditField
+                  label="Timezone"
+                  value={localContact.timezone}
+                  fieldKey="timezone"
+                  contactId={localContact.id}
+                  onSave={handleEnrichSave}
+                />
+              </FieldRow>
+              <FieldRow label="Language">
+                <InlineEditField
+                  label="Language"
+                  value={localContact.language}
+                  fieldKey="language"
+                  contactId={localContact.id}
+                  onSave={handleEnrichSave}
+                />
+              </FieldRow>
+              <FieldRow label="Source">
+                <InlineEditField
+                  label="Source"
+                  value={localContact.source}
+                  fieldKey="source"
+                  contactId={localContact.id}
+                  onSave={handleEnrichSave}
+                />
+              </FieldRow>
+              <FieldRow label="Notes" tall>
+                <InlineEditField
+                  label="Notes"
+                  value={localContact.notes}
+                  fieldKey="notes"
+                  contactId={localContact.id}
+                  onSave={handleEnrichSave}
+                  multiline
+                />
+              </FieldRow>
+            </section>
           </div>
 
-          <div className="space-y-4">
+          <aside className="flex min-w-0 flex-col gap-4">
             <OwnerSection
               contactId={localContact.id}
               ownerId={localContact.ownerId}
@@ -791,63 +701,36 @@ export function ContactDetailClient({ contact }: { contact: Contact }): React.JS
               onAssignOwner={handleAssignOwner}
             />
             <QuickInfoCard contact={localContact} />
-            <Card>
-              <CardHeader className="border-b border-slate-100 px-5 py-3.5">
-                <CardTitle className="flex items-center gap-2 text-sm font-semibold text-slate-900">
-                  <CheckCircle2 className="h-4 w-4 text-slate-400" />
-                  Tags
-                </CardTitle>
-              </CardHeader>
-              <TagsSection
-                contactId={localContact.id}
-                tags={localContact.tags}
-                onTagsChange={refreshContact}
-              />
-            </Card>
-            <ChannelsCard />
-            <EnrichmentProgress contact={localContact} />
-          </div>
+            <CompletenessCard contact={localContact} />
+            <TagsSection
+              contactId={localContact.id}
+              tags={localContact.tags}
+              onTagsChange={refreshContact}
+            />
+            <ChannelsCard channels={connectedChannels} />
+          </aside>
         </div>
       ) : null}
 
       {/* ── Activity Tab ── */}
       {activeTab === 'activity' ? (
-        <Card>
-          <CardHeader className="border-b border-slate-100 px-6 py-3.5">
-            <CardTitle className="flex items-center gap-2 text-sm font-semibold text-slate-900">
-              <Clock className="h-4 w-4 text-slate-400" />
-              Activity Timeline
-            </CardTitle>
-          </CardHeader>
-          {/* Story 4.2 (AC 49): the real, paginated timeline is mounted here —
-              the hardcoded mock and "read-only" footer are gone. */}
-          <div className="px-6 py-4">
-            <ContactTimeline contactId={contact.id} />
-          </div>
-        </Card>
+        <section className="max-w-[840px] overflow-hidden rounded-[14px] border border-[#ececf0] bg-white px-[18px] py-4">
+          <ContactTimeline contactId={contact.id} />
+        </section>
       ) : null}
 
       {/* ── Conversations Tab ── */}
-      {activeTab === 'conversations' ? (
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between border-b border-slate-100 px-6 py-3.5">
-            <CardTitle className="flex items-center gap-2 text-sm font-semibold text-slate-900">
-              <MessageSquare className="h-4 w-4 text-slate-400" />
-              Conversations
-            </CardTitle>
-            <Button
-              variant="default"
-              size="sm"
-              className="h-8 gap-1.5 bg-indigo-600 text-xs hover:bg-indigo-700"
-              onClick={() => toast.success('New conversation feature coming soon')}
-            >
-              <Plus className="h-3 w-3" />
-              New conversation
-            </Button>
-          </CardHeader>
-          <ConversationList />
-        </Card>
-      ) : null}
+      {activeTab === 'conversations' ? <ConversationsPanel contactId={contact.id} /> : null}
+
+      <ContactFormDrawer
+        open={editOpen}
+        onOpenChange={setEditOpen}
+        contact={localContact}
+        onSaved={(saved) => {
+          setLocalContact(saved)
+          setEditOpen(false)
+        }}
+      />
     </div>
   )
 }

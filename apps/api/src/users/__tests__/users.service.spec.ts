@@ -346,6 +346,70 @@ describe('UsersService', () => {
         }) as Record<string, unknown>,
       )
     })
+
+    it('filters by teamId', async () => {
+      prisma.user.findMany.mockResolvedValue([])
+      prisma.user.count.mockResolvedValue(0)
+
+      await service.findMany(TENANT_ID, { teamId: 'team-1' })
+
+      expect(prisma.user.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ teamId: 'team-1' }) as Record<string, unknown>,
+        }) as Record<string, unknown>,
+      )
+    })
+
+    it('filters by roleId via the userRoles junction', async () => {
+      prisma.user.findMany.mockResolvedValue([])
+      prisma.user.count.mockResolvedValue(0)
+
+      await service.findMany(TENANT_ID, { roleId: 'role-1' })
+
+      expect(prisma.user.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            userRoles: { some: { roleId: 'role-1' } },
+          }) as Record<string, unknown>,
+        }) as Record<string, unknown>,
+      )
+    })
+  })
+
+  describe('getStats()', () => {
+    it('returns total, active, deactivated and admin counts scoped to the tenant', async () => {
+      prisma.user.count
+        .mockResolvedValueOnce(6) // total
+        .mockResolvedValueOnce(4) // active
+        .mockResolvedValueOnce(1) // admins
+
+      const result = await service.getStats(TENANT_ID)
+
+      expect(result).toEqual({ total: 6, active: 4, deactivated: 2, admins: 1 })
+    })
+
+    it('scopes every counter to the tenant and excludes soft-deleted users', async () => {
+      prisma.user.count.mockResolvedValue(0)
+
+      await service.getStats(TENANT_ID)
+
+      expect(prisma.user.count).toHaveBeenCalledTimes(3)
+      for (const call of prisma.user.count.mock.calls) {
+        expect(call[0].where).toEqual(
+          expect.objectContaining({ tenantId: TENANT_ID, deletedAt: null }),
+        )
+      }
+    })
+
+    it('counts admins as users with an ADMIN role via the userRoles junction', async () => {
+      prisma.user.count.mockResolvedValue(0)
+
+      await service.getStats(TENANT_ID)
+
+      expect(prisma.user.count.mock.calls[2]![0].where.userRoles).toEqual({
+        some: { role: { name: 'ADMIN' } },
+      })
+    })
   })
 
   describe('update()', () => {

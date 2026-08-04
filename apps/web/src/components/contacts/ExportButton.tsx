@@ -53,10 +53,11 @@ export function ExportButton({ filters }: ExportButtonProps): React.JSX.Element 
 
   return (
     <Button
-      className="bg-slate-950 text-white hover:bg-slate-800"
+      className="h-[36px] rounded-[9px] border border-[#e6e6eb] bg-white px-3.5 text-[13px] font-medium text-[#4b4b55] shadow-none hover:bg-[#f4f4f6] hover:text-[#1b1b1f]"
       disabled={isExporting}
       onClick={handleExport}
       type="button"
+      variant="outline"
     >
       {isExporting ? 'Exporting...' : 'Export CSV'}
     </Button>

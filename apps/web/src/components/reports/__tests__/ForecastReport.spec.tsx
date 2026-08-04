@@ -35,8 +35,8 @@ jest.mock('@/lib/graphql-subscription', () => ({
 // Mock recharts — jsdom cannot render SVG
 jest.mock('recharts', () => ({
   ResponsiveContainer: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  LineChart: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  Line: () => <div />,
+  AreaChart: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  Area: () => <div />,
   XAxis: () => <div />,
   YAxis: () => <div />,
   CartesianGrid: () => <div />,
@@ -103,6 +103,9 @@ describe('ForecastReport', () => {
       pageSize: 100,
     })
     ;(getTeams as jest.Mock).mockResolvedValue([])
+
+    global.URL.createObjectURL = jest.fn(() => 'blob:test')
+    global.URL.revokeObjectURL = jest.fn()
   })
 
   it('shows loading skeleton while data is fetching', async () => {
@@ -112,7 +115,7 @@ describe('ForecastReport', () => {
 
     renderWithQueryClient(<ForecastReport />)
 
-    expect(screen.getByText('Sales Forecast Filters')).toBeInTheDocument()
+    expect(screen.getByText('Sales forecast')).toBeInTheDocument()
   })
 
   it('shows error state with retry button when query fails', async () => {
@@ -139,9 +142,9 @@ describe('ForecastReport', () => {
   it('renders forecast chart and bands with data', async () => {
     renderWithQueryClient(<ForecastReport />)
 
-    expect(await screen.findByText('Forecast Trend')).toBeInTheDocument()
+    expect(await screen.findByText('Forecast trend')).toBeInTheDocument()
     expect(screen.getByText('Commit')).toBeInTheDocument()
-    expect(screen.getByText('Best Case')).toBeInTheDocument()
+    expect(screen.getByText('Best case')).toBeInTheDocument()
     expect(screen.getByText('Pipeline')).toBeInTheDocument()
   })
 
@@ -162,7 +165,7 @@ describe('ForecastReport', () => {
     renderWithQueryClient(<ForecastReport />)
 
     // Wait for chart to render
-    expect(await screen.findByText('Forecast Trend')).toBeInTheDocument()
+    expect(await screen.findByText('Forecast trend')).toBeInTheDocument()
 
     // Accuracy card should not appear
     expect(screen.queryByText('Forecast Accuracy')).not.toBeInTheDocument()
@@ -180,22 +183,20 @@ describe('ForecastReport', () => {
 
     fireEvent.click(retryButton)
 
-    expect(await screen.findByText('Forecast Trend')).toBeInTheDocument()
+    expect(await screen.findByText('Forecast trend')).toBeInTheDocument()
   })
 
   it('changes forecast data when groupBy filter is changed', async () => {
     renderWithQueryClient(<ForecastReport />)
 
-    expect(await screen.findByText('Forecast Trend')).toBeInTheDocument()
+    expect(await screen.findByText('Forecast trend')).toBeInTheDocument()
 
     const groupBySelect = screen.getByLabelText('Group By')
     fireEvent.change(groupBySelect, { target: { value: 'QUARTER' } })
 
     // Should trigger a refetch with new filter
     await waitFor(() => {
-      expect(getSalesForecast).toHaveBeenCalledWith(
-        expect.objectContaining({ groupBy: 'QUARTER' }),
-      )
+      expect(getSalesForecast).toHaveBeenCalledWith(expect.objectContaining({ groupBy: 'QUARTER' }))
     })
   })
 
@@ -215,6 +216,24 @@ describe('ForecastReport', () => {
   it('renders with EUR currency from forecast data', async () => {
     renderWithQueryClient(<ForecastReport />)
 
-    expect(await screen.findByText('Forecast Trend')).toBeInTheDocument()
+    expect(await screen.findByText('Forecast trend')).toBeInTheDocument()
+  })
+
+  it('disables Export CSV until the forecast has loaded', async () => {
+    ;(getSalesForecast as jest.Mock).mockReturnValue(new Promise(() => {}))
+    renderWithQueryClient(<ForecastReport />)
+
+    expect(screen.getByRole('button', { name: 'Export CSV' })).toBeDisabled()
+  })
+
+  it('downloads a CSV when Export CSV is clicked', async () => {
+    renderWithQueryClient(<ForecastReport />)
+
+    const exportButton = await screen.findByRole('button', { name: 'Export CSV' })
+    await waitFor(() => expect(exportButton).toBeEnabled())
+
+    fireEvent.click(exportButton)
+
+    expect(global.URL.createObjectURL).toHaveBeenCalled()
   })
 })

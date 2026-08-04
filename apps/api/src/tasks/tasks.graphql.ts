@@ -166,6 +166,17 @@ const TaskConnectionRef = builder
     }),
   })
 
+const TaskStatsRef = builder
+  .objectRef<Awaited<ReturnType<TasksService['getStats']>>>('TaskStats')
+  .implement({
+    fields: (t) => ({
+      openTasks: t.exposeInt('openTasks'),
+      dueToday: t.exposeInt('dueToday'),
+      overdue: t.exposeInt('overdue'),
+      completedThisWeek: t.exposeInt('completedThisWeek'),
+    }),
+  })
+
 // ─── TaskTemplate Type ────────────────────────────────────
 
 export type TaskTemplateGraphqlShape = {
@@ -411,6 +422,14 @@ builder.queryFields((t) => ({
           pageSize: args.pagination?.pageSize ?? undefined,
         },
       )
+    },
+  }),
+  taskStats: t.field({
+    type: TaskStatsRef,
+    resolve: async (_parent, _args, context) => {
+      const user = requireUser(context)
+      await requirePermission(context, 'TASK', 'READ')
+      return getTasksService().getStats(user.tenantId, user.userId)
     },
   }),
   taskTemplates: t.field({

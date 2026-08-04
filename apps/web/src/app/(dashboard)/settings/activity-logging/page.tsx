@@ -2,10 +2,12 @@ import { ActivityLogPreferencesForm } from '@/components/settings/ActivityLogPre
 
 export default function ActivityLoggingSettingsPage(): React.JSX.Element {
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight text-slate-950">Activity Logging</h1>
-        <p className="mt-1 text-sm text-slate-600">
+    <div className="flex flex-col gap-[22px]">
+      <div className="flex flex-col gap-1">
+        <h1 className="text-[24px] font-semibold tracking-[-0.025em] text-[#1b1b1f]">
+          Activity logging
+        </h1>
+        <p className="max-w-[60ch] text-[13.5px] text-[#77777f]">
           Choose which automatic events from tasks, deals and messages appear on contact timelines.
         </p>
       </div>

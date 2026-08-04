@@ -7,12 +7,11 @@ import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { z } from 'zod'
 
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
 import { createDeal, updateDeal, getDealStages } from '@/services/deal.service'
 import { getContacts } from '@/services/contact.service'
 import { getDealLineItems } from '@/services/product.service'
+import { searchUsers } from '@/services/owner.service'
+import { cn } from '@/lib/utils'
 import type { Deal } from '@/services/deal.service'
 
 const dealSchema = z.object({
@@ -21,6 +20,7 @@ const dealSchema = z.object({
   currency: z.string().trim().default('USD'),
   stageId: z.string().min(1, 'Stage is required'),
   contactId: z.string().min(1, 'Contact is required'),
+  ownerId: z.string().trim().optional(),
   probability: z.coerce.number().int().min(0).max(100).optional(),
   expectedCloseDate: z.string().optional(),
 })
@@ -29,11 +29,18 @@ type DealFormValues = z.infer<typeof dealSchema>
 
 type DealFormProps = {
   deal?: Deal
+  onSaved?: (deal: Deal) => void
+  onCancel?: () => void
 }
 
-export function DealForm({ deal }: DealFormProps): React.JSX.Element {
+const inputClass =
+  'h-[38px] w-full rounded-[9px] border border-[#e6e6eb] bg-[#fafafb] px-3 text-[13.5px] text-[#1b1b1f] outline-none transition-colors placeholder:text-[#9b9ba3] focus:border-[#1b1b1f] focus:bg-white'
+
+export function DealForm({ deal, onSaved, onCancel }: DealFormProps): React.JSX.Element {
   const router = useRouter()
-  const [contactSearch, setContactSearch] = useState('')
+  const [contactSearch, setContactSearch] = useState(
+    deal?.contact ? `${deal.contact.firstName} ${deal.contact.lastName}` : '',
+  )
   const [showContactDropdown, setShowContactDropdown] = useState(false)
 
   const { data: stages } = useQuery({
@@ -55,6 +62,11 @@ export function DealForm({ deal }: DealFormProps): React.JSX.Element {
     enabled: showContactDropdown,
   })
 
+  const { data: owners = [] } = useQuery({
+    queryKey: ['deal-form-owners'],
+    queryFn: () => searchUsers(''),
+  })
+
   const {
     register,
     handleSubmit,
@@ -70,6 +82,7 @@ export function DealForm({ deal }: DealFormProps): React.JSX.Element {
       currency: deal?.currency ?? 'USD',
       stageId: deal?.stageId ?? '',
       contactId: deal?.contactId ?? '',
+      ownerId: deal?.ownerId ?? '',
       probability: deal?.probability ?? undefined,
       expectedCloseDate: deal?.expectedCloseDate
         ? new Date(deal.expectedCloseDate).toISOString().split('T')[0]
@@ -78,6 +91,8 @@ export function DealForm({ deal }: DealFormProps): React.JSX.Element {
   })
 
   const selectedContactId = watch('contactId')
+  const selectedStageId = watch('stageId')
+  const selectedStage = stages?.find((stage) => stage.id === selectedStageId)
 
   async function onSubmit(values: DealFormValues): Promise<void> {
     try {
@@ -87,11 +102,16 @@ export function DealForm({ deal }: DealFormProps): React.JSX.Element {
         currency: values.currency || 'USD',
         stageId: values.stageId,
         contactId: values.contactId,
+        ownerId: values.ownerId || undefined,
         probability: values.probability ?? undefined,
         expectedCloseDate: values.expectedCloseDate || undefined,
       }
       const savedDeal = deal ? await updateDeal(deal.id, payload) : await createDeal(payload)
 
+      if (onSaved) {
+        onSaved(savedDeal)
+        return
+      }
       router.push(`/deals/${savedDeal.id}`)
       router.refresh()
     } catch (error) {
@@ -102,96 +122,156 @@ export function DealForm({ deal }: DealFormProps): React.JSX.Element {
   }
 
   return (
-    <Card className="border-slate-200 bg-white text-slate-950 shadow-sm">
-      <CardHeader className="border-b border-slate-100">
-        <CardTitle className="text-lg">{deal ? 'Edit deal' : 'Create deal'}</CardTitle>
-      </CardHeader>
-      <CardContent className="pt-6">
-        <form className="grid gap-5 md:grid-cols-2" onSubmit={handleSubmit(onSubmit)}>
-          <Field label="Title" error={errors.title?.message}>
-            <Input
+    <form className="flex min-h-0 flex-1 flex-col" onSubmit={handleSubmit(onSubmit)}>
+      <div className="flex min-h-0 flex-1 flex-col gap-[24px] overflow-y-auto px-6 py-[22px]">
+        <Section title="Deal">
+          <Field label="Title" required error={errors.title?.message}>
+            <input
+              className={inputClass}
+              placeholder="Enter deal title"
               {...register('title')}
               aria-invalid={Boolean(errors.title)}
-              placeholder="Enter deal title"
             />
           </Field>
 
-          <Field label="Value" error={errors.value?.message}>
-            <Input
-              type="number"
-              min="0"
-              step="0.01"
-              {...register('value')}
-              readOnly={hasLineItems}
-              aria-invalid={Boolean(errors.value)}
-              className={hasLineItems ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : ''}
-            />
-            {hasLineItems && (
-              <span className="text-xs text-slate-400 italic">
-                Value is calculated from the deal&apos;s products.
-              </span>
-            )}
-          </Field>
+          <div className="grid grid-cols-[1.4fr_1fr] gap-3">
+            <Field label="Value" error={errors.value?.message}>
+              <div
+                className={cn(
+                  'flex h-[38px] items-center gap-[7px] rounded-[9px] border border-[#e6e6eb] bg-[#fafafb] px-3 transition-colors focus-within:border-[#1b1b1f] focus-within:bg-white',
+                  hasLineItems && 'bg-[#f0f0f3]',
+                )}
+              >
+                <span className="text-[13px] text-[#a0a0aa]">$</span>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  {...register('value')}
+                  readOnly={hasLineItems}
+                  aria-invalid={Boolean(errors.value)}
+                  className={cn(
+                    'min-w-0 flex-1 border-none bg-transparent font-mono text-[13.5px] text-[#1b1b1f] outline-none',
+                    hasLineItems && 'cursor-not-allowed text-[#8c8c96]',
+                  )}
+                />
+              </div>
+              {hasLineItems && (
+                <span className="text-[11.5px] italic text-[#8c8c96]">
+                  Value is calculated from the deal&apos;s products.
+                </span>
+              )}
+            </Field>
 
-          <Field label="Probability (%)" error={errors.probability?.message}>
-            <Input
-              type="number"
-              min="0"
-              max="100"
-              placeholder="Leave empty to inherit stage default"
-              {...register('probability')}
-              aria-invalid={Boolean(errors.probability)}
-            />
-            <span className="text-xs text-slate-400 italic">
-              Moving this deal to another stage resets probability to the stage default.
+            <Field label="Currency" error={errors.currency?.message}>
+              <select
+                {...register('currency')}
+                className={cn(inputClass, 'cursor-pointer')}
+                aria-invalid={Boolean(errors.currency)}
+              >
+                <option value="USD">USD</option>
+                <option value="EUR">EUR</option>
+                <option value="VND">VND</option>
+              </select>
+            </Field>
+          </div>
+        </Section>
+
+        <div className="flex flex-col gap-3">
+          <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#a0a0aa]">
+            Stage <span className="text-[#b91c1c]">*</span>
+          </div>
+          <div className="flex flex-wrap gap-[7px]">
+            {stages?.map((stage) => {
+              const isSelected = stage.id === selectedStageId
+              return (
+                <button
+                  key={stage.id}
+                  type="button"
+                  onClick={() => setValue('stageId', stage.id, { shouldValidate: true })}
+                  className={cn(
+                    'flex h-8 items-center gap-[7px] rounded-full border px-3 text-[12.5px] font-medium transition-colors',
+                    isSelected
+                      ? 'border-[#1b1b1f] bg-[#fafafb] text-[#1b1b1f]'
+                      : 'border-[#e6e6eb] bg-white text-[#4b4b55] hover:border-[#c7c7d1]',
+                  )}
+                >
+                  <span
+                    className="block h-[5px] w-[5px] shrink-0 rounded-full"
+                    style={{ background: stage.color }}
+                  />
+                  {stage.name}
+                </button>
+              )
+            })}
+          </div>
+          {errors.stageId?.message ? (
+            <span className="text-[11.5px] font-medium text-[#b91c1c]" role="alert">
+              {errors.stageId.message}
+            </span>
+          ) : null}
+
+          <Field label="Probability" error={errors.probability?.message}>
+            <div className="flex h-[38px] max-w-[240px] items-center gap-[7px] rounded-[9px] border border-[#e6e6eb] bg-[#fafafb] px-3 transition-colors focus-within:border-[#1b1b1f] focus-within:bg-white">
+              <input
+                type="number"
+                min="0"
+                max="100"
+                placeholder="Inherit stage default"
+                {...register('probability')}
+                aria-invalid={Boolean(errors.probability)}
+                className="min-w-0 flex-1 border-none bg-transparent font-mono text-[13.5px] text-[#1b1b1f] outline-none"
+              />
+              <span className="text-[13px] text-[#a0a0aa]">%</span>
+            </div>
+            <span className="text-[11.5px] text-[#a0a0aa]">
+              {selectedStage
+                ? `Default for ${selectedStage.name} — override if you disagree.`
+                : 'Default comes from the selected stage.'}
             </span>
           </Field>
+        </div>
 
-          <Field label="Currency" error={errors.currency?.message}>
-            <Input
-              {...register('currency')}
-              placeholder="USD"
-              aria-invalid={Boolean(errors.currency)}
-            />
-          </Field>
-
-          <Field label="Stage" error={errors.stageId?.message}>
-            <select
-              {...register('stageId')}
-              className="flex h-9 w-full rounded-md border border-slate-300 bg-white px-3 py-1 text-sm shadow-sm transition-colors focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
-              aria-invalid={Boolean(errors.stageId)}
-            >
-              <option value="">Select stage</option>
-              {stages?.map((stage) => (
-                <option key={stage.id} value={stage.id}>
-                  {stage.name}
-                </option>
-              ))}
-            </select>
-          </Field>
-
-          <Field label="Contact" error={errors.contactId?.message}>
+        <Section title="People & timeline">
+          <Field label="Primary contact" required error={errors.contactId?.message}>
             <div className="relative">
-              <Input
-                placeholder="Search contacts..."
-                value={contactSearch}
-                onChange={(e) => {
-                  setContactSearch(e.target.value)
-                  setShowContactDropdown(true)
-                }}
-                onFocus={() => setShowContactDropdown(true)}
-              />
+              <div className="flex h-[38px] items-center gap-[9px] rounded-[9px] border border-[#e6e6eb] bg-[#fafafb] px-[11px] transition-colors focus-within:border-[#1b1b1f] focus-within:bg-white">
+                {selectedContactId ? (
+                  <span className="flex h-[22px] w-[22px] flex-none items-center justify-center rounded-full bg-[#f0f0f3] text-[9.5px] font-semibold text-[#4b4b55]">
+                    {contactSearch
+                      .trim()
+                      .split(/\s+/)
+                      .map((part) => part.charAt(0))
+                      .join('')
+                      .slice(0, 2)
+                      .toUpperCase() || '?'}
+                  </span>
+                ) : null}
+                <input
+                  className="min-w-0 flex-1 border-none bg-transparent text-[13.5px] text-[#1b1b1f] outline-none"
+                  placeholder="Search contacts..."
+                  value={contactSearch}
+                  onChange={(e) => {
+                    setContactSearch(e.target.value)
+                    setValue('contactId', '', { shouldValidate: false })
+                    setShowContactDropdown(true)
+                  }}
+                  onFocus={() => setShowContactDropdown(true)}
+                />
+              </div>
               {showContactDropdown && contactsData && (
-                <div className="absolute z-10 mt-1 max-h-48 w-full overflow-y-auto rounded-md border border-slate-200 bg-white shadow-lg">
+                <div className="absolute z-10 mt-1 max-h-48 w-full overflow-y-auto rounded-[9px] border border-[#e6e6eb] bg-white shadow-lg">
                   {contactsData.items.length === 0 ? (
-                    <div className="px-3 py-2 text-sm text-slate-500">No contacts found</div>
+                    <div className="px-3 py-2 text-[13px] text-[#8c8c96]">No contacts found</div>
                   ) : (
                     contactsData.items.map((contact) => (
                       <button
                         key={contact.id}
                         type="button"
-                        className={`w-full px-3 py-2 text-left text-sm hover:bg-indigo-50 ${
-                          selectedContactId === contact.id ? 'bg-indigo-50 font-medium' : ''
+                        className={`w-full px-3 py-2 text-left text-[13px] hover:bg-[#f4f4f6] ${
+                          selectedContactId === contact.id
+                            ? 'bg-[#f4f4f6] font-medium text-[#1b1b1f]'
+                            : 'text-[#4b4b55]'
                         }`}
                         onClick={() => {
                           setValue('contactId', contact.id, { shouldValidate: true })
@@ -200,58 +280,110 @@ export function DealForm({ deal }: DealFormProps): React.JSX.Element {
                         }}
                       >
                         {contact.firstName} {contact.lastName}
-                        <span className="ml-2 text-xs text-slate-400">{contact.email}</span>
+                        <span className="ml-2 text-[12px] text-[#8c8c96]">{contact.email}</span>
                       </button>
                     ))
                   )}
                 </div>
               )}
-              {selectedContactId && !showContactDropdown ? null : null}
             </div>
             <input type="hidden" {...register('contactId')} />
           </Field>
 
-          <Field label="Expected close date" error={errors.expectedCloseDate?.message}>
-            <Input type="date" {...register('expectedCloseDate')} />
-          </Field>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label="Owner" error={errors.ownerId?.message}>
+              <select
+                {...register('ownerId')}
+                className={cn(inputClass, 'cursor-pointer')}
+                aria-invalid={Boolean(errors.ownerId)}
+              >
+                <option value="">Assign to me</option>
+                {owners.map((owner) => (
+                  <option key={owner.id} value={owner.id}>
+                    {`${owner.firstName} ${owner.lastName}`.trim() || owner.email}
+                  </option>
+                ))}
+              </select>
+            </Field>
 
-          {errors.root?.message ? (
-            <p
-              className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 md:col-span-2"
-              role="alert"
-            >
-              {errors.root.message}
-            </p>
-          ) : null}
-
-          <div className="flex items-center justify-end border-t border-slate-100 pt-5 md:col-span-2">
-            <Button
-              disabled={isSubmitting}
-              type="submit"
-              className="bg-slate-950 text-white hover:bg-slate-800"
-            >
-              {isSubmitting ? 'Saving...' : deal ? 'Update deal' : 'Create deal'}
-            </Button>
+            <Field label="Expected close" error={errors.expectedCloseDate?.message}>
+              <input type="date" className={inputClass} {...register('expectedCloseDate')} />
+            </Field>
           </div>
-        </form>
-      </CardContent>
-    </Card>
+        </Section>
+
+        {errors.root?.message ? (
+          <p
+            className="rounded-[9px] border border-[#f0d5d5] bg-[#fdf2f2] px-3 py-2 text-[13px] text-[#b91c1c]"
+            role="alert"
+          >
+            {errors.root.message}
+          </p>
+        ) : null}
+      </div>
+
+      <div className="flex items-center justify-between gap-3 border-t border-[#f2f2f5] bg-[#fafafb] px-6 py-[14px]">
+        <span className="text-[12px] text-[#a0a0aa]">
+          {deal ? `Last updated ${new Date(deal.updatedAt).toLocaleDateString()}` : ''}
+        </span>
+        <div className="flex items-center gap-2">
+          {onCancel ? (
+            <button
+              type="button"
+              onClick={onCancel}
+              className="inline-flex h-9 items-center rounded-[9px] border border-[#e6e6eb] bg-white px-3.5 text-[13px] font-medium text-[#4b4b55] transition-colors hover:bg-[#f4f4f6]"
+            >
+              Cancel
+            </button>
+          ) : null}
+          <button
+            type="submit"
+            disabled={isSubmitting}
+            className="inline-flex h-9 items-center rounded-[9px] border border-[#1b1b1f] bg-[#1b1b1f] px-4 text-[13px] font-semibold text-white transition-colors hover:bg-black disabled:opacity-60"
+          >
+            {isSubmitting ? 'Saving...' : deal ? 'Update deal' : 'Save deal'}
+          </button>
+        </div>
+      </div>
+    </form>
+  )
+}
+
+type SectionProps = {
+  title: string
+  hint?: string
+  children: React.ReactNode
+}
+
+function Section({ title, hint, children }: SectionProps): React.JSX.Element {
+  return (
+    <div className="flex flex-col gap-3.5">
+      <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#a0a0aa]">
+        {title}
+      </div>
+      {children}
+      {hint ? <span className="text-[11.5px] text-[#8c8c96]">{hint}</span> : null}
+    </div>
   )
 }
 
 type FieldProps = {
   label: string
+  required?: boolean
   error?: string
   children: React.ReactNode
 }
 
-function Field({ label, error, children }: FieldProps): React.JSX.Element {
+function Field({ label, required, error, children }: FieldProps): React.JSX.Element {
   return (
-    <label className="grid gap-2 text-sm font-medium text-slate-700">
-      {label}
+    <label className="flex flex-col gap-1.5">
+      <span className="text-[12.5px] font-medium text-[#4b4b55]">
+        {label}
+        {required ? <span className="text-[#b91c1c]"> *</span> : null}
+      </span>
       {children}
       {error ? (
-        <span className="text-xs font-medium text-red-700" role="alert">
+        <span className="text-[11.5px] font-medium text-[#b91c1c]" role="alert">
           {error}
         </span>
       ) : null}

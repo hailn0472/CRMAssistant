@@ -16,7 +16,8 @@ module.exports = {
     },
     extend: {
       fontFamily: {
-        sans: ['Arial', 'Helvetica', 'sans-serif'],
+        sans: ['var(--font-sans)', 'Inter Tight', 'Helvetica', 'Arial', 'sans-serif'],
+        mono: ['var(--font-mono)', 'IBM Plex Mono', 'ui-monospace', 'monospace'],
         serif: ['Georgia', 'serif'],
       },
       colors: {

@@ -55,7 +55,7 @@ export function DealCard({ deal, stages, onMoveToStage }: DealCardProps): React.
       className="h-6 w-6 rounded-full object-cover"
     />
   ) : (
-    <div className="flex h-6 w-6 items-center justify-center rounded-full bg-indigo-100 text-xs font-medium text-indigo-700">
+    <div className="flex h-6 w-6 items-center justify-center rounded-full bg-[#f0f0f3] text-[10.5px] font-semibold text-[#4b4b55]">
       {ownerInitials}
     </div>
   )
@@ -80,14 +80,14 @@ export function DealCard({ deal, stages, onMoveToStage }: DealCardProps): React.
     <div
       ref={setNodeRef}
       style={style}
-      className="group relative rounded-lg border border-slate-200 bg-white p-3 shadow-sm transition-shadow hover:shadow-md min-h-[44px] min-w-[44px] cursor-grab active:cursor-grabbing"
+      className="group relative rounded-[9px] border border-[#e6e6eb] bg-white p-3.5 shadow-none transition-colors hover:border-[#c7c7d1] min-h-[44px] min-w-[44px] cursor-grab active:cursor-grabbing"
       {...attributes}
       {...listeners}
     >
       <div className="mb-2 flex items-start justify-between gap-2">
         <Link
           href={`/deals/${deal.id}`}
-          className="font-medium text-slate-900 hover:text-indigo-600 transition-colors text-sm leading-snug"
+          className="font-medium text-[#1b1b1f] hover:text-[#4338ca] transition-colors text-[13.5px] leading-snug"
           onClick={(e) => e.stopPropagation()}
         >
           {deal.title}
@@ -95,7 +95,7 @@ export function DealCard({ deal, stages, onMoveToStage }: DealCardProps): React.
         <button
           type="button"
           onClick={handleMenuToggle}
-          className="flex h-7 w-7 items-center justify-center rounded text-slate-400 opacity-0 group-hover:opacity-100 hover:bg-slate-100 hover:text-slate-600 transition-opacity focus:opacity-100 focus:outline-none focus:ring-2 focus:ring-indigo-400"
+          className="flex h-7 w-7 items-center justify-center rounded text-[#8c8c96] opacity-0 group-hover:opacity-100 hover:bg-[#f4f4f6] hover:text-[#1b1b1f] transition-opacity focus:opacity-100 focus:outline-none"
           aria-label="Move to stage"
         >
           <MoreHorizontal className="h-4 w-4" />
@@ -103,8 +103,8 @@ export function DealCard({ deal, stages, onMoveToStage }: DealCardProps): React.
       </div>
 
       {menuOpen && (
-        <div className="absolute right-0 top-8 z-50 w-48 rounded-md border border-slate-200 bg-white py-1 shadow-lg">
-          <div className="px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-slate-400">
+        <div className="absolute right-0 top-8 z-50 w-48 rounded-[9px] border border-[#e6e6eb] bg-white py-1 shadow-lg">
+          <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-[#a0a0aa]">
             Move to stage
           </div>
           {otherStages.map((stage) => (
@@ -112,7 +112,7 @@ export function DealCard({ deal, stages, onMoveToStage }: DealCardProps): React.
               key={stage.id}
               type="button"
               onClick={() => handleMoveToStage(stage.id)}
-              className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-slate-700 hover:bg-slate-50"
+              className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[13px] text-[#4b4b55] hover:bg-[#f4f4f6]"
             >
               <span className="h-2 w-2 rounded-full" style={{ backgroundColor: stage.color }} />
               {stage.name}
@@ -122,24 +122,24 @@ export function DealCard({ deal, stages, onMoveToStage }: DealCardProps): React.
       )}
 
       <div className="flex items-center gap-2">
-        <span className="text-sm font-semibold text-slate-800">
+        <span className="font-mono text-[13px] font-semibold text-[#1b1b1f]">
           {formatCurrency(deal.value, deal.currency)}
         </span>
       </div>
 
       {deal.contact && (
-        <p className="mt-1 text-xs text-slate-500">
+        <p className="mt-1 text-[12.5px] text-[#8c8c96]">
           {deal.contact.firstName} {deal.contact.lastName}
         </p>
       )}
 
-      <div className="mt-2 flex items-center justify-between">
+      <div className="mt-2.5 flex items-center justify-between">
         <StageBadge stage={deal.stage} />
         {ownerAvatar}
       </div>
 
       <div className="absolute left-1 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity">
-        <GripVertical className="h-4 w-4 text-slate-300" />
+        <GripVertical className="h-4 w-4 text-[#b4b4bd]" />
       </div>
     </div>
   )

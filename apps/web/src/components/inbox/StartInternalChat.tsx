@@ -123,7 +123,7 @@ export function StartInternalChat({
         {/* Header */}
         <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
           <div className="flex items-center gap-2.5">
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-indigo-50 text-indigo-600">
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#f4f4f6] text-[#1b1b1f]">
               <MessageCircle className="h-4 w-4" />
             </div>
             <h2 className="text-[15px] font-bold text-slate-900 tracking-tight">
@@ -149,7 +149,7 @@ export function StartInternalChat({
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               autoFocus
-              className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 pl-10 pr-4 text-[14px] outline-none transition-all focus:border-indigo-400 focus:bg-white focus:ring-4 focus:ring-indigo-500/10"
+              className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 pl-10 pr-4 text-[14px] outline-none transition-all focus:border-[#1b1b1f] focus:bg-white"
             />
           </div>
         </div>
@@ -198,11 +198,11 @@ export function StartInternalChat({
                       onClick={() => setSelectedAgentId(isSelected ? null : agent.id)}
                       className={cn(
                         'flex w-full items-center gap-3.5 rounded-xl px-3 py-3 text-left transition-all',
-                        isSelected ? 'bg-indigo-50 ring-1 ring-indigo-200' : 'hover:bg-slate-50',
+                        isSelected ? 'bg-[#fafafb] ring-1 ring-[#1b1b1f]/20' : 'hover:bg-slate-50',
                       )}
                     >
                       <div className="relative shrink-0">
-                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-blue-600 text-sm font-bold text-white shadow-sm">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#f0f0f3] text-sm font-bold text-[#4b4b55]">
                           {init}
                         </div>
                         {agent.isOnline && (
@@ -226,7 +226,7 @@ export function StartInternalChat({
                         <p className="mt-0.5 truncate text-[13px] text-slate-500">{agent.email}</p>
                       </div>
                       {isSelected && (
-                        <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-indigo-600 text-white">
+                        <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#1b1b1f] text-white">
                           <UserCheck className="h-3.5 w-3.5" />
                         </div>
                       )}
@@ -252,9 +252,9 @@ export function StartInternalChat({
             onClick={handleCreate}
             disabled={!selectedAgentId || creating}
             className={cn(
-              'rounded-full px-5 py-2 text-sm font-semibold text-white shadow-sm transition-all',
+              'rounded-full px-5 py-2 text-sm font-semibold text-white shadow-sm transition-colors',
               selectedAgentId && !creating
-                ? 'bg-indigo-600 hover:bg-indigo-700 hover:shadow-md'
+                ? 'bg-[#1b1b1f] hover:bg-black'
                 : 'bg-slate-300 cursor-not-allowed',
             )}
           >

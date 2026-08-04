@@ -1,7 +1,7 @@
 import { cookies } from 'next/headers'
 import { notFound, redirect } from 'next/navigation'
 
-import { DealForm } from '@/components/deals/DealForm'
+import { DealFormPanel } from '@/components/deals/DealFormPanel'
 import { QueryProvider } from '@/components/contacts/QueryProvider'
 import type { Deal } from '@/services/deal.service'
 
@@ -76,9 +76,7 @@ export default async function EditDealPage({
 
   return (
     <QueryProvider>
-      <div className="space-y-6 p-6 text-slate-950">
-        <DealForm deal={deal} />
-      </div>
+      <DealFormPanel deal={deal} />
     </QueryProvider>
   )
 }

@@ -48,7 +48,7 @@ describe('NoteComposer', () => {
     fireEvent.change(textarea, { target: { value: 'A'.repeat(900) } })
 
     const counter = screen.getByText('900/1000')
-    expect(counter.className).toContain('amber')
+    expect(counter.className).toContain('#c2860a')
   })
 
   it('shows error color when over limit (> 1000 chars)', () => {
@@ -57,7 +57,7 @@ describe('NoteComposer', () => {
     fireEvent.change(textarea, { target: { value: 'A'.repeat(1001) } })
 
     const counter = screen.getByText('1001/1000')
-    expect(counter.className).toContain('red')
+    expect(counter.className).toContain('#b91c1c')
   })
 
   it('disables save button when over limit', () => {

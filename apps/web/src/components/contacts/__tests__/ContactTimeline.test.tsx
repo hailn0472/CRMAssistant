@@ -138,22 +138,22 @@ describe('ContactTimeline', () => {
     })
   })
 
-  it('shows Add Note button', async () => {
+  it('shows Add note button', async () => {
     render(<ContactTimeline contactId="contact-1" />)
 
     await waitFor(() => {
-      expect(screen.getByText('Add Note')).toBeInTheDocument()
+      expect(screen.getByText('Add note')).toBeInTheDocument()
     })
   })
 
-  it('shows NoteComposer when Add Note is clicked', async () => {
+  it('shows NoteComposer when Add note is clicked', async () => {
     render(<ContactTimeline contactId="contact-1" />)
 
     await waitFor(() => {
-      expect(screen.getByText('Add Note')).toBeInTheDocument()
+      expect(screen.getByText('Add note')).toBeInTheDocument()
     })
 
-    fireEvent.click(screen.getByText('Add Note'))
+    fireEvent.click(screen.getByText('Add note'))
 
     expect(screen.getByPlaceholderText(/Add a note/)).toBeInTheDocument()
   })
@@ -178,7 +178,7 @@ describe('ContactTimeline', () => {
     })
 
     // Open composer
-    fireEvent.click(screen.getByText('Add Note'))
+    fireEvent.click(screen.getByText('Add note'))
 
     // Type and submit note
     const textarea = screen.getByPlaceholderText(/Add a note/)

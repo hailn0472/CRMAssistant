@@ -20,6 +20,8 @@ export type CreateContactInput = {
   phone?: string
   company?: string
   jobTitle?: string
+  /// Defaults to the creating user when omitted.
+  ownerId?: string
   // Enrichment fields
   linkedin?: string
   twitter?: string
@@ -57,6 +59,7 @@ export type ContactFilterInput = {
   search?: string
   company?: string
   jobTitle?: string
+  ownerId?: string
   tags?: string[]
   createdAtFrom?: string
   createdAtTo?: string
@@ -118,6 +121,16 @@ export type BulkAssignResult = {
   errors: Array<{ contactId: string; error: string }>
 }
 
+export type ContactStats = {
+  total: number
+  addedThisMonth: number
+  withOpenDeals: number
+  unassigned: number
+}
+
+/// Sentinel owner used by schema defaults for records created without a real user.
+const UNASSIGNED_OWNER_ID = 'system'
+
 const MAX_REQUIRED_FIELD_LENGTH = 100
 const MAX_OPTIONAL_FIELD_LENGTH = 200
 
@@ -173,6 +186,7 @@ function normalizeCreateInput(input: CreateContactInput): CreateContactInput {
     phone: normalizeOptionalString(input.phone, 'Phone') ?? undefined,
     company: normalizeOptionalString(input.company, 'Company') ?? undefined,
     jobTitle: normalizeOptionalString(input.jobTitle, 'Job title') ?? undefined,
+    ownerId: normalizeOptionalString(input.ownerId, 'Owner') ?? undefined,
     linkedin: normalizeOptionalString(input.linkedin, 'LinkedIn') ?? undefined,
     twitter: normalizeOptionalString(input.twitter, 'Twitter') ?? undefined,
     addressStreet: normalizeOptionalString(input.addressStreet, 'Address street') ?? undefined,
@@ -223,6 +237,16 @@ export class ContactsService {
   async create(tenantId: string, userId: string, input: CreateContactInput): Promise<Contact> {
     const normalizedInput = normalizeCreateInput(input)
 
+    // An explicit owner must be a live user of the same tenant, otherwise the
+    // FK would let a caller hand a contact to someone outside their tenant.
+    if (normalizedInput.ownerId && normalizedInput.ownerId !== userId) {
+      const owner = await this.prisma.user.findFirst({
+        where: { id: normalizedInput.ownerId, tenantId, deletedAt: null },
+        select: { id: true },
+      })
+      if (!owner) throw new NotFoundException('User not found')
+    }
+
     try {
       const contact = await this.prisma.contact.create({
         data: {
@@ -244,7 +268,7 @@ export class ContactsService {
           language: normalizedInput.language,
           source: normalizedInput.source,
           notes: normalizedInput.notes,
-          ownerId: userId,
+          ownerId: normalizedInput.ownerId ?? userId,
           createdBy: userId,
           updatedBy: userId,
         },
@@ -356,17 +380,12 @@ export class ContactsService {
     return rule.accessLevel
   }
 
-  async findMany(
+  /// Resolves the owner/sharing conditions that scope a list query to what the user may see.
+  /// Returns an empty condition list when the user has unrestricted visibility (ALL/ADMIN).
+  private async resolveOwnerScope(
     tenantId: string,
     userId: string,
-    filter: ContactFilterInput = {},
-    pagination: ContactPaginationInput = {},
-  ): Promise<ContactConnection> {
-    const page = Math.max(pagination.page ?? DEFAULT_PAGE, 1)
-    const pageSize = Math.min(Math.max(pagination.pageSize ?? DEFAULT_PAGE_SIZE, 1), MAX_PAGE_SIZE)
-    const search = filter.search?.trim()
-    const company = filter.company?.trim()
-    const jobTitle = filter.jobTitle?.trim()
+  ): Promise<{ ownerConditions: Prisma.ContactWhereInput[]; sharedIds: string[] }> {
     const visibilityFilter = await resolveVisibilityFilter(userId, tenantId)
     const sharedIds = await resolveSharedRecordIds(userId, tenantId, 'CONTACT')
 
@@ -380,6 +399,60 @@ export class ContactsService {
         ownerConditions.push({ id: { in: sharedIds } })
       }
     }
+
+    return { ownerConditions, sharedIds }
+  }
+
+  /// Aggregate counters for the contacts workspace summary cards.
+  /// Scoped with the same visibility/sharing rules as findMany so the totals
+  /// always match what the user can actually list.
+  async getStats(tenantId: string, userId: string): Promise<ContactStats> {
+    const { ownerConditions } = await this.resolveOwnerScope(tenantId, userId)
+
+    const scope: Prisma.ContactWhereInput = { tenantId, deletedAt: null }
+    if (ownerConditions.length > 0) {
+      scope.AND = [{ OR: ownerConditions }]
+    }
+
+    const monthStart = new Date()
+    monthStart.setDate(1)
+    monthStart.setHours(0, 0, 0, 0)
+
+    const [total, addedThisMonth, withOpenDeals, unassigned] = await Promise.all([
+      this.prisma.contact.count({ where: scope }),
+      this.prisma.contact.count({ where: { ...scope, createdAt: { gte: monthStart } } }),
+      this.prisma.contact.count({
+        where: {
+          ...scope,
+          deals: { some: { deletedAt: null, stage: { isWon: false, isLost: false } } },
+        },
+      }),
+      this.prisma.contact.count({
+        where: {
+          ...scope,
+          OR: [
+            { ownerId: UNASSIGNED_OWNER_ID },
+            { owner: { OR: [{ deletedAt: { not: null } }, { isActive: false }] } },
+          ],
+        },
+      }),
+    ])
+
+    return { total, addedThisMonth, withOpenDeals, unassigned }
+  }
+
+  async findMany(
+    tenantId: string,
+    userId: string,
+    filter: ContactFilterInput = {},
+    pagination: ContactPaginationInput = {},
+  ): Promise<ContactConnection> {
+    const page = Math.max(pagination.page ?? DEFAULT_PAGE, 1)
+    const pageSize = Math.min(Math.max(pagination.pageSize ?? DEFAULT_PAGE_SIZE, 1), MAX_PAGE_SIZE)
+    const search = filter.search?.trim()
+    const company = filter.company?.trim()
+    const jobTitle = filter.jobTitle?.trim()
+    const { ownerConditions, sharedIds } = await this.resolveOwnerScope(tenantId, userId)
 
     const where: Prisma.ContactWhereInput = {
       tenantId,
@@ -395,6 +468,11 @@ export class ContactsService {
 
     if (jobTitle) {
       andConditions.push({ jobTitle: { contains: jobTitle, mode: 'insensitive' } })
+    }
+
+    const ownerId = filter.ownerId?.trim()
+    if (ownerId) {
+      andConditions.push({ ownerId })
     }
 
     if (filter.createdAtFrom || filter.createdAtTo) {

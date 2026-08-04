@@ -37,8 +37,13 @@ jest.mock('react-hot-toast', () => ({
 const mockUsePermission: jest.Mock<boolean, [string, string]> = jest.fn<boolean, [string, string]>(
   () => true,
 )
+let mockPermissionsLoading = false
 jest.mock('@/hooks/usePermission', () => ({
-  usePermission: (resource: string, action: string) => mockUsePermission(resource, action),
+  useMyPermissions: () => ({
+    permissions: [],
+    isLoading: mockPermissionsLoading,
+    hasPermission: (resource: string, action: string) => mockUsePermission(resource, action),
+  }),
 }))
 
 const mockTemplates = {
@@ -67,6 +72,7 @@ function renderWithQuery(ui: React.ReactElement): ReturnType<typeof render> {
 describe('TaskTemplatesManager', () => {
   beforeEach(() => {
     jest.clearAllMocks()
+    mockPermissionsLoading = false
     mockUsePermission.mockImplementation(() => true)
     ;(getTaskTemplates as jest.Mock).mockResolvedValue(mockTemplates)
   })
@@ -78,6 +84,14 @@ describe('TaskTemplatesManager', () => {
     })
     renderWithQuery(<TaskTemplatesManager />)
     expect(screen.getByText('Access limited')).toBeInTheDocument()
+  })
+
+  it('renders TableSkeleton (not Access limited) while permissions are still loading', () => {
+    mockPermissionsLoading = true
+    mockUsePermission.mockImplementation(() => false)
+    renderWithQuery(<TaskTemplatesManager />)
+    expect(screen.getByRole('status')).toBeInTheDocument()
+    expect(screen.queryByText('Access limited')).not.toBeInTheDocument()
   })
 
   it('renders the template table with name, title, priority and due columns', async () => {
