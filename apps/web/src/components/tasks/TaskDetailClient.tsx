@@ -217,13 +217,6 @@ export function TaskDetailClient({ task }: TaskDetailClientProps): React.JSX.Ele
               Edit
             </button>
           ) : null}
-          <button
-            type="button"
-            aria-label="More options"
-            className="flex h-9 w-9 items-center justify-center rounded-[9px] border border-[#e6e6eb] bg-white text-[15px] tracking-[1px] text-[#8c8c96] transition-colors hover:bg-[#f4f4f6]"
-          >
-            ···
-          </button>
         </div>
       </div>
 

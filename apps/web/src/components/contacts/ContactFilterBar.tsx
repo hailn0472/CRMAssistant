@@ -5,7 +5,6 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import {
   Dialog,
   DialogContent,
@@ -17,6 +16,8 @@ import { TagFilterBar } from '@/components/contacts/TagFilterBar'
 import { SavedSegmentSelect } from '@/components/contacts/SavedSegmentSelect'
 import { createSegment, type SavedSegment } from '@/services/segment.service'
 import { searchUsers } from '@/services/owner.service'
+import { FilterTrigger } from '@/components/shared/FilterTrigger'
+import { useDebounce } from '@/hooks/useDebounce'
 import { cn } from '@/lib/utils'
 
 export type ContactFilters = {
@@ -46,40 +47,6 @@ type ContactFilterBarProps = {
   trailing?: React.ReactNode
 }
 
-const triggerClass =
-  'inline-flex h-[34px] items-center gap-1.5 rounded-[9px] border px-3 text-[12.5px] font-medium transition-colors'
-
-function FilterTrigger({
-  label,
-  value,
-  active,
-  children,
-}: {
-  label: string
-  value?: string
-  active: boolean
-  children: React.ReactNode
-}): React.JSX.Element {
-  return (
-    <Popover>
-      <PopoverTrigger
-        className={cn(
-          triggerClass,
-          active
-            ? 'border-[#1b1b1f] bg-[#fafafb] text-[#1b1b1f]'
-            : 'border-[#e6e6eb] bg-white text-[#4b4b55] hover:bg-[#f4f4f6]',
-        )}
-      >
-        {active && value ? `${label}: ${value}` : label}
-        <span className="text-[9px] text-[#b4b4bd]">▾</span>
-      </PopoverTrigger>
-      <PopoverContent align="start" className="w-64 p-3">
-        {children}
-      </PopoverContent>
-    </Popover>
-  )
-}
-
 function OwnerFilter({
   filters,
   onFiltersChange,
@@ -88,14 +55,20 @@ function OwnerFilter({
   onFiltersChange: (filters: ContactFilters) => void
 }): React.JSX.Element {
   const [term, setTerm] = useState('')
+  const debouncedTerm = useDebounce(term, 300)
 
   const { data: users = [] } = useQuery({
-    queryKey: ['contact-owner-options', term],
-    queryFn: () => searchUsers(term),
+    queryKey: ['contact-owner-options', debouncedTerm],
+    queryFn: () => searchUsers(debouncedTerm),
   })
 
   return (
-    <FilterTrigger label="Owner" value={filters.owner?.name} active={filters.owner !== null}>
+    <FilterTrigger
+      label="Owner"
+      value={filters.owner?.name}
+      active={filters.owner !== null}
+      contentClassName="w-64"
+    >
       <div className="flex flex-col gap-2">
         <Input
           className="h-8 text-xs"
@@ -212,7 +185,12 @@ export function ContactFilterBar({
         </div>
 
         <div className="flex flex-wrap items-center gap-1.5">
-          <FilterTrigger label="Company" value={filters.company} active={filters.company !== ''}>
+          <FilterTrigger
+            label="Company"
+            value={filters.company}
+            active={filters.company !== ''}
+            contentClassName="w-64"
+          >
             <Input
               className="h-8 text-xs"
               placeholder="Company name"
@@ -225,6 +203,7 @@ export function ContactFilterBar({
             label="Job title"
             value={filters.jobTitle}
             active={filters.jobTitle !== ''}
+            contentClassName="w-64"
           >
             <Input
               className="h-8 text-xs"
@@ -240,6 +219,7 @@ export function ContactFilterBar({
             label="Created"
             value={createdLabel}
             active={filters.createdAtFrom !== '' || filters.createdAtTo !== ''}
+            contentClassName="w-64"
           >
             <div className="flex flex-col gap-2">
               <label className="flex flex-col gap-1 text-[11.5px] text-slate-500">

@@ -2,9 +2,9 @@
 
 import { useQuery } from '@tanstack/react-query'
 
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { getRoles } from '@/services/role.service'
 import { getTeams } from '@/services/team.service'
+import { FilterTrigger } from '@/components/shared/FilterTrigger'
 import { cn } from '@/lib/utils'
 
 export type UserStatusFilter = '' | 'active' | 'deactivated'
@@ -33,40 +33,6 @@ type UserFilterBarProps = {
 const STATUS_LABELS: Record<Exclude<UserStatusFilter, ''>, string> = {
   active: 'Active',
   deactivated: 'Deactivated',
-}
-
-const triggerClass =
-  'inline-flex h-[34px] items-center gap-1.5 rounded-[9px] border px-3 text-[12.5px] font-medium transition-colors'
-
-function FilterTrigger({
-  label,
-  value,
-  active,
-  children,
-}: {
-  label: string
-  value?: string
-  active: boolean
-  children: React.ReactNode
-}): React.JSX.Element {
-  return (
-    <Popover>
-      <PopoverTrigger
-        className={cn(
-          triggerClass,
-          active
-            ? 'border-[#1b1b1f] bg-[#fafafb] text-[#1b1b1f]'
-            : 'border-[#e6e6eb] bg-white text-[#4b4b55] hover:bg-[#f4f4f6]',
-        )}
-      >
-        {active && value ? `${label}: ${value}` : label}
-        <span className="text-[9px] text-[#b4b4bd]">▾</span>
-      </PopoverTrigger>
-      <PopoverContent align="start" className="w-56 p-3">
-        {children}
-      </PopoverContent>
-    </Popover>
-  )
 }
 
 function RoleFilter({

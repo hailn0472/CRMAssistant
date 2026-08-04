@@ -2,6 +2,7 @@
 
 import { useQuery } from '@tanstack/react-query'
 import { fetchTimeline } from '@/services/activity.service'
+import { formatDate } from '@/lib/date-format'
 
 type DealTimelineProps = {
   dealId: string
@@ -61,13 +62,7 @@ export function DealTimeline({ dealId, contactId }: DealTimelineProps): React.JS
       const isAuto = Boolean(node.source)
       const isLost = node.type.includes('LOST') || node.title.toLowerCase().includes('closed lost')
       const dotColor = isLost ? '#b91c1c' : isAuto ? '#4f46e5' : '#8c8c96'
-      const formattedDate = new Date(node.createdAt).toLocaleDateString('en-GB', {
-        day: 'numeric',
-        month: 'short',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-      })
+      const formattedDate = formatDate(node.createdAt, { includeTime: true })
       return {
         id: node.id,
         title: node.title,

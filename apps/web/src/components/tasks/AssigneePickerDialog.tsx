@@ -9,6 +9,7 @@ import toast from 'react-hot-toast'
 import { assignTask } from '@/services/task.service'
 import { searchUsers } from '@/services/owner.service'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { useDebounce } from '@/hooks/useDebounce'
 import { cn } from '@/lib/utils'
 import type { Task } from '@/services/task.service'
 
@@ -30,14 +31,15 @@ export function AssigneePickerDialog({
   const router = useRouter()
   const queryClient = useQueryClient()
   const [searchTerm, setSearchTerm] = useState('')
+  const debouncedSearchTerm = useDebounce(searchTerm, 300)
 
   // The teammate list is always visible while the dialog is open — the mock's
   // assign panel is a list, not a type-to-reveal dropdown.
   const { data: users } = useQuery({
-    queryKey: ['users', 'search', searchTerm],
+    queryKey: ['users', 'search', debouncedSearchTerm],
     // searchUsers can resolve to undefined in tests; TanStack v5 rejects an
     // undefined query result, so normalise to an empty list here.
-    queryFn: async () => (await searchUsers(searchTerm)) ?? [],
+    queryFn: async () => (await searchUsers(debouncedSearchTerm)) ?? [],
     enabled: open,
   })
 

@@ -20,6 +20,7 @@ import { getDealHealth, unsnoozeDealReminder } from '@/services/deal-health.serv
 import { HEALTH_SIGNAL_LABELS, formatSnoozedUntil } from '@/lib/deal-health-format'
 import { usePermission } from '@/hooks/usePermission'
 import { cn } from '@/lib/utils'
+import { formatDate } from '@/lib/date-format'
 import type { Deal, DealStage } from '@/services/deal.service'
 import type { WinLossReason } from '@/services/competitor.service'
 
@@ -46,17 +47,6 @@ function initials(value: string): string {
   const first = words[0]?.charAt(0) ?? ''
   const second = words[1]?.charAt(0) ?? ''
   return (first + second).toUpperCase() || '?'
-}
-
-function formatDate(dateString?: string | null): string {
-  if (!dateString) return '—'
-  try {
-    const d = new Date(dateString)
-    if (isNaN(d.getTime())) return '—'
-    return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
-  } catch {
-    return '—'
-  }
 }
 
 export function DealDetailClient({ deal }: DealDetailClientProps): React.JSX.Element {
@@ -304,13 +294,6 @@ export function DealDetailClient({ deal }: DealDetailClientProps): React.JSX.Ele
               {movingStage ? 'Reopening...' : 'Reopen deal'}
             </button>
           ) : null}
-          <button
-            type="button"
-            aria-label="More options"
-            className="inline-flex h-9 w-9 items-center justify-center rounded-[9px] border border-[#e6e6eb] bg-white text-[15px] tracking-widest text-[#8c8c96] transition-colors hover:bg-[#f4f4f6]"
-          >
-            ···
-          </button>
         </div>
       </div>
 

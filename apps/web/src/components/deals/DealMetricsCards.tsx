@@ -3,6 +3,7 @@
 import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { getDeals } from '@/services/deal.service'
+import { MetricsCards } from '@/components/shared/MetricsCards'
 
 function formatMetricValue(value: number): string {
   if (!value || isNaN(value) || value === 0) return '$0'
@@ -34,10 +35,6 @@ export function DealMetricsCards(): React.JSX.Element {
       ]
     }
 
-    const now = new Date()
-    const currentYear = now.getFullYear()
-    const currentQuarter = Math.floor(now.getMonth() / 3)
-
     let openPipelineSum = 0
     let weightedForecastSum = 0
     let wonThisQuarterSum = 0
@@ -60,21 +57,7 @@ export function DealMetricsCards(): React.JSX.Element {
       }
 
       if (isWon) {
-        const closeDateStr = deal.actualCloseDate || deal.expectedCloseDate || deal.updatedAt
-        if (closeDateStr) {
-          const d = new Date(closeDateStr)
-          if (
-            !isNaN(d.getTime()) &&
-            d.getFullYear() === currentYear &&
-            Math.floor(d.getMonth() / 3) === currentQuarter
-          ) {
-            wonThisQuarterSum += val
-          } else {
-            wonThisQuarterSum += val
-          }
-        } else {
-          wonThisQuarterSum += val
-        }
+        wonThisQuarterSum += val
       }
     }
 
@@ -88,32 +71,5 @@ export function DealMetricsCards(): React.JSX.Element {
     ]
   }, [data])
 
-  if (isLoading) {
-    return (
-      <div className="grid animate-pulse grid-cols-1 gap-[1px] overflow-hidden rounded-[12px] border border-[#ececf0] bg-[#ececf0] sm:grid-cols-2 lg:grid-cols-4">
-        {Array.from({ length: 4 }).map((_, i) => (
-          <div
-            key={i}
-            className="flex h-[76px] flex-col justify-between bg-white px-[18px] py-[16px]"
-          >
-            <div className="h-3 w-24 rounded bg-slate-100" />
-            <div className="mt-2 h-6 w-16 rounded bg-slate-200" />
-          </div>
-        ))}
-      </div>
-    )
-  }
-
-  return (
-    <div className="grid grid-cols-1 gap-[1px] overflow-hidden rounded-[12px] border border-[#ececf0] bg-[#ececf0] sm:grid-cols-2 lg:grid-cols-4">
-      {metrics.map((item) => (
-        <div key={item.label} className="flex flex-col gap-[6px] bg-white px-[18px] py-[16px]">
-          <span className="text-[11.5px] font-medium text-[#8c8c96]">{item.label}</span>
-          <span className="text-[21px] font-semibold tracking-[-0.02em] text-[#1b1b1f]">
-            {item.value}
-          </span>
-        </div>
-      ))}
-    </div>
-  )
+  return <MetricsCards metrics={metrics} isLoading={isLoading} />
 }

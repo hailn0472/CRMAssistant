@@ -4,9 +4,10 @@ import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 
 import { Input } from '@/components/ui/input'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { searchUsers } from '@/services/owner.service'
 import { getDealStages } from '@/services/deal.service'
+import { FilterTrigger } from '@/components/shared/FilterTrigger'
+import { useDebounce } from '@/hooks/useDebounce'
 import { cn } from '@/lib/utils'
 
 export type DealFilters = {
@@ -30,40 +31,6 @@ type DealFilterBarProps = {
   onFiltersChange: (filters: DealFilters) => void
   /** Rendered at the far right of the toolbar row — e.g. the result count. */
   trailing?: React.ReactNode
-}
-
-const triggerClass =
-  'inline-flex h-[34px] items-center gap-1.5 rounded-[9px] border px-3 text-[12.5px] font-medium transition-colors'
-
-function FilterTrigger({
-  label,
-  value,
-  active,
-  children,
-}: {
-  label: string
-  value?: string
-  active: boolean
-  children: React.ReactNode
-}): React.JSX.Element {
-  return (
-    <Popover>
-      <PopoverTrigger
-        className={cn(
-          triggerClass,
-          active
-            ? 'border-[#1b1b1f] bg-[#fafafb] text-[#1b1b1f]'
-            : 'border-[#e6e6eb] bg-white text-[#4b4b55] hover:bg-[#f4f4f6]',
-        )}
-      >
-        {active && value ? `${label}: ${value}` : label}
-        <span className="text-[9px] text-[#b4b4bd]">▾</span>
-      </PopoverTrigger>
-      <PopoverContent align="start" className="w-56 p-3">
-        {children}
-      </PopoverContent>
-    </Popover>
-  )
 }
 
 function StageFilter({
@@ -126,10 +93,11 @@ function OwnerFilter({
   onFiltersChange: (filters: DealFilters) => void
 }): React.JSX.Element {
   const [term, setTerm] = useState('')
+  const debouncedTerm = useDebounce(term, 300)
 
   const { data: users = [] } = useQuery({
-    queryKey: ['deal-owner-options', term],
-    queryFn: () => searchUsers(term),
+    queryKey: ['deal-owner-options', debouncedTerm],
+    queryFn: () => searchUsers(debouncedTerm),
   })
 
   return (
