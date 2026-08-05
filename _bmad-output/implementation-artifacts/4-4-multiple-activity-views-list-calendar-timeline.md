@@ -1,6 +1,6 @@
 # Story 4.4: Multiple Activity Views (List, Calendar, Timeline)
 
-Status: review
+Status: done
 
 Epic: 4 — Activity & Task Management
 FR: **FR19** — "Users can view activities across multiple views (list, calendar, timeline)" [Source: `epics.md:43`, `:314`]
