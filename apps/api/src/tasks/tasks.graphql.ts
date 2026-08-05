@@ -4,8 +4,11 @@ import { UnauthorizedException } from '@nestjs/common'
 
 import { builder } from '../graphql/schema.builder'
 import { requirePermission } from '../common/guards/permission-check'
+import { resolveVisibilityFilter } from '../common/guards/visibility-check'
 import { TASK_PRIORITIES, TASK_STATUSES } from './task-due-status'
-import { PUBSUB_TASK_ASSIGNED } from './task-pubsub.service'
+import { PUBSUB_TASK_ASSIGNED, PUBSUB_TASK_CHANGED } from './task-pubsub.service'
+import { TASK_SORT_FIELDS } from './tasks.service'
+import { filterTaskChangedEvents } from './task-subscription-visibility'
 import type { TaskPriority, TaskStatus } from './task-due-status'
 import type { TasksService } from './tasks.service'
 import type { TaskTemplatesService } from './task-templates.service'
@@ -17,6 +20,12 @@ import type { JwtPayload } from '../auth/strategies/jwt.strategy'
 
 const TaskStatusRef = builder.enumType('TaskStatus', { values: TASK_STATUSES })
 const TaskPriorityRef = builder.enumType('TaskPriority', { values: TASK_PRIORITIES })
+
+// Story 4.4 (AC 12): explicit sort enums over the service's const tuple.
+const TaskSortFieldRef = builder.enumType('TaskSortField', { values: TASK_SORT_FIELDS })
+const TaskSortDirectionRef = builder.enumType('TaskSortDirection', {
+  values: ['ASC', 'DESC'] as const,
+})
 
 // ─── Nested refs ──────────────────────────────────────────
 
@@ -281,6 +290,14 @@ const TaskPaginationInputRef = builder.inputType('TaskPaginationInput', {
   }),
 })
 
+// Story 4.4 (AC 12): optional sort argument on tasks / myTasks.
+const TaskSortInputRef = builder.inputType('TaskSortInput', {
+  fields: (t) => ({
+    field: t.field({ type: TaskSortFieldRef, required: true }),
+    direction: t.field({ type: TaskSortDirectionRef, required: true }),
+  }),
+})
+
 const CreateTaskTemplateInputRef = builder.inputType('CreateTaskTemplateInput', {
   fields: (t) => ({
     name: t.string({ required: true }),
@@ -318,7 +335,9 @@ let tasksService: TasksService | undefined
 let taskTemplatesService: TaskTemplatesService | undefined
 let taskPubSub: TaskPubSubService | undefined
 
-function getTasksService(): TasksService {
+// Exported so activities.graphql.ts can compose activityFeedStats (AC 11)
+// without closing the ActivitiesModule → TasksModule DI cycle (T8b).
+export function getTasksService(): TasksService {
   if (!tasksService) {
     throw new Error('TasksService is not initialized')
   }
@@ -367,6 +386,7 @@ builder.queryFields((t) => ({
     args: {
       filter: t.arg({ type: TaskFilterInputRef }),
       pagination: t.arg({ type: TaskPaginationInputRef }),
+      sort: t.arg({ type: TaskSortInputRef }),
     },
     resolve: async (_parent, args, context) => {
       const user = requireUser(context)
@@ -389,6 +409,12 @@ builder.queryFields((t) => ({
           page: args.pagination?.page ?? undefined,
           pageSize: args.pagination?.pageSize ?? undefined,
         },
+        args.sort
+          ? {
+              field: args.sort.field,
+              direction: args.sort.direction,
+            }
+          : undefined,
       )
     },
   }),
@@ -397,6 +423,7 @@ builder.queryFields((t) => ({
     args: {
       filter: t.arg({ type: TaskFilterInputRef }),
       pagination: t.arg({ type: TaskPaginationInputRef }),
+      sort: t.arg({ type: TaskSortInputRef }),
     },
     resolve: async (_parent, args, context) => {
       const user = requireUser(context)
@@ -421,6 +448,12 @@ builder.queryFields((t) => ({
           page: args.pagination?.page ?? undefined,
           pageSize: args.pagination?.pageSize ?? undefined,
         },
+        args.sort
+          ? {
+              field: args.sort.field,
+              direction: args.sort.direction,
+            }
+          : undefined,
       )
     },
   }),
@@ -637,6 +670,27 @@ builder.subscriptionField('onTaskAssigned', (t) =>
           }
         },
       }
+    },
+    resolve: (payload: unknown) => payload as TaskGraphqlShape,
+  }),
+)
+
+// Story 4.4 (AC 14-17): tenant-wide onTaskChanged. Unlike onTaskAssigned this
+// channel is NOT own-scoped, so it gets the mandatory visibility filter
+// (T2): resolveVisibilityFilter is resolved ONCE at subscribe time and every
+// event is compared in memory against `assignedTo` (the task visibility
+// column, per TasksService.findOne). ZERO database reads per event.
+builder.subscriptionField('onTaskChanged', (t) =>
+  t.field({
+    type: TaskRef,
+    subscribe: async (_root, _args, context) => {
+      const user = requireUser(context)
+      const visibility = await resolveVisibilityFilter(user.userId, user.tenantId)
+      const channel = `${PUBSUB_TASK_CHANGED}:${user.tenantId}`
+      return filterTaskChangedEvents(
+        getTaskPubSub().subscribe<TaskGraphqlShape>(channel),
+        visibility,
+      )
     },
     resolve: (payload: unknown) => payload as TaskGraphqlShape,
   }),

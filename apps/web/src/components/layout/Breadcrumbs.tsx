@@ -21,6 +21,8 @@ const SEGMENT_LABELS: Record<string, string> = {
   contacts: 'Contacts',
   deals: 'Deals',
   tasks: 'Tasks',
+  // Story 4.4 (AC 39): without this label the breadcrumb renders "Chi tiết".
+  activities: 'Activities',
   templates: 'Templates',
   inbox: 'Inbox',
   reports: 'Reports',

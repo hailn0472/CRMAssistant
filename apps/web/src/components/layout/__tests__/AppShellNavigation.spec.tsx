@@ -21,7 +21,7 @@ jest.mock('@tanstack/react-query', () => {
           return { data: undefined, isLoading: false, isError: false }
         }
         return {
-          data: ['REPORT', 'CONTACT', 'DEAL', 'INBOX'].flatMap((r) =>
+          data: ['REPORT', 'CONTACT', 'DEAL', 'INBOX', 'TASK'].flatMap((r) =>
             ['CREATE', 'READ', 'UPDATE', 'DELETE', 'EXPORT', 'IMPORT', 'ASSIGN'].map((a) => ({
               resource: r,
               action: a,
@@ -96,5 +96,24 @@ describe('AppShellNavigation', () => {
     const nav = screen.getByRole('navigation', { name: 'CRM navigation' })
     const winLossLink = within(nav).getByRole('link', { name: 'Win/Loss' })
     expect(winLossLink).toHaveAttribute('aria-current', 'page')
+  })
+
+  it('exposes the Activities entry with href /activities gated on TASK:READ (Story 4.4, AC 38)', () => {
+    renderNav()
+
+    const nav = screen.getByRole('navigation', { name: 'CRM navigation' })
+    const activitiesLink = within(nav).getByRole('link', { name: 'Activities' })
+    expect(activitiesLink).toHaveAttribute('href', '/activities')
+  })
+
+  it('marks the activities route as active when on /activities', () => {
+    mockUsePathname.mockReturnValue('/activities')
+    renderNav()
+
+    const nav = screen.getByRole('navigation', { name: 'CRM navigation' })
+    expect(within(nav).getByRole('link', { name: 'Activities' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    )
   })
 })

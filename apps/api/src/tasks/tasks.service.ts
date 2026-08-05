@@ -8,7 +8,7 @@ import { resolveVisibilityFilter } from '../common/guards/visibility-check'
 import { ContactsService } from '../contacts/contacts.service'
 import { DealsService } from '../deals/deals.service'
 import { TaskTemplatesService } from './task-templates.service'
-import { TaskPubSubService, PUBSUB_TASK_ASSIGNED } from './task-pubsub.service'
+import { TaskPubSubService, PUBSUB_TASK_ASSIGNED, PUBSUB_TASK_CHANGED } from './task-pubsub.service'
 import { CalendarSyncService } from '../calendar/calendar-sync.service'
 import type { CalendarTaskInput } from '../calendar/calendar-sync.service'
 import { isTaskPriority, isTaskStatus, toUtcMidnight } from './task-due-status'
@@ -74,6 +74,19 @@ export type TaskStats = {
   dueToday: number
   overdue: number
   completedThisWeek: number
+}
+
+// Story 4.4 (AC 12): explicit sort vocabulary — a plain const tuple is the
+// single source for the Pothos enum and the service-side orderBy mapping. A
+// client-supplied free-text column name would be an injection surface, so the
+// enum value is the ONLY thing that can reach `orderBy`.
+export const TASK_SORT_FIELDS = ['DUE_DATE', 'PRIORITY', 'CREATED_AT', 'TITLE'] as const
+export type TaskSortField = (typeof TASK_SORT_FIELDS)[number]
+export type TaskSortDirection = 'ASC' | 'DESC'
+
+export type TaskSortInput = {
+  field: TaskSortField
+  direction: TaskSortDirection
 }
 
 const OPEN_STATUSES: TaskStatus[] = ['TODO', 'IN_PROGRESS']
@@ -172,6 +185,34 @@ function addDays(date: Date, days: number): Date {
   return result
 }
 
+/**
+ * Story 4.4 (AC 12): exhaustive enum → Prisma orderBy mapping. Never passes a
+ * client string through to orderBy; the default ordering is preserved
+ * byte-for-byte when `sort` is omitted so every existing caller is unaffected.
+ */
+function buildTaskOrderBy(sort: TaskSortInput | undefined): Prisma.TaskOrderByWithRelationInput[] {
+  if (!sort) {
+    return [{ dueDate: { sort: 'asc', nulls: 'last' } }, { createdAt: 'desc' }]
+  }
+  const direction: 'asc' | 'desc' = sort.direction === 'ASC' ? 'asc' : 'desc'
+  switch (sort.field) {
+    case 'DUE_DATE':
+      return [{ dueDate: { sort: direction, nulls: 'last' } }, { createdAt: 'desc' }]
+    case 'PRIORITY':
+      return [{ priority: direction }, { createdAt: 'desc' }]
+    case 'CREATED_AT':
+      return [{ createdAt: direction }]
+    case 'TITLE':
+      return [{ title: direction }]
+    default:
+      // Unreachable for a typed enum value; a garbage value must never reach
+      // Prisma's orderBy (AC 12).
+      throw new BadRequestException(
+        'sort.field must be one of DUE_DATE, PRIORITY, CREATED_AT, TITLE',
+      )
+  }
+}
+
 @Injectable()
 export class TasksService {
   constructor(
@@ -234,6 +275,19 @@ export class TasksService {
     }
   }
 
+  /**
+   * Story 4.4 (AC 19): best-effort onTaskChanged publish on the tenant-wide
+   * channel. Publishing must never fail a mutation — same discipline as
+   * syncCalendarSafe / logSafe.
+   */
+  private publishTaskChanged(tenantId: string, payload: unknown): void {
+    try {
+      this.taskPubSub.publish(`${PUBSUB_TASK_CHANGED}:${tenantId}`, payload)
+    } catch {
+      // Swallowed — the mutation must succeed (AC 19).
+    }
+  }
+
   async create(tenantId: string, userId: string, input: CreateTaskInput): Promise<TaskListItem> {
     const title = normalizeTitle(input.title)
     const description = normalizeDescription(input.description)
@@ -293,6 +347,10 @@ export class TasksService {
     if (createdTask.dueDate) {
       await this.syncCalendarSafe(createdTask)
     }
+
+    // Story 4.4 (AC 14): tenant-wide change notification, after every other
+    // side effect, never failing the mutation.
+    this.publishTaskChanged(tenantId, createdTask)
 
     return createdTask
   }
@@ -369,6 +427,7 @@ export class TasksService {
     userId: string,
     filter: TaskFilterInput = {},
     pagination: TaskPaginationInput = {},
+    sort?: TaskSortInput,
     now: Date = new Date(),
   ): Promise<TaskConnection> {
     const page = Math.max(pagination.page ?? DEFAULT_PAGE, 1)
@@ -379,7 +438,7 @@ export class TasksService {
     const [items, total] = await Promise.all([
       this.prisma.task.findMany({
         where,
-        orderBy: [{ dueDate: { sort: 'asc', nulls: 'last' } }, { createdAt: 'desc' }],
+        orderBy: buildTaskOrderBy(sort),
         skip: (page - 1) * pageSize,
         take: pageSize,
         select: taskListSelect,
@@ -591,6 +650,10 @@ export class TasksService {
       }
     }
 
+    // Story 4.4 (AC 14): tenant-wide change notification, after every other
+    // side effect, never failing the mutation.
+    this.publishTaskChanged(tenantId, updatedTask)
+
     return updatedTask
   }
 
@@ -638,6 +701,10 @@ export class TasksService {
       }
     }
 
+    // Story 4.4 (AC 14): tenant-wide change notification, after every other
+    // side effect, never failing the mutation.
+    this.publishTaskChanged(tenantId, updatedTask)
+
     return updatedTask
   }
 
@@ -675,6 +742,10 @@ export class TasksService {
     // Story 4.2: auto-log the completion (AC 19). Uses logSafe — a logging
     // failure never fails the task mutation.
     await this.logTaskCompleted(tenantId, userId, updatedTask)
+
+    // Story 4.4 (AC 14): tenant-wide change notification, after every other
+    // side effect, never failing the mutation.
+    this.publishTaskChanged(tenantId, updatedTask)
 
     return updatedTask
   }
@@ -747,6 +818,10 @@ export class TasksService {
 
     // Story 4.3: delete the remote event and the link row (AC 23). Best-effort.
     await this.removeCalendarSafe(currentTask)
+
+    // Story 4.4 (AC 14): the delete payload is the pre-delete row — the client
+    // only needs the id to invalidate.
+    this.publishTaskChanged(tenantId, currentTask)
 
     return true
   }

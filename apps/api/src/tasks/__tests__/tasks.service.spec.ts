@@ -9,6 +9,7 @@ jest.mock('../../common/guards/visibility-check', () => ({
 
 import { resolveVisibilityFilter } from '../../common/guards/visibility-check'
 import { TasksService } from '../tasks.service'
+import type { TaskSortInput } from '../tasks.service'
 import { TaskTemplatesService } from '../task-templates.service'
 import { TaskPubSubService, PUBSUB_TASK_ASSIGNED } from '../task-pubsub.service'
 import type { TaskListItem } from '../tasks.service'
@@ -330,7 +331,7 @@ describe('TasksService', () => {
       )
     })
 
-    it('does not publish on self-assignment', async () => {
+    it('does not publish TASK_ASSIGNED on self-assignment but publishes TASK_CHANGED (AC 14)', async () => {
       const { service, pubsub } = makeService(prisma)
       const created = makeTask({ assignedTo: USER })
       prisma.task.create.mockResolvedValue(created)
@@ -338,7 +339,11 @@ describe('TasksService', () => {
 
       await service.create(TENANT, USER, { title: 'Task' })
 
-      expect(pubsub.publish).not.toHaveBeenCalled()
+      expect(pubsub.publish).not.toHaveBeenCalledWith(
+        `${PUBSUB_TASK_ASSIGNED}:${TENANT}:${USER}`,
+        expect.anything(),
+      )
+      expect(pubsub.publish).toHaveBeenCalledWith(`TASK_CHANGED:${TENANT}`, created)
     })
 
     it('rejects a nonexistent assignedTo with BadRequestException', async () => {
@@ -843,15 +848,18 @@ describe('TasksService', () => {
       )
     })
 
-    it('does not publish when the assignee is unchanged', async () => {
+    it('does not publish TASK_ASSIGNED when the assignee is unchanged but publishes TASK_CHANGED (AC 14)', async () => {
       const { service, pubsub } = makeService(prisma)
       prisma.task.findFirst.mockResolvedValue(makeTask({ assignedTo: USER }))
       prisma.task.updateMany.mockResolvedValue({ count: 1 })
-      prisma.task.findFirst.mockResolvedValue(makeTask({ assignedTo: USER }))
 
       await service.update(TENANT, USER, 'task-1', { title: 'Renamed' })
 
-      expect(pubsub.publish).not.toHaveBeenCalled()
+      expect(pubsub.publish).not.toHaveBeenCalledWith(
+        `${PUBSUB_TASK_ASSIGNED}:${TENANT}:${USER}`,
+        expect.anything(),
+      )
+      expect(pubsub.publish).toHaveBeenCalledWith(`TASK_CHANGED:${TENANT}`, expect.anything())
     })
   })
 
@@ -907,16 +915,19 @@ describe('TasksService', () => {
       )
     })
 
-    it('does not publish when reassigning to the current assignee', async () => {
+    it('does not publish TASK_ASSIGNED when reassigning to the current assignee but publishes TASK_CHANGED (AC 14)', async () => {
       const { service, pubsub } = makeService(prisma)
       prisma.task.findFirst.mockResolvedValue(makeTask({ assignedTo: 'user-2' }))
       prisma.user.findFirst.mockResolvedValue({ id: 'user-2', isActive: true })
       prisma.task.updateMany.mockResolvedValue({ count: 1 })
-      prisma.task.findFirst.mockResolvedValue(makeTask({ assignedTo: 'user-2' }))
 
       await service.assign(TENANT, USER, 'task-1', 'user-2')
 
-      expect(pubsub.publish).not.toHaveBeenCalled()
+      expect(pubsub.publish).not.toHaveBeenCalledWith(
+        `${PUBSUB_TASK_ASSIGNED}:${TENANT}:user-2`,
+        expect.anything(),
+      )
+      expect(pubsub.publish).toHaveBeenCalledWith(`TASK_CHANGED:${TENANT}`, expect.anything())
     })
 
     it('throws NotFoundException when the task is gone', async () => {
@@ -1548,6 +1559,170 @@ describe('TasksService', () => {
         expect(select).not.toHaveProperty('calendarEvents')
         expect(result).not.toHaveProperty('calendarEvents')
       })
+    })
+  })
+
+  // ─── Story 4.4: task sorting (AC 12) ────────────────────────────────────
+
+  describe('findMany() sort (Story 4.4, AC 12)', () => {
+    async function findManyOrderBy(sort?: TaskSortInput): Promise<Record<string, unknown>[]> {
+      const { service } = makeService(prisma)
+      prisma.task.findMany.mockResolvedValue([])
+      prisma.task.count.mockResolvedValue(0)
+      await service.findMany(TENANT, USER, {}, { page: 1, pageSize: 20 }, sort)
+      const call = prisma.task.findMany.mock.calls[0]![0] as { orderBy: Record<string, unknown>[] }
+      return call.orderBy
+    }
+
+    it('maps DUE_DATE ASC to the documented orderBy (AC 12)', async () => {
+      expect(await findManyOrderBy({ field: 'DUE_DATE', direction: 'ASC' })).toEqual([
+        { dueDate: { sort: 'asc', nulls: 'last' } },
+        { createdAt: 'desc' },
+      ])
+    })
+
+    it('maps DUE_DATE DESC with nulls last (AC 12)', async () => {
+      expect(await findManyOrderBy({ field: 'DUE_DATE', direction: 'DESC' })).toEqual([
+        { dueDate: { sort: 'desc', nulls: 'last' } },
+        { createdAt: 'desc' },
+      ])
+    })
+
+    it('maps PRIORITY to a priority orderBy', async () => {
+      expect(await findManyOrderBy({ field: 'PRIORITY', direction: 'ASC' })).toEqual([
+        { priority: 'asc' },
+        { createdAt: 'desc' },
+      ])
+    })
+
+    it('maps CREATED_AT to a createdAt orderBy', async () => {
+      expect(await findManyOrderBy({ field: 'CREATED_AT', direction: 'DESC' })).toEqual([
+        { createdAt: 'desc' },
+      ])
+    })
+
+    it('maps TITLE to a title orderBy', async () => {
+      expect(await findManyOrderBy({ field: 'TITLE', direction: 'ASC' })).toEqual([
+        { title: 'asc' },
+      ])
+    })
+
+    it('omitting sort preserves the current default ordering byte-for-byte (AC 12)', async () => {
+      expect(await findManyOrderBy(undefined)).toEqual([
+        { dueDate: { sort: 'asc', nulls: 'last' } },
+        { createdAt: 'desc' },
+      ])
+    })
+
+    it('a garbage sort field is rejected and never reaches orderBy (AC 12)', async () => {
+      const { service } = makeService(prisma)
+      await expect(
+        service.findMany(
+          TENANT,
+          USER,
+          {},
+          { page: 1, pageSize: 20 },
+          { field: 'GARBAGE' as TaskSortInput['field'], direction: 'ASC' },
+        ),
+      ).rejects.toThrow(BadRequestException)
+      expect(prisma.task.findMany).not.toHaveBeenCalled()
+    })
+  })
+
+  // ─── Story 4.4: onTaskChanged publish (AC 14, 18, 19) ───────────────────
+
+  describe('onTaskChanged publish (Story 4.4, AC 14/18/19)', () => {
+    function changedCalls(pubsub: { publish: jest.Mock }): unknown[][] {
+      return pubsub.publish.mock.calls.filter(
+        (call) => typeof call[0] === 'string' && call[0].startsWith('TASK_CHANGED:'),
+      )
+    }
+
+    it('publishes TASK_CHANGED on create (AC 14)', async () => {
+      const { service, pubsub } = makeService(prisma)
+      const created = makeTask({ id: 'task-c1' })
+      prisma.task.create.mockResolvedValue(created)
+      prisma.task.findFirst.mockResolvedValue(created)
+
+      await service.create(TENANT, USER, { title: 'New task' })
+
+      expect(changedCalls(pubsub)).toEqual([['TASK_CHANGED:tenant-1', created]])
+    })
+
+    it('publishes TASK_CHANGED on update (AC 14)', async () => {
+      const { service, pubsub } = makeService(prisma)
+      const updated = makeTask({ id: 'task-u1', title: 'Renamed' })
+      prisma.task.findFirst.mockResolvedValue(updated)
+      prisma.task.updateMany.mockResolvedValue({ count: 1 })
+
+      await service.update(TENANT, USER, 'task-u1', { title: 'Renamed' })
+
+      expect(changedCalls(pubsub)).toEqual([['TASK_CHANGED:tenant-1', updated]])
+    })
+
+    it('publishes TASK_CHANGED on assign (AC 14)', async () => {
+      const { service, pubsub } = makeService(prisma)
+      const current = makeTask({ id: 'task-a1', assignedTo: 'user-1' })
+      const updated = makeTask({ id: 'task-a1', assignedTo: 'user-2' })
+      prisma.task.findFirst.mockResolvedValueOnce(current).mockResolvedValueOnce(updated)
+      prisma.task.updateMany.mockResolvedValue({ count: 1 })
+      prisma.user.findFirst.mockResolvedValue({ id: 'user-2' })
+
+      await service.assign(TENANT, USER, 'task-a1', 'user-2')
+
+      expect(changedCalls(pubsub)).toEqual([['TASK_CHANGED:tenant-1', updated]])
+    })
+
+    it('publishes TASK_CHANGED on complete (AC 14)', async () => {
+      const { service, pubsub } = makeService(prisma)
+      const before = makeTask({ id: 'task-c1', status: 'TODO' })
+      const completed = makeTask({ id: 'task-c1', status: 'COMPLETED', completedAt: new Date() })
+      prisma.task.findFirst.mockResolvedValueOnce(before).mockResolvedValueOnce(completed)
+      prisma.task.updateMany.mockResolvedValue({ count: 1 })
+
+      await service.complete(TENANT, USER, 'task-c1')
+
+      expect(changedCalls(pubsub)).toEqual([['TASK_CHANGED:tenant-1', completed]])
+    })
+
+    it('publishes TASK_CHANGED on delete with the pre-delete row (AC 14)', async () => {
+      const { service, pubsub } = makeService(prisma)
+      const current = makeTask({ id: 'task-d1' })
+      prisma.task.findFirst.mockResolvedValue(current)
+      prisma.task.updateMany.mockResolvedValue({ count: 1 })
+
+      await service.delete(TENANT, USER, 'task-d1')
+
+      expect(changedCalls(pubsub)).toEqual([['TASK_CHANGED:tenant-1', current]])
+    })
+
+    it('a publish failure never fails the mutation (AC 19)', async () => {
+      const { service, pubsub } = makeService(prisma)
+      pubsub.publish.mockImplementation(() => {
+        throw new Error('emitter exploded')
+      })
+      const created = makeTask({ id: 'task-ok' })
+      prisma.task.create.mockResolvedValue(created)
+      prisma.task.findFirst.mockResolvedValue(created)
+
+      await expect(service.create(TENANT, USER, { title: 'New task' })).resolves.toMatchObject({
+        id: 'task-ok',
+      })
+    })
+
+    it('onTaskAssigned stays on its own per-user channel and is untouched (AC 18)', async () => {
+      const { service, pubsub } = makeService(prisma)
+      const created = makeTask({ id: 'task-a2', assignedTo: 'user-2' })
+      prisma.user.findFirst.mockResolvedValue({ id: 'user-2', isActive: true })
+      prisma.task.create.mockResolvedValue(created)
+      prisma.task.findFirst.mockResolvedValue(created)
+
+      await service.create(TENANT, USER, { title: 'Assigned away', assignedTo: 'user-2' })
+
+      expect(pubsub.publish).toHaveBeenCalledWith(
+        `${PUBSUB_TASK_ASSIGNED}:tenant-1:user-2`,
+        created,
+      )
     })
   })
 })

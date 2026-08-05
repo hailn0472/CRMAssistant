@@ -82,13 +82,16 @@ describe('ActivityService', () => {
   let service: ActivityService
   let prisma: MockPrisma
   let audit: { log: jest.Mock }
+  let pubsub: { publish: jest.Mock }
 
   beforeEach(() => {
     prisma = makePrisma()
     audit = makeAudit()
+    pubsub = { publish: jest.fn() }
     service = new ActivityService(
       prisma as unknown as ConstructorParameters<typeof ActivityService>[0],
       audit as never,
+      pubsub as never,
     )
     jest.restoreAllMocks()
   })
@@ -121,6 +124,13 @@ describe('ActivityService', () => {
           metadata: undefined,
           createdBy: USER_ID,
         },
+        // Story 4.4 (AC 16): the parent contact's ownerId is fetched in the
+        // same insert round-trip so onActivityLogged can filter in memory.
+        select: expect.objectContaining({
+          id: true,
+          contactId: true,
+          contact: { select: { ownerId: true } },
+        }),
       })
     })
 
@@ -250,6 +260,7 @@ describe('ActivityService', () => {
           dedupeKey: 'TASK_COMPLETED:task-1',
           metadata: { taskId: 'task-1', priority: 'HIGH' },
         }),
+        select: expect.objectContaining({ contact: { select: { ownerId: true } } }),
       })
     })
   })
@@ -592,16 +603,18 @@ describe('ActivityService', () => {
       })
 
       expect(result.id).toBe('note-1')
-      expect(prisma.activity.create).toHaveBeenCalledWith({
-        data: expect.objectContaining({
-          tenantId: TENANT_ID,
-          contactId: CONTACT_ID,
-          type: 'NOTE_ADDED',
-          title: 'Follow up call',
-          description: 'Customer asked for a quote',
-          createdBy: USER_ID,
+      expect(prisma.activity.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            tenantId: TENANT_ID,
+            contactId: CONTACT_ID,
+            type: 'NOTE_ADDED',
+            title: 'Follow up call',
+            description: 'Customer asked for a quote',
+            createdBy: USER_ID,
+          }),
         }),
-      })
+      )
       expect(audit.log).toHaveBeenCalledWith({
         tenantId: TENANT_ID,
         userId: USER_ID,
@@ -622,10 +635,11 @@ describe('ActivityService', () => {
         title: 'Note',
         userId: USER_ID,
       })
-
-      expect(prisma.activity.create).toHaveBeenCalledWith({
-        data: expect.objectContaining({ description: null }),
-      })
+      expect(prisma.activity.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ description: null }),
+        }),
+      )
     })
   })
 
@@ -736,6 +750,386 @@ describe('ActivityService', () => {
       expect(result.totalCount).toBe(0)
       // Should NOT have called $transaction
       expect(prisma.$transaction).not.toHaveBeenCalled()
+    })
+  })
+
+  // ─── Story 4.4: tenant-wide activity feed (AC 4-11) ─────────────────────
+
+  function makeFeedActivity(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+    return {
+      ...makeActivity({ sourceId: null }),
+      contact: { id: CONTACT_ID, firstName: 'Ada', lastName: 'Lovelace' },
+      ...overrides,
+    }
+  }
+
+  describe('findFeed()', () => {
+    beforeEach(() => {
+      ;(resolveVisibilityFilter as jest.Mock).mockResolvedValue(USER_ID)
+      ;(resolveSharedRecordIds as jest.Mock).mockResolvedValue([])
+    })
+
+    function mockFeedRows(rows: Array<Record<string, unknown>>): void {
+      prisma.activity.findMany.mockResolvedValue(rows as never)
+      prisma.activity.count.mockResolvedValue(rows.length)
+    }
+
+    it('returns the house connection shape with page=1/pageSize=20 defaults (AC 4)', async () => {
+      mockFeedRows([makeFeedActivity()])
+
+      const result = await service.findFeed(TENANT_ID, USER_ID, {})
+
+      expect(result.items).toHaveLength(1)
+      expect(result.total).toBe(1)
+      expect(result.page).toBe(1)
+      expect(result.pageSize).toBe(20)
+      expect(prisma.activity.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ skip: 0, take: 20 }),
+      )
+    })
+
+    it('clamps pageSize at 100 (AC 4)', async () => {
+      mockFeedRows([])
+
+      await service.findFeed(TENANT_ID, USER_ID, {}, { page: 1, pageSize: 500 })
+
+      expect(prisma.activity.findMany).toHaveBeenCalledWith(expect.objectContaining({ take: 100 }))
+    })
+
+    it('case 1: ADMIN/ALL visibility (undefined) applies NO owner predicate (AC 5)', async () => {
+      ;(resolveVisibilityFilter as jest.Mock).mockResolvedValue(undefined)
+      mockFeedRows([makeFeedActivity()])
+
+      await service.findFeed(TENANT_ID, USER_ID, {})
+
+      const where = (
+        prisma.activity.findMany.mock.calls[0]![0] as { where: Record<string, unknown> }
+      ).where
+      expect(where.tenantId).toBe(TENANT_ID)
+      expect(where.contact).toEqual({ deletedAt: null })
+      expect(where.OR).toBeUndefined()
+    })
+
+    it('case 2: OWN visibility (string) adds contact.ownerId predicate (AC 5)', async () => {
+      ;(resolveVisibilityFilter as jest.Mock).mockResolvedValue(USER_ID)
+      mockFeedRows([makeFeedActivity()])
+
+      await service.findFeed(TENANT_ID, USER_ID, {})
+
+      const where = (prisma.activity.findMany.mock.calls[0]![0] as { where: { OR: unknown[] } })
+        .where
+      expect(where.OR).toContainEqual({ contact: { ownerId: USER_ID } })
+    })
+
+    it('case 3: TEAM visibility ({ in }) adds contact.ownerId { in } predicate (AC 5)', async () => {
+      ;(resolveVisibilityFilter as jest.Mock).mockResolvedValue({ in: ['user-1', 'user-2'] })
+      mockFeedRows([makeFeedActivity()])
+
+      await service.findFeed(TENANT_ID, USER_ID, {})
+
+      const where = (prisma.activity.findMany.mock.calls[0]![0] as { where: { OR: unknown[] } })
+        .where
+      expect(where.OR).toContainEqual({ contact: { ownerId: { in: ['user-1', 'user-2'] } } })
+    })
+
+    it('case 4: sharing rules add a contactId { in } OR branch (AC 5)', async () => {
+      ;(resolveVisibilityFilter as jest.Mock).mockResolvedValue(USER_ID)
+      ;(resolveSharedRecordIds as jest.Mock).mockResolvedValue(['contact-shared'])
+      mockFeedRows([makeFeedActivity()])
+
+      await service.findFeed(TENANT_ID, USER_ID, {})
+
+      const where = (prisma.activity.findMany.mock.calls[0]![0] as { where: { OR: unknown[] } })
+        .where
+      expect(where.OR).toContainEqual({ contact: { ownerId: USER_ID } })
+      expect(where.OR).toContainEqual({ contactId: { in: ['contact-shared'] } })
+    })
+
+    it('shared-only: no visibility predicate, shared ids still surface via OR (AC 5)', async () => {
+      ;(resolveVisibilityFilter as jest.Mock).mockResolvedValue(undefined)
+      ;(resolveSharedRecordIds as jest.Mock).mockResolvedValue(['contact-shared'])
+      mockFeedRows([makeFeedActivity()])
+
+      await service.findFeed(TENANT_ID, USER_ID, {})
+
+      const where = (prisma.activity.findMany.mock.calls[0]![0] as { where: { OR: unknown[] } })
+        .where
+      expect(where.OR).toEqual([{ contactId: { in: ['contact-shared'] } }])
+    })
+
+    it('always scopes to tenantId and excludes soft-deleted contacts (AC 5)', async () => {
+      ;(resolveVisibilityFilter as jest.Mock).mockResolvedValue(USER_ID)
+      mockFeedRows([makeFeedActivity()])
+
+      await service.findFeed(TENANT_ID, USER_ID, {})
+
+      const where = (
+        prisma.activity.findMany.mock.calls[0]![0] as { where: Record<string, unknown> }
+      ).where
+      expect(where.tenantId).toBe(TENANT_ID)
+      expect(where.contact).toEqual({ deletedAt: null })
+    })
+
+    it('cross-tenant (non-ADMIN OWN scope): feed query is scoped to the caller tenant (AC 6)', async () => {
+      ;(resolveVisibilityFilter as jest.Mock).mockResolvedValue(USER_ID) // SALES_REP OWN — not ADMIN
+      mockFeedRows([])
+
+      await service.findFeed(OTHER_TENANT_ID, USER_ID, {})
+
+      const where = (
+        prisma.activity.findMany.mock.calls[0]![0] as { where: Record<string, unknown> }
+      ).where
+      expect(where.tenantId).toBe(OTHER_TENANT_ID)
+      expect(where.OR).toContainEqual({ contact: { ownerId: USER_ID } })
+    })
+
+    it('ADMIN bypass: no owner predicate is applied (AC 6 / T9)', async () => {
+      ;(resolveVisibilityFilter as jest.Mock).mockResolvedValue(undefined)
+      mockFeedRows([makeFeedActivity()])
+
+      await service.findFeed(TENANT_ID, USER_ID, {})
+
+      const where = (
+        prisma.activity.findMany.mock.calls[0]![0] as { where: Record<string, unknown> }
+      ).where
+      expect(where.OR).toBeUndefined()
+    })
+
+    it('createdTo is inclusive of the whole final day (AC 8)', async () => {
+      mockFeedRows([])
+
+      await service.findFeed(TENANT_ID, USER_ID, { createdTo: '2026-08-05' })
+
+      const where = (
+        prisma.activity.findMany.mock.calls[0]![0] as {
+          where: { AND: unknown[] }
+        }
+      ).where
+      // The house day-closing rule (buildTaskWhere) is `setHours(23,59,59,999)`
+      // in local time — compute the expectation the same way so the test is
+      // timezone-independent.
+      const endDate = new Date('2026-08-05')
+      endDate.setHours(23, 59, 59, 999)
+      expect(where.AND).toContainEqual({ createdAt: { lte: endDate } })
+    })
+
+    it('orders by createdAt DESC then id DESC — the stable tiebreaker (AC 9)', async () => {
+      mockFeedRows([makeFeedActivity()])
+
+      await service.findFeed(TENANT_ID, USER_ID, {})
+
+      expect(prisma.activity.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ orderBy: [{ createdAt: 'desc' }, { id: 'desc' }] }),
+      )
+    })
+
+    it('each filter field narrows the where clause (AC 7)', async () => {
+      mockFeedRows([])
+
+      await service.findFeed(TENANT_ID, USER_ID, {
+        type: 'CALL_MADE',
+        source: 'TASK',
+        contactId: CONTACT_ID,
+        createdBy: 'user-9',
+        createdFrom: '2026-08-01',
+        search: 'acme',
+      })
+
+      const where = (prisma.activity.findMany.mock.calls[0]![0] as { where: { AND: unknown[] } })
+        .where
+      expect(where.AND).toContainEqual({ type: 'CALL_MADE' })
+      expect(where.AND).toContainEqual({ source: 'TASK' })
+      expect(where.AND).toContainEqual({ contactId: CONTACT_ID })
+      expect(where.AND).toContainEqual({ createdBy: 'user-9' })
+      expect(where.AND).toContainEqual({ createdAt: { gte: new Date('2026-08-01') } })
+      expect(where.AND).toContainEqual({
+        title: { contains: 'acme', mode: 'insensitive' },
+      })
+    })
+
+    it('unknown/empty filter values are ignored, never rejected (AC 7)', async () => {
+      mockFeedRows([])
+
+      await service.findFeed(TENANT_ID, USER_ID, {
+        type: '',
+        source: '',
+        contactId: '',
+        createdBy: '',
+        search: '   ',
+      })
+
+      const where = (
+        prisma.activity.findMany.mock.calls[0]![0] as { where: Record<string, unknown> }
+      ).where
+      expect(where.AND).toBeUndefined()
+    })
+
+    it('selects sourceId and the parent contact identity via ACTIVITY_FEED_SELECT (AC 10)', async () => {
+      mockFeedRows([
+        makeFeedActivity({
+          id: 'a1',
+          sourceId: 'task-9',
+          contact: { id: 'c1', firstName: 'Ada', lastName: 'L' },
+        }),
+      ])
+
+      const result = await service.findFeed(TENANT_ID, USER_ID, {})
+
+      expect(prisma.activity.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          select: expect.objectContaining({
+            sourceId: true,
+            contact: { select: { id: true, firstName: true, lastName: true } },
+          }),
+        }),
+      )
+      expect(result.items[0]).toMatchObject({ sourceId: 'task-9' })
+    })
+
+    it('does not widen ACTIVITY_SELECT — findByContact keeps its 7-field select (AC 10)', async () => {
+      prisma.activity.findMany.mockResolvedValue([makeActivity()])
+
+      await service.findByContact(TENANT_ID, CONTACT_ID, { first: 20 })
+
+      expect(prisma.activity.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          select: {
+            id: true,
+            type: true,
+            title: true,
+            description: true,
+            createdAt: true,
+            createdBy: true,
+            source: true,
+          },
+        }),
+      )
+    })
+  })
+
+  describe('getFeedStats()', () => {
+    beforeEach(() => {
+      ;(resolveVisibilityFilter as jest.Mock).mockResolvedValue(USER_ID)
+      ;(resolveSharedRecordIds as jest.Mock).mockResolvedValue([])
+    })
+
+    it('returns todayCount/weekCount from activity counts scoped to visibility (AC 11)', async () => {
+      prisma.activity.count.mockResolvedValueOnce(3).mockResolvedValueOnce(9)
+
+      const result = await service.getFeedStats(TENANT_ID, USER_ID, NOW)
+
+      expect(result).toEqual({ todayCount: 3, weekCount: 9 })
+      expect(prisma.activity.count).toHaveBeenNthCalledWith(
+        1,
+        expect.objectContaining({
+          where: expect.objectContaining({
+            createdAt: { gte: NOW, lt: new Date(NOW.getTime() + 24 * 60 * 60 * 1000) },
+          }),
+        }),
+      )
+      expect(prisma.activity.count).toHaveBeenNthCalledWith(
+        2,
+        expect.objectContaining({
+          where: expect.objectContaining({
+            createdAt: { gte: new Date(NOW.getTime() - 7 * 24 * 60 * 60 * 1000) },
+          }),
+        }),
+      )
+    })
+
+    it('never counts tasks itself — TasksService is NOT injected (AC 11 / T8b)', async () => {
+      prisma.activity.count.mockResolvedValue(1)
+
+      const result = await service.getFeedStats(TENANT_ID, USER_ID, NOW)
+
+      expect(result).toEqual({ todayCount: 1, weekCount: 1 })
+      expect(prisma).not.toHaveProperty('task')
+      expect(Object.keys(result)).not.toContain('tasksDueToday')
+      expect(Object.keys(result)).not.toContain('overdueTasks')
+    })
+
+    it('applies the same visibility + sharing OR predicate as findFeed (AC 11)', async () => {
+      ;(resolveSharedRecordIds as jest.Mock).mockResolvedValue(['contact-shared'])
+      prisma.activity.count.mockResolvedValue(0)
+
+      await service.getFeedStats(TENANT_ID, USER_ID, NOW)
+
+      expect(prisma.activity.count).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            OR: [{ contact: { ownerId: USER_ID } }, { contactId: { in: ['contact-shared'] } }],
+          }),
+        }),
+      )
+    })
+  })
+
+  describe('log() — Story 4.4 contact-owner select + onActivityLogged publish (AC 14-19)', () => {
+    beforeEach(() => {
+      jest.clearAllMocks()
+    })
+
+    it('fetches the parent contact ownerId in the same insert round-trip (AC 16)', async () => {
+      prisma.activity.create.mockResolvedValue({
+        ...makeActivity(),
+        contact: { ownerId: 'owner-1' },
+      })
+
+      await service.log({
+        tenantId: TENANT_ID,
+        contactId: CONTACT_ID,
+        type: 'NOTE_ADDED' as PrismaActivityType,
+        title: 'Test',
+        createdBy: USER_ID,
+      })
+
+      expect(prisma.activity.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          select: expect.objectContaining({ contact: { select: { ownerId: true } } }),
+        }),
+      )
+    })
+
+    it('publishes onActivityLogged with contactOwnerId on the ACTIVITY_LOGGED channel (AC 14, 16)', async () => {
+      const created = {
+        ...makeActivity({ id: 'a-42' }),
+        contact: { ownerId: 'owner-1' },
+      }
+      prisma.activity.create.mockResolvedValue(created)
+
+      const result = await service.log({
+        tenantId: TENANT_ID,
+        contactId: CONTACT_ID,
+        type: 'CALL_MADE' as PrismaActivityType,
+        title: 'Call Acme',
+        createdBy: USER_ID,
+      })
+
+      expect(result.id).toBe('a-42')
+      expect(pubsub.publish).toHaveBeenCalledWith(
+        `ACTIVITY_LOGGED:${TENANT_ID}`,
+        expect.objectContaining({ contactOwnerId: 'owner-1' }),
+      )
+    })
+
+    it('a publish failure never fails the mutation (AC 19)', async () => {
+      pubsub.publish.mockImplementation(() => {
+        throw new Error('emitter exploded')
+      })
+      prisma.activity.create.mockResolvedValue({
+        ...makeActivity({ id: 'a-43' }),
+        contact: { ownerId: 'owner-1' },
+      })
+
+      await expect(
+        service.log({
+          tenantId: TENANT_ID,
+          contactId: CONTACT_ID,
+          type: 'NOTE_ADDED' as PrismaActivityType,
+          title: 'Test',
+          createdBy: USER_ID,
+        }),
+      ).resolves.toMatchObject({ id: 'a-43' })
     })
   })
 })

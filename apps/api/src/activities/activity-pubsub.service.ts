@@ -1,12 +1,19 @@
 import { Injectable } from '@nestjs/common'
 import { EventEmitter } from 'events'
 
-export const PUBSUB_TASK_ASSIGNED = 'TASK_ASSIGNED'
-// Story 4.4 (AC 14): tenant-wide task change channel for onTaskChanged.
-export const PUBSUB_TASK_CHANGED = 'TASK_CHANGED'
+export const PUBSUB_ACTIVITY_LOGGED = 'ACTIVITY_LOGGED'
 
+/**
+ * Story 4.4 (AC 17): in-process fan-out for the `onActivityLogged`
+ * subscription — a sibling of TaskPubSubService with the identical shape.
+ *
+ * 🚨 This is a fan-out to live subscribers, NOT a job queue: `subscribe()`
+ * drops any event emitted while no consumer is pending, and the emitter is
+ * per-process. Single-instance only — needs a Redis-backed pub/sub for
+ * multi-instance deployments (see deferred-work.md, Story 4.4).
+ */
 @Injectable()
-export class TaskPubSubService {
+export class ActivityPubSubService {
   private emitter = new EventEmitter()
   /** Max listeners to prevent memory leak warnings for many subscription channels */
   private readonly MAX_LISTENERS = 500

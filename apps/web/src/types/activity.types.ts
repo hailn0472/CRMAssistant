@@ -75,3 +75,44 @@ export const ACTIVITY_TYPE_LABELS: Record<ActivityTypeValue, string> = {
   MESSAGE_RECEIVED: 'Message Received',
   MESSAGE_SENT: 'Message Sent',
 }
+
+// ─── Story 4.4: tenant-wide feed vocabulary (AC 7, 10, 36) ────────────────
+
+export type ActivityFeedContact = {
+  id: string
+  firstName: string
+  lastName: string
+}
+
+/** A feed row — `Activity` plus the widened select (`sourceId` + contact identity, AC 10). */
+export type ActivityFeedItem = Activity & {
+  sourceId: string | null
+  contact: ActivityFeedContact | null
+}
+
+/** Mirrors `ActivityFeedFilterInput` server-side (AC 7). Unknown/empty values are ignored by the API. */
+export type ActivityFeedFilter = {
+  type?: ActivityTypeValue
+  source?: string
+  contactId?: string
+  createdBy?: string
+  createdFrom?: string
+  createdTo?: string
+  search?: string
+}
+
+/** The house connection shape, page 1 / size 20 default, clamped at 100. */
+export type ActivityFeedPage = {
+  items: ActivityFeedItem[]
+  total: number
+  page: number
+  pageSize: number
+}
+
+/** The workspace metric strip (AC 11) — activity counters + task counters composed server-side. */
+export type ActivityFeedStats = {
+  todayCount: number
+  weekCount: number
+  tasksDueToday: number
+  overdueTasks: number
+}
