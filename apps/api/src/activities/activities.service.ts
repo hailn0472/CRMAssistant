@@ -6,6 +6,8 @@ import { PrismaService } from '../prisma/prisma.service'
 import { AuditService } from '../audit/audit.service'
 import { resolveVisibilityFilter } from '../common/guards/visibility-check'
 import { resolveSharedRecordIds } from '../common/guards/sharing-check'
+import { ActivityPubSubService, PUBSUB_ACTIVITY_LOGGED } from './activity-pubsub.service'
+import { toUtcMidnight } from '../tasks/task-due-status'
 
 export type CreateActivityInput = {
   tenantId: string
@@ -79,6 +81,68 @@ const ACTIVITY_SELECT = {
   source: true,
 } as const
 
+// Story 4.4 (AC 10): the tenant-wide feed needs two more fields than the
+// contact timeline — `sourceId` and the parent contact identity. Declared as
+// a SEPARATE select so ACTIVITY_SELECT / findByContact stay untouched (an
+// unrequested payload change on a hot path).
+const ACTIVITY_FEED_SELECT = {
+  ...ACTIVITY_SELECT,
+  contactId: true,
+  sourceId: true,
+  contact: { select: { id: true, firstName: true, lastName: true } },
+} as const
+
+export type ActivityFeedItem = Prisma.ActivityGetPayload<{ select: typeof ACTIVITY_FEED_SELECT }>
+
+// Story 4.4 (AC 16): the insert select that also fetches the parent contact's
+// ownerId in the same round-trip, so onActivityLogged can filter in memory.
+const ACTIVITY_LOG_SELECT = {
+  id: true,
+  tenantId: true,
+  contactId: true,
+  type: true,
+  title: true,
+  description: true,
+  createdAt: true,
+  createdBy: true,
+  source: true,
+  sourceId: true,
+  dedupeKey: true,
+  contact: { select: { ownerId: true } },
+} as const
+
+export type ActivityFeedFilter = {
+  type?: string
+  source?: string
+  contactId?: string
+  createdBy?: string
+  createdFrom?: string
+  createdTo?: string
+  search?: string
+}
+
+export type ActivityFeedPagination = {
+  page?: number
+  pageSize?: number
+}
+
+export type ActivityFeedConnection = {
+  items: ActivityFeedItem[]
+  total: number
+  page: number
+  pageSize: number
+}
+
+export type ActivityFeedStats = {
+  todayCount: number
+  weekCount: number
+}
+
+const FEED_DEFAULT_PAGE = 1
+const FEED_DEFAULT_PAGE_SIZE = 20
+const FEED_MAX_PAGE_SIZE = 100
+const MS_PER_DAY = 24 * 60 * 60 * 1000
+
 @Injectable()
 export class ActivityService {
   private readonly logger = new Logger('ActivityService')
@@ -86,7 +150,20 @@ export class ActivityService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly activityPubSub: ActivityPubSubService,
   ) {}
+
+  /**
+   * Story 4.4 (AC 19): best-effort onActivityLogged publish. Publishing must
+   * never fail the mutation — same discipline as syncCalendarSafe / logSafe.
+   */
+  private publishActivityLogged(tenantId: string, payload: unknown): void {
+    try {
+      this.activityPubSub.publish(`${PUBSUB_ACTIVITY_LOGGED}:${tenantId}`, payload)
+    } catch {
+      // Swallowed — the insert must succeed (AC 19).
+    }
+  }
 
   /**
    * Create an activity record. Validates required fields.
@@ -103,13 +180,17 @@ export class ActivityService {
     source: string | null
     sourceId: string | null
     dedupeKey: string | null
+    contact: { ownerId: string } | null
   }> {
     if (!input.tenantId) throw new BadRequestException('tenantId is required')
     if (!input.contactId) throw new BadRequestException('contactId is required')
     if (!input.type) throw new BadRequestException('type is required')
     if (!input.title) throw new BadRequestException('title is required')
 
-    return this.prisma.activity.create({
+    // Story 4.4 (AC 16): the parent contact's ownerId is fetched in the SAME
+    // insert round-trip so onActivityLogged can compare visibility in memory
+    // with zero per-event database reads (AC 15).
+    const activity = await this.prisma.activity.create({
       data: {
         tenantId: input.tenantId,
         contactId: input.contactId,
@@ -122,7 +203,18 @@ export class ActivityService {
         dedupeKey: input.dedupeKey ?? null,
         metadata: (input.metadata ?? undefined) as Prisma.InputJsonValue | undefined,
       },
+      select: ACTIVITY_LOG_SELECT,
     })
+
+    // Publish AFTER the insert, outside any $transaction, and never fail the
+    // mutation on a publish error (AC 19). contactOwnerId is transport-internal
+    // only — ActivityRef never exposes it.
+    this.publishActivityLogged(activity.tenantId, {
+      ...activity,
+      contactOwnerId: activity.contact?.ownerId ?? null,
+    })
+
+    return activity
   }
 
   /**
@@ -286,6 +378,158 @@ export class ActivityService {
     return this.prisma.activity.count({
       where: { tenantId, contactId },
     })
+  }
+
+  /**
+   * Story 4.4 (AC 4-10): tenant-wide, visibility-scoped activity feed.
+   * Returns the house connection shape `{ items, total, page, pageSize }`
+   * (offset pagination — the List view needs page numbers; the Timeline view
+   * uses the same query with a larger page size and appends).
+   *
+   * Access derives from the parent Contact (Activity has no ownerId): the
+   * same predicate checkContactAccess encodes for a single record, lifted to
+   * a list filter — resolveVisibilityFilter against `contact.ownerId`, OR'd
+   * with `contactId IN resolveSharedRecordIds`. When visibility is undefined
+   * (ADMIN / DATA:VIEW_ALL / ALL) no owner predicate is applied at all.
+   * `where` always starts `{ tenantId }` and the contact must not be
+   * soft-deleted — there is no RLS; this predicate is the only isolation.
+   */
+  async findFeed(
+    tenantId: string,
+    userId: string,
+    filter: ActivityFeedFilter = {},
+    pagination: ActivityFeedPagination = {},
+  ): Promise<ActivityFeedConnection> {
+    const page = Math.max(pagination.page ?? FEED_DEFAULT_PAGE, 1)
+    const pageSize = Math.min(
+      Math.max(pagination.pageSize ?? FEED_DEFAULT_PAGE_SIZE, 1),
+      FEED_MAX_PAGE_SIZE,
+    )
+
+    const where = await this.buildFeedWhere(tenantId, userId, filter)
+
+    const [items, total] = await Promise.all([
+      this.prisma.activity.findMany({
+        where,
+        // AC 9: the id tiebreaker is not decoration — auto-logged activities
+        // are written in bursts and share a createdAt to the millisecond; an
+        // unstable sort drops/duplicates rows across offset pages.
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        select: ACTIVITY_FEED_SELECT,
+      }),
+      this.prisma.activity.count({ where }),
+    ])
+
+    return {
+      items: items as ActivityFeedItem[],
+      total,
+      page,
+      pageSize,
+    }
+  }
+
+  /**
+   * Shared where-builder for findFeed / getFeedStats (AC 5).
+   */
+  private async buildFeedWhere(
+    tenantId: string,
+    userId: string,
+    filter: ActivityFeedFilter,
+  ): Promise<Prisma.ActivityWhereInput> {
+    const visibilityFilter = await resolveVisibilityFilter(userId, tenantId)
+    const sharedIds = await resolveSharedRecordIds(userId, tenantId, 'CONTACT')
+
+    const where: Prisma.ActivityWhereInput = {
+      tenantId,
+      contact: { deletedAt: null },
+    }
+
+    // Ownership ⊕ sharing OR-predicate (AC 5). `undefined` visibility (ADMIN /
+    // ALL / DATA:VIEW_ALL) applies no owner predicate at all.
+    const or: Prisma.ActivityWhereInput[] = []
+    if (visibilityFilter !== undefined) {
+      or.push({
+        contact: { ownerId: visibilityFilter as Prisma.ContactWhereInput['ownerId'] },
+      })
+    }
+    if (sharedIds.length > 0) {
+      or.push({ contactId: { in: sharedIds } })
+    }
+    if (or.length > 0) {
+      where.OR = or
+    }
+
+    const andConditions: Prisma.ActivityWhereInput[] = []
+
+    if (filter.type) {
+      andConditions.push({ type: filter.type as ActivityType })
+    }
+    if (filter.source) {
+      andConditions.push({ source: filter.source })
+    }
+    if (filter.contactId) {
+      andConditions.push({ contactId: filter.contactId })
+    }
+    if (filter.createdBy) {
+      andConditions.push({ createdBy: filter.createdBy })
+    }
+    if (filter.createdFrom || filter.createdTo) {
+      const dateFilter: Prisma.DateTimeFilter = {}
+      if (filter.createdFrom) {
+        dateFilter.gte = new Date(filter.createdFrom)
+      }
+      if (filter.createdTo) {
+        // AC 8: inclusive of the whole final day — exactly as buildTaskWhere.
+        const endDate = new Date(filter.createdTo)
+        endDate.setHours(23, 59, 59, 999)
+        dateFilter.lte = endDate
+      }
+      andConditions.push({ createdAt: dateFilter })
+    }
+    if (filter.search?.trim()) {
+      andConditions.push({
+        title: { contains: filter.search.trim(), mode: 'insensitive' },
+      })
+    }
+
+    if (andConditions.length > 0) {
+      where.AND = andConditions
+    }
+
+    return where
+  }
+
+  /**
+   * Story 4.4 (AC 11): activity counters for the workspace metric strip.
+   * ONLY the activity side — the task counters come from TasksService.getStats
+   * (same visibility scope, same toUtcMidnight day maths) and are composed in
+   * the GraphQL resolver. TasksService is deliberately NOT injected here:
+   * TasksService already injects ActivityService, so doing so would close a DI
+   * cycle (T8b).
+   */
+  async getFeedStats(
+    tenantId: string,
+    userId: string,
+    now: Date = new Date(),
+  ): Promise<ActivityFeedStats> {
+    const baseWhere = await this.buildFeedWhere(tenantId, userId, {})
+
+    const todayStart = toUtcMidnight(now)
+    const todayEnd = new Date(todayStart.getTime() + MS_PER_DAY)
+    const sevenDaysAgo = new Date(now.getTime() - 7 * MS_PER_DAY)
+
+    const [todayCount, weekCount] = await Promise.all([
+      this.prisma.activity.count({
+        where: { ...baseWhere, createdAt: { gte: todayStart, lt: todayEnd } },
+      }),
+      this.prisma.activity.count({
+        where: { ...baseWhere, createdAt: { gte: sevenDaysAgo } },
+      }),
+    ])
+
+    return { todayCount, weekCount }
   }
 
   /**

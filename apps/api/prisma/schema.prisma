@@ -420,6 +420,10 @@ model Activity {
   @@index([tenantId, contactId])
   @@index([tenantId, contactId, createdAt(sort: Desc)])
   @@index([tenantId, createdBy])
+  // Story 4.4 (AC 1): tenant-wide feed ordered by createdAt DESC (the
+  // contact-timeline index above cannot serve a cross-contact feed; NFR11
+  // targets 10M activities per tenant).
+  @@index([tenantId, createdAt(sort: Desc)])
 }
 
 /// Tenant-scoped tag model for contact tagging and segmentation.

@@ -15,6 +15,7 @@ import { PostgreSqlContainer } from '@testcontainers/postgresql'
 import { PrismaService } from '../../src/prisma/prisma.service'
 import { AuditService } from '../../src/audit/audit.service'
 import { ActivityService } from '../../src/activities/activities.service'
+import { ActivityPubSubService } from '../../src/activities/activity-pubsub.service'
 import { ActivityLogPreferenceService } from '../../src/activities/activity-log-preference.service'
 import { ConversationsService } from '../../src/inbox/conversations.service'
 import { MessagesService } from '../../src/inbox/messages.service'
@@ -71,7 +72,9 @@ describe('Facebook history sync (integration)', () => {
     const messagesService = new MessagesService(
       prismaService,
       pubSub,
-      new ActivityService(prismaService, auditService),
+      // Story 4.4: ActivityService now takes ActivityPubSubService as its
+      // third dependency (AC 16/17).
+      new ActivityService(prismaService, auditService, new ActivityPubSubService()),
       new ActivityLogPreferenceService(prismaService, auditService),
     )
     const facebookService = new FacebookService(

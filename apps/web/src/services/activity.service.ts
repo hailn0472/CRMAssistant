@@ -1,5 +1,11 @@
 import { graphqlRequest } from '@/lib/graphql-client'
 import type { ContactTimelineResult } from '@/types/activity.types'
+import type {
+  ActivityFeedFilter,
+  ActivityFeedPage,
+  ActivityFeedStats,
+} from '@/types/activity.types'
+import { TASK_FIELDS } from '@/services/task.service'
 
 // Story 4.2: `source` must be listed here — there is no GraphQL codegen in
 // this workspace; every document is a hand-written template literal, and a
@@ -131,3 +137,65 @@ export async function updateActivityLogPreferences(
   )
   return data.updateActivityLogPreferences
 }
+
+// ─── Story 4.4: tenant-wide feed (AC 7, 10, 11, 36) ───────────────────────
+
+// 🚨 No GraphQL codegen — every field used by the views MUST be listed here;
+// a field missing from this fragment is silently undefined at runtime (the
+// exact trap documented at the top of this file for `source`).
+export const ACTIVITY_FEED_FIELDS = `
+  id
+  contactId
+  type
+  title
+  description
+  createdAt
+  createdBy
+  source
+  sourceId
+  contact { id firstName lastName }
+`
+
+export async function fetchActivityFeed(
+  filter: ActivityFeedFilter = {},
+  page = 1,
+  pageSize = 20,
+): Promise<ActivityFeedPage> {
+  const data = await graphqlRequest<{ activityFeed: ActivityFeedPage }>(
+    `query ActivityFeed($filter: ActivityFeedFilterInput, $pagination: ActivityFeedPaginationInput) {
+      activityFeed(filter: $filter, pagination: $pagination) {
+        total
+        page
+        pageSize
+        items { ${ACTIVITY_FEED_FIELDS} }
+      }
+    }`,
+    { filter: filter ?? undefined, pagination: { page, pageSize } },
+  )
+  return data.activityFeed
+}
+
+export async function fetchActivityFeedStats(): Promise<ActivityFeedStats> {
+  const data = await graphqlRequest<{ activityFeedStats: ActivityFeedStats }>(
+    `query ActivityFeedStats {
+      activityFeedStats { todayCount weekCount tasksDueToday overdueTasks }
+    }`,
+    {},
+  )
+  return data.activityFeedStats
+}
+
+// Story 4.4 (AC 14/36): tenant-wide subscriptions, both visibility-filtered
+// server-side inside `subscribe`. onTaskChanged reuses the exported task
+// field list so the two subscription documents cannot drift.
+export const ON_TASK_CHANGED_SUBSCRIPTION = `subscription OnTaskChanged {
+  onTaskChanged {
+    ${TASK_FIELDS}
+  }
+}`
+
+export const ON_ACTIVITY_LOGGED_SUBSCRIPTION = `subscription OnActivityLogged {
+  onActivityLogged {
+    ${ACTIVITY_FEED_FIELDS}
+  }
+}`

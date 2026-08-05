@@ -97,7 +97,17 @@ export type TaskStats = {
   completedThisWeek: number
 }
 
-const TASK_FIELDS = `
+// Story 4.4 (AC 12): mirrors the server's TaskSortField enum — an explicit
+// enum, never a free-text column name (client-supplied orderBy is an
+// injection surface).
+export const TASK_SORT_FIELDS = ['DUE_DATE', 'PRIORITY', 'CREATED_AT', 'TITLE'] as const
+export type TaskSortField = (typeof TASK_SORT_FIELDS)[number]
+export type TaskSortDirection = 'ASC' | 'DESC'
+export type TaskSort = { field: TaskSortField; direction: TaskSortDirection }
+
+// Exported so activity.service.ts can build ON_TASK_CHANGED_SUBSCRIPTION from
+// the SAME field list (Story 4.4, AC 36) — two copies would silently drift.
+export const TASK_FIELDS = `
   id
   title
   description
@@ -120,10 +130,11 @@ export async function getTasks(
   page: number,
   pageSize: number,
   filter?: TaskFilter,
+  sort?: TaskSort,
 ): Promise<TaskConnection> {
   const data = await graphqlRequest<{ tasks: TaskConnection }>(
-    `query Tasks($filter: TaskFilterInput, $pagination: TaskPaginationInput) {
-      tasks(filter: $filter, pagination: $pagination) {
+    `query Tasks($filter: TaskFilterInput, $pagination: TaskPaginationInput, $sort: TaskSortInput) {
+      tasks(filter: $filter, pagination: $pagination, sort: $sort) {
         total
         page
         pageSize
@@ -133,6 +144,7 @@ export async function getTasks(
     {
       filter: filter ?? undefined,
       pagination: { page, pageSize },
+      sort: sort ?? undefined,
     },
   )
   return data.tasks
@@ -318,6 +330,16 @@ export async function createTaskFromTemplate(
 
 export const ON_TASK_ASSIGNED_SUBSCRIPTION = `subscription OnTaskAssigned {
   onTaskAssigned {
+    ${TASK_FIELDS}
+  }
+}`
+
+// Story 4.4 (AC 14/36): tenant-wide task-change subscription, published by
+// TasksService on create/update/assign/complete/delete. The payload only
+// needs the id to invalidate; the full field list keeps the cache warm for
+// the list view.
+export const ON_TASK_CHANGED_SUBSCRIPTION = `subscription OnTaskChanged {
+  onTaskChanged {
     ${TASK_FIELDS}
   }
 }`

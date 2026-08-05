@@ -105,12 +105,12 @@ When this file and the code disagree, **the code wins** — and fix this file in
 
 - **Transport**: `graphql-ws` carried by `ws` 8.x. Server config in `apps/api/src/graphql/graphql.module.ts`; subscription root registered in `apps/api/src/graphql/schema.builder.ts`. Client: `apps/web/src/lib/graphql-subscription.ts`.
 - **Endpoint**: `ws://localhost:4000/graphql`, protocol `graphql-transport-ws`, JWT in the `connection_init` payload.
-- **Reference implementations**: `onNewMessage` / `onConversationUpdated` in `apps/api/src/inbox/inbox.graphql.ts`; `onDealUpdated` in `apps/api/src/deals/deals.graphql.ts`.
+- **Reference implementations**: `onNewMessage` / `onConversationUpdated` in `apps/api/src/inbox/inbox.graphql.ts`; `onDealUpdated` in `apps/api/src/deals/deals.graphql.ts`; `onTaskAssigned` (own-channel, no visibility filter by construction) in `apps/api/src/tasks/tasks.graphql.ts`. **Story 4.4 (2026-08-05) added two tenant-wide subscriptions** — `onTaskChanged` (`TASK_CHANGED:<tenantId>`, published from `TasksService` on create/update/assign/complete/delete) in `tasks.graphql.ts`, and `onActivityLogged` (`ACTIVITY_LOGGED:<tenantId>`, published from `ActivityService.log` after insert) in `activities.graphql.ts`. Both apply `resolveVisibilityFilter` once at subscribe time and compare payloads in memory per event (zero DB reads per event); `onActivityLogged` also checks the subscribe-time `resolveSharedRecordIds('CONTACT')` list against the payload's transport-internal `contactOwnerId`. Client wiring lives in ONE hook: `apps/web/src/components/activities/useActivityRealtime.ts`.
 - **Every new subscription MUST**:
   1. **Tenant-scope the channel** — `` `${EVENT}:${tenantId}` ``. A global channel leaks across tenants.
   2. **Apply `resolveVisibilityFilter` inside `subscribe`**, resolved once at subscribe time. Query resolvers filter by visibility; a subscription that does not will push records the user cannot otherwise read. This is a real leak, not a theoretical one — without it a `SALES_REP` scoped to `OWN` receives every deal in the tenant.
   3. **Prefer reusing an existing channel** over adding one. A second emitter is a second visibility filter to keep correct and a second leak surface.
-- **Known limitation**: pub/sub is an in-process `EventEmitter` (`apps/api/src/inbox/pubsub.service.ts`, `apps/api/src/deals/deal-pubsub.service.ts`) — **single-instance only**. Multi-instance deployment requires Redis-backed pub/sub first.
+- **Known limitation**: pub/sub is an in-process `EventEmitter` (`apps/api/src/inbox/pubsub.service.ts`, `apps/api/src/deals/deal-pubsub.service.ts`, `apps/api/src/tasks/task-pubsub.service.ts`, and Story 4.4's sibling `apps/api/src/activities/activity-pubsub.service.ts`) — **single-instance only**, and events emitted with no pending consumer are dropped (fan-out, not a job queue). Multi-instance deployment requires Redis-backed pub/sub first.
 - **Architecture Decision**: Simple request-response for Text-to-SQL (no streaming for MVP)
 
 ### AI/LLM Integration
@@ -369,7 +369,7 @@ apps/api/src/<domain>/
   __tests__/*.spec.ts
 ```
 
-**Frontend** — `apps/web/src/`: `app/(auth)`, `app/(dashboard)/<domain>`, `app/api/graphql` (proxy route), `components/<domain>`, `components/ui` (shadcn), `components/shared`, `components/layout`, `services/<domain>.service.ts`, `lib/`, `hooks/`, `stores/`.
+**Frontend** — `apps/web/src/`: `app/(auth)`, `app/(dashboard)/<domain>` (Story 4.4 added `app/(dashboard)/activities` — the List/Calendar/Timeline workspace route), `app/api/graphql` (proxy route), `components/<domain>`, `components/ui` (shadcn), `components/shared`, `components/layout`, `services/<domain>.service.ts`, `lib/`, `hooks/`, `stores/`.
 
 **Conventions that recur across every domain**:
 

@@ -1,5 +1,5 @@
 generated: 2026-05-09 05:39:46.484000+00:00
-last_updated: '2026-08-02T18:48:56.000Z'
+last_updated: '2026-08-05T00:00:00.000Z'
 project: CRMAssistant
 project_key: NOKEY
 tracking_system: file-system
@@ -73,7 +73,7 @@ development_status:
   4-1-task-crud-with-templates-assignment: done
   4-2-automatic-activity-logging-from-integrated-channels: done
   4-3-calendar-integration-google-calendar-outlook: done
-  4-4-multiple-activity-views-list-calendar-timeline: ready-for-dev
+  4-4-multiple-activity-views-list-calendar-timeline: done
   4-5-time-tracking-productivity-reports: backlog
   4-6-task-dependencies-recurring-tasks: backlog
   4-7-notes-on-contact-deal-account: backlog

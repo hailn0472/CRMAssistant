@@ -10,6 +10,7 @@ import {
   MessageSquare,
   Briefcase,
   CheckSquare,
+  CalendarDays,
   UserCog,
   Settings,
   BarChart3,
@@ -69,6 +70,15 @@ const navigationSections: NavigationSection[] = [
         label: 'Tasks',
         href: '/tasks',
         icon: CheckSquare,
+        permission: { resource: 'TASK', action: 'READ' },
+      },
+      {
+        // Story 4.4 (AC 38): Activities is a top-level primary group entry
+        // (ux-design-specification.md:1823). Gated on the existing TASK:READ
+        // resource — no new permission resource (AC 13).
+        label: 'Activities',
+        href: '/activities',
+        icon: CalendarDays,
         permission: { resource: 'TASK', action: 'READ' },
       },
       {

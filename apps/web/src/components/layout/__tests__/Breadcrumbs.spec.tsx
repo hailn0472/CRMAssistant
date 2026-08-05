@@ -95,4 +95,13 @@ describe('Breadcrumbs', () => {
     expect(screen.getByText('Connecting…')).toHaveAttribute('aria-current', 'page')
     expect(screen.queryByText('Chi tiết')).not.toBeInTheDocument()
   })
+
+  it('labels the activities segment — not "Chi tiết" (Story 4.4, AC 39)', () => {
+    mockUsePathname.mockReturnValue('/activities')
+
+    render(<Breadcrumbs />)
+    expect(screen.getByRole('link', { name: 'CRM' })).toHaveAttribute('href', '/dashboard')
+    expect(screen.getByText('Activities')).toHaveAttribute('aria-current', 'page')
+    expect(screen.queryByText('Chi tiết')).not.toBeInTheDocument()
+  })
 })
