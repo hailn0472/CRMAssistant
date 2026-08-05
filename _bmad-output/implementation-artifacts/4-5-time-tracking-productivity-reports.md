@@ -1,6 +1,6 @@
 # Story 4.5: Time Tracking & Productivity Reports
 
-Status: ready-for-dev
+Status: done
 
 Epic: 4 — Activity & Task Management
 FR: **FR20** — "Users can track time spent on activities and generate productivity reports" [Source: `prd.md:949`; `epics.md:44`, `:315`]
