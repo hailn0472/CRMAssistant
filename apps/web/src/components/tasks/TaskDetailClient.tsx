@@ -11,6 +11,8 @@ import { usePermission } from '@/hooks/usePermission'
 import { AssigneePickerDialog } from './AssigneePickerDialog'
 import { TaskCalendarSyncBadge } from './TaskCalendarSyncBadge'
 import { TaskFormDrawer } from './TaskFormDrawer'
+import { TaskTimerWidget } from './TaskTimerWidget'
+import { TimeEntryList } from './TimeEntryList'
 import {
   TASK_PRIORITY_LABELS,
   TASK_STATUS_DOT_COLOR,
@@ -231,6 +233,9 @@ export function TaskDetailClient({ task }: TaskDetailClientProps): React.JSX.Ele
             )}
           </section>
 
+          {/* Story 4.5 (AC 38): the entries list sits between Description and Activity. */}
+          <TimeEntryList taskId={task.id} />
+
           <section className="flex flex-col gap-3.5 rounded-[14px] border border-[#ececf0] bg-white px-5 py-[18px]">
             <h2 className="m-0 text-[14px] font-semibold text-[#1b1b1f]">Activity</h2>
             {activity.map((entry) => (
@@ -249,6 +254,10 @@ export function TaskDetailClient({ task }: TaskDetailClientProps): React.JSX.Ele
         </div>
 
         <aside className="flex min-w-0 flex-col gap-4">
+          {/* Story 4.5 (AC 34): the timer widget is the FIRST section in the
+              aside — immediately before the Details card. */}
+          <TaskTimerWidget taskId={task.id} />
+
           <section className="flex flex-col gap-3 rounded-[14px] border border-[#ececf0] bg-white px-[18px] py-4">
             <h2 className="m-0 text-[14px] font-semibold text-[#1b1b1f]">Details</h2>
             <DetailRow label="Status">{TASK_STATUS_LABELS[task.status]}</DetailRow>

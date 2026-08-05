@@ -31,6 +31,7 @@ import { FacebookModule } from './facebook/facebook.module'
 import { ChannelDispatcherBindingModule } from './facebook/channel-dispatcher-binding.module'
 import { ImportExportModule } from './import-export/import-export.module'
 import { ReportsModule } from './reports/reports.module'
+import { TimeTrackingModule } from './time-tracking/time-tracking.module'
 
 @Module({
   imports: [
@@ -49,6 +50,11 @@ import { ReportsModule } from './reports/reports.module'
     TasksModule,
     CalendarModule,
     CalendarTaskBindingModule,
+    // Story 4.5 (AC 26): TimeTrackingModule registers time-tracking.graphql
+    // fields — it must sit ABOVE AppGraphqlModule so the barrel (which builds
+    // the SDL) sees the refs at import time. Schema registration order is
+    // load-bearing (docs/project-context.md:84).
+    TimeTrackingModule,
     AppGraphqlModule,
     ContactsModule,
     DealsModule,

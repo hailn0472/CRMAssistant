@@ -17,6 +17,13 @@ import type {
   WinLossReasonBucket,
   CompetitorOutcome,
 } from './win-loss.service'
+import type {
+  ProductivityService,
+  ProductivityTaskBucket,
+  ProductivityRelatedBucket,
+  ProductivityTimeBucket,
+} from './productivity.service'
+import type { ProductivityBucket } from './productivity-buckets'
 import type { GraphqlContext } from '../graphql/graphql-context'
 import type { JwtPayload } from '../auth/strategies/jwt.strategy'
 
@@ -133,10 +140,82 @@ const SalesForecastInputRef = builder.inputType('SalesForecastInput', {
   }),
 })
 
+// ─── Productivity Report Types (Story 4.5, AC 25) ─────────
+
+const ProductivityBucketRef = builder.enumType('ProductivityBucket', {
+  values: ['DAY', 'WEEK', 'MONTH'] as const,
+})
+
+const ProductivityTaskBucketRef =
+  builder.objectRef<ProductivityTaskBucket>('ProductivityTaskBucket')
+
+ProductivityTaskBucketRef.implement({
+  fields: (t) => ({
+    taskId: t.exposeID('taskId'),
+    taskTitle: t.exposeString('taskTitle'),
+    totalSeconds: t.exposeInt('totalSeconds'),
+    percentage: t.exposeFloat('percentage'),
+  }),
+})
+
+const ProductivityRelatedBucketRef = builder.objectRef<ProductivityRelatedBucket>(
+  'ProductivityRelatedBucket',
+)
+
+ProductivityRelatedBucketRef.implement({
+  fields: (t) => ({
+    kind: t.exposeString('kind'),
+    id: t.id({ nullable: true, resolve: (r) => r.id }),
+    label: t.exposeString('label'),
+    totalSeconds: t.exposeInt('totalSeconds'),
+    percentage: t.exposeFloat('percentage'),
+  }),
+})
+
+const ProductivityTimeBucketRef =
+  builder.objectRef<ProductivityTimeBucket>('ProductivityTimeBucket')
+
+ProductivityTimeBucketRef.implement({
+  fields: (t) => ({
+    bucketStart: t.exposeString('bucketStart'),
+    totalSeconds: t.exposeInt('totalSeconds'),
+  }),
+})
+
+// The TaskStatsRef idiom (tasks.graphql.ts:178): the ref is typed straight
+// off the service's return type so ref fields cannot outrun the service.
+const ProductivityReportRef = builder
+  .objectRef<Awaited<ReturnType<ProductivityService['productivityReport']>>>('ProductivityReport')
+  .implement({
+    fields: (t) => ({
+      userId: t.exposeID('userId'),
+      startDate: t.exposeString('startDate'),
+      endDate: t.exposeString('endDate'),
+      bucket: t.field({ type: ProductivityBucketRef, resolve: (r) => r.bucket }),
+      totalSeconds: t.exposeInt('totalSeconds'),
+      entryCount: t.exposeInt('entryCount'),
+      trackedDays: t.exposeInt('trackedDays'),
+      averageSecondsPerTrackedDay: t.exposeFloat('averageSecondsPerTrackedDay'),
+      byTask: t.field({ type: [ProductivityTaskBucketRef], resolve: (r) => r.byTask }),
+      byRelated: t.field({ type: [ProductivityRelatedBucketRef], resolve: (r) => r.byRelated }),
+      buckets: t.field({ type: [ProductivityTimeBucketRef], resolve: (r) => r.buckets }),
+    }),
+  })
+
+const ProductivityReportInputRef = builder.inputType('ProductivityReportInput', {
+  fields: (t) => ({
+    startDate: t.string({ required: true }),
+    endDate: t.string({ required: true }),
+    bucket: t.field({ type: ProductivityBucketRef }),
+    userId: t.string(),
+  }),
+})
+
 // ─── Service Singleton ─────────────────────────────────────
 
 let forecastService: ForecastService | undefined
 let winLossService: WinLossService | undefined
+let productivityService: ProductivityService | undefined
 
 function getForecastService(): ForecastService {
   if (!forecastService) {
@@ -150,6 +229,13 @@ function getWinLossService(): WinLossService {
     throw new Error('WinLossService is not initialized')
   }
   return winLossService
+}
+
+function getProductivityService(): ProductivityService {
+  if (!productivityService) {
+    throw new Error('ProductivityService is not initialized')
+  }
+  return productivityService
 }
 
 function requireUser(context: GraphqlContext): JwtPayload {
@@ -213,11 +299,32 @@ builder.queryFields((t) => ({
       })
     },
   }),
+  productivityReport: t.field({
+    type: ProductivityReportRef,
+    args: {
+      input: t.arg({ type: ProductivityReportInputRef, required: true }),
+    },
+    resolve: async (_parent, args, context) => {
+      const user = requireUser(context)
+      await requirePermission(context, 'REPORT', 'READ')
+      return getProductivityService().productivityReport(user.tenantId, user.userId, {
+        userId: args.input.userId ?? undefined,
+        startDate: args.input.startDate,
+        endDate: args.input.endDate,
+        bucket: (args.input.bucket ?? 'DAY') as ProductivityBucket,
+      })
+    },
+  }),
 }))
 
 // ─── Registration ─────────────────────────────────────────
 
-export function registerReportsGraphql(service: ForecastService, winLoss: WinLossService): void {
+export function registerReportsGraphql(
+  service: ForecastService,
+  winLoss: WinLossService,
+  productivity: ProductivityService,
+): void {
   forecastService = service
   winLossService = winLoss
+  productivityService = productivity
 }

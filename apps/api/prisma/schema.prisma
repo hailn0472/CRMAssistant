@@ -129,6 +129,7 @@ model Tenant {
   taskTemplates            TaskTemplate[]
   calendarConnections      CalendarConnection[]
   taskCalendarEvents       TaskCalendarEvent[]
+  timeEntries              TimeEntry[]
 }
 
 /// Tenant-scoped user model with authentication support.
@@ -184,6 +185,7 @@ model User {
   activityLogPreference UserActivityLogPreference? @relation("UserActivityLogPreference")
   assignedTasks         Task[]                   @relation("TaskAssignee")
   calendarConnections   CalendarConnection[]     @relation("UserCalendarConnection")
+  timeEntries           TimeEntry[]              @relation("TimeEntryUser")
 
   // Email is unique per tenant, NOT globally unique
   @@unique([tenantId, email])
@@ -1095,6 +1097,7 @@ model Task {
   deal     Deal?    @relation(fields: [dealId], references: [id], onDelete: Cascade)
 
   calendarEvents TaskCalendarEvent[]
+  timeEntries    TimeEntry[]
 
   @@index([tenantId])
   @@index([tenantId, assignedTo])
@@ -1126,6 +1129,42 @@ model TaskTemplate {
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
+}
+
+// =============================================================================
+// TIME TRACKING MODELS (Story 4.5)
+// =============================================================================
+
+/// Tenant-scoped time entry against a task (Story 4.5, AC 1).
+/// durationSeconds is the single source of truth for a row's length — a
+/// hand-corrected entry (AC 10) must never be recomputed from
+/// startTime/endTime. "One active timer per user" (AC 6) is enforced in
+/// TimeEntriesService inside a Serializable transaction — NOT by a partial
+/// unique index (Prisma cannot express WHERE "endTime" IS NULL, and a plain
+/// @@unique is the soft-delete trap). No @@unique, no @db.* native types.
+model TimeEntry {
+  id              String    @id @default(uuid())
+  tenantId        String
+  taskId          String
+  userId          String
+  startTime       DateTime
+  endTime         DateTime?
+  durationSeconds Int       @default(0)
+  description     String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  createdBy       String    @default("system")
+  updatedBy       String    @default("system")
+  deletedAt       DateTime?
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  task   Task   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user   User   @relation("TimeEntryUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([tenantId, userId, startTime])
+  @@index([tenantId, taskId])
+  @@index([tenantId, userId, endTime])
 }
 
 // =============================================================================

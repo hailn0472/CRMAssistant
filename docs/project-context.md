@@ -12,11 +12,11 @@ sections_completed:
     'framework_specific_rules',
   ]
 existing_patterns_found: 0
-last_updated: '2026-07-31T14:00:00Z'
+last_updated: '2026-08-06T00:00:00Z'
 reviewed_by: ['Winston', 'John', 'Amelia', 'Murat']
 status: 'complete'
 version: '1.1.0'
-verified_against_code: '2026-07-31'
+verified_against_code: '2026-08-06'
 ---
 
 # Project Context for AI Agents
@@ -354,7 +354,7 @@ model MyDomainModel {
 
 ### As-built module map (check here before creating anything)
 
-**Backend** — `apps/api/src/`: `accounts` (tests only; Account entity deferred 2026-07-29), `activities`, `audit`, `auth`, `calendar` (Story 4.3 — Google Calendar & Outlook integration: OAuth adapters, sync engine, per-user `CalendarConnection`, `TaskCalendarEvent` link rows), `common` (guards, interceptors, validation), `contacts`, `contacts-export`, `contacts-import`, `deals`, `facebook`, `graphql`, `health`, `import-export`, `inbox`, `permissions`, `prisma`, `products`, `reports`, `roles`, `segments`, `sharing`, `tags`, `teams`, `users`.
+**Backend** — `apps/api/src/`: `accounts` (tests only; Account entity deferred 2026-07-29), `activities`, `audit`, `auth`, `calendar` (Story 4.3 — Google Calendar & Outlook integration: OAuth adapters, sync engine, per-user `CalendarConnection`, `TaskCalendarEvent` link rows), `common` (guards, interceptors, validation), `contacts`, `contacts-export`, `contacts-import`, `deals`, `facebook`, `graphql`, `health`, `import-export`, `inbox`, `permissions`, `prisma`, `products`, `reports` (Story 4.5 added the `ProductivityService` + pure `productivity-buckets.ts`), `roles`, `segments`, `sharing`, `tags`, `teams`, `time-tracking` (Story 4.5 — `TimeEntry` model, timer + manual-entry CRUD via `TimeEntriesService`), `users`.
 
 > Note: the architecture doc's directory tree lists `cache/` and `realtime/` modules. **Neither exists.**
 
@@ -369,7 +369,7 @@ apps/api/src/<domain>/
   __tests__/*.spec.ts
 ```
 
-**Frontend** — `apps/web/src/`: `app/(auth)`, `app/(dashboard)/<domain>` (Story 4.4 added `app/(dashboard)/activities` — the List/Calendar/Timeline workspace route), `app/api/graphql` (proxy route), `components/<domain>`, `components/ui` (shadcn), `components/shared`, `components/layout`, `services/<domain>.service.ts`, `lib/`, `hooks/`, `stores/`.
+**Frontend** — `apps/web/src/`: `app/(auth)`, `app/(dashboard)/<domain>` (Story 4.4 added `app/(dashboard)/activities` — the List/Calendar/Timeline workspace route; Story 4.5 added `app/(dashboard)/reports/productivity`), `app/api/graphql` (proxy route), `components/<domain>`, `components/ui` (shadcn), `components/shared`, `components/layout`, `services/<domain>.service.ts`, `lib/`, `hooks/`, `stores/`.
 
 **Conventions that recur across every domain**:
 
@@ -814,6 +814,7 @@ describe('ContactService', () => {
 - **Soft delete + `@@unique` is a trap.** `DealStage` has `@@unique([tenantId, name])` while soft-deleting, so a deleted row's name stays reserved forever and re-creating it fails with an opaque `P2002`. For new models prefer **no DB unique constraint** plus a case-insensitive check over `deletedAt: null` rows in the service, throwing a clear `ConflictException`.
 - **Altering an existing table**: new columns must be nullable (existing rows have no value), and every FK needs an explicit `ON DELETE` decision (`RESTRICT` for referenced catalogue rows, `CASCADE` for owned children).
 - **Story 4.3 models**: `CalendarConnection` (per-USER, `@@unique([tenantId, userId, provider])`, tokens encrypted at rest via `common/crypto/token-crypto`, `accessTokenEncrypted` nullable because disconnect nulls both token columns) and `TaskCalendarEvent` (per-task-per-connection link + sync state, `@@unique([tenantId, taskId, calendarConnectionId])`, **no `deletedAt`** — hard-deleted, documented in the schema like `Activity`). `TaskCalendarEvent` is the "no soft delete + unique" exemption, deliberately different from the DealStage trap above.
+- **Story 4.5 model**: `TimeEntry` (per-user, per-task time record — full house pattern with `deletedAt`, **no `@@unique`** because "one active timer per user" is enforced in `TimeEntriesService` inside a `Serializable` transaction, not by a partial unique index Prisma cannot express; `durationSeconds Int` is the row's single source of truth; `@@index([tenantId, userId, endTime])` serves the running-timer lookup, `@@index([tenantId, userId, startTime])` the report range scan).
 - Migration order has caused near-data-loss before (FK constraint created before the data was seeded). Review order of operations, data-migration steps and nullable FKs deliberately.
 
 ## References

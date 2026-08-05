@@ -66,6 +66,15 @@ describe('Breadcrumbs', () => {
     expect(screen.getByText('Win/Loss')).toHaveAttribute('aria-current', 'page')
   })
 
+  it('labels the productivity segment instead of the "Chi tiết" fallback (AC #45)', () => {
+    mockUsePathname.mockReturnValue('/reports/productivity')
+
+    render(<Breadcrumbs />)
+    expect(screen.getByRole('link', { name: 'Reports' })).toHaveAttribute('href', '/reports')
+    expect(screen.getByText('Productivity')).toHaveAttribute('aria-current', 'page')
+    expect(screen.queryByText('Chi tiết')).not.toBeInTheDocument()
+  })
+
   it('labels the reminders segment (AC #54)', () => {
     mockUsePathname.mockReturnValue('/settings/reminders')
 

@@ -150,3 +150,14 @@
 - The calendar view has no per-user timezone — all day bucketing is UTC (`toUtcMidnight`), inherited from 4.3's UTC-only events. A `User.timezone` column is the prerequisite (also deferred by 4.3).
 - No drag-to-reschedule for activities — an activity's `createdAt` is immutable history and there is no mutation to change it; only task chips are draggable (AC 31). A "move activity" feature is a product decision, not a gap.
 - The workspace's real-time update only invalidates caches — a task rescheduled from another client updates the grid after the next fetch; there is no optimistic merge of incoming subscription payloads into the calendar (the subscription payloads are used purely as invalidate signals, per `useActivityRealtime`).
+## Deferred from: 4-5-time-tracking-productivity-reports (2026-08-06)
+
+- No CSV/PDF/Excel export for the productivity report — FR45 remains unmet for reports generally (inherits the `:90` gap; the `downloadCsv` helper in `WinLossReport.tsx` is available if a later story picks it up).
+- "One active timer per user" is enforced by a `Serializable` interactive transaction in `TimeEntriesService` (mapping Prisma P2034 to a 409 Conflict), NOT by a partial unique index — Prisma cannot express `WHERE "endTime" IS NULL` in `schema.prisma` and the resulting drift would break `prisma migrate diff` forever.
+- A runaway timer is never auto-closed — no scheduler (`@nestjs/schedule` / `bullmq` / `ioredis` still not installed). A timer left running simply keeps running.
+- All day/week/month bucketing is UTC — no `User.timezone` column (inherited from 4.3/4.4). The UI states "All times are UTC".
+- The report is bounded by construction: `MAX_REPORT_ENTRIES = 20000` (`take: MAX + 1` and throw) and a 366-day range — it rejects rather than truncates, so a rendered report is never silently incomplete.
+- The report is computed on read with no cache — no Redis, no materialized view, no snapshot table (the aggregate lives entirely in `ProductivityService`).
+- Team leaderboards / manager roll-ups / `/reports/activity` belong to Story 6.8 ("Activity Reports & Team Productivity Metrics"); 4.5 owns the per-user report only.
+- Time entries are not exposed on the `/activities` workspace — no cross-workspace surface was added.
+- The live tick is client-side (`setInterval` in `TaskTimerWidget`) — no fifth in-process `EventEmitter`, no new GraphQL subscription (the four existing single-instance emitters remain the only ones; Redis-backed pub/sub is still the multi-instance prerequisite).
