@@ -44,6 +44,8 @@ const SEGMENT_LABELS: Record<string, string> = {
   products: 'Products',
   competitors: 'Competitors',
   'win-loss': 'Win/Loss',
+  // Story 4.5 (AC 45): without this label the breadcrumb renders "Chi tiết".
+  productivity: 'Productivity',
   reminders: 'Reminders',
   'activity-logging': 'Activity Logging',
   // Story 4.3 calendar settings routes.

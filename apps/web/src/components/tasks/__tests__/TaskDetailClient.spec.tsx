@@ -5,6 +5,7 @@ import toast from 'react-hot-toast'
 import { TaskDetailClient } from '../TaskDetailClient'
 import { completeTask, deleteTask } from '@/services/task.service'
 import { getTaskCalendarSync } from '@/services/calendar.service'
+import { getActiveTimeEntry, getTimeEntries } from '@/services/time-entry.service'
 import type { Task } from '@/services/task.service'
 
 jest.mock('next/navigation', () => ({
@@ -23,15 +24,30 @@ jest.mock('@/services/calendar.service', () => ({
   syncTaskToCalendar: jest.fn(),
 }))
 
+// Story 4.5: TaskTimerWidget + TimeEntryList query this on every render.
+jest.mock('@/services/time-entry.service', () => ({
+  getActiveTimeEntry: jest.fn(),
+  getTimeEntries: jest.fn(),
+  startTimer: jest.fn(),
+  stopTimer: jest.fn(),
+  createTimeEntry: jest.fn(),
+  updateTimeEntry: jest.fn(),
+  deleteTimeEntry: jest.fn(),
+}))
+
 jest.mock('@/services/owner.service', () => ({
   searchUsers: jest.fn(),
 }))
 
 jest.mock('@/components/ui/dialog', () => ({
-  Dialog: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  // The custom Dialog renders nothing when closed — the mock must gate
+  // children on `open` exactly like the real DialogContent.
+  Dialog: ({ open, children }: { open?: boolean; children: React.ReactNode }) =>
+    open ? <div>{children}</div> : null,
   DialogContent: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   DialogHeader: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   DialogTitle: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  DialogFooter: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }))
 
 const mockUsePermission: jest.Mock<boolean, [string, string]> = jest.fn<boolean, [string, string]>(
@@ -83,6 +99,14 @@ describe('TaskDetailClient', () => {
     // Story 4.3: the badge query needs a concrete default (TanStack Query v5
     // treats a queryFn resolving to undefined as an error).
     ;(getTaskCalendarSync as jest.Mock).mockResolvedValue(null)
+    // Story 4.5: concrete defaults for the timer widget + entries list.
+    ;(getActiveTimeEntry as jest.Mock).mockResolvedValue(null)
+    ;(getTimeEntries as jest.Mock).mockResolvedValue({
+      items: [],
+      total: 0,
+      page: 1,
+      pageSize: 100,
+    })
   })
 
   it('renders the back link, title, badges and detail sections', () => {
@@ -116,6 +140,27 @@ describe('TaskDetailClient', () => {
     expect(contactLink?.getAttribute('href')).toBe('/contacts/contact-1')
     const dealLink = screen.getByText('CloudTech deal').closest('a')
     expect(dealLink?.getAttribute('href')).toBe('/deals/deal-1')
+  })
+
+  it('mounts TimeEntryList in the main column between Description and Activity (AC 38)', async () => {
+    const { container } = renderWithQuery(<TaskDetailClient task={mockTask} />)
+
+    expect(await screen.findByText('Time entries')).toBeInTheDocument()
+    const headings = Array.from(container.querySelectorAll('h2')).map((h) => h.textContent)
+    expect(headings.indexOf('Time entries')).toBeGreaterThan(headings.indexOf('Description'))
+    expect(headings.indexOf('Time entries')).toBeLessThan(headings.indexOf('Activity'))
+  })
+
+  it('mounts TaskTimerWidget as the first aside section, before the Details card (AC 34)', async () => {
+    const { container } = renderWithQuery(<TaskDetailClient task={mockTask} />)
+
+    expect(await screen.findByText('Time tracker')).toBeInTheDocument()
+    const headings = Array.from(container.querySelectorAll('h2')).map((h) => h.textContent)
+    expect(headings.indexOf('Time tracker')).toBeLessThan(headings.indexOf('Details'))
+    // And it stays in the aside — the aside is the only column holding Details.
+    const aside = container.querySelector('aside')
+    expect(aside?.textContent).toContain('Time tracker')
+    expect(aside?.textContent).toContain('Details')
   })
 
   it('completes the task from the header checkbox with an impact-stating toast', async () => {

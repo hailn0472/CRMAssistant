@@ -11,6 +11,7 @@ import {
   Briefcase,
   CheckSquare,
   CalendarDays,
+  Timer,
   UserCog,
   Settings,
   BarChart3,
@@ -91,6 +92,15 @@ const navigationSections: NavigationSection[] = [
         label: 'Win/Loss',
         href: '/reports/win-loss',
         icon: BarChart3,
+        permission: { resource: 'REPORT', action: 'READ' },
+      },
+      {
+        // Story 4.5 (AC 44): productivity report entry, immediately after
+        // Win/Loss. Gated on the existing REPORT:READ — no new permission
+        // resource (AC 27).
+        label: 'Productivity',
+        href: '/reports/productivity',
+        icon: Timer,
         permission: { resource: 'REPORT', action: 'READ' },
       },
     ],
