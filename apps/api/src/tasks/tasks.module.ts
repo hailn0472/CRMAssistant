@@ -4,6 +4,8 @@ import { registerTasksGraphql } from './tasks.graphql'
 import { TasksService } from './tasks.service'
 import { TaskTemplatesService } from './task-templates.service'
 import { TaskPubSubService } from './task-pubsub.service'
+import { TaskDependenciesService } from './task-dependencies.service'
+import { TaskRecurrenceService } from './task-recurrence.service'
 import { PrismaModule } from '../prisma/prisma.module'
 import { ContactsModule } from '../contacts/contacts.module'
 import { DealsModule } from '../deals/deals.module'
@@ -23,7 +25,14 @@ import { CalendarModule } from '../calendar/calendar.module'
     // injects TasksService (AC 24).
     CalendarModule,
   ],
-  providers: [TasksService, TaskTemplatesService, TaskPubSubService],
+  providers: [
+    TasksService,
+    TaskTemplatesService,
+    TaskPubSubService,
+    // Story 4.6: dependency + recurrence services
+    TaskDependenciesService,
+    TaskRecurrenceService,
+  ],
   exports: [TasksService, TaskTemplatesService],
 })
 export class TasksModule implements OnModuleInit {
@@ -31,9 +40,17 @@ export class TasksModule implements OnModuleInit {
     private readonly tasksService: TasksService,
     private readonly taskTemplatesService: TaskTemplatesService,
     private readonly taskPubSub: TaskPubSubService,
+    private readonly dependenciesService: TaskDependenciesService,
+    private readonly recurrenceService: TaskRecurrenceService,
   ) {}
 
   onModuleInit(): void {
-    registerTasksGraphql(this.tasksService, this.taskTemplatesService, this.taskPubSub)
+    registerTasksGraphql(
+      this.tasksService,
+      this.taskTemplatesService,
+      this.taskPubSub,
+      this.dependenciesService,
+      this.recurrenceService,
+    )
   }
 }

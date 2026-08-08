@@ -45,6 +45,10 @@ async function loadTask(id: string): Promise<Task> {
           createdBy
           createdAt
           updatedAt
+          isRecurring
+          recurrencePattern
+          recurrenceEndDate
+          parentTaskId
           assignee { id firstName lastName email avatar }
           contact { id firstName lastName email }
           deal { id title }

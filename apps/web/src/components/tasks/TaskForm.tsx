@@ -21,20 +21,43 @@ import {
   TASK_PRIORITY_LABELS,
   TASK_STATUSES,
   TASK_STATUS_LABELS,
+  TASK_RECURRENCE_PATTERNS,
+  TASK_RECURRENCE_PATTERN_LABELS,
 } from '@/lib/task-format'
 import { cn } from '@/lib/utils'
 import type { Task } from '@/services/task.service'
 
-const taskSchema = z.object({
-  title: z.string().trim().min(1, 'Title is required'),
-  description: z.string().optional(),
-  status: z.enum(TASK_STATUSES),
-  priority: z.enum(TASK_PRIORITIES),
-  dueDate: z.string().optional(),
-  assignedTo: z.string().optional(),
-  contactId: z.string().optional(),
-  dealId: z.string().optional(),
-})
+const taskSchema = z
+  .object({
+    title: z.string().trim().min(1, 'Title is required'),
+    description: z.string().optional(),
+    status: z.enum(TASK_STATUSES),
+    priority: z.enum(TASK_PRIORITIES),
+    dueDate: z.string().optional(),
+    assignedTo: z.string().optional(),
+    contactId: z.string().optional(),
+    dealId: z.string().optional(),
+    // Story 4.6 (AC 64-67): recurrence fields
+    isRecurring: z.boolean().optional().default(false),
+    recurrencePattern: z.string().optional(),
+    recurrenceEndDate: z.string().optional(),
+  })
+  .refine(
+    (data) =>
+      !data.isRecurring ||
+      (data.isRecurring && data.recurrencePattern && data.recurrencePattern.length > 0),
+    {
+      message: 'Recurrence pattern is required when task is recurring',
+      path: ['recurrencePattern'],
+    },
+  )
+  .refine(
+    (data) => !data.recurrenceEndDate || !data.dueDate || data.recurrenceEndDate >= data.dueDate,
+    {
+      message: 'Recurrence end date must be on or after the due date',
+      path: ['recurrenceEndDate'],
+    },
+  )
 
 type TaskFormValues = z.infer<typeof taskSchema>
 
@@ -120,6 +143,12 @@ export function TaskForm({
       assignedTo: task?.assignedTo ?? '',
       contactId: task?.contactId ?? prefillContactId ?? '',
       dealId: task?.dealId ?? '',
+      // Story 4.6 (AC 64-67): recurrence defaults
+      isRecurring: task?.isRecurring ?? false,
+      recurrencePattern: task?.recurrencePattern ?? '',
+      recurrenceEndDate: task?.recurrenceEndDate
+        ? new Date(task.recurrenceEndDate).toISOString().split('T')[0]
+        : '',
     },
   })
 
@@ -132,6 +161,7 @@ export function TaskForm({
   const selectedContactId = watch('contactId')
   const selectedDealId = watch('dealId')
   const selectedAssigneeId = watch('assignedTo')
+  const isRecurring = watch('isRecurring')
 
   async function onSubmit(values: TaskFormValues): Promise<void> {
     try {
@@ -144,6 +174,10 @@ export function TaskForm({
         assignedTo: values.assignedTo || undefined,
         contactId: values.contactId || undefined,
         dealId: values.dealId || undefined,
+        // Story 4.6 (AC 64-67): recurrence payload
+        isRecurring: values.isRecurring || undefined,
+        recurrencePattern: values.isRecurring ? values.recurrencePattern || undefined : undefined,
+        recurrenceEndDate: values.isRecurring ? values.recurrenceEndDate || undefined : undefined,
       }
       let savedTask: Task
       if (task) {
@@ -292,6 +326,48 @@ export function TaskForm({
               aria-invalid={Boolean(errors.dueDate)}
             />
           </Field>
+        </Section>
+
+        {/* Story 4.6 (AC 64-67): Recurrence section */}
+        <Section title="Recurrence">
+          <Field label="Recurring task">
+            <label className="inline-flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                className="h-4 w-4 rounded border-[#e6e6eb] accent-[#1b1b1f]"
+                {...register('isRecurring')}
+              />
+              <span className="text-[13px] text-[#4b4b55]">Make this a recurring task</span>
+            </label>
+          </Field>
+
+          {isRecurring ? (
+            <>
+              <Field label="Recurrence pattern" required error={errors.recurrencePattern?.message}>
+                <select
+                  {...register('recurrencePattern')}
+                  className={cn(inputClass, 'cursor-pointer')}
+                  aria-invalid={Boolean(errors.recurrencePattern)}
+                >
+                  <option value="">Select a pattern</option>
+                  {TASK_RECURRENCE_PATTERNS.map((pattern) => (
+                    <option key={pattern} value={pattern}>
+                      {TASK_RECURRENCE_PATTERN_LABELS[pattern]}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+
+              <Field label="Recurrence end date">
+                <input
+                  type="date"
+                  className={inputClass}
+                  {...register('recurrenceEndDate')}
+                  aria-label="Recurrence end date"
+                />
+              </Field>
+            </>
+          ) : null}
         </Section>
 
         <Section title="Related records">
