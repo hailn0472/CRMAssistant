@@ -29,6 +29,15 @@ export type TaskStatus = (typeof TASK_STATUSES)[number]
 export const TASK_PRIORITIES = ['LOW', 'MEDIUM', 'HIGH', 'URGENT'] as const
 export type TaskPriority = (typeof TASK_PRIORITIES)[number]
 
+// Story 4.6 (AC 10): recurrence pattern vocabulary — mirrors the Prisma
+// enum RecurrencePattern. CUSTOM is deferred (AC 89).
+export const TASK_RECURRENCE_PATTERNS = ['DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY'] as const
+export type RecurrencePattern = (typeof TASK_RECURRENCE_PATTERNS)[number]
+
+export function isRecurrencePattern(value: string): value is RecurrencePattern {
+  return (TASK_RECURRENCE_PATTERNS as readonly string[]).includes(value)
+}
+
 export const TASK_DUE_STATUSES = [
   'NO_DUE_DATE',
   'OVERDUE',

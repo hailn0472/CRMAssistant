@@ -1,4 +1,9 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common'
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common'
 
 import { PrismaService } from '../prisma/prisma.service'
 import { AuditService } from '../audit/audit.service'
@@ -24,6 +29,10 @@ export type CreateTaskInput = {
   assignedTo?: string
   contactId?: string
   dealId?: string
+  // Story 4.6: recurrence fields (AC 41-43)
+  isRecurring?: boolean
+  recurrencePattern?: string
+  recurrenceEndDate?: string | null
 }
 
 export type UpdateTaskInput = {
@@ -35,6 +44,10 @@ export type UpdateTaskInput = {
   assignedTo?: string
   contactId?: string | null
   dealId?: string | null
+  // Story 4.6: recurrence fields (AC 41-43)
+  isRecurring?: boolean
+  recurrencePattern?: string | null
+  recurrenceEndDate?: string | null
 }
 
 export type TaskFilterInput = {
@@ -102,6 +115,8 @@ const MAX_DESCRIPTION_LENGTH = 5000
 // three nested refs) or the resolver crashes at query time — Story 3.4
 // Critical, re-flagged on 3.5, 3.6 and 3.7. Walk it against tasks.graphql.ts
 // before opening the PR.
+// Story 4.6 (AC 44): +4 fields for recurrence — MUST stay in sync with
+// TaskGraphqlShape in tasks.graphql.ts.
 const taskListSelect = {
   id: true,
   tenantId: true,
@@ -118,6 +133,10 @@ const taskListSelect = {
   updatedAt: true,
   createdBy: true,
   updatedBy: true,
+  isRecurring: true,
+  recurrencePattern: true,
+  recurrenceEndDate: true,
+  parentTaskId: true,
   assignee: {
     select: { id: true, firstName: true, lastName: true, email: true, avatar: true },
   },
@@ -167,6 +186,28 @@ function normalizePriority(value: string | undefined, fallback: TaskPriority): T
     throw new BadRequestException('priority must be one of LOW, MEDIUM, HIGH, URGENT')
   }
   return value
+}
+
+// Story 4.6 (AC 37): recurrence pattern normalizer
+function normalizeRecurrencePattern(
+  value: string | undefined,
+): 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'YEARLY' | null {
+  if (value === undefined || value === null) return null
+  const valid = ['DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY']
+  if (!valid.includes(value)) {
+    throw new BadRequestException('recurrencePattern must be one of DAILY, WEEKLY, MONTHLY, YEARLY')
+  }
+  return value as 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'YEARLY'
+}
+
+// Story 4.6: recurrence end date normalizer
+function normalizeRecurrenceEndDate(value: string | null | undefined): Date | null {
+  if (value === undefined || value === null) return null
+  const parsed = new Date(value)
+  if (Number.isNaN(parsed.getTime())) {
+    throw new BadRequestException('recurrenceEndDate is not a valid date')
+  }
+  return toUtcMidnight(parsed)
 }
 
 function normalizeDueDate(value: string | null | undefined): Date | null {
@@ -315,6 +356,15 @@ export class TasksService {
       await this.deals.findOne(tenantId, userId, input.dealId)
     }
 
+    // Story 4.6: recurrence fields (AC 41-43) — pass through to prisma
+    const isRecurring = input.isRecurring ?? false
+    const recurrencePattern = isRecurring
+      ? normalizeRecurrencePattern(input.recurrencePattern)
+      : null
+    const recurrenceEndDate = isRecurring
+      ? normalizeRecurrenceEndDate(input.recurrenceEndDate)
+      : null
+
     const task = await this.prisma.task.create({
       data: {
         tenantId,
@@ -328,6 +378,9 @@ export class TasksService {
         dealId: input.dealId ?? null,
         createdBy: userId,
         updatedBy: userId,
+        isRecurring,
+        recurrencePattern,
+        recurrenceEndDate,
       },
       select: taskListSelect,
     })
@@ -602,6 +655,32 @@ export class TasksService {
       data.dealId = input.dealId
     }
 
+    // Story 4.6 (AC 37): recurrence fields — reject setting isRecurring on an occurrence
+    if (
+      input.isRecurring !== undefined ||
+      input.recurrencePattern !== undefined ||
+      input.recurrenceEndDate !== undefined
+    ) {
+      if (currentTask.parentTaskId !== null) {
+        throw new BadRequestException('A recurring occurrence cannot itself recur')
+      }
+      if (input.isRecurring !== undefined) {
+        data.isRecurring = input.isRecurring
+      }
+      if (input.recurrencePattern !== undefined) {
+        data.recurrencePattern = normalizeRecurrencePattern(input.recurrencePattern ?? undefined)
+      }
+      if (input.recurrenceEndDate !== undefined) {
+        data.recurrenceEndDate = normalizeRecurrenceEndDate(input.recurrenceEndDate)
+      }
+    }
+
+    // Story 4.6 (AC 21-22): block completion via updateTask when open
+    // dependencies exist. Only fires on status transition TO COMPLETED.
+    if (input.status === 'COMPLETED' && currentTask.status !== 'COMPLETED') {
+      await this.assertDependenciesResolved(tenantId, userId, id)
+    }
+
     const result = await this.prisma.task.updateMany({
       where: { id, tenantId, deletedAt: null },
       data,
@@ -708,6 +787,69 @@ export class TasksService {
     return updatedTask
   }
 
+  /**
+   * Story 4.6 (AC 21): blocking validation helper. Checks that all open
+   * dependencies of the given task are resolved before allowing completion.
+   * Called from both `complete()` and `update()` — the two independent
+   * completion paths (AC 22).
+   *
+   * No new constructor dependency — direct prisma query, matching the
+   * existing pattern for task-level checks (Trap T8 avoidance).
+   */
+  private async assertDependenciesResolved(
+    tenantId: string,
+    userId: string,
+    taskId: string,
+  ): Promise<void> {
+    const openDependencies = await this.prisma.taskDependency.findMany({
+      where: {
+        tenantId,
+        taskId,
+        dependsOnTask: {
+          deletedAt: null,
+          status: { in: OPEN_STATUSES },
+        },
+      },
+      select: {
+        dependsOnTask: {
+          select: { id: true, title: true, assignedTo: true },
+        },
+      },
+    })
+
+    if (openDependencies.length === 0) return
+
+    // AC 23: visibility filter to only name blockers the caller can see
+    const visibilityFilter = await resolveVisibilityFilter(userId, tenantId)
+
+    const visibleBlockers: string[] = []
+    let hiddenCount = 0
+
+    for (const dep of openDependencies) {
+      const blocker = dep.dependsOnTask
+      let canSee = true
+      if (visibilityFilter !== undefined) {
+        if (typeof visibilityFilter === 'string') {
+          canSee = blocker.assignedTo === visibilityFilter
+        } else {
+          canSee = (visibilityFilter as { in: string[] }).in.includes(blocker.assignedTo)
+        }
+      }
+      if (canSee && visibleBlockers.length < 3) {
+        visibleBlockers.push(`"${blocker.title}"`)
+      } else if (!canSee) {
+        hiddenCount++
+      }
+    }
+
+    const parts = [...visibleBlockers]
+    if (hiddenCount > 0) {
+      parts.push(`${hiddenCount} more`)
+    }
+
+    throw new ConflictException(`Cannot complete: blocked by ${parts.join(', ')}`)
+  }
+
   async complete(
     tenantId: string,
     userId: string,
@@ -722,6 +864,12 @@ export class TasksService {
     if (currentTask.status === 'COMPLETED') {
       return currentTask
     }
+
+    // Story 4.6 (AC 21-22): block completion when open dependencies exist.
+    // Placed AFTER the idempotent short-circuit so re-completing an
+    // already-completed task remains idempotent even if it has since
+    // acquired blockers.
+    await this.assertDependenciesResolved(tenantId, userId, id)
 
     const result = await this.prisma.task.updateMany({
       where: { id, tenantId, deletedAt: null },

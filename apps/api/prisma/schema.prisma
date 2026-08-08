@@ -76,6 +76,16 @@ enum TaskPriority {
   URGENT
 }
 
+// Story 4.6: recurrence patterns for recurring tasks (AC 3). CUSTOM is
+// deferred — no field carries the custom rule and no rrule library is
+// installed (AC 89).
+enum RecurrencePattern {
+  DAILY
+  WEEKLY
+  MONTHLY
+  YEARLY
+}
+
 // External calendar providers (Story 4.3). Both ship — Google Calendar and
 // Outlook Calendar are provider-agnostic behind CalendarProviderPort.
 enum CalendarProvider {
@@ -130,6 +140,7 @@ model Tenant {
   calendarConnections      CalendarConnection[]
   taskCalendarEvents       TaskCalendarEvent[]
   timeEntries              TimeEntry[]
+  taskDependencies         TaskDependency[]
 }
 
 /// Tenant-scoped user model with authentication support.
@@ -1091,10 +1102,23 @@ model Task {
   updatedBy   String       @default("system")
   deletedAt   DateTime?
 
+  // Story 4.6: recurrence fields (AC 4) — all nullable or defaulted so existing rows have no value.
+  isRecurring       Boolean            @default(false)
+  recurrencePattern RecurrencePattern?
+  recurrenceEndDate DateTime?
+  parentTaskId      String?
+
   tenant   Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   assignee User     @relation("TaskAssignee", fields: [assignedTo], references: [id], onDelete: Cascade)
   contact  Contact? @relation(fields: [contactId], references: [id], onDelete: Cascade)
   deal     Deal?    @relation(fields: [dealId], references: [id], onDelete: Cascade)
+
+  // Story 4.6: self-relations (AC 5) — three distinct relation names.
+  parentTask  Task?  @relation("TaskRecurrence", fields: [parentTaskId], references: [id], onDelete: SetNull)
+  occurrences Task[] @relation("TaskRecurrence")
+
+  dependencies TaskDependency[] @relation("TaskDependencyDependent") // edges where THIS task is blocked
+  dependents   TaskDependency[] @relation("TaskDependencyBlocker")   // edges where THIS task blocks others
 
   calendarEvents TaskCalendarEvent[]
   timeEntries    TimeEntry[]
@@ -1105,6 +1129,9 @@ model Task {
   @@index([tenantId, dueDate])
   @@index([tenantId, contactId])
   @@index([tenantId, dealId])
+  // Story 4.6: occurrence lookup + sweep template scan (AC 4)
+  @@index([tenantId, parentTaskId])
+  @@index([tenantId, isRecurring])
 }
 
 /// Tenant-global task template catalogue (Story 4.1).
@@ -1129,6 +1156,30 @@ model TaskTemplate {
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
+}
+
+/// Story 4.6: a directed dependency edge — `taskId` is BLOCKED BY
+/// `dependsOnTaskId`.
+/// Like TaskCalendarEvent and Activity, this is a derived link row: it is
+/// created and hard-deleted, never updated, so it deliberately carries NO
+/// `deletedAt`, `updatedAt` or `updatedBy`. That is what makes the @@unique
+/// below safe — the DealStage soft-delete + @@unique trap only bites a
+/// soft-deleting model.
+model TaskDependency {
+  id               String   @id @default(uuid())
+  tenantId         String
+  taskId           String
+  dependsOnTaskId  String
+  createdAt        DateTime @default(now())
+  createdBy        String   @default("system")
+
+  tenant        Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  task          Task   @relation("TaskDependencyDependent", fields: [taskId], references: [id], onDelete: Cascade)
+  dependsOnTask Task   @relation("TaskDependencyBlocker", fields: [dependsOnTaskId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, taskId, dependsOnTaskId])
+  @@index([tenantId])
+  @@index([tenantId, dependsOnTaskId])
 }
 
 // =============================================================================

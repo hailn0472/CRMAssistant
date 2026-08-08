@@ -31,6 +31,7 @@ const TASK_PERMISSIONS: Record<string, { resource: string; action: string }[]> =
 const TASK_FIELDS = `
   id title description status priority dueDate assignedTo contactId dealId completedAt
   createdAt updatedAt createdBy
+  isRecurring recurrencePattern recurrenceEndDate parentTaskId
   assignee { id firstName lastName email }
   contact { id firstName lastName email }
   deal { id title }
@@ -79,10 +80,10 @@ describe('Task CRUD with templates and assignment (integration)', () => {
     await container.stop()
   })
 
-  // AC 89 — Task/TaskTemplate first (children before parents).
+  // AC 89 — TaskDependency first (children before parents), then Task/TaskTemplate.
   afterEach(async () => {
     await prisma.$executeRawUnsafe(
-      'TRUNCATE TABLE "Task", "TaskTemplate", "Deal", "DealStage", "Contact", "User", "UserRole", "Role", "Permission", "RolePermission", "Team", "Tenant", "AuditLog" RESTART IDENTITY CASCADE',
+      'TRUNCATE TABLE "TaskDependency", "Task", "TaskTemplate", "Deal", "DealStage", "Contact", "User", "UserRole", "Role", "Permission", "RolePermission", "Team", "Tenant", "AuditLog" RESTART IDENTITY CASCADE',
     )
   })
 

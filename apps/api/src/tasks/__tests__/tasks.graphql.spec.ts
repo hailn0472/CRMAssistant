@@ -10,6 +10,8 @@ import { TASK_PRIORITIES, TASK_STATUSES } from '../task-due-status'
 import type { TasksService } from '../tasks.service'
 import type { TaskTemplatesService } from '../task-templates.service'
 import type { TaskPubSubService } from '../task-pubsub.service'
+import type { TaskDependenciesService } from '../task-dependencies.service'
+import type { TaskRecurrenceService } from '../task-recurrence.service'
 
 const mockTask = {
   id: 'task-1',
@@ -27,6 +29,11 @@ const mockTask = {
   updatedAt: new Date('2026-08-01T00:00:00.000Z'),
   createdBy: 'user-1',
   updatedBy: 'user-1',
+  // Story 4.6: recurrence fields
+  isRecurring: false,
+  recurrencePattern: null,
+  recurrenceEndDate: null,
+  parentTaskId: null,
   assignee: { id: 'user-1', firstName: 'Test', lastName: 'User', email: 't@local', avatar: null },
   contact: null,
   deal: null,
@@ -170,7 +177,9 @@ describe('tasks.graphql', () => {
     const service = makeTasksService()
     const templates = makeTemplatesService()
     const pubsub = makePubSub()
-    expect(() => registerTasksGraphql(service, templates, pubsub)).not.toThrow()
+    const deps = { getDependencyView: jest.fn() } as unknown as TaskDependenciesService
+    const recur = { runRecurringTaskGeneration: jest.fn() } as unknown as TaskRecurrenceService
+    expect(() => registerTasksGraphql(service, templates, pubsub, deps, recur)).not.toThrow()
   })
 
   it('can represent authentication failures in the task resolvers', () => {

@@ -84,6 +84,13 @@ export const MUTATION_AUDIT_MAP: Record<string, { action: string; entity: string
   updateTaskTemplate: { action: 'UPDATE', entity: 'TASK_TEMPLATE' },
   deleteTaskTemplate: { action: 'DELETE', entity: 'TASK_TEMPLATE' },
 
+  // Task dependency mutations (Story 4.6). Decorative for GraphQL — the
+  // interceptor never fires — but kept for documentation parity; the services
+  // write the rows themselves (AC 16f, AC 17).
+  addTaskDependency: { action: 'CREATE', entity: 'TASK_DEPENDENCY' },
+  removeTaskDependency: { action: 'DELETE', entity: 'TASK_DEPENDENCY' },
+  runRecurringTaskGeneration: { action: 'CREATE', entity: 'TASK' },
+
   // Activity-log preferences (Story 4.2). Decorative for GraphQL — the
   // interceptor never fires for mutations in this repo (AC 42) — but kept for
   // consistency; the service writes the row itself (AC 41).

@@ -1,6 +1,8 @@
 import {
   TASK_DUE_STATUSES,
   TASK_PRIORITIES,
+  TASK_RECURRENCE_PATTERNS,
+  TASK_RECURRENCE_PATTERN_LABELS,
   TASK_STATUSES,
   formatDueDate,
   isTaskPriority,
@@ -26,6 +28,21 @@ describe('task-format tuples and guards (mirrors apps/api task-due-status)', () 
   it('exports TASK_DUE_STATUSES with exactly the five values of AC 3', () => {
     expect(TASK_DUE_STATUSES).toEqual(['NO_DUE_DATE', 'OVERDUE', 'DUE_TODAY', 'UPCOMING', 'DONE'])
     expect(TASK_DUE_STATUSES).toHaveLength(5)
+  })
+
+  // Story 4.6: recurrence tuple and labels (AC 10)
+  it('exports TASK_RECURRENCE_PATTERNS with exactly four values', () => {
+    expect(TASK_RECURRENCE_PATTERNS).toEqual(['DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY'])
+    expect(TASK_RECURRENCE_PATTERNS).toHaveLength(4)
+  })
+
+  it('exports TASK_RECURRENCE_PATTERN_LABELS for every pattern', () => {
+    expect(TASK_RECURRENCE_PATTERN_LABELS).toEqual({
+      DAILY: 'Daily',
+      WEEKLY: 'Weekly',
+      MONTHLY: 'Monthly',
+      YEARLY: 'Yearly',
+    })
   })
 
   it('isTaskStatus accepts every member and rejects everything else', () => {

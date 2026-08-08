@@ -106,7 +106,7 @@ describe('Calendar sync (integration)', () => {
   }
 
   const TRUNCATE_TABLES =
-    'TRUNCATE TABLE "TaskCalendarEvent", "CalendarConnection", "UserActivityLogPreference", "Activity", "Task", "Deal", "DealStage", "Contact", "User", "UserRole", "Role", "Permission", "RolePermission", "Team", "Tenant", "AuditLog" RESTART IDENTITY CASCADE'
+    'TRUNCATE TABLE "TaskCalendarEvent", "CalendarConnection", "UserActivityLogPreference", "Activity", "TaskDependency", "Task", "Deal", "DealStage", "Contact", "User", "UserRole", "Role", "Permission", "RolePermission", "Team", "Tenant", "AuditLog" RESTART IDENTITY CASCADE'
 
   beforeAll(async () => {
     container = await new PostgreSqlContainer('postgres:15-alpine').start()

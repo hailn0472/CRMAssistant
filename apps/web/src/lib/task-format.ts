@@ -22,6 +22,18 @@ export type TaskStatus = (typeof TASK_STATUSES)[number]
 export const TASK_PRIORITIES = ['LOW', 'MEDIUM', 'HIGH', 'URGENT'] as const
 export type TaskPriority = (typeof TASK_PRIORITIES)[number]
 
+// Story 4.6 (AC 10): recurrence pattern vocabulary — frontend twin of
+// apps/api/src/tasks/task-due-status.ts. Keep both files in sync.
+export const TASK_RECURRENCE_PATTERNS = ['DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY'] as const
+export type RecurrencePattern = (typeof TASK_RECURRENCE_PATTERNS)[number]
+
+export const TASK_RECURRENCE_PATTERN_LABELS: Record<RecurrencePattern, string> = {
+  DAILY: 'Daily',
+  WEEKLY: 'Weekly',
+  MONTHLY: 'Monthly',
+  YEARLY: 'Yearly',
+}
+
 export const TASK_DUE_STATUSES = [
   'NO_DUE_DATE',
   'OVERDUE',

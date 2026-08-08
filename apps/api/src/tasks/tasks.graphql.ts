@@ -1,8 +1,11 @@
-import { UnauthorizedException } from '@nestjs/common'
+import { Logger } from '@nestjs/common'
+import { UnauthorizedException, ForbiddenException } from '@nestjs/common'
 
 /* eslint-disable @typescript-eslint/explicit-function-return-type, @typescript-eslint/explicit-module-boundary-types */
 
 import { builder } from '../graphql/schema.builder'
+
+const logger = new Logger('TasksGraphql')
 import { requirePermission } from '../common/guards/permission-check'
 import { resolveVisibilityFilter } from '../common/guards/visibility-check'
 import { TASK_PRIORITIES, TASK_STATUSES } from './task-due-status'
@@ -13,6 +16,8 @@ import type { TaskPriority, TaskStatus } from './task-due-status'
 import type { TasksService } from './tasks.service'
 import type { TaskTemplatesService } from './task-templates.service'
 import type { TaskPubSubService } from './task-pubsub.service'
+import type { TaskDependenciesService } from './task-dependencies.service'
+import type { TaskRecurrenceService } from './task-recurrence.service'
 import type { GraphqlContext } from '../graphql/graphql-context'
 import type { JwtPayload } from '../auth/strategies/jwt.strategy'
 
@@ -25,6 +30,12 @@ const TaskPriorityRef = builder.enumType('TaskPriority', { values: TASK_PRIORITI
 const TaskSortFieldRef = builder.enumType('TaskSortField', { values: TASK_SORT_FIELDS })
 const TaskSortDirectionRef = builder.enumType('TaskSortDirection', {
   values: ['ASC', 'DESC'] as const,
+})
+
+// Story 4.6 (AC 43): RecurrencePattern enum
+import { TASK_RECURRENCE_PATTERNS } from './task-due-status'
+const RecurrencePatternRef = builder.enumType('RecurrencePattern', {
+  values: TASK_RECURRENCE_PATTERNS,
 })
 
 // ─── Nested refs ──────────────────────────────────────────
@@ -100,6 +111,11 @@ export type TaskGraphqlShape = {
   createdAt: Date
   updatedAt: Date
   createdBy: string
+  // Story 4.6 (AC 44): recurrence fields
+  isRecurring: boolean
+  recurrencePattern: string | null
+  recurrenceEndDate: Date | null
+  parentTaskId: string | null
   assignee?: AssigneeShape | null
   contact?: ContactShape | null
   deal?: DealShape | null
@@ -153,6 +169,26 @@ TaskRef.implement({
       type: DealRef,
       nullable: true,
       resolve: (task) => ('deal' in task && task.deal ? (task.deal as unknown as DealShape) : null),
+    }),
+    // Story 4.6 (AC 44): recurrence fields on Task ref
+    isRecurring: t.boolean({
+      resolve: (task) => ('isRecurring' in task ? Boolean(task.isRecurring) : false),
+    }),
+    recurrencePattern: t.string({
+      nullable: true,
+      resolve: (task) =>
+        'recurrencePattern' in task ? (task.recurrencePattern as string | null) : null,
+    }),
+    recurrenceEndDate: t.string({
+      nullable: true,
+      resolve: (task) =>
+        'recurrenceEndDate' in task
+          ? (task.recurrenceEndDate as Date | null)?.toISOString() ?? null
+          : null,
+    }),
+    parentTaskId: t.string({
+      nullable: true,
+      resolve: (task) => ('parentTaskId' in task ? (task.parentTaskId as string | null) : null),
     }),
   }),
 })
@@ -241,6 +277,74 @@ const TaskTemplateConnectionRef = builder
     }),
   })
 
+// ─── TaskDependency Types (Story 4.6, AC 39-40) ──────────
+
+type DependencyNodeShape = {
+  dependencyId: string
+  taskId: string
+  status: string
+  restricted: boolean
+  title: string | null
+  priority: string | null
+  dueDate: string | null
+  assigneeName: string | null
+}
+
+const TaskDependencyNodeRef = builder.objectRef<DependencyNodeShape>('TaskDependencyNode')
+
+TaskDependencyNodeRef.implement({
+  fields: (t) => ({
+    dependencyId: t.exposeID('dependencyId'),
+    taskId: t.exposeID('taskId'),
+    status: t.field({ type: TaskStatusRef, resolve: (node) => node.status as TaskStatus }),
+    restricted: t.exposeBoolean('restricted'),
+    title: t.string({
+      nullable: true,
+      resolve: (node) => node.title ?? null,
+    }),
+    priority: t.string({
+      nullable: true,
+      resolve: (node) => node.priority ?? null,
+    }),
+    dueDate: t.string({
+      nullable: true,
+      resolve: (node) => node.dueDate ?? null,
+    }),
+    assigneeName: t.string({
+      nullable: true,
+      resolve: (node) => node.assigneeName ?? null,
+    }),
+  }),
+})
+
+type DependencyViewShape = {
+  blockedBy: DependencyNodeShape[]
+  blocking: DependencyNodeShape[]
+  isBlocked: boolean
+  openBlockerCount: number
+}
+
+const TaskDependencyViewRef = builder.objectRef<DependencyViewShape>('TaskDependencyView')
+
+TaskDependencyViewRef.implement({
+  fields: (t) => ({
+    blockedBy: t.field({ type: [TaskDependencyNodeRef], resolve: (view) => view.blockedBy }),
+    blocking: t.field({ type: [TaskDependencyNodeRef], resolve: (view) => view.blocking }),
+    isBlocked: t.exposeBoolean('isBlocked'),
+    openBlockerCount: t.exposeInt('openBlockerCount'),
+  }),
+})
+
+// Story 4.6 (AC 36): result type for the ADMIN runRecurringTaskGeneration mutation
+const TaskRecurrenceRunResultRef = builder
+  .objectRef<{ generated: number; templatesScanned: number }>('TaskRecurrenceRunResult')
+  .implement({
+    fields: (t) => ({
+      generated: t.exposeInt('generated'),
+      templatesScanned: t.exposeInt('templatesScanned'),
+    }),
+  })
+
 // ─── Input Types ──────────────────────────────────────────
 
 const CreateTaskInputRef = builder.inputType('CreateTaskInput', {
@@ -253,6 +357,10 @@ const CreateTaskInputRef = builder.inputType('CreateTaskInput', {
     assignedTo: t.string(),
     contactId: t.string(),
     dealId: t.string(),
+    // Story 4.6 (AC 43): recurrence fields
+    isRecurring: t.boolean(),
+    recurrencePattern: t.field({ type: RecurrencePatternRef }),
+    recurrenceEndDate: t.string(),
   }),
 })
 
@@ -266,6 +374,10 @@ const UpdateTaskInputRef = builder.inputType('UpdateTaskInput', {
     assignedTo: t.string(),
     contactId: t.string(),
     dealId: t.string(),
+    // Story 4.6 (AC 43): recurrence fields
+    isRecurring: t.boolean(),
+    recurrencePattern: t.field({ type: RecurrencePatternRef }),
+    recurrenceEndDate: t.string(),
   }),
 })
 
@@ -334,6 +446,8 @@ const CreateTaskFromTemplateInputRef = builder.inputType('CreateTaskFromTemplate
 let tasksService: TasksService | undefined
 let taskTemplatesService: TaskTemplatesService | undefined
 let taskPubSub: TaskPubSubService | undefined
+let dependenciesService: TaskDependenciesService | undefined
+let recurrenceService: TaskRecurrenceService | undefined
 
 // Exported so activities.graphql.ts can compose activityFeedStats (AC 11)
 // without closing the ActivitiesModule → TasksModule DI cycle (T8b).
@@ -356,6 +470,21 @@ function getTaskPubSub(): TaskPubSubService {
     throw new Error('TaskPubSubService is not initialized')
   }
   return taskPubSub
+}
+
+// Story 4.6: getters for the new services
+function getDependenciesService(): TaskDependenciesService {
+  if (!dependenciesService) {
+    throw new Error('TaskDependenciesService is not initialized')
+  }
+  return dependenciesService
+}
+
+function getRecurrenceService(): TaskRecurrenceService {
+  if (!recurrenceService) {
+    throw new Error('TaskRecurrenceService is not initialized')
+  }
+  return recurrenceService
 }
 
 function requireUser(context: GraphqlContext): JwtPayload {
@@ -391,6 +520,15 @@ builder.queryFields((t) => ({
     resolve: async (_parent, args, context) => {
       const user = requireUser(context)
       await requirePermission(context, 'TASK', 'READ')
+      // Story 4.6 (AC 33): there is no scheduler in this codebase. The "daily job"
+      // is a lazy sweep fired from the task list — never awaited, never 500s.
+      try {
+        getRecurrenceService()
+          .ensureRecurrenceGeneratedToday(user.tenantId, user.userId, new Date())
+          .catch((err) => logger.error('Lazy recurrence sweep failed', err))
+      } catch {
+        // Service not initialized — first request before onModuleInit
+      }
       return getTasksService().findMany(
         user.tenantId,
         user.userId,
@@ -491,6 +629,22 @@ builder.queryFields((t) => ({
       ) as unknown as TaskTemplateGraphqlShape
     },
   }),
+  // Story 4.6 (AC 41): taskDependencies query
+  taskDependencies: t.field({
+    type: TaskDependencyViewRef,
+    args: { taskId: t.arg.id({ required: true }) },
+    resolve: async (_parent, args, context) => {
+      const user = requireUser(context)
+      await requirePermission(context, 'TASK', 'READ')
+      // Resolve parent task first (visibility oracle)
+      await getTasksService().findOne(user.tenantId, user.userId, String(args.taskId))
+      return getDependenciesService().getDependencyView(
+        user.tenantId,
+        user.userId,
+        String(args.taskId),
+      )
+    },
+  }),
 }))
 
 // ─── Mutations ────────────────────────────────────────────
@@ -517,6 +671,10 @@ builder.mutationFields((t) => ({
         assignedTo: args.input.assignedTo ?? undefined,
         contactId: args.input.contactId ?? undefined,
         dealId: args.input.dealId ?? undefined,
+        // Story 4.6 (AC 43): recurrence fields
+        isRecurring: args.input.isRecurring ?? undefined,
+        recurrencePattern: args.input.recurrencePattern ?? undefined,
+        recurrenceEndDate: args.input.recurrenceEndDate ?? undefined,
       }) as unknown as TaskGraphqlShape
     },
   }),
@@ -538,6 +696,10 @@ builder.mutationFields((t) => ({
         assignedTo: args.input.assignedTo ?? undefined,
         contactId: args.input.contactId ?? undefined,
         dealId: args.input.dealId ?? undefined,
+        // Story 4.6 (AC 43): recurrence fields
+        isRecurring: args.input.isRecurring ?? undefined,
+        recurrencePattern: args.input.recurrencePattern ?? undefined,
+        recurrenceEndDate: args.input.recurrenceEndDate ?? undefined,
       }) as unknown as TaskGraphqlShape
     },
   }),
@@ -645,6 +807,55 @@ builder.mutationFields((t) => ({
       ) as unknown as TaskGraphqlShape
     },
   }),
+  // Story 4.6 (AC 42): addTaskDependency mutation
+  addTaskDependency: t.field({
+    type: TaskDependencyViewRef,
+    args: {
+      taskId: t.arg.id({ required: true }),
+      dependsOnTaskId: t.arg.id({ required: true }),
+    },
+    resolve: async (_parent, args, context) => {
+      const user = requireUser(context)
+      await requirePermission(context, 'TASK', 'UPDATE')
+      return getDependenciesService().addTaskDependency(
+        user.tenantId,
+        user.userId,
+        String(args.taskId),
+        String(args.dependsOnTaskId),
+      )
+    },
+  }),
+  // Story 4.6 (AC 42): removeTaskDependency mutation
+  removeTaskDependency: t.field({
+    type: TaskDependencyViewRef,
+    args: { dependencyId: t.arg.id({ required: true }) },
+    resolve: async (_parent, args, context) => {
+      const user = requireUser(context)
+      await requirePermission(context, 'TASK', 'UPDATE')
+      return getDependenciesService().removeTaskDependency(
+        user.tenantId,
+        user.userId,
+        String(args.dependencyId),
+      )
+    },
+  }),
+  // Story 4.6 (AC 34): ADMIN-gated runRecurringTaskGeneration mutation
+  runRecurringTaskGeneration: t.field({
+    type: TaskRecurrenceRunResultRef,
+    resolve: async (_parent, _args, context) => {
+      const user = requireUser(context)
+      // Story 4.6 (AC 34): local isAdmin helper — copied from
+      // deal-health.graphql.ts:174-180 (not a shared export).
+      if (!user.roles?.includes('ADMIN')) {
+        throw new ForbiddenException('Admin access required')
+      }
+      return getRecurrenceService().runRecurringTaskGeneration(
+        user.tenantId,
+        user.userId,
+        new Date(),
+      )
+    },
+  }),
 }))
 
 // ─── Subscriptions ────────────────────────────────────────
@@ -702,8 +913,12 @@ export function registerTasksGraphql(
   service: TasksService,
   templatesService: TaskTemplatesService,
   pubSubService: TaskPubSubService,
+  depsService: TaskDependenciesService,
+  recurService: TaskRecurrenceService,
 ): void {
   tasksService = service
   taskTemplatesService = templatesService
   taskPubSub = pubSubService
+  dependenciesService = depsService
+  recurrenceService = recurService
 }

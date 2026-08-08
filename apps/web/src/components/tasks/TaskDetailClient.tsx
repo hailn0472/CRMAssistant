@@ -5,18 +5,21 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import toast from 'react-hot-toast'
 import { Check } from 'lucide-react'
+import { useQuery } from '@tanstack/react-query'
 
-import { deleteTask, completeTask } from '@/services/task.service'
+import { deleteTask, completeTask, getTaskDependencies } from '@/services/task.service'
 import { usePermission } from '@/hooks/usePermission'
 import { AssigneePickerDialog } from './AssigneePickerDialog'
 import { TaskCalendarSyncBadge } from './TaskCalendarSyncBadge'
 import { TaskFormDrawer } from './TaskFormDrawer'
 import { TaskTimerWidget } from './TaskTimerWidget'
 import { TimeEntryList } from './TimeEntryList'
+import { TaskDependenciesSection } from './TaskDependenciesSection'
 import {
   TASK_PRIORITY_LABELS,
   TASK_STATUS_DOT_COLOR,
   TASK_STATUS_LABELS,
+  TASK_RECURRENCE_PATTERN_LABELS,
   formatDueDate,
 } from '@/lib/task-format'
 import { cn } from '@/lib/utils'
@@ -81,6 +84,18 @@ export function TaskDetailClient({ task }: TaskDetailClientProps): React.JSX.Ele
   const [assignOpen, setAssignOpen] = useState(false)
   const [editOpen, setEditOpen] = useState(false)
 
+  // Story 4.6 (AC 62-63): fetch dependency view to determine blocked state
+  const { data: depView } = useQuery({
+    queryKey: ['taskDependencies', task.id],
+    queryFn: () => getTaskDependencies(task.id),
+  })
+
+  const isBlocked = depView?.isBlocked ?? false
+  const openBlockerNames = depView?.blockedBy
+    ?.filter((n) => n.status !== 'COMPLETED')
+    .map((n) => n.title)
+    .filter(Boolean) as string[] | undefined
+
   const canUpdate = usePermission('TASK', 'UPDATE')
   const canAssign = usePermission('TASK', 'ASSIGN')
   const canDelete = usePermission('TASK', 'DELETE')
@@ -97,8 +112,9 @@ export function TaskDetailClient({ task }: TaskDetailClientProps): React.JSX.Ele
       await completeTask(task.id)
       toast.success('Task completed and removed from your open list')
       router.refresh()
-    } catch {
-      toast.error('Failed to complete task')
+    } catch (error) {
+      // Story 4.6 (AC 61): surface the server error message
+      toast.error(error instanceof Error ? error.message : 'Failed to complete task')
     } finally {
       setCompleting(false)
     }
@@ -134,9 +150,12 @@ export function TaskDetailClient({ task }: TaskDetailClientProps): React.JSX.Ele
             <button
               type="button"
               onClick={handleComplete}
-              disabled={completing}
+              disabled={completing || isBlocked}
               aria-label="Mark task complete"
-              title="Mark task complete"
+              aria-describedby={isBlocked ? 'blocked-reason' : undefined}
+              title={
+                isBlocked ? 'Cannot complete — task has open dependencies' : 'Mark task complete'
+              }
               className="mt-[5px] flex h-[22px] w-[22px] flex-none items-center justify-center rounded-[6px] border-[1.5px] border-[#d8d8e0] bg-white text-white text-[12px] transition-colors hover:border-[#1b1b1f] disabled:opacity-50"
             />
           ) : (
@@ -185,6 +204,12 @@ export function TaskDetailClient({ task }: TaskDetailClientProps): React.JSX.Ele
                   Overdue by {overdueDays} {overdueDays === 1 ? 'day' : 'days'}
                 </span>
               ) : null}
+              {/* Story 4.6 (AC 62-63): blocked badge */}
+              {isBlocked && !isClosed ? (
+                <span className="inline-flex items-center rounded-full border border-[#f0e2c0] bg-[#fdf6e7] px-2.5 py-[3px] text-[11.5px] font-semibold text-[#92640d]">
+                  Blocked
+                </span>
+              ) : null}
               <span className="text-[12.5px] text-[#8c8c96]">
                 {task.dueDate ? `Due ${formatDueDate(task.dueDate)}` : 'No due date'}
                 {task.assignee
@@ -192,6 +217,15 @@ export function TaskDetailClient({ task }: TaskDetailClientProps): React.JSX.Ele
                   : ' · Unassigned'}
               </span>
             </div>
+            {/* Story 4.6 (AC 62-63): inline blocked reason */}
+            {isBlocked && !isClosed ? (
+              <p id="blocked-reason" className="m-0 text-[12px] text-[#92640d]">
+                Complete disabled — blocked by:{' '}
+                {openBlockerNames && openBlockerNames.length > 0
+                  ? openBlockerNames.join(', ')
+                  : 'open dependencies'}
+              </p>
+            ) : null}
           </div>
         </div>
 
@@ -233,6 +267,9 @@ export function TaskDetailClient({ task }: TaskDetailClientProps): React.JSX.Ele
             )}
           </section>
 
+          {/* Story 4.6 (AC 52): Dependencies section between Description and Time entries */}
+          <TaskDependenciesSection taskId={task.id} />
+
           {/* Story 4.5 (AC 38): the entries list sits between Description and Activity. */}
           <TimeEntryList taskId={task.id} />
 
@@ -272,6 +309,26 @@ export function TaskDetailClient({ task }: TaskDetailClientProps): React.JSX.Ele
             </DetailRow>
             {task.completedAt ? (
               <DetailRow label="Completed at">{formatDueDate(task.completedAt)}</DetailRow>
+            ) : null}
+            {/* Story 4.6 (AC 68): recurrence info */}
+            {task.isRecurring && task.recurrencePattern ? (
+              <DetailRow label="Repeats">
+                {TASK_RECURRENCE_PATTERN_LABELS[
+                  task.recurrencePattern as keyof typeof TASK_RECURRENCE_PATTERN_LABELS
+                ] ?? task.recurrencePattern}
+                {task.recurrenceEndDate ? ` until ${formatDueDate(task.recurrenceEndDate)}` : ''}
+                <span className="block text-[11px] font-normal text-[#8c8c96]">All times UTC</span>
+              </DetailRow>
+            ) : null}
+            {task.parentTaskId ? (
+              <DetailRow label="Parent task">
+                <a
+                  href={`/tasks/${task.parentTaskId}`}
+                  className="text-[13px] text-[#4338ca] hover:underline"
+                >
+                  View parent
+                </a>
+              </DetailRow>
             ) : null}
           </section>
 

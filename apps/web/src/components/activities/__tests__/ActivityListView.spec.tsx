@@ -42,6 +42,11 @@ function makeTask(overrides: Partial<Task> = {}): Task {
     createdBy: 'user-1',
     createdAt: '2026-08-01T00:00:00.000Z',
     updatedAt: '2026-08-01T00:00:00.000Z',
+    // Story 4.6: recurrence fields
+    isRecurring: false,
+    recurrencePattern: null,
+    recurrenceEndDate: null,
+    parentTaskId: null,
     assignee: { id: 'user-1', firstName: 'Ada', lastName: 'Lovelace', email: 'ada@example.com' },
     contact: { id: 'contact-1', firstName: 'Alice', lastName: 'One', email: 'a@example.com' },
     deal: null,

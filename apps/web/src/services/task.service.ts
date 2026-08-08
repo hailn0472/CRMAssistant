@@ -37,9 +37,33 @@ export type Task = {
   createdBy: string
   createdAt: string
   updatedAt: string
+  // Story 4.6: recurrence fields (AC 50)
+  isRecurring: boolean
+  recurrencePattern: string | null
+  recurrenceEndDate: string | null
+  parentTaskId: string | null
   assignee: TaskAssignee | null
   contact: TaskContact | null
   deal: TaskDeal | null
+}
+
+// Story 4.6: dependency types (AC 49)
+export type TaskDependencyNode = {
+  dependencyId: string
+  taskId: string
+  status: TaskStatus
+  restricted: boolean
+  title: string | null
+  priority: string | null
+  dueDate: string | null
+  assigneeName: string | null
+}
+
+export type TaskDependencyView = {
+  blockedBy: TaskDependencyNode[]
+  blocking: TaskDependencyNode[]
+  isBlocked: boolean
+  openBlockerCount: number
 }
 
 export type TaskConnection = {
@@ -76,6 +100,10 @@ export type TaskFormData = {
   assignedTo?: string
   contactId?: string
   dealId?: string
+  // Story 4.6: recurrence fields
+  isRecurring?: boolean
+  recurrencePattern?: string
+  recurrenceEndDate?: string | null
 }
 
 export type TaskFilter = {
@@ -107,6 +135,8 @@ export type TaskSort = { field: TaskSortField; direction: TaskSortDirection }
 
 // Exported so activity.service.ts can build ON_TASK_CHANGED_SUBSCRIPTION from
 // the SAME field list (Story 4.4, AC 36) — two copies would silently drift.
+// Story 4.6 (AC 50): +4 fields for recurrence — MUST stay in sync with
+// the Task TypeScript type and the server's taskListSelect.
 export const TASK_FIELDS = `
   id
   title
@@ -121,6 +151,10 @@ export const TASK_FIELDS = `
   createdBy
   createdAt
   updatedAt
+  isRecurring
+  recurrencePattern
+  recurrenceEndDate
+  parentTaskId
   assignee { id firstName lastName email avatar }
   contact { id firstName lastName email }
   deal { id title }
@@ -343,3 +377,63 @@ export const ON_TASK_CHANGED_SUBSCRIPTION = `subscription OnTaskChanged {
     ${TASK_FIELDS}
   }
 }`
+
+// Story 4.6: dependency documents (AC 49)
+export const TASK_DEPENDENCY_FIELDS = `
+  dependencyId
+  taskId
+  status
+  restricted
+  title
+  priority
+  dueDate
+  assigneeName
+`
+
+export async function getTaskDependencies(taskId: string): Promise<TaskDependencyView> {
+  const data = await graphqlRequest<{ taskDependencies: TaskDependencyView }>(
+    `query TaskDependencies($taskId: ID!) {
+      taskDependencies(taskId: $taskId) {
+        blockedBy { ${TASK_DEPENDENCY_FIELDS} }
+        blocking { ${TASK_DEPENDENCY_FIELDS} }
+        isBlocked
+        openBlockerCount
+      }
+    }`,
+    { taskId },
+  )
+  return data.taskDependencies
+}
+
+export async function addTaskDependency(
+  taskId: string,
+  dependsOnTaskId: string,
+): Promise<TaskDependencyView> {
+  const data = await graphqlRequest<{ addTaskDependency: TaskDependencyView }>(
+    `mutation AddTaskDependency($taskId: ID!, $dependsOnTaskId: ID!) {
+      addTaskDependency(taskId: $taskId, dependsOnTaskId: $dependsOnTaskId) {
+        blockedBy { ${TASK_DEPENDENCY_FIELDS} }
+        blocking { ${TASK_DEPENDENCY_FIELDS} }
+        isBlocked
+        openBlockerCount
+      }
+    }`,
+    { taskId, dependsOnTaskId },
+  )
+  return data.addTaskDependency
+}
+
+export async function removeTaskDependency(dependencyId: string): Promise<TaskDependencyView> {
+  const data = await graphqlRequest<{ removeTaskDependency: TaskDependencyView }>(
+    `mutation RemoveTaskDependency($dependencyId: ID!) {
+      removeTaskDependency(dependencyId: $dependencyId) {
+        blockedBy { ${TASK_DEPENDENCY_FIELDS} }
+        blocking { ${TASK_DEPENDENCY_FIELDS} }
+        isBlocked
+        openBlockerCount
+      }
+    }`,
+    { dependencyId },
+  )
+  return data.removeTaskDependency
+}

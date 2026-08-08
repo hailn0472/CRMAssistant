@@ -42,6 +42,9 @@ type MockPrisma = {
     create: jest.Mock
     updateMany: jest.Mock
   }
+  taskDependency: {
+    findMany: jest.Mock
+  }
   $transaction: jest.Mock
 }
 
@@ -65,6 +68,11 @@ function makeTask(overrides: Partial<TaskListItem> = {}): TaskListItem {
     updatedAt: new Date('2026-08-01T00:00:00.000Z'),
     createdBy: USER,
     updatedBy: USER,
+    // Story 4.6: recurrence fields (AC 44)
+    isRecurring: false,
+    recurrencePattern: null,
+    recurrenceEndDate: null,
+    parentTaskId: null,
     assignee: { id: USER, firstName: 'Test', lastName: 'User', email: 'test@local', avatar: null },
     contact: null,
     deal: null,
@@ -89,6 +97,9 @@ function buildPrismaMock(): MockPrisma {
       count: jest.fn(),
       create: jest.fn(),
       updateMany: jest.fn(),
+    },
+    taskDependency: {
+      findMany: jest.fn().mockResolvedValue([]),
     },
     $transaction: jest.fn((cb: (tx: unknown) => unknown) => cb({})),
   }
@@ -992,6 +1003,50 @@ describe('TasksService', () => {
       prisma.task.updateMany.mockResolvedValue({ count: 0 })
 
       await expect(service.complete(TENANT, USER, 'task-1')).rejects.toThrow('Task not found')
+    })
+
+    // Story 4.6 (AC 21-22): blocking validation tests
+    it('allows completion when there are no open dependencies', async () => {
+      const { service } = makeService(prisma)
+      prisma.task.findFirst
+        .mockResolvedValueOnce(makeTask())
+        .mockResolvedValueOnce(makeTask({ status: 'COMPLETED', completedAt: new Date() }))
+      prisma.task.updateMany.mockResolvedValue({ count: 1 })
+      prisma.taskDependency.findMany.mockResolvedValue([])
+
+      await service.complete(TENANT, USER, 'task-1')
+
+      expect(prisma.task.updateMany).toHaveBeenCalled()
+    })
+
+    it('blocks completion when there are open dependencies', async () => {
+      const { service } = makeService(prisma)
+      prisma.task.findFirst.mockResolvedValue(makeTask())
+      prisma.taskDependency.findMany.mockResolvedValue([
+        {
+          dependsOnTask: {
+            id: 'blocker-1',
+            title: 'Send quote',
+            assignedTo: USER,
+          },
+        },
+      ])
+
+      await expect(service.complete(TENANT, USER, 'task-1')).rejects.toThrow(
+        'Cannot complete: blocked by "Send quote"',
+      )
+    })
+
+    it('still allows completing an already-completed task even with blockers (idempotent)', async () => {
+      const { service } = makeService(prisma)
+      prisma.task.findFirst.mockResolvedValue(
+        makeTask({ status: 'COMPLETED', completedAt: new Date() }),
+      )
+      // Should NOT even query dependencies for an already-completed task
+      const result = await service.complete(TENANT, USER, 'task-1')
+
+      expect(result.status).toBe('COMPLETED')
+      expect(prisma.taskDependency.findMany).not.toHaveBeenCalled()
     })
   })
 

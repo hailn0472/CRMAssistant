@@ -76,6 +76,11 @@ const mockTask: Task = {
   createdBy: 'user-1',
   createdAt: '2026-08-01T00:00:00.000Z',
   updatedAt: '2026-08-01T00:00:00.000Z',
+  // Story 4.6: recurrence fields
+  isRecurring: false,
+  recurrencePattern: null,
+  recurrenceEndDate: null,
+  parentTaskId: null,
   assignee: {
     id: 'user-1',
     firstName: 'Ada',
