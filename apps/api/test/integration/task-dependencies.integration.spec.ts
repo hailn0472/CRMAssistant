@@ -17,6 +17,12 @@ const DEPENDENCY_FIELDS = `
   dependencyId taskId status restricted title priority dueDate assigneeName
 `
 
+interface GraphQLResponse {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  data?: any
+  errors?: Array<{ message: string }>
+}
+
 describe('Task dependencies and recurring tasks (integration)', () => {
   let prisma: PrismaClient
   let container: StartedPostgreSqlContainer
@@ -109,6 +115,7 @@ describe('Task dependencies and recurring tasks (integration)', () => {
     email: string,
     firstName: string,
     lastName: string,
+    roles: string[] = ['SALES_MANAGER'],
   ): Promise<{ userId: string; token: string }> {
     const user = await prisma.user.create({
       data: {
@@ -126,7 +133,7 @@ describe('Task dependencies and recurring tasks (integration)', () => {
       userId: user.id,
       tenantId,
       email,
-      roles: ['SALES_MANAGER'],
+      roles,
     })
 
     return { userId: user.id, token }
@@ -153,12 +160,12 @@ describe('Task dependencies and recurring tasks (integration)', () => {
     token: string,
     query: string,
     variables: Record<string, unknown> = {},
-  ): Promise<Record<string, unknown>> {
+  ): Promise<GraphQLResponse> {
     const res = await request(app.getHttpServer())
       .post('/graphql')
       .set('Authorization', `Bearer ${token}`)
       .send({ query, variables })
-    return res.body
+    return res.body as GraphQLResponse
   }
 
   // ─── Test cases ───────────────────────────────────────────────────────
@@ -264,7 +271,7 @@ describe('Task dependencies and recurring tasks (integration)', () => {
       )
 
       expect(result.errors).toBeDefined()
-      expect(result.errors[0].message).toContain('cannot depend on itself')
+      expect(result.errors?.[0]?.message).toContain('cannot depend on itself')
     })
 
     it('rejects cycle', async () => {
@@ -299,7 +306,7 @@ describe('Task dependencies and recurring tasks (integration)', () => {
       )
 
       expect(result.errors).toBeDefined()
-      expect(result.errors[0].message).toContain('cycle')
+      expect(result.errors?.[0]?.message).toContain('cycle')
     })
 
     it('blocks completion when dependencies are open', async () => {
@@ -334,7 +341,7 @@ describe('Task dependencies and recurring tasks (integration)', () => {
       )
 
       expect(result.errors).toBeDefined()
-      expect(result.errors[0].message).toContain('Cannot complete')
+      expect(result.errors?.[0]?.message).toContain('Cannot complete')
     })
 
     it('allows completion after blocker is completed', async () => {
@@ -390,7 +397,14 @@ describe('Task dependencies and recurring tasks (integration)', () => {
       // ADMIN role needed for the mutation
       const adminRoleId = await createRole(tenant.id, 'ADMIN', 'ALL')
       await seedPermissions(adminRoleId)
-      const { token } = await createUser(tenant.id, adminRoleId, 'admin@test.com', 'Admin', 'User')
+      const { token } = await createUser(
+        tenant.id,
+        adminRoleId,
+        'admin@test.com',
+        'Admin',
+        'User',
+        ['ADMIN'],
+      )
       const userId = (await prisma.user.findFirst({ where: { tenantId: tenant.id } }))!.id
 
       // Create a recurring template
@@ -431,7 +445,14 @@ describe('Task dependencies and recurring tasks (integration)', () => {
       const tenant = await createTenant('Test Tenant')
       const adminRoleId = await createRole(tenant.id, 'ADMIN', 'ALL')
       await seedPermissions(adminRoleId)
-      const { token } = await createUser(tenant.id, adminRoleId, 'admin@test.com', 'Admin', 'User')
+      const { token } = await createUser(
+        tenant.id,
+        adminRoleId,
+        'admin@test.com',
+        'Admin',
+        'User',
+        ['ADMIN'],
+      )
       const userId = (await prisma.user.findFirst({ where: { tenantId: tenant.id } }))!.id
 
       await createTask(tenant.id, userId, 'Daily standup', {
@@ -452,7 +473,14 @@ describe('Task dependencies and recurring tasks (integration)', () => {
       const tenant = await createTenant('Test Tenant')
       const adminRoleId = await createRole(tenant.id, 'ADMIN', 'ALL')
       await seedPermissions(adminRoleId)
-      const { token } = await createUser(tenant.id, adminRoleId, 'admin@test.com', 'Admin', 'User')
+      const { token } = await createUser(
+        tenant.id,
+        adminRoleId,
+        'admin@test.com',
+        'Admin',
+        'User',
+        ['ADMIN'],
+      )
       const userId = (await prisma.user.findFirst({ where: { tenantId: tenant.id } }))!.id
 
       const templateId = await createTask(tenant.id, userId, 'Daily standup', {

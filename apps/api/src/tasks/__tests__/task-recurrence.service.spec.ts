@@ -5,7 +5,19 @@ import type { TaskPubSubService } from '../task-pubsub.service'
 const TENANT = 'tenant-1'
 const USER = 'user-1'
 
-function buildPrismaMock(): Record<string, unknown> {
+interface MockPrisma {
+  task: {
+    findFirst: jest.Mock
+    findMany: jest.Mock
+    create: jest.Mock
+  }
+  auditLog: {
+    create: jest.Mock
+  }
+  $transaction: jest.Mock
+}
+
+function buildPrismaMock(): MockPrisma {
   const task = {
     findFirst: jest.fn().mockResolvedValue(null),
     findMany: jest.fn().mockResolvedValue([]),
@@ -23,7 +35,12 @@ function buildPrismaMock(): Record<string, unknown> {
   }
 }
 
-function makeService(prisma: Record<string, unknown>): Record<string, unknown> {
+interface MockServiceBundle {
+  service: TaskRecurrenceService
+  pubsub: { publish: jest.Mock }
+}
+
+function makeService(prisma: MockPrisma): MockServiceBundle {
   const pubsub = { publish: jest.fn() }
   const service = new TaskRecurrenceService(
     prisma as unknown as PrismaService,

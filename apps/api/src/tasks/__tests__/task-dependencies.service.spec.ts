@@ -40,7 +40,22 @@ function makeTask(overrides: Record<string, unknown> = {}): Record<string, unkno
   }
 }
 
-function buildPrismaMock(): Record<string, unknown> {
+interface MockPrisma {
+  taskDependency: {
+    findFirst: jest.Mock
+    findMany: jest.Mock
+    create: jest.Mock
+    deleteMany: jest.Mock
+    count: jest.Mock
+  }
+  task: {
+    findFirst: jest.Mock
+    findMany: jest.Mock
+  }
+  $transaction: jest.Mock
+}
+
+function buildPrismaMock(): MockPrisma {
   const taskDependency = {
     findFirst: jest.fn(),
     findMany: jest.fn(),
@@ -59,7 +74,13 @@ function buildPrismaMock(): Record<string, unknown> {
   }
 }
 
-function makeService(prisma: Record<string, unknown>): Record<string, unknown> {
+interface MockServiceBundle {
+  service: TaskDependenciesService
+  tasks: { findOne: jest.Mock }
+  audit: { log: jest.Mock }
+}
+
+function makeService(prisma: MockPrisma): MockServiceBundle {
   const tasks = {
     findOne: jest.fn().mockResolvedValue(makeTask()),
   }
