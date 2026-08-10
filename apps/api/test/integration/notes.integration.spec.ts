@@ -18,11 +18,21 @@ import type { StartedPostgreSqlContainer } from '@testcontainers/postgresql'
 // Permission → User → UserRole → Team → Contact → DealStage → Note.
 // createUser() accepts caller-supplied roles: string[] (fix from b3fcdfa).
 
+const CRUD = ['CREATE', 'READ', 'UPDATE', 'DELETE']
+
 const ROLE_PERMISSIONS: Record<string, { resource: string; action: string }[]> = {
   ADMIN: [],
   SALES_REP: [
-    ...['CREATE', 'READ', 'UPDATE', 'DELETE'].map((action) => ({ resource: 'CONTACT', action })),
-    ...['CREATE', 'READ', 'UPDATE', 'DELETE'].map((action) => ({ resource: 'DEAL', action })),
+    ...CRUD.map((action) => ({ resource: 'CONTACT', action })),
+    ...CRUD.map((action) => ({ resource: 'DEAL', action })),
+  ],
+  // Same permissions as SALES_REP, but the authorship tests pair it with
+  // dataVisibility 'ALL' so the holder clears the parent gate and the note's
+  // author check is the thing under test. Deliberately not named ADMIN — the
+  // delete carve-out keys off the ADMIN role name in the JWT.
+  SALES_MANAGER: [
+    ...CRUD.map((action) => ({ resource: 'CONTACT', action })),
+    ...CRUD.map((action) => ({ resource: 'DEAL', action })),
   ],
 }
 
@@ -94,13 +104,21 @@ describe('Notes on Contact & Deal (integration)', () => {
     return prisma.tenant.create({ data: { name } })
   }
 
+  /**
+   * Idempotent per (tenantId, name) — Role carries @@unique([tenantId, name]) and
+   * several tests seed two users holding the same role name in one tenant. Reuses
+   * the existing row instead of colliding; dataVisibility comes from the first
+   * create, since two rows with the same name in a tenant cannot differ anyway.
+   */
   async function createRole(
     tenantId: string,
     name: string,
     dataVisibility: 'OWN' | 'TEAM' | 'ALL' = 'OWN',
   ): Promise<string> {
-    const role = await prisma.role.create({
-      data: {
+    const role = await prisma.role.upsert({
+      where: { tenantId_name: { tenantId, name } },
+      update: {},
+      create: {
         tenantId,
         name,
         isSystem: true,
@@ -122,8 +140,14 @@ describe('Notes on Contact & Deal (integration)', () => {
         create: { resource, action, description: '' },
         update: {},
       })
+      // Idempotent too — a reused role must not re-grant a permission it already
+      // holds (RolePermission is keyed @@id([roleId, permissionId])).
       // eslint-disable-next-line no-await-in-loop
-      await prisma.rolePermission.create({ data: { roleId, permissionId: permission.id } })
+      await prisma.rolePermission.upsert({
+        where: { roleId_permissionId: { roleId, permissionId: permission.id } },
+        update: {},
+        create: { roleId, permissionId: permission.id },
+      })
     }
   }
 
@@ -360,10 +384,13 @@ describe('Notes on Contact & Deal (integration)', () => {
   it('forbids a non-author from editing a note', async () => {
     const tenant = await createTenant('Acme')
     await createUser(tenant.id, 'rep-1', ['SALES_REP'])
-    await createUser(tenant.id, 'rep-2', ['SALES_REP'])
+    // rep-2 gets ALL visibility so it clears assertParentAccess on rep-1's
+    // contact — otherwise the parent gate rejects first and the authorship
+    // rule this test exists to cover is never reached.
+    await createUserWithRole(tenant.id, 'rep-2', 'SALES_MANAGER', 'ALL')
     const contact = await createContact(tenant.id, 'rep-1')
     const tokenRep1 = tokenFor(tenant.id, 'rep-1', ['SALES_REP'])
-    const tokenRep2 = tokenFor(tenant.id, 'rep-2', ['SALES_REP'])
+    const tokenRep2 = tokenFor(tenant.id, 'rep-2', ['SALES_MANAGER'])
 
     // rep-1 creates a note
     const created = await graphqlRequest(
@@ -424,10 +451,13 @@ describe('Notes on Contact & Deal (integration)', () => {
   it('forbids a non-author non-ADMIN from deleting a note', async () => {
     const tenant = await createTenant('Acme')
     await createUser(tenant.id, 'rep-1', ['SALES_REP'])
-    await createUser(tenant.id, 'rep-2', ['SALES_REP'])
+    // ALL visibility to clear the parent gate, but NOT ADMIN — the delete
+    // carve-out is the ADMIN role name in the JWT, and this test asserts the
+    // non-ADMIN path is refused.
+    await createUserWithRole(tenant.id, 'rep-2', 'SALES_MANAGER', 'ALL')
     const contact = await createContact(tenant.id, 'rep-1')
     const tokenRep1 = tokenFor(tenant.id, 'rep-1', ['SALES_REP'])
-    const tokenRep2 = tokenFor(tenant.id, 'rep-2', ['SALES_REP'])
+    const tokenRep2 = tokenFor(tenant.id, 'rep-2', ['SALES_MANAGER'])
 
     // rep-1 creates note
     const created = await graphqlRequest(
@@ -601,7 +631,10 @@ describe('Notes on Contact & Deal (integration)', () => {
       }`,
       { filter: { contactId: contactA.id } },
     )
-    expect(listRes.body.errors?.[0]?.message).toBe('Note not found')
+    // Listing is gated on the parent first (findManyForParent → assertParentAccess
+    // → checkContactAccess), so a cross-tenant contact fails as 'Contact not found'.
+    // Still a 404 with no existence leak — the note itself is never reached.
+    expect(listRes.body.errors?.[0]?.message).toBe('Contact not found')
   })
 
   // ─── Non-ADMIN visibility negative ─────────────────────────────────────
@@ -632,7 +665,9 @@ describe('Notes on Contact & Deal (integration)', () => {
       { filter: { contactId: contact.id } },
     )
 
-    expect(res.body.errors?.[0]?.message).toBe('Note not found')
+    // Same parent gate: an OWN-scoped rep fails checkContactAccess on the
+    // visibility predicate, which reports 'Contact not found' (not 'Note ...').
+    expect(res.body.errors?.[0]?.message).toBe('Contact not found')
   })
 
   // ─── ADMIN bypass case ─────────────────────────────────────────────────

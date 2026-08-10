@@ -755,8 +755,10 @@ describe('Activity feed (integration) — Story 4.4, AC 4-13', () => {
     expect(res.body.errors).toBeUndefined()
     const node = res.body.data.contactTimeline.edges[0].node
     expect(node.title).toBe('Timeline row')
-    // The feed select fields are NOT selected by findByContact → resolve null.
-    expect(node.sourceId).toBeNull()
+    // Story 4.7 added sourceId to ACTIVITY_SELECT — the note-hydration pass in
+    // findByContact needs it — so the timeline now resolves it.
+    expect(node.sourceId).toBe('task-9')
+    // `contact` remains feed-only: still NOT selected by findByContact → null.
     expect(node.contact).toBeNull()
   })
 })
