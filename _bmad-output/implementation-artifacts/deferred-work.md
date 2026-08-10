@@ -161,3 +161,12 @@
 - Team leaderboards / manager roll-ups / `/reports/activity` belong to Story 6.8 ("Activity Reports & Team Productivity Metrics"); 4.5 owns the per-user report only.
 - Time entries are not exposed on the `/activities` workspace — no cross-workspace surface was added.
 - The live tick is client-side (`setInterval` in `TaskTimerWidget`) — no fifth in-process `EventEmitter`, no new GraphQL subscription (the four existing single-instance emitters remain the only ones; Redis-backed pub/sub is still the multi-instance prerequisite).
+
+## Deferred from: 4-7-notes-on-contact-deal-account (2026-08-09)
+
+- **(a)** `addContactNote` / `ActivityService.addContactNote` are now caller-less and should be removed in a follow-up. The `NoteComposer` component that was their only caller has been deleted; the server mutations remain untouched with zero risk but produce dead code.
+- **(b)** `DealTimeline.tsx` renders hardcoded `DEFAULT_TIMELINE_ENTRIES` and reads the *contact's* activity feed, not a real deal-scoped timeline. Pre-existing debt — not touched here.
+- **(c)** There is no deal-scoped activity timeline, so deal notes never reach a chronological cross-source feed. Deal notes surface only in the Deal Collaboration "Notes" tab.
+- **(d)** `totalCount` on `contactTimeline` counts soft-deleted note markers. Hydration drops the edges but `totalCount` is not recomputed (AC 29).
+- **(e)** Notes have no realtime channel — a second viewer sees a change only on refetch. No new pub/sub service, no GraphQL subscription.
+- **(f)** No @mentions and therefore no notification on a note. Notification centre belongs to Story 4.8.

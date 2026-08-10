@@ -58,7 +58,7 @@ describe('Activity timeline (integration)', () => {
 
   afterEach(async () => {
     await prisma.$executeRawUnsafe(
-      'TRUNCATE TABLE "Activity", "ContactTag", "Tag", "Contact", "User", "UserRole", "Role", "Team", "Tenant" RESTART IDENTITY CASCADE',
+      'TRUNCATE TABLE "Activity", "ContactTag", "Tag", "Note", "Contact", "User", "UserRole", "Role", "Team", "Tenant" RESTART IDENTITY CASCADE',
     )
   })
 
@@ -195,7 +195,9 @@ describe('Activity timeline (integration)', () => {
 
     const edges = response.body.data.contactTimeline.edges
     // Verify DESC order by comparing timestamps
-    const timestamps = edges.map((e: { node: { createdAt: string } }) => new Date(e.node.createdAt).getTime())
+    const timestamps = edges.map((e: { node: { createdAt: string } }) =>
+      new Date(e.node.createdAt).getTime(),
+    )
     for (let i = 1; i < timestamps.length; i++) {
       expect(timestamps[i]!).toBeLessThanOrEqual(timestamps[i - 1]!)
     }
@@ -294,14 +296,20 @@ describe('Activity timeline (integration)', () => {
           id type title description createdBy
         }
       }`,
-      { contactId, title: 'Met with client', description: 'Discussed project timeline and budget.' },
+      {
+        contactId,
+        title: 'Met with client',
+        description: 'Discussed project timeline and budget.',
+      },
     )
 
     expect(noteResponse.status).toBe(200)
     expect(noteResponse.body.errors).toBeUndefined()
     expect(noteResponse.body.data.addContactNote.type).toBe('NOTE_ADDED')
     expect(noteResponse.body.data.addContactNote.title).toBe('Met with client')
-    expect(noteResponse.body.data.addContactNote.description).toBe('Discussed project timeline and budget.')
+    expect(noteResponse.body.data.addContactNote.description).toBe(
+      'Discussed project timeline and budget.',
+    )
     expect(noteResponse.body.data.addContactNote.createdBy).toBe(userId)
 
     // Query timeline — should include the note
@@ -318,9 +326,7 @@ describe('Activity timeline (integration)', () => {
 
     expect(timelineResponse.status).toBe(200)
     const edges = timelineResponse.body.data.contactTimeline.edges
-    const noteActivity = edges.find(
-      (e: { node: { type: string } }) => e.node.type === 'NOTE_ADDED',
-    )
+    const noteActivity = edges.find((e: { node: { type: string } }) => e.node.type === 'NOTE_ADDED')
     expect(noteActivity).toBeDefined()
     expect(noteActivity.node.title).toBe('Met with client')
   })

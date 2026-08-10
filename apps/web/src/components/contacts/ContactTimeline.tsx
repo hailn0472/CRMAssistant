@@ -2,9 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'react-hot-toast'
-import { fetchTimeline, addContactNote } from '@/services/activity.service'
+import { fetchTimeline } from '@/services/activity.service'
 import { TimelineCard } from './TimelineCard'
-import { NoteComposer } from './NoteComposer'
 import { TimelineFilter } from './TimelineFilter'
 import type { Activity, ActivityFilterType, ActivityTypeValue } from '@/types/activity.types'
 import { SALES_TYPES, SYSTEM_TYPES } from '@/types/activity.types'
@@ -35,8 +34,6 @@ export function ContactTimeline({ contactId }: ContactTimelineProps): React.JSX.
   const [isLoadingMore, setIsLoadingMore] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [filter, setFilter] = useState<ActivityFilterType>('ALL')
-  const [showComposer, setShowComposer] = useState(false)
-  const [isAddingNote, setIsAddingNote] = useState(false)
 
   const sentinelRef = useRef<HTMLDivElement>(null)
   const loadedRef = useRef(false)
@@ -113,60 +110,6 @@ export function ContactTimeline({ contactId }: ContactTimelineProps): React.JSX.
     return () => observer.disconnect()
   }, [contactId, pageInfo, isLoadingMore])
 
-  // Handle note submission
-  const handleAddNote = useCallback(
-    async (text: string) => {
-      setIsAddingNote(true)
-      // Optimistic update
-      const optimisticActivity: Activity = {
-        id: `optimistic-${Date.now()}`,
-        contactId,
-        type: 'NOTE_ADDED',
-        title: text.slice(0, 80) + (text.length > 80 ? '...' : ''),
-        description: text,
-        createdAt: new Date().toISOString(),
-        createdBy: 'You',
-        // A manual note is never auto-logged (Story 4.2, AC 3).
-        source: null,
-      }
-
-      setActivities((prev) => [optimisticActivity, ...prev])
-      setTotalCount((prev) => prev + 1)
-      setShowComposer(false)
-
-      try {
-        const result = await addContactNote(contactId, text.slice(0, 80), text)
-        if (!mountedRef.current) return
-        // Replace optimistic with real
-        setActivities((prev) =>
-          prev.map((a) =>
-            a.id === optimisticActivity.id
-              ? {
-                  id: result.id,
-                  contactId: result.contactId,
-                  type: result.type as ActivityTypeValue,
-                  title: result.title,
-                  description: result.description,
-                  createdAt: result.createdAt,
-                  createdBy: result.createdBy,
-                  source: result.source,
-                }
-              : a,
-          ),
-        )
-      } catch (err) {
-        if (!mountedRef.current) return
-        // Remove optimistic on failure
-        setActivities((prev) => prev.filter((a) => a.id !== optimisticActivity.id))
-        setTotalCount((prev) => Math.max(0, prev - 1))
-        toast.error(err instanceof Error ? err.message : 'Failed to save note')
-      } finally {
-        setIsAddingNote(false)
-      }
-    },
-    [contactId],
-  )
-
   // Loading skeleton
   if (isLoading) {
     return (
@@ -212,21 +155,10 @@ export function ContactTimeline({ contactId }: ContactTimelineProps): React.JSX.
       <div className="flex flex-col gap-4">
         <div className="flex items-center justify-between gap-3">
           <h2 className="text-[14px] font-semibold text-[#1b1b1f]">Activity timeline</h2>
-          <button
-            type="button"
-            onClick={() => setShowComposer(!showComposer)}
-            className="inline-flex h-8 items-center rounded-[9px] border border-[#1b1b1f] bg-[#1b1b1f] px-3 text-[12px] font-semibold text-white transition-colors hover:bg-black"
-          >
-            {showComposer ? 'Cancel' : 'Add note'}
-          </button>
         </div>
 
-        {showComposer && <NoteComposer onSubmit={handleAddNote} isSubmitting={isAddingNote} />}
-
         <div className="rounded-[11px] border border-dashed border-[#d8d8e0] p-8 text-center">
-          <p className="text-[13px] text-[#8c8c96]">
-            No activity recorded yet — log your first interaction
-          </p>
+          <p className="text-[13px] text-[#8c8c96]">No activity recorded yet</p>
         </div>
       </div>
     )
@@ -244,17 +176,8 @@ export function ContactTimeline({ contactId }: ContactTimelineProps): React.JSX.
         </div>
         <div className="flex items-center gap-[7px]">
           <TimelineFilter activeFilter={filter} onFilterChange={setFilter} />
-          <button
-            type="button"
-            onClick={() => setShowComposer(!showComposer)}
-            className="inline-flex h-8 items-center rounded-[9px] border border-[#1b1b1f] bg-[#1b1b1f] px-3 text-[12px] font-semibold text-white transition-colors hover:bg-black"
-          >
-            {showComposer ? 'Cancel' : 'Add note'}
-          </button>
         </div>
       </div>
-
-      {showComposer && <NoteComposer onSubmit={handleAddNote} isSubmitting={isAddingNote} />}
 
       <div>
         {filteredActivities.length === 0 ? (

@@ -131,6 +131,7 @@ model Tenant {
   dealDocuments            DealDocument[]
   dealComments             DealComment[]
   dealCommentMentions      DealCommentMention[]
+  notes                    Note[]
   dealReminders            DealReminder[]
   dealReminderSnoozes      DealReminderSnooze[]
   userReminderPreferences  UserReminderPreference[]
@@ -197,6 +198,7 @@ model User {
   assignedTasks         Task[]                   @relation("TaskAssignee")
   calendarConnections   CalendarConnection[]     @relation("UserCalendarConnection")
   timeEntries           TimeEntry[]              @relation("TimeEntryUser")
+  authoredNotes         Note[]                   @relation("NoteAuthor")
 
   // Email is unique per tenant, NOT globally unique
   @@unique([tenantId, email])
@@ -388,6 +390,7 @@ model Contact {
   activities        Activity[]
   deals             Deal[]
   tasks             Task[]
+  noteEntries       Note[]                   @relation("ContactNote")
 
   @@unique([tenantId, email])
   @@index([tenantId])
@@ -658,6 +661,7 @@ model Deal {
   competitors        DealCompetitor[]
   documents          DealDocument[]
   comments           DealComment[]
+  notes              Note[]                   @relation("DealNote")
   reminders          DealReminder[]
   reminderSnoozes    DealReminderSnooze[]
   tasks              Task[]
@@ -851,6 +855,37 @@ model DealCommentMention {
   @@index([tenantId])
   @@index([commentId])
   @@index([tenantId, mentionedUserId])
+}
+
+/// Story 4.7 (FR64): user-authored prose attached to exactly ONE parent —
+/// a Contact or a Deal. Association is two nullable FK columns, NOT a
+/// polymorphic entityType/entityId pair (architecture.md:938-942). The
+/// "exactly one non-null" rule is enforced in NotesService; Prisma cannot
+/// express an XOR check constraint. There is deliberately NO accountId —
+/// the Account entity is deferred (architecture.md:922-929).
+model Note {
+  id        String    @id @default(uuid())
+  tenantId  String
+  contactId String?
+  dealId    String?
+  userId    String
+  body      String
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  createdBy String    @default("system")
+  updatedBy String    @default("system")
+  deletedAt DateTime?
+
+  tenant  Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  contact Contact? @relation("ContactNote", fields: [contactId], references: [id], onDelete: Cascade)
+  deal    Deal?    @relation("DealNote", fields: [dealId], references: [id], onDelete: Cascade)
+  author  User     @relation("NoteAuthor", fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId])
+  @@index([tenantId, contactId])
+  @@index([tenantId, dealId])
+  @@index([contactId, deletedAt, createdAt])
+  @@index([dealId, deletedAt, createdAt])
 }
 
 /// Tenant-scoped reminder row produced by the daily deal-health sweep (Story 3.7).

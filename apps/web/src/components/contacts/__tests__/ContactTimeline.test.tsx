@@ -5,13 +5,11 @@ import type { ContactTimelineResult, Activity } from '@/types/activity.types'
 // Mock the activity service
 jest.mock('@/services/activity.service', () => ({
   fetchTimeline: jest.fn(),
-  addContactNote: jest.fn(),
 }))
 
-import { fetchTimeline, addContactNote } from '@/services/activity.service'
+import { fetchTimeline } from '@/services/activity.service'
 
 const mockFetchTimeline = fetchTimeline as jest.MockedFunction<typeof fetchTimeline>
-const mockAddContactNote = addContactNote as jest.MockedFunction<typeof addContactNote>
 
 function makeActivity(overrides: Partial<Activity> = {}): Activity {
   return {
@@ -135,61 +133,6 @@ describe('ContactTimeline', () => {
 
     await waitFor(() => {
       expect(screen.getByText(/1 activity/)).toBeInTheDocument()
-    })
-  })
-
-  it('shows Add note button', async () => {
-    render(<ContactTimeline contactId="contact-1" />)
-
-    await waitFor(() => {
-      expect(screen.getByText('Add note')).toBeInTheDocument()
-    })
-  })
-
-  it('shows NoteComposer when Add note is clicked', async () => {
-    render(<ContactTimeline contactId="contact-1" />)
-
-    await waitFor(() => {
-      expect(screen.getByText('Add note')).toBeInTheDocument()
-    })
-
-    fireEvent.click(screen.getByText('Add note'))
-
-    expect(screen.getByPlaceholderText(/Add a note/)).toBeInTheDocument()
-  })
-
-  it('adds an activity optimistically when a note is submitted', async () => {
-    mockAddContactNote.mockResolvedValue({
-      id: 'new-note-id',
-      contactId: 'contact-1',
-      type: 'NOTE_ADDED',
-      title: 'New note',
-      description: 'New note content',
-      createdAt: new Date().toISOString(),
-      createdBy: 'user-1',
-      source: null,
-    })
-
-    render(<ContactTimeline contactId="contact-1" />)
-
-    // Wait for initial load
-    await waitFor(() => {
-      expect(screen.getByText('Test activity')).toBeInTheDocument()
-    })
-
-    // Open composer
-    fireEvent.click(screen.getByText('Add note'))
-
-    // Type and submit note
-    const textarea = screen.getByPlaceholderText(/Add a note/)
-    fireEvent.change(textarea, { target: { value: 'New note' } })
-    fireEvent.click(screen.getByRole('button', { name: /save/i }))
-
-    // Should show optimistic activity immediately
-    await waitFor(() => {
-      const titleElements = screen.getAllByText(/New note/)
-      // The title "New note" appears in both the card title and possibly description
-      expect(titleElements.length).toBeGreaterThanOrEqual(1)
     })
   })
 

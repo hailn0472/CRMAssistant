@@ -15,14 +15,16 @@ import { updateContact } from '@/services/contact.service'
 import { assignContactOwner } from '@/services/owner.service'
 import { getConversations } from '@/services/inbox.service'
 import { ContactTimeline } from '@/components/contacts/ContactTimeline'
+import { NotesPanel } from '@/components/notes/NotesPanel'
 import { cn } from '@/lib/utils'
 import type { Contact } from '@/services/contact.service'
 
-type TabId = 'overview' | 'activity' | 'conversations'
+type TabId = 'overview' | 'activity' | 'notes' | 'conversations'
 
 const TABS: Array<{ id: TabId; label: string }> = [
   { id: 'overview', label: 'Overview' },
   { id: 'activity', label: 'Activity' },
+  { id: 'notes', label: 'Notes' },
   { id: 'conversations', label: 'Conversations' },
 ]
 
@@ -679,7 +681,7 @@ export function ContactDetailClient({ contact }: { contact: Contact }): React.JS
                   onSave={handleEnrichSave}
                 />
               </FieldRow>
-              <FieldRow label="Notes" tall>
+              <FieldRow label="Internal note" tall>
                 <InlineEditField
                   label="Notes"
                   value={localContact.notes}
@@ -716,6 +718,13 @@ export function ContactDetailClient({ contact }: { contact: Contact }): React.JS
       {activeTab === 'activity' ? (
         <section className="max-w-[840px] overflow-hidden rounded-[14px] border border-[#ececf0] bg-white px-[18px] py-4">
           <ContactTimeline contactId={contact.id} />
+        </section>
+      ) : null}
+
+      {/* ── Notes Tab (Story 4.7) ── */}
+      {activeTab === 'notes' ? (
+        <section className="max-w-[840px] overflow-hidden rounded-[14px] border border-[#ececf0] bg-white px-[18px] py-4">
+          <NotesPanel contactId={contact.id} />
         </section>
       ) : null}
 

@@ -37,6 +37,7 @@ export type ActivityTimelineEdge = {
     createdAt: string
     createdBy: string
     source: string | null
+    sourceId: string | null
   }
 }
 
@@ -79,6 +80,7 @@ const ACTIVITY_SELECT = {
   createdAt: true,
   createdBy: true,
   source: true,
+  sourceId: true,
 } as const
 
 // Story 4.4 (AC 10): the tenant-wide feed needs two more fields than the
@@ -306,6 +308,13 @@ export class ActivityService {
    * Paginated timeline query sorted by createdAt DESC.
    * Uses cursor-based pagination with `take: first + 1` pattern to detect hasNextPage.
    * When includeTotalCount is true, runs findMany + count in a single $transaction.
+   *
+   * Story 4.7 (AC 26-29): after building edges, a hydration pass fetches live Note
+   * rows for edges whose source === 'NOTE'. Edited notes get the live body;
+   * soft-deleted or missing notes cause the edge to be dropped. hasNextPage and
+   * endCursor are computed BEFORE hydration so the cursor chain stays intact.
+   * totalCount is NOT adjusted for dropped edges (recomputing it needs a second
+   * correlated query per page for a cosmetic counter).
    */
   async findByContact(
     tenantId: string,
@@ -334,8 +343,45 @@ export class ActivityService {
           createdAt: (a.createdAt as Date).toISOString(),
           createdBy: a.createdBy as string,
           source: (a.source as string | null) ?? null,
+          sourceId: (a.sourceId as string | null) ?? null,
         },
       }))
+
+    /**
+     * Hydrate note-sourced edges from the live Note table (Story 4.7, AC 26-29).
+     * One query per page, never per row. Drops edges whose note is missing or
+     * soft-deleted; overwrites title/description with live body.
+     */
+    const hydrateNoteMarkers = async (
+      edges: ActivityTimelineEdge[],
+    ): Promise<ActivityTimelineEdge[]> => {
+      const noteIds = edges
+        .filter((e) => e.node.source === 'NOTE' && e.node.sourceId !== null)
+        .map((e) => e.node.sourceId!)
+
+      if (noteIds.length === 0) return edges
+
+      const notes = await this.prisma.note.findMany({
+        where: { tenantId, id: { in: noteIds } },
+        select: { id: true, body: true, deletedAt: true },
+      })
+
+      const noteMap = new Map(notes.map((n) => [n.id, n]))
+
+      return edges.filter((edge) => {
+        if (edge.node.source !== 'NOTE' || edge.node.sourceId === null) return true
+
+        const note = noteMap.get(edge.node.sourceId!)
+        // Drop if note is missing or soft-deleted
+        if (!note || note.deletedAt !== null) return false
+
+        // Overwrite title/description with live body
+        const liveBody = note.body
+        edge.node.title = liveBody.substring(0, 80)
+        edge.node.description = liveBody
+        return true
+      })
+    }
 
     if (args.includeTotalCount) {
       const [activities, totalCount] = await this.prisma.$transaction([
@@ -344,28 +390,37 @@ export class ActivityService {
       ])
 
       const hasNextPage = activities.length > first
-      const edges = hasNextPage ? activities.slice(0, first) : activities
+      const sliced = hasNextPage ? activities.slice(0, first) : activities
+      const preEdges = mapEdges(sliced as Array<Record<string, unknown>>)
 
+      // Hydrate note-sourced edges before returning
+      const edges = await hydrateNoteMarkers(preEdges)
+
+      // hasNextPage / endCursor computed BEFORE hydration from the un-dropped slice
       return {
-        edges: mapEdges(edges as Array<Record<string, unknown>>),
+        edges,
         pageInfo: {
           hasNextPage,
-          endCursor: edges.length > 0 ? (edges[edges.length - 1]!.id as string) : null,
+          endCursor: sliced.length > 0 ? (sliced[sliced.length - 1]!.id as string) : null,
         },
-        totalCount,
+        totalCount, // NOT adjusted for dropped edges (AC 29)
       }
     }
 
     const activities = await this.prisma.activity.findMany(baseQuery)
 
     const hasNextPage = activities.length > first
-    const edges = hasNextPage ? activities.slice(0, first) : activities
+    const sliced = hasNextPage ? activities.slice(0, first) : activities
+    const preEdges = mapEdges(sliced as Array<Record<string, unknown>>)
+
+    // Hydrate note-sourced edges before returning
+    const edges = await hydrateNoteMarkers(preEdges)
 
     return {
-      edges: mapEdges(edges as Array<Record<string, unknown>>),
+      edges,
       pageInfo: {
         hasNextPage,
-        endCursor: edges.length > 0 ? (edges[edges.length - 1]!.id as string) : null,
+        endCursor: sliced.length > 0 ? (sliced[sliced.length - 1]!.id as string) : null,
       },
       totalCount: 0, // Not computed by default to avoid extra query
     }
