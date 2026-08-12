@@ -1,6 +1,6 @@
 # Story 6.1: Role-Based Dashboard with Customizable Widgets
 
-Status: ready-for-dev
+Status: done
 
 Epic: 6 — Reporting & Analytics Dashboard (first story; epic moves `backlog` → `in-progress`)
 FR: **FR40** — "Users can view role-based dashboards with customizable widgets" [Source: `prd.md:983`]. MVP Phase 1 scope: "Reporting: Dashboard, Sales Reports" [Source: `prd.md:179`]
