@@ -26,7 +26,7 @@ export type SharingRuleWithDetails = SharingRule
 
 /**
  * Resolves the owner of a given resource by type.
- * Currently supports CONTACT only; DEAL and TASK are future scope.
+ * Supports CONTACT and DASHBOARD; DEAL and TASK are future scope.
  */
 async function getResourceOwner(
   prisma: PrismaService,
@@ -42,6 +42,15 @@ async function getResourceOwner(
       })
       if (!contact) throw new NotFoundException('Contact not found')
       return contact
+    }
+    // DASHBOARD sharing — reuses SharingRule model (arbitrated 2026-08-12)
+    case 'DASHBOARD': {
+      const dashboard = await prisma.dashboard.findFirst({
+        where: { id: resourceId, tenantId, deletedAt: null },
+        select: { userId: true },
+      })
+      if (!dashboard) throw new NotFoundException('Dashboard not found')
+      return { ownerId: dashboard.userId }
     }
     case 'DEAL':
     case 'TASK':

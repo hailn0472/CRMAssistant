@@ -12,11 +12,11 @@ sections_completed:
     'framework_specific_rules',
   ]
 existing_patterns_found: 0
-last_updated: '2026-08-06T00:00:00Z'
+last_updated: '2026-08-13T00:00:00Z'
 reviewed_by: ['Winston', 'John', 'Amelia', 'Murat']
 status: 'complete'
 version: '1.1.0'
-verified_against_code: '2026-08-06'
+verified_against_code: '2026-08-13'
 ---
 
 # Project Context for AI Agents
@@ -354,7 +354,7 @@ model MyDomainModel {
 
 ### As-built module map (check here before creating anything)
 
-**Backend** — `apps/api/src/`: `accounts` (tests only; Account entity deferred 2026-07-29), `activities`, `audit`, `auth`, `calendar` (Story 4.3 — Google Calendar & Outlook integration: OAuth adapters, sync engine, per-user `CalendarConnection`, `TaskCalendarEvent` link rows), `common` (guards, interceptors, validation), `contacts`, `contacts-export`, `contacts-import`, `deals`, `facebook`, `graphql`, `health`, `import-export`, `inbox`, `notes` (Story 4.7 — `Note` model on Contact/Deal, dual nullable FKs, contact-timeline hydration), `notifications` (Story 4.8 — `Notification` model, bell+panel, three producers: TASK_ASSIGNED/DEAL_REMINDER/DEAL_MENTION), `permissions`, `prisma`, `products`, `reports` (Story 4.5 added the `ProductivityService` + pure `productivity-buckets.ts`), `roles`, `segments`, `sharing`, `tags`, `teams`, `time-tracking` (Story 4.5 — `TimeEntry` model, timer + manual-entry CRUD via `TimeEntriesService`), `users`.
+**Backend** — `apps/api/src/`: `accounts` (tests only; Account entity deferred 2026-07-29), `activities`, `audit`, `auth`, `calendar` (Story 4.3 — Google Calendar & Outlook integration: OAuth adapters, sync engine, per-user `CalendarConnection`, `TaskCalendarEvent` link rows), `common` (guards, interceptors, validation), `contacts`, `contacts-export`, `contacts-import`, `dashboards` (Story 6.1 — `Dashboard` + `Widget` models, role-based templates, `WidgetDataService` with 10 sources), `deals`, `facebook`, `graphql`, `health`, `import-export`, `inbox`, `notes` (Story 4.7 — `Note` model on Contact/Deal, dual nullable FKs, contact-timeline hydration), `notifications` (Story 4.8 — `Notification` model, bell+panel, three producers: TASK_ASSIGNED/DEAL_REMINDER/DEAL_MENTION), `permissions`, `prisma`, `products`, `reports` (Story 4.5 added the `ProductivityService` + pure `productivity-buckets.ts`), `roles`, `segments`, `sharing`, `tags`, `teams`, `time-tracking` (Story 4.5 — `TimeEntry` model, timer + manual-entry CRUD via `TimeEntriesService`), `users`.
 
 > Note: the architecture doc's directory tree lists `cache/` and `realtime/` modules. **Neither exists.**
 

@@ -663,6 +663,20 @@ describe('TasksService', () => {
       expect(where.AND).toContainEqual({ dealId: 'deal-1' })
     })
 
+    it('adds an in-filter when statuses (plural) is supplied', async () => {
+      const { service } = makeService(prisma)
+      const where = await service.buildTaskWhere(TENANT, USER, {
+        statuses: ['TODO', 'IN_PROGRESS'],
+      })
+      expect(where.AND).toContainEqual({ status: { in: ['TODO', 'IN_PROGRESS'] } })
+    })
+
+    it('ignores an empty statuses array', async () => {
+      const { service } = makeService(prisma)
+      const where = await service.buildTaskWhere(TENANT, USER, { statuses: [] })
+      expect(where.AND).toBeUndefined()
+    })
+
     it('normalises dueDateTo to 23:59:59.999', async () => {
       const { service } = makeService(prisma)
       const where = await service.buildTaskWhere(TENANT, USER, {

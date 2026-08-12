@@ -14,6 +14,7 @@ import { TimeTrackingModule } from '../time-tracking/time-tracking.module'
 @Module({
   imports: [PrismaModule, DealsModule, TimeTrackingModule],
   providers: [ForecastService, WinLossService, ProductivityService],
+  exports: [ForecastService, WinLossService, ProductivityService],
 })
 export class ReportsModule implements OnModuleInit {
   constructor(
