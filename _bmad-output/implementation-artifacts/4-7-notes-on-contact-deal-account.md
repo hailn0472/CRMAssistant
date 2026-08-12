@@ -1,6 +1,6 @@
 # Story 4.7: Notes on Contact & Deal
 
-Status: review
+Status: done
 
 Epic: 4 — Activity & Task Management
 FR: **FR64** — "Users can add, edit, and delete notes on contacts and deals, surfaced on the relevant timeline" [Source: `prd.md:951`]
