@@ -15,6 +15,7 @@ import { DealsService } from '../deals/deals.service'
 import { TaskTemplatesService } from './task-templates.service'
 import { TaskPubSubService, PUBSUB_TASK_ASSIGNED, PUBSUB_TASK_CHANGED } from './task-pubsub.service'
 import { CalendarSyncService } from '../calendar/calendar-sync.service'
+import { NotificationsService } from '../notifications/notifications.service'
 import type { CalendarTaskInput } from '../calendar/calendar-sync.service'
 import { isTaskPriority, isTaskStatus, toUtcMidnight } from './task-due-status'
 import type { TaskPriority, TaskStatus } from './task-due-status'
@@ -266,6 +267,7 @@ export class TasksService {
     private readonly activity: ActivityService,
     private readonly activityLogPreference: ActivityLogPreferenceService,
     private readonly calendarSync: CalendarSyncService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   /**
@@ -389,6 +391,16 @@ export class TasksService {
 
     if (assignedTo !== userId) {
       this.taskPubSub.publish(`${PUBSUB_TASK_ASSIGNED}:${tenantId}:${assignedTo}`, createdTask)
+      // Story 4.8 (AC 24): persist assignment notification
+      await this.notifications.notifySafe(tenantId, userId, {
+        recipientUserId: assignedTo,
+        type: 'TASK_ASSIGNED',
+        title: `Task assigned: ${createdTask.title}`,
+        body: createdTask.description ?? null,
+        taskId: createdTask.id,
+        dealId: null,
+        dedupeKey: null,
+      })
     }
 
     await this.writeAudit(tenantId, userId, 'CREATE', createdTask.id)
@@ -698,6 +710,19 @@ export class TasksService {
         `${PUBSUB_TASK_ASSIGNED}:${tenantId}:${input.assignedTo}`,
         updatedTask,
       )
+      // Story 4.8 (AC 24): persist notification, only when the new assignee
+      // is not the actor (self-assignment notifies nobody — AC 76).
+      if (input.assignedTo !== userId) {
+        await this.notifications.notifySafe(tenantId, userId, {
+          recipientUserId: input.assignedTo,
+          type: 'TASK_ASSIGNED',
+          title: `Task assigned: ${updatedTask.title}`,
+          body: updatedTask.description ?? null,
+          taskId: updatedTask.id,
+          dealId: null,
+          dedupeKey: null,
+        })
+      }
     }
 
     await this.writeAudit(tenantId, userId, 'UPDATE', updatedTask.id)
@@ -766,6 +791,19 @@ export class TasksService {
 
     if (assigneeId !== currentTask.assignedTo) {
       this.taskPubSub.publish(`${PUBSUB_TASK_ASSIGNED}:${tenantId}:${assigneeId}`, updatedTask)
+      // Story 4.8 (AC 24): persist notification, only when the new assignee
+      // is not the actor (self-assignment notifies nobody — AC 76).
+      if (assigneeId !== userId) {
+        await this.notifications.notifySafe(tenantId, userId, {
+          recipientUserId: assigneeId,
+          type: 'TASK_ASSIGNED',
+          title: `Task assigned: ${updatedTask.title}`,
+          body: updatedTask.description ?? null,
+          taskId: updatedTask.id,
+          dealId: null,
+          dedupeKey: null,
+        })
+      }
     }
 
     await this.writeAudit(tenantId, userId, 'UPDATE', updatedTask.id)

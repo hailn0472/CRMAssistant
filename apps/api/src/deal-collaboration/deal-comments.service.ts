@@ -8,6 +8,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service'
 import { DealsService } from '../deals/deals.service'
 import { DealPubSubService } from '../deals/deal-pubsub.service'
+import { NotificationsService } from '../notifications/notifications.service'
 import { MAX_COMMENT_LENGTH, extractMentionedUserIds } from './mention-parse'
 
 export const PUBSUB_DEAL_COMMENT_ADDED = 'DEAL_COMMENT_ADDED'
@@ -77,6 +78,7 @@ export class DealCommentsService {
     private readonly prisma: PrismaService,
     private readonly deals: DealsService,
     private readonly dealPubSub: DealPubSubService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   async add(
@@ -141,6 +143,33 @@ export class DealCommentsService {
       `${PUBSUB_DEAL_COMMENT_ADDED}:${tenantId}:${input.dealId}`,
       hydrated ?? created,
     )
+
+    // Story 4.8 (AC 33-37): persist notifications for @mentions.
+    // Notify survivingIds minus the comment author.
+    // authorName: narrow the nested author out of COMMENT_INCLUDE's
+    // Record<string, unknown> type.
+    const recipients = survivingIds.filter((id) => id !== userId)
+    if (recipients.length > 0 && hydrated) {
+      const hydratedAuthor = (hydrated as Record<string, unknown>).author as
+        | Record<string, unknown>
+        | undefined
+      const firstName = String(hydratedAuthor?.firstName ?? '')
+      const lastName = String(hydratedAuthor?.lastName ?? '')
+      const authorName = `${firstName} ${lastName}`.trim()
+      const title = authorName ? `${authorName} mentioned you` : 'Someone mentioned you'
+
+      for (const mentionedUserId of recipients) {
+        await this.notifications.notifySafe(tenantId, userId, {
+          recipientUserId: mentionedUserId,
+          type: 'DEAL_MENTION',
+          title,
+          body: comment,
+          dealId: input.dealId,
+          taskId: null,
+          dedupeKey: `DEAL_MENTION:${hydrated.id}:${mentionedUserId}`,
+        })
+      }
+    }
 
     return hydrated ?? created
   }

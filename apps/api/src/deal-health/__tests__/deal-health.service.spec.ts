@@ -5,6 +5,7 @@ import type { HealthDealRow } from '../deal-health.service'
 import type { PrismaService } from '../../prisma/prisma.service'
 import type { DealsService } from '../../deals/deals.service'
 import type { AuditService } from '../../audit/audit.service'
+import type { NotificationsService } from '../../notifications/notifications.service'
 
 const NOW = new Date('2026-08-01T10:30:00.000Z') // Saturday 2026-08-01
 const MONDAY = new Date('2026-08-03T09:00:00.000Z') // Monday 2026-08-03
@@ -71,7 +72,12 @@ function makePrismaMock(): Record<string, unknown> & {
   dealComment: { groupBy: jest.Mock }
   dealDocument: { groupBy: jest.Mock }
   deal: { findMany: jest.Mock }
-  dealReminder: { findFirst: jest.Mock; createMany: jest.Mock }
+  dealReminder: {
+    findFirst: jest.Mock
+    createMany: jest.Mock
+    findMany: jest.Mock
+    updateMany: jest.Mock
+  }
   dealReminderSnooze: {
     findFirst: jest.Mock
     findMany: jest.Mock
@@ -84,7 +90,12 @@ function makePrismaMock(): Record<string, unknown> & {
     dealComment: { groupBy: jest.fn() },
     dealDocument: { groupBy: jest.fn() },
     deal: { findMany: jest.fn() },
-    dealReminder: { findFirst: jest.fn(), createMany: jest.fn() },
+    dealReminder: {
+      findFirst: jest.fn(),
+      createMany: jest.fn(),
+      findMany: jest.fn(),
+      updateMany: jest.fn(),
+    },
     dealReminderSnooze: {
       findFirst: jest.fn(),
       findMany: jest.fn(),
@@ -121,12 +132,15 @@ describe('DealHealthService', () => {
       prisma as unknown as PrismaService,
       deals as unknown as DealsService,
       audit as unknown as AuditService,
+      { notifySafe: jest.fn().mockResolvedValue(undefined) } as unknown as NotificationsService,
     )
     prisma.dealComment.groupBy.mockResolvedValue([])
     prisma.dealDocument.groupBy.mockResolvedValue([])
     prisma.dealReminderSnooze.findMany.mockResolvedValue([])
     prisma.userReminderPreference.findMany.mockResolvedValue([])
     prisma.dealReminder.createMany.mockResolvedValue({ count: 0 })
+    prisma.dealReminder.findMany.mockResolvedValue([])
+    prisma.dealReminder.updateMany.mockResolvedValue({ count: 0 })
   })
 
   describe('resolveLastActivityAt (AC 20)', () => {

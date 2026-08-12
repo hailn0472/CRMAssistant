@@ -12,6 +12,7 @@ import { DealsModule } from '../deals/deals.module'
 import { AuditModule } from '../audit/audit.module'
 import { ActivitiesModule } from '../activities/activities.module'
 import { CalendarModule } from '../calendar/calendar.module'
+import { NotificationsModule } from '../notifications/notifications.module'
 
 @Module({
   imports: [
@@ -24,6 +25,9 @@ import { CalendarModule } from '../calendar/calendar.module'
     // DI is one-way: TasksModule → CalendarModule; CalendarSyncService never
     // injects TasksService (AC 24).
     CalendarModule,
+    // Story 4.8 (AC 51): NotificationsModule for the persisted assignment
+    // notification hooks.
+    NotificationsModule,
   ],
   providers: [
     TasksService,

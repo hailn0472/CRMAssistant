@@ -58,7 +58,7 @@ describe('Deal health reminders and alerts (integration)', () => {
 
   afterEach(async () => {
     await prisma.$executeRawUnsafe(
-      'TRUNCATE TABLE "DealReminder", "DealReminderSnooze", "UserReminderPreference", "DealComment", "DealDocument", "Deal", "DealStage", "Note", "Contact", "User", "UserRole", "Role", "Permission", "RolePermission", "Team", "Tenant", "AuditLog" RESTART IDENTITY CASCADE',
+      'TRUNCATE TABLE "Notification", "DealReminder", "DealReminderSnooze", "UserReminderPreference", "DealComment", "DealDocument", "Deal", "DealStage", "Note", "Contact", "User", "UserRole", "Role", "Permission", "RolePermission", "Team", "Tenant", "AuditLog" RESTART IDENTITY CASCADE',
     )
   })
 
@@ -274,7 +274,9 @@ describe('Deal health reminders and alerts (integration)', () => {
         expect(row.userId).toBe(salesRepId)
         expect(row.healthStatus).toBe('AT_RISK')
         expect(row.healthScore).toBe(60)
-        expect(row.deliveredAt).toBeNull()
+        // Story 4.8 (AC 29): the sweep now stamps deliveredAt after notifying.
+        // This inverts Story 3.7's assertion that deliveredAt is always null.
+        expect(row.deliveredAt).not.toBeNull()
         const now = new Date()
         expect(row.sweepDate).toEqual(
           new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())),

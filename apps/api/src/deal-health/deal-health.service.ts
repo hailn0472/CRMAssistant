@@ -3,6 +3,7 @@ import { BadRequestException, Injectable, Logger, NotFoundException } from '@nes
 import { PrismaService } from '../prisma/prisma.service'
 import { DealsService } from '../deals/deals.service'
 import { AuditService } from '../audit/audit.service'
+import { NotificationsService } from '../notifications/notifications.service'
 import {
   CLOSING_SOON_DAYS,
   STALE_ACTIVITY_DAYS,
@@ -11,6 +12,7 @@ import {
   toUtcMidnight,
 } from './deal-health-score'
 import { isEmailFrequency } from './reminder-preference-values'
+import { DEAL_REMINDER_REASON_LABELS } from '../notifications/notification-types'
 import type { DealHealthResult } from './deal-health-score'
 
 const DEFAULT_PAGE = 1
@@ -114,6 +116,7 @@ export class DealHealthService {
     private readonly prisma: PrismaService,
     private readonly deals: DealsService,
     private readonly audit: AuditService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   /**
@@ -435,6 +438,42 @@ export class DealHealthService {
     if (data.length > 0) {
       const result = await this.prisma.dealReminder.createMany({ data, skipDuplicates: true })
       remindersCreated = result.count
+    }
+
+    // Story 4.8 (AC 27-32): persist notifications for undelivered reminders,
+    // then stamp deliveredAt. createMany returns only a count — read back.
+    if (remindersCreated > 0) {
+      const undelivered = await this.prisma.dealReminder.findMany({
+        where: { tenantId, sweepDate, deliveredAt: null, deletedAt: null },
+        select: {
+          id: true,
+          dealId: true,
+          userId: true,
+          reason: true,
+          healthStatus: true,
+          deal: { select: { title: true } },
+        },
+      })
+
+      for (const reminder of undelivered) {
+        const title = DEAL_REMINDER_REASON_LABELS[reminder.reason] ?? reminder.reason
+        const body = `${reminder.deal.title} — health: ${reminder.healthStatus}`
+        await this.notifications.notifySafe(tenantId, actingUserId, {
+          recipientUserId: reminder.userId,
+          type: 'DEAL_REMINDER',
+          title,
+          body,
+          dealId: reminder.dealId,
+          taskId: null,
+          dedupeKey: `DEAL_REMINDER:${reminder.id}`,
+        })
+      }
+
+      // Stamp deliveredAt AFTER notifications, so a crash mid-loop leaves rows undelivered (AC 29)
+      await this.prisma.dealReminder.updateMany({
+        where: { id: { in: undelivered.map((r) => r.id) }, tenantId, deletedAt: null },
+        data: { deliveredAt: new Date(), updatedBy: actingUserId },
+      })
     }
 
     // The AuditInterceptor fires only for GraphQL mutations and drops the

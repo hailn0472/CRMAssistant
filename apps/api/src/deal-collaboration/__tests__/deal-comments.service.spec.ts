@@ -5,6 +5,7 @@ import { MAX_COMMENT_LENGTH } from '../mention-parse'
 import type { PrismaService } from '../../prisma/prisma.service'
 import type { DealsService } from '../../deals/deals.service'
 import type { DealPubSubService } from '../../deals/deal-pubsub.service'
+import type { NotificationsService } from '../../notifications/notifications.service'
 
 const mockAuthor = {
   id: 'user-1',
@@ -100,6 +101,7 @@ describe('DealCommentsService', () => {
       prisma as unknown as PrismaService,
       deals as unknown as DealsService,
       pubSub as unknown as DealPubSubService,
+      { notifySafe: jest.fn().mockResolvedValue(undefined) } as unknown as NotificationsService,
     )
     deals.findOne.mockResolvedValue({ id: 'deal-1' })
   })

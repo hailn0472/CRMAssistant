@@ -58,7 +58,7 @@ describe('Competitor tracking & win/loss analysis (integration)', () => {
 
   afterEach(async () => {
     await prisma.$executeRawUnsafe(
-      'TRUNCATE TABLE "Deal", "DealStage", "DealCompetitor", "Competitor", "Note", "Contact", "User", "UserRole", "Role", "RolePermission", "Permission", "Team", "Tenant" RESTART IDENTITY CASCADE',
+      'TRUNCATE TABLE "Notification", "Deal", "DealStage", "DealCompetitor", "Competitor", "Note", "Contact", "User", "UserRole", "Role", "RolePermission", "Permission", "Team", "Tenant" RESTART IDENTITY CASCADE',
     )
   })
 

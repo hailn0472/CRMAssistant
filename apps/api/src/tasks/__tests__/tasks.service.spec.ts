@@ -20,6 +20,7 @@ import type { AuditService } from '../../audit/audit.service'
 import type { ActivityService } from '../../activities/activities.service'
 import type { ActivityLogPreferenceService } from '../../activities/activity-log-preference.service'
 import type { CalendarSyncService } from '../../calendar/calendar-sync.service'
+import type { NotificationsService } from '../../notifications/notifications.service'
 import type { Prisma } from '@prisma/client'
 
 const mockResolveVisibilityFilter = resolveVisibilityFilter as jest.Mock
@@ -115,6 +116,7 @@ function makeService(prisma: MockPrisma): {
   activity: { logSafe: jest.Mock }
   activityLogPreference: { isEnabled: jest.Mock }
   calendarSync: { syncTaskSafe: jest.Mock; removeTaskFromCalendarSafe: jest.Mock }
+  notifications: { notifySafe: jest.Mock }
 } {
   const contacts = { findOne: jest.fn() }
   const deals = { findOne: jest.fn() }
@@ -129,6 +131,7 @@ function makeService(prisma: MockPrisma): {
     syncTaskSafe: jest.fn().mockResolvedValue(undefined),
     removeTaskFromCalendarSafe: jest.fn().mockResolvedValue(undefined),
   }
+  const notifications = { notifySafe: jest.fn().mockResolvedValue(undefined) }
   const service = new TasksService(
     prisma as unknown as PrismaService,
     contacts as unknown as ContactsService,
@@ -139,6 +142,7 @@ function makeService(prisma: MockPrisma): {
     activity as unknown as ActivityService,
     activityLogPreference as unknown as ActivityLogPreferenceService,
     calendarSync as unknown as CalendarSyncService,
+    notifications as unknown as NotificationsService,
   )
   return {
     service,
@@ -150,6 +154,7 @@ function makeService(prisma: MockPrisma): {
     activity,
     activityLogPreference,
     calendarSync,
+    notifications,
   }
 }
 

@@ -51,6 +51,8 @@ const SEGMENT_LABELS: Record<string, string> = {
   // Story 4.3 calendar settings routes.
   calendars: 'Calendars',
   callback: 'Connecting…',
+  // Story 4.8 (AC 72): without this label the breadcrumb renders "Chi tiết".
+  notifications: 'Notifications',
 }
 
 function labelForSegment(segment: string): string {

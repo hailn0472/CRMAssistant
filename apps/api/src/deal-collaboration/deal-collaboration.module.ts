@@ -4,6 +4,7 @@ import { PrismaModule } from '../prisma/prisma.module'
 import { DealsModule } from '../deals/deals.module'
 import { StorageModule } from '../storage/storage.module'
 import { AuditModule } from '../audit/audit.module'
+import { NotificationsModule } from '../notifications/notifications.module'
 import { registerDealCollaborationGraphql } from './deal-collaboration.graphql'
 import { DealDocumentsService } from './deal-documents.service'
 import { DealDocumentsController } from './deal-documents.controller'
@@ -12,7 +13,7 @@ import { DealsService } from '../deals/deals.service'
 import { DealPubSubService } from '../deals/deal-pubsub.service'
 
 @Module({
-  imports: [PrismaModule, DealsModule, StorageModule, AuditModule],
+  imports: [PrismaModule, DealsModule, StorageModule, AuditModule, NotificationsModule],
   controllers: [DealDocumentsController],
   providers: [DealDocumentsService, DealCommentsService],
   exports: [DealDocumentsService, DealCommentsService],
