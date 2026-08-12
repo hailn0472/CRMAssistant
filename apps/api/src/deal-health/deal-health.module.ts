@@ -3,11 +3,12 @@ import { Module, OnModuleInit } from '@nestjs/common'
 import { PrismaModule } from '../prisma/prisma.module'
 import { DealsModule } from '../deals/deals.module'
 import { AuditModule } from '../audit/audit.module'
+import { NotificationsModule } from '../notifications/notifications.module'
 import { registerDealHealthGraphql } from './deal-health.graphql'
 import { DealHealthService } from './deal-health.service'
 
 @Module({
-  imports: [PrismaModule, DealsModule, AuditModule],
+  imports: [PrismaModule, DealsModule, AuditModule, NotificationsModule],
   providers: [DealHealthService],
   exports: [DealHealthService],
 })

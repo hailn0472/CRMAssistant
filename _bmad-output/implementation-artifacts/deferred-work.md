@@ -93,7 +93,7 @@
 
 ## Deferred from: 3-6-deal-document-attachment-collaboration (2026-07-31)
 
-- @mentions persist a `DealCommentMention` row and push over the comment subscription, but write no `Notification` and light no bell — Story 4-8 owns the notification centre and the `Notification` model does not exist yet. A mentioned user who is not watching the deal detail page learns nothing.
+- @mentions persist a `DealCommentMention` row and push over the comment subscription, but write no `Notification` and light no bell — ~~**RESOLVED 2026-08-12**~~ Story 4-8 shipped the notification centre with DEAL_MENTION producer producing notifications for mentioned users.
 - No virus/malware scanning on uploaded files. Files are stored in a private bucket and served only through short-lived signed URLs, but a malicious document handed to another user is not detected.
 - No rate limiting on `POST /api/deals/:dealId/documents` — `@nestjs/throttler` is still not wired anywhere in `apps/api`. This endpoint joins the CSV import as a prime candidate for the dedicated throttler pass.
 - A soft-deleted `DealDocument` is not restorable: the storage object is hard-removed on delete, so the row survives only as an audit trace.
@@ -105,7 +105,7 @@
 
 - No email transport exists (no nodemailer / Resend / SendGrid / SES anywhere in the repo), so a `DealReminder` row is persisted but no reminder is ever actually delivered. The delivery *intent* stops at the row.
 - No scheduler exists (`@nestjs/schedule` is not installed; "no cron in this codebase" per `schema.prisma:762`). The sweep is lazily triggered from `atRiskDeals` (at most once per tenant per UTC day) plus the ADMIN-gated `runDealHealthSweep` mutation — a tenant whose users never open the dashboard never sweeps, so its reminder history has gaps. Health values shown in the UI are always computed live, so the UI is never stale — only the persisted reminder trail is.
-- `DealReminder.deliveredAt` is always `null` — the column exists so Story 4-8 (Notification Center) can stamp delivery without a migration.
+- `DealReminder.deliveredAt` is always `null` — ~~**RESOLVED 2026-08-12**~~ Story 4-8 now stamps `deliveredAt` after producing `DEAL_REMINDER` notifications, closing this gap.
 - `emailFrequency` only gates reminder-row creation — it sends nothing. `DAILY`/`WEEKLY`/`OFF` are behavioural hints for a future delivery layer.
 - The `WEEKLY` Monday (UTC) rule is a placeholder decision — it is the only behavioural meaning `emailFrequency` carries in this story.
 - Health thresholds (`STALE_ACTIVITY_DAYS`, `CRITICAL_ACTIVITY_DAYS`, `CLOSING_SOON_DAYS`, `PROBABILITY_MISMATCH_POINTS`, `AT_RISK_SCORE_THRESHOLD`, `STALE_SCORE_THRESHOLD`) are compile-time constants in `deal-health-score.ts`, not tenant-configurable.
@@ -113,7 +113,7 @@
 
 ## Deferred from: 4-1-task-crud-with-templates-assignment (2026-08-02)
 
-- Assignment notification is ephemeral (`task-pubsub.service.ts` + `onTaskAssigned` subscription): it pushes over `graphql-ws` to an assignee's open Tasks page, but writes no `Notification` row, has no unread state, and the topbar bell stays inert (`TopbarActions.tsx:136-144` untouched). An assignee who is not on the Tasks page when the event fires learns nothing until their next load. Story 4-8 owns the notification centre, the `Notification` model and the bell.
+- Assignment notification is ephemeral (`task-pubsub.service.ts` + `onTaskAssigned` subscription): it pushes over `graphql-ws` to an assignee's open Tasks page, but writes no `Notification` row, has no unread state, and the topbar bell stays inert (`TopbarActions.tsx:14-22` untouched). An assignee who is not on the Tasks page when the event fires learns nothing until their next load. ~~**RESOLVED 2026-08-12**~~ Story 4-8 shipped the notification centre: `NotificationsService` is injected into `TasksService` as its 10th dependency, `notifySafe` is called at all three assignment sites, persisted `Notification` rows drive an unread badge, and the topbar bell is wired.
 - No email transport exists (no nodemailer / Resend / SendGrid / SES anywhere in the repo), so no task reminder can ever be delivered out-of-app. Same project-wide gap recorded by Stories 3.6 and 3.7.
 - ~~Task→`Activity` timeline logging is absent — `Activity` is documented append-only contact-timeline-only (`schema.prisma:336-337`, `:549`) and no `TASK_COMPLETED` member was added to `ActivityType`. Story 4.2 owns it.~~ — **RESOLVED 2026-08-02.** Story 4.2 ships `TASK_COMPLETED` (+ `DEAL_STAGE_CHANGED`, `MESSAGE_RECEIVED`, `MESSAGE_SENT`), the `source`/`sourceId`/`dedupeKey`/`metadata` columns, `@@unique([tenantId, dedupeKey])` dedup and the producers in `TasksService`, `DealsService` and `MessagesService`.
 - `TaskPubSubService` is a third in-process `EventEmitter` alongside `DealPubSubService` and `InboxPubSubService` (all three share the same verbatim `EventEmitter` shape). Single-instance only: an event published on one API instance is never seen by another. A Redis-backed pub/sub is the prerequisite for multi-instance deployment, exactly as already deferred for the other two.
@@ -169,4 +169,19 @@
 - **(c)** There is no deal-scoped activity timeline, so deal notes never reach a chronological cross-source feed. Deal notes surface only in the Deal Collaboration "Notes" tab.
 - **(d)** `totalCount` on `contactTimeline` counts soft-deleted note markers. Hydration drops the edges but `totalCount` is not recomputed (AC 29).
 - **(e)** Notes have no realtime channel — a second viewer sees a change only on refetch. No new pub/sub service, no GraphQL subscription.
-- **(f)** No @mentions and therefore no notification on a note. Notification centre belongs to Story 4.8.
+- **(f)** No @mentions and therefore no notification on a note. Notification centre belongs to Story 4.8. — **STILL OPEN** Story 4.8 shipped the notification centre but note mentions were excluded from scope per the arbitration table; this gap remains, re-pointed at a follow-up.
+
+## Deferred from: 4-8-notification-center (2026-08-12)
+
+- The fifth single-instance `EventEmitter` (`NotificationPubSubService`) — Redis-backed pub/sub is still the prerequisite for multi-instance deployment; unchanged from the four existing emitters.
+- Unbounded `Notification` growth — no retention policy, no dismiss/delete mutation, no archive. The `deletedAt` column exists but there is no delete mutation and no scheduled cleanup.
+- No email, SMS, push or browser `Notification` API delivery — in-app only. No email transport exists anywhere in the repo.
+- No scheduler — no `@nestjs/schedule`, no `@Cron`, no server `setInterval`. Due-date/overdue task notifications and calendar-conflict notifications remain unbuilt because they need a scheduler. Calendar-conflict notifications (`deferred-work.md:138`) stay open and are re-pointed at a follow-up.
+- An undelivered `DealReminder` is never retried — `ensureSweptToday` short-circuits on the existence of any row for today's `sweepDate` regardless of `deliveredAt`. A crash mid-notification-loop orphans that day's rows permanently.
+- **`emailFrequency` (an email preference) now also suppresses the in-app bell**, with no separate in-app notification preference. A user who set `emailFrequency` to `OFF` (or `WEEKLY` on a non-Monday) loses in-app notifications as a side effect.
+- No return-context preservation on click-through (`ux-design-specification.md:2008` asks for `?from=` but there is no house pattern for it).
+- Calendar-conflict notifications still unbuilt (re-pointed from `deferred-work.md:138`).
+- Note mentions still unbuilt (`deferred-work.md:172` stays open).
+- "Shared with you" notifications unbuilt.
+- The now four-way duplicated `formatRelativeTime` plus two `timeAgo` near-twins — a five-component refactor is its own story, not tackled here.
+- No grouping or collapsing of repeated notifications — each event is an independent row with no aggregation.

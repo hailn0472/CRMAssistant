@@ -27,6 +27,7 @@ import '../calendar/calendar.graphql'
 import '../reports/reports.graphql'
 import '../time-tracking/time-tracking.graphql'
 import '../notes/notes.graphql'
+import '../notifications/notifications.graphql'
 import { builder } from './schema.builder'
 
 export const schema = builder.toSchema({})

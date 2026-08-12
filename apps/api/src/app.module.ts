@@ -12,6 +12,7 @@ import { StorageModule } from './storage/storage.module'
 import { DealCollaborationModule } from './deal-collaboration/deal-collaboration.module'
 import { DealHealthModule } from './deal-health/deal-health.module'
 import { NotesModule } from './notes/notes.module'
+import { NotificationsModule } from './notifications/notifications.module'
 import { TasksModule } from './tasks/tasks.module'
 import { CalendarModule } from './calendar/calendar.module'
 import { CalendarTaskBindingModule } from './calendar/calendar-task-binding.module'
@@ -59,6 +60,9 @@ import { TimeTrackingModule } from './time-tracking/time-tracking.module'
     // Story 4.7 (AC 38): NotesModule registers notes.graphql fields — must
     // sit ABOVE AppGraphqlModule for the same reason.
     NotesModule,
+    // Story 4.8 (AC 50): NotificationsModule registers notifications.graphql
+    // fields — must sit ABOVE AppGraphqlModule so the barrel sees the refs.
+    NotificationsModule,
     AppGraphqlModule,
     ContactsModule,
     DealsModule,

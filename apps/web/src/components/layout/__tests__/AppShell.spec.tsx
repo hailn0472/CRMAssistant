@@ -33,6 +33,14 @@ jest.mock('@/services/user.service', () => ({
   getMe: (): Promise<unknown> => mockGetMe(),
 }))
 
+jest.mock('@/lib/graphql-subscription', () => ({
+  GraphqlSubscriptionClient: jest.fn().mockImplementation(() => ({
+    connect: jest.fn().mockResolvedValue(undefined),
+    subscribe: jest.fn().mockReturnValue(jest.fn()),
+    disconnect: jest.fn(),
+  })),
+}))
+
 jest.mock('@tanstack/react-query', () => {
   const actual = jest.requireActual('@tanstack/react-query') as Record<string, unknown>
   return {
@@ -63,6 +71,9 @@ jest.mock('@tanstack/react-query', () => {
           isLoading: false,
           isError: false,
         }
+      }
+      if (queryKey[0] === 'notifications') {
+        return { data: 0, isLoading: false, isError: false }
       }
       return actual.useQuery
     }),

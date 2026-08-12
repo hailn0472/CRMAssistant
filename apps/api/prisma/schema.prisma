@@ -142,6 +142,7 @@ model Tenant {
   taskCalendarEvents       TaskCalendarEvent[]
   timeEntries              TimeEntry[]
   taskDependencies         TaskDependency[]
+  notifications            Notification[]
 }
 
 /// Tenant-scoped user model with authentication support.
@@ -199,6 +200,7 @@ model User {
   calendarConnections   CalendarConnection[]     @relation("UserCalendarConnection")
   timeEntries           TimeEntry[]              @relation("TimeEntryUser")
   authoredNotes         Note[]                   @relation("NoteAuthor")
+  notifications         Notification[]           @relation("NotificationRecipient")
 
   // Email is unique per tenant, NOT globally unique
   @@unique([tenantId, email])
@@ -665,6 +667,7 @@ model Deal {
   reminders          DealReminder[]
   reminderSnoozes    DealReminderSnooze[]
   tasks              Task[]
+  notifications      Notification[]           @relation("DealNotification")
   competitor         Competitor? @relation("DealWinLossCompetitor", fields: [competitorId], references: [id], onDelete: Restrict)
   winLossReason      String?
   winLossNote        String?
@@ -1157,6 +1160,7 @@ model Task {
 
   calendarEvents TaskCalendarEvent[]
   timeEntries    TimeEntry[]
+  notifications  Notification[] @relation("TaskNotification")
 
   @@index([tenantId])
   @@index([tenantId, assignedTo])
@@ -1332,4 +1336,55 @@ model TaskCalendarEvent {
   @@index([tenantId])
   @@index([tenantId, syncStatus, nextAttemptAt])
   @@index([calendarConnectionId, externalEventId])
+}
+
+// =============================================================================
+// NOTIFICATION MODELS (Story 4.8)
+// =============================================================================
+
+/// In-app notification row persisted in Postgres so unread state survives
+/// reload (architecture.md:944-946). type is a String validated against a
+/// const tuple in the service rather than in the DB — Deal.winLossReason set
+/// the precedent of validating a fixed vocabulary in the service.
+/// Recipient-scoped (userId), not visibility-scoped — no NEW resource is
+/// created and no requirePermission is ever called on the notification
+/// surface. dedupeKey is unique-when-set; NULL dedupeKeys never collide
+/// because Postgres treats NULLs as distinct in unique indexes (the same
+/// mechanism Activity relies on at schema.prisma:432-434).
+///
+/// Association: two nullable FK columns (dealId / taskId), at most one
+/// non-null, onDelete: Cascade on all four relations. Cascade on recipient
+/// (not Restrict as Note.author uses) is deliberate: a notification is
+/// worthless without its recipient, unlike an authored note which is a
+/// record of work.
+///
+/// Producers are server-side only (no createNotification mutation); every
+/// row is derived from an already-audited mutation, so no AuditLog rows are
+/// written for notifications (the Activity derived-record carve-out applies).
+model Notification {
+  id         String    @id @default(uuid())
+  tenantId   String
+  userId     String // the recipient
+  type       String // TASK_ASSIGNED | DEAL_REMINDER | DEAL_MENTION
+  title      String
+  body       String?
+  dealId     String?
+  taskId     String?
+  dedupeKey  String?
+  readAt     DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  createdBy  String    @default("system")
+  updatedBy  String    @default("system")
+  deletedAt  DateTime?
+
+  tenant    Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  recipient User   @relation("NotificationRecipient", fields: [userId], references: [id], onDelete: Cascade)
+  deal      Deal?  @relation("DealNotification", fields: [dealId], references: [id], onDelete: Cascade)
+  task      Task?  @relation("TaskNotification", fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, dedupeKey])
+  @@index([tenantId])
+  @@index([tenantId, userId, createdAt(sort: Desc)])
+  @@index([tenantId, userId, readAt])
 }

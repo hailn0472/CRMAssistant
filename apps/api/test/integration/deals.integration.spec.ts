@@ -58,7 +58,7 @@ describe('Deals persistence tenant pattern (integration)', () => {
 
   afterEach(async () => {
     await prisma.$executeRawUnsafe(
-      'TRUNCATE TABLE "Deal", "DealStage", "Note", "Contact", "User", "UserRole", "Role", "Team", "Tenant" RESTART IDENTITY CASCADE',
+      'TRUNCATE TABLE "Notification", "Deal", "DealStage", "Note", "Contact", "User", "UserRole", "Role", "Team", "Tenant" RESTART IDENTITY CASCADE',
     )
   })
 
