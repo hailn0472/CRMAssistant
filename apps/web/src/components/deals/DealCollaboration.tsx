@@ -6,8 +6,10 @@ import { useQuery } from '@tanstack/react-query'
 import { DealTimeline } from './DealTimeline'
 import { DealDocuments } from './DealDocuments'
 import { DealComments } from './DealComments'
+import { NotesPanel } from '@/components/notes/NotesPanel'
 import { getDealDocuments } from '@/services/deal-document.service'
 import { getDealComments } from '@/services/deal-comment.service'
+import { getNotes } from '@/services/note.service'
 
 /**
  * Three-tab Collaboration block (Timeline | Documents | Comments) for the deal detail page
@@ -17,6 +19,7 @@ const TABS = [
   { id: 'timeline', label: 'Timeline' },
   { id: 'documents', label: 'Documents' },
   { id: 'comments', label: 'Comments' },
+  { id: 'notes', label: 'Notes' },
 ] as const
 
 type TabId = (typeof TABS)[number]['id']
@@ -41,13 +44,20 @@ export function DealCollaboration({
     queryFn: () => getDealComments(dealId),
   })
 
+  const { data: notesData } = useQuery({
+    queryKey: ['notes', { dealId }],
+    queryFn: () => getNotes({ dealId }),
+  })
+
   const docCount = docs?.length ?? 0
   const commentCount = commentsData?.total ?? 2
+  const notesCount = notesData?.total ?? 0
   const timelineCount = 4
 
   const getCount = (id: TabId): number => {
     if (id === 'documents') return docCount
     if (id === 'comments') return commentCount
+    if (id === 'notes') return notesCount
     return timelineCount
   }
 
@@ -122,6 +132,15 @@ export function DealCollaboration({
         hidden={activeTab !== 'comments'}
       >
         {activeTab === 'comments' ? <DealComments dealId={dealId} /> : null}
+      </div>
+
+      <div
+        role="tabpanel"
+        id="deal-collab-panel-notes"
+        aria-labelledby="deal-collab-tab-notes"
+        hidden={activeTab !== 'notes'}
+      >
+        {activeTab === 'notes' ? <NotesPanel dealId={dealId} /> : null}
       </div>
     </div>
   )

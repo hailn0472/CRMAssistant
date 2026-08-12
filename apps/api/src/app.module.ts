@@ -11,6 +11,7 @@ import { CompetitorsModule } from './competitors/competitors.module'
 import { StorageModule } from './storage/storage.module'
 import { DealCollaborationModule } from './deal-collaboration/deal-collaboration.module'
 import { DealHealthModule } from './deal-health/deal-health.module'
+import { NotesModule } from './notes/notes.module'
 import { TasksModule } from './tasks/tasks.module'
 import { CalendarModule } from './calendar/calendar.module'
 import { CalendarTaskBindingModule } from './calendar/calendar-task-binding.module'
@@ -55,6 +56,9 @@ import { TimeTrackingModule } from './time-tracking/time-tracking.module'
     // the SDL) sees the refs at import time. Schema registration order is
     // load-bearing (docs/project-context.md:84).
     TimeTrackingModule,
+    // Story 4.7 (AC 38): NotesModule registers notes.graphql fields — must
+    // sit ABOVE AppGraphqlModule for the same reason.
+    NotesModule,
     AppGraphqlModule,
     ContactsModule,
     DealsModule,

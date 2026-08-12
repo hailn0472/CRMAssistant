@@ -28,6 +28,9 @@ type MockPrisma = {
   contact: {
     findFirst: jest.Mock
   }
+  note: {
+    findMany: jest.Mock
+  }
   auditLog: {
     create: jest.Mock
   }
@@ -66,6 +69,9 @@ function makePrisma(): MockPrisma {
     },
     contact: {
       findFirst: jest.fn(),
+    },
+    note: {
+      findMany: jest.fn(),
     },
     auditLog: {
       create: jest.fn(),
@@ -359,6 +365,7 @@ describe('ActivityService', () => {
             createdAt: true,
             createdBy: true,
             source: true,
+            sourceId: true,
           },
         }),
       )
@@ -704,6 +711,115 @@ describe('ActivityService', () => {
     })
   })
 
+  // ─── Story 4.7: hydrateNoteMarkers (AC 31) ───────────────────────────
+
+  describe('findByContact() — note-sourced hydration', () => {
+    function makeNoteActivity(
+      noteId: string,
+      title: string,
+      description: string | null = null,
+    ): Record<string, unknown> {
+      return makeActivity({
+        id: `activity-note-${noteId}`,
+        type: 'NOTE_ADDED',
+        source: 'NOTE',
+        sourceId: noteId,
+        title,
+        description,
+      })
+    }
+
+    it('case 1: no note-sourced edges → zero extra queries to prisma.note', async () => {
+      const normalActivity = makeActivity({ id: 'a1', source: null, sourceId: null })
+      prisma.activity.findMany.mockResolvedValue([normalActivity])
+
+      await service.findByContact(TENANT_ID, CONTACT_ID, { first: 20 })
+
+      expect(prisma.note.findMany).not.toHaveBeenCalled()
+    })
+
+    it('case 2: edited note → live body overwrites the marker title/description', async () => {
+      const noteActivity = makeNoteActivity('n1', 'Old title', 'Old description')
+      prisma.activity.findMany.mockResolvedValue([noteActivity])
+      prisma.note.findMany.mockResolvedValue([
+        { id: 'n1', body: 'This is the live edited body', deletedAt: null },
+      ])
+
+      const result = await service.findByContact(TENANT_ID, CONTACT_ID, { first: 20 })
+
+      expect(prisma.note.findMany).toHaveBeenCalledTimes(1)
+      expect(result.edges).toHaveLength(1)
+      const edge = result.edges[0]!
+      expect(edge.node.title).toBe('This is the live edited body')
+      expect(edge.node.description).toBe('This is the live edited body')
+      // source metadata unchanged
+      expect(edge.node.source).toBe('NOTE')
+      expect(edge.node.sourceId).toBe('n1')
+    })
+
+    it('case 3: soft-deleted note → edge is dropped, hasNextPage unchanged', async () => {
+      const noteActivity = makeNoteActivity('n-del', 'Some note', 'body')
+      // Exactly 21 rows returned → hasNextPage should be true
+      const activities = [
+        noteActivity,
+        ...Array.from({ length: 20 }, (_, i) =>
+          makeActivity({ id: `other-${i}`, source: null, sourceId: null }),
+        ),
+      ]
+      prisma.activity.findMany.mockResolvedValue(activities)
+      prisma.note.findMany.mockResolvedValue([
+        { id: 'n-del', body: 'Some note', deletedAt: new Date('2026-08-01') },
+      ])
+
+      const result = await service.findByContact(TENANT_ID, CONTACT_ID, { first: 20 })
+
+      // The note-sourced edge should be DROPPED, but hasNextPage still computed from the original 21 overshoot
+      // slice(0,20) keeps 20 rows, then 1 note edge is dropped → 19
+      expect(result.edges).toHaveLength(19)
+      // hasNextPage was true (21 > 20) before hydration; still true after
+      expect(result.pageInfo.hasNextPage).toBe(true)
+    })
+
+    it('case 4: legacy source:null NOTE_ADDED row → untouched (not dropped, not hydrated)', async () => {
+      const legacyActivity = makeActivity({
+        id: 'legacy-1',
+        type: 'NOTE_ADDED',
+        source: null,
+        sourceId: null,
+        title: 'Legacy manual note',
+        description: 'This is a legacy note',
+      })
+      prisma.activity.findMany.mockResolvedValue([legacyActivity])
+      // Even if prisma.note is called somehow, it shouldn't be
+      prisma.note.findMany.mockResolvedValue([])
+
+      const result = await service.findByContact(TENANT_ID, CONTACT_ID, { first: 20 })
+
+      // Not dropped
+      expect(result.edges).toHaveLength(1)
+      // No hydration — title/description unchanged
+      expect(result.edges[0]!.node.title).toBe('Legacy manual note')
+      expect(result.edges[0]!.node.description).toBe('This is a legacy note')
+      // prisma.note was never called because no source === 'NOTE' with sourceId
+      expect(prisma.note.findMany).not.toHaveBeenCalled()
+    })
+
+    it('case 5: note-sourced edge with missing Note row → edge dropped, no throw', async () => {
+      const noteActivity = makeNoteActivity('n-missing', 'Orphan title', 'body')
+      prisma.activity.findMany.mockResolvedValue([noteActivity])
+      // Note row missing — findMany returns empty array
+      prisma.note.findMany.mockResolvedValue([])
+
+      const result = await service.findByContact(TENANT_ID, CONTACT_ID, { first: 20 })
+
+      // Edge dropped
+      expect(result.edges).toHaveLength(0)
+      // hasNextPage still computed correctly
+      expect(result.pageInfo.hasNextPage).toBe(false)
+      // No error thrown
+    })
+  })
+
   describe('findByContact() with includeTotalCount', () => {
     const activityObjects = Array.from({ length: 25 }, (_, i) =>
       makeActivity({
@@ -986,7 +1102,7 @@ describe('ActivityService', () => {
       expect(result.items[0]).toMatchObject({ sourceId: 'task-9' })
     })
 
-    it('does not widen ACTIVITY_SELECT — findByContact keeps its 7-field select (AC 10)', async () => {
+    it('does not widen ACTIVITY_SELECT — findByContact keeps its 8-field select (AC 10, Story 4.7 adds sourceId)', async () => {
       prisma.activity.findMany.mockResolvedValue([makeActivity()])
 
       await service.findByContact(TENANT_ID, CONTACT_ID, { first: 20 })
@@ -1001,6 +1117,7 @@ describe('ActivityService', () => {
             createdAt: true,
             createdBy: true,
             source: true,
+            sourceId: true,
           },
         }),
       )

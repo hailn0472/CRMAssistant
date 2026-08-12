@@ -75,8 +75,8 @@ development_status:
   4-3-calendar-integration-google-calendar-outlook: done
   4-4-multiple-activity-views-list-calendar-timeline: done
   4-5-time-tracking-productivity-reports: done
-  4-6-task-dependencies-recurring-tasks: review
-  4-7-notes-on-contact-deal-account: backlog
+  4-6-task-dependencies-recurring-tasks: done
+  4-7-notes-on-contact-deal-account: review
   4-8-notification-center: backlog
   epic-4-retrospective: optional
   epic-6: backlog
@@ -191,4 +191,4 @@ action_items:
   action: When authoring Story 4-7 (Notes), model Note with contactId/dealId only
     — no accountId
   owner: Amelia (PO/Dev)
-  status: open
+  status: done

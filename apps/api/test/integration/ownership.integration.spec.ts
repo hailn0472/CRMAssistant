@@ -58,7 +58,7 @@ describe('Ownership rules (integration)', () => {
 
   afterEach(async () => {
     await prisma.$executeRawUnsafe(
-      'TRUNCATE TABLE "Activity", "ContactTag", "Tag", "Contact", "User", "UserRole", "Role", "Team", "Tenant" RESTART IDENTITY CASCADE',
+      'TRUNCATE TABLE "Activity", "ContactTag", "Tag", "Note", "Contact", "User", "UserRole", "Role", "Team", "Tenant" RESTART IDENTITY CASCADE',
     )
   })
 

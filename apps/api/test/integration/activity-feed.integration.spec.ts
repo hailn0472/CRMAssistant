@@ -68,7 +68,7 @@ function makeFakeProvider(): CalendarProviderPort {
 
 // The spec's own TRUNCATE list (AC 44) — there is no shared harness.
 const TRUNCATE_TABLES =
-  'TRUNCATE TABLE "TaskCalendarEvent", "CalendarConnection", "UserActivityLogPreference", "Activity", "Task", "SharingRule", "Contact", "User", "UserRole", "Role", "Permission", "RolePermission", "Team", "Tenant", "AuditLog" RESTART IDENTITY CASCADE'
+  'TRUNCATE TABLE "TaskCalendarEvent", "CalendarConnection", "UserActivityLogPreference", "Activity", "Task", "SharingRule", "Note", "Contact", "User", "UserRole", "Role", "Permission", "RolePermission", "Team", "Tenant", "AuditLog" RESTART IDENTITY CASCADE'
 
 const FEED_QUERY = `
   query Feed($filter: ActivityFeedFilterInput, $pagination: ActivityFeedPaginationInput) {
@@ -755,8 +755,10 @@ describe('Activity feed (integration) — Story 4.4, AC 4-13', () => {
     expect(res.body.errors).toBeUndefined()
     const node = res.body.data.contactTimeline.edges[0].node
     expect(node.title).toBe('Timeline row')
-    // The feed select fields are NOT selected by findByContact → resolve null.
-    expect(node.sourceId).toBeNull()
+    // Story 4.7 added sourceId to ACTIVITY_SELECT — the note-hydration pass in
+    // findByContact needs it — so the timeline now resolves it.
+    expect(node.sourceId).toBe('task-9')
+    // `contact` remains feed-only: still NOT selected by findByContact → null.
     expect(node.contact).toBeNull()
   })
 })

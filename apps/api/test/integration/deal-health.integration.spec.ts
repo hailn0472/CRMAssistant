@@ -58,7 +58,7 @@ describe('Deal health reminders and alerts (integration)', () => {
 
   afterEach(async () => {
     await prisma.$executeRawUnsafe(
-      'TRUNCATE TABLE "DealReminder", "DealReminderSnooze", "UserReminderPreference", "DealComment", "DealDocument", "Deal", "DealStage", "Contact", "User", "UserRole", "Role", "Permission", "RolePermission", "Team", "Tenant", "AuditLog" RESTART IDENTITY CASCADE',
+      'TRUNCATE TABLE "DealReminder", "DealReminderSnooze", "UserReminderPreference", "DealComment", "DealDocument", "Deal", "DealStage", "Note", "Contact", "User", "UserRole", "Role", "Permission", "RolePermission", "Team", "Tenant", "AuditLog" RESTART IDENTITY CASCADE',
     )
   })
 

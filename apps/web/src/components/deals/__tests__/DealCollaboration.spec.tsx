@@ -95,9 +95,10 @@ describe('DealCollaboration', () => {
     const timelineTab = screen.getByRole('tab', { name: /Timeline/ })
     fireEvent.keyDown(timelineTab, { key: 'ArrowLeft' })
 
-    const commentsTab = screen.getByRole('tab', { name: /Comments/ })
-    expect(commentsTab).toHaveFocus()
-    expect(commentsTab).toHaveAttribute('aria-selected', 'true')
+    // With 4 tabs, ArrowLeft from first tab wraps to last (Notes)
+    const notesTab = screen.getByRole('tab', { name: /Notes/ })
+    expect(notesTab).toHaveFocus()
+    expect(notesTab).toHaveAttribute('aria-selected', 'true')
   })
 
   it('ignores other keys in the tablist', () => {

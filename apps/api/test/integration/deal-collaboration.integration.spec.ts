@@ -84,7 +84,7 @@ describe('Deal document & comment collaboration (integration)', () => {
 
   afterEach(async () => {
     await prisma.$executeRawUnsafe(
-      'TRUNCATE TABLE "Deal", "DealStage", "Contact", "User", "UserRole", "Role", "Permission", "RolePermission", "Team", "Tenant", "DealDocument", "DealComment", "DealCommentMention", "AuditLog" RESTART IDENTITY CASCADE',
+      'TRUNCATE TABLE "Deal", "DealStage", "Note", "Contact", "User", "UserRole", "Role", "Permission", "RolePermission", "Team", "Tenant", "DealDocument", "DealComment", "DealCommentMention", "AuditLog" RESTART IDENTITY CASCADE',
     )
     fakeStorage.uploadedObjects = []
     fakeStorage.removedObjects = []

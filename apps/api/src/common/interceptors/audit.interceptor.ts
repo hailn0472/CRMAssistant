@@ -103,6 +103,13 @@ export const MUTATION_AUDIT_MAP: Record<string, { action: string; entity: string
   disconnectCalendar: { action: 'DELETE', entity: 'CALENDAR_CONNECTION' },
   syncTaskToCalendar: { action: 'UPDATE', entity: 'TASK' },
   syncCalendar: { action: 'UPDATE', entity: 'CALENDAR_CONNECTION' },
+
+  // Note mutations (Story 4.7). Decorative for GraphQL — the interceptor
+  // never fires — but kept for documentation parity; the service writes the
+  // rows itself (AC 21-22).
+  createNote: { action: 'CREATE', entity: 'NOTE' },
+  updateNote: { action: 'UPDATE', entity: 'NOTE' },
+  deleteNote: { action: 'DELETE', entity: 'NOTE' },
 }
 
 @Injectable()

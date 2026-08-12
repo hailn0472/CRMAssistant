@@ -37,6 +37,15 @@ jest.mock('@/components/contacts/ContactTimeline', () => ({
   ),
 }))
 
+// The real NotesPanel is fully tested in its own spec; here we only need
+// to prove ContactDetailClient mounts it in the Notes tab with the right
+// contactId (Story 4.7).
+jest.mock('@/components/notes/NotesPanel', () => ({
+  NotesPanel: ({ contactId }: { contactId: string }) => (
+    <div data-testid="notes-panel">{contactId}</div>
+  ),
+}))
+
 jest.mock('react-hot-toast', () => ({
   success: jest.fn(),
   error: jest.fn(),
@@ -193,5 +202,17 @@ describe('ContactDetailClient', () => {
     fireEvent.click(screen.getByRole('tab', { name: /activity/i }))
 
     expect(screen.getByTestId('contact-timeline')).toBeInTheDocument()
+  })
+
+  it('renders NotesPanel in the Notes tab with the contact id (Story 4.7)', () => {
+    renderClient()
+
+    expect(screen.queryByTestId('notes-panel')).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('tab', { name: /^notes$/i }))
+
+    const panel = screen.getByTestId('notes-panel')
+    expect(panel).toBeInTheDocument()
+    expect(panel.textContent).toBe('contact-1')
   })
 })

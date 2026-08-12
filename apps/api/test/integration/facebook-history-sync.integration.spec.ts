@@ -106,7 +106,7 @@ describe('Facebook history sync (integration)', () => {
 
   afterEach(async () => {
     await prisma.$executeRawUnsafe(
-      'TRUNCATE TABLE "Message", "Conversation", "ContactChannelIdentity", "Contact", "ChannelConnection", "UserRole", "Role", "User", "Tenant" RESTART IDENTITY CASCADE',
+      'TRUNCATE TABLE "Message", "Conversation", "ContactChannelIdentity", "Note", "Contact", "ChannelConnection", "UserRole", "Role", "User", "Tenant" RESTART IDENTITY CASCADE',
     )
     jest.restoreAllMocks()
   })

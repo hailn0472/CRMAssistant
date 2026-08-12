@@ -93,7 +93,7 @@ describe('Time tracking and productivity reports (integration)', () => {
   // AC 48: "TimeEntry" MUST be first in the spec's own TRUNCATE list.
   afterEach(async () => {
     await prisma.$executeRawUnsafe(
-      'TRUNCATE TABLE "TimeEntry", "TaskDependency", "Task", "TaskTemplate", "Deal", "DealStage", "Contact", "User", "UserRole", "Role", "Permission", "RolePermission", "Team", "Tenant", "AuditLog" RESTART IDENTITY CASCADE',
+      'TRUNCATE TABLE "TimeEntry", "TaskDependency", "Task", "TaskTemplate", "Deal", "DealStage", "Note", "Contact", "User", "UserRole", "Role", "Permission", "RolePermission", "Team", "Tenant", "AuditLog" RESTART IDENTITY CASCADE',
     )
   })
 
