@@ -14,6 +14,14 @@ export type SalesForecastInput = {
   groupBy: ForecastGroupBy
   ownerId?: string
   teamId?: string
+  /**
+   * Focused regression fix required by story 6.2 (AC 24/28/40, AC 30): the
+   * composed report must narrow by the same filters as its scope. Optional —
+   * absent values preserve the legacy forecast behaviour.
+   */
+  stageId?: string
+  productId?: string
+  currency?: string
 }
 
 export type ForecastBucket = {
@@ -226,6 +234,29 @@ export class ForecastService {
       where.AND = [
         ...(Array.isArray(baseWhere.AND) ? baseWhere.AND : baseWhere.AND ? [baseWhere.AND] : []),
         { owner: { teamId: input.teamId, deletedAt: null } },
+      ]
+    }
+
+    // Story 6.2 focused regression fix (AC 24/28/40, AC 30): narrow by the
+    // same stage/product/currency filters as the composed report scope so the
+    // headline bands never disagree with buckets/drill and never sum unlike
+    // currencies into one labeled number.
+    if (input.stageId) {
+      where.AND = [
+        ...(Array.isArray(where.AND) ? where.AND : where.AND ? [where.AND] : []),
+        { stageId: input.stageId },
+      ]
+    }
+    if (input.productId) {
+      where.AND = [
+        ...(Array.isArray(where.AND) ? where.AND : where.AND ? [where.AND] : []),
+        { lineItems: { some: { productId: input.productId, deletedAt: null } } },
+      ]
+    }
+    if (input.currency) {
+      where.AND = [
+        ...(Array.isArray(where.AND) ? where.AND : where.AND ? [where.AND] : []),
+        { currency: input.currency },
       ]
     }
 

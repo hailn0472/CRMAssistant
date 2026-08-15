@@ -24,8 +24,12 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, { resource: string; action
       resource: 'TASK',
       action: a,
     })),
+    // Story 6.2 (AC 19): Sales Manager gains REPORT CUD (was READ/EXPORT only).
     { resource: 'REPORT', action: 'READ' },
     { resource: 'REPORT', action: 'EXPORT' },
+    { resource: 'REPORT', action: 'CREATE' },
+    { resource: 'REPORT', action: 'UPDATE' },
+    { resource: 'REPORT', action: 'DELETE' },
     { resource: 'PRODUCT', action: 'CREATE' },
     { resource: 'PRODUCT', action: 'READ' },
     { resource: 'PRODUCT', action: 'UPDATE' },

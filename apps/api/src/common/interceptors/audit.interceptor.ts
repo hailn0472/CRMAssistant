@@ -110,6 +110,14 @@ export const MUTATION_AUDIT_MAP: Record<string, { action: string; entity: string
   createNote: { action: 'CREATE', entity: 'NOTE' },
   updateNote: { action: 'UPDATE', entity: 'NOTE' },
   deleteNote: { action: 'DELETE', entity: 'NOTE' },
+
+  // Report mutations (Story 6.2, AC 18). Decorative for GraphQL — the
+  // interceptor never fires for mutations in this repo — but kept for
+  // documentation parity; SalesReportsService writes the audit rows itself
+  // (AC 17). There is no double write.
+  createReport: { action: 'CREATE', entity: 'REPORT' },
+  updateReport: { action: 'UPDATE', entity: 'REPORT' },
+  deleteReport: { action: 'DELETE', entity: 'REPORT' },
 }
 
 @Injectable()

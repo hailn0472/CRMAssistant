@@ -68,7 +68,7 @@ describe('Task dependencies and recurring tasks (integration)', () => {
 
   afterEach(async () => {
     await prisma.$executeRawUnsafe(
-      'TRUNCATE TABLE "Notification", "Widget", "Dashboard", "TaskDependency", "Task", "TaskTemplate", "Deal", "DealStage", "Note", "Contact", "User", "UserRole", "Role", "Permission", "RolePermission", "Team", "Tenant", "AuditLog" RESTART IDENTITY CASCADE',
+      'TRUNCATE TABLE "Notification", "Widget", "Dashboard", "TaskDependency", "Task", "TaskTemplate", "Deal", "DealStage", "Note", "Contact", "User", "UserRole", "Role", "Permission", "RolePermission", "Team", "Report", "Tenant", "AuditLog" RESTART IDENTITY CASCADE',
     )
   })
 

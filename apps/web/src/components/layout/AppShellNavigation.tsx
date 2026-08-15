@@ -83,8 +83,10 @@ const navigationSections: NavigationSection[] = [
         permission: { resource: 'TASK', action: 'READ' },
       },
       {
+        // Story 6.2 (AC 65): primary Reports entry now points at the sales
+        // reports workspace; Win/Loss and Productivity entries stay separate.
         label: 'Reports',
-        href: '/reports/forecast',
+        href: '/reports/sales',
         icon: BarChart3,
         permission: { resource: 'REPORT', action: 'READ' },
       },

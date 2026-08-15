@@ -38,6 +38,7 @@ describe('Products Integration', () => {
     await prisma.$executeRawUnsafe('TRUNCATE TABLE "Notification" CASCADE')
     await prisma.$executeRawUnsafe('TRUNCATE TABLE "Widget" CASCADE')
     await prisma.$executeRawUnsafe('TRUNCATE TABLE "Dashboard" CASCADE')
+    await prisma.$executeRawUnsafe('TRUNCATE TABLE "Report" CASCADE')
     await prisma.$executeRawUnsafe('TRUNCATE TABLE "DealLineItem" CASCADE')
     await prisma.$executeRawUnsafe('TRUNCATE TABLE "Product" CASCADE')
     await prisma.$executeRawUnsafe('TRUNCATE TABLE "Deal" CASCADE')

@@ -61,7 +61,7 @@ describe('Forecast Integration', () => {
   beforeEach(async () => {
     // Clean tables
     await prisma.$executeRawUnsafe(
-      'TRUNCATE TABLE "Notification", "Widget", "Dashboard", "ForecastSnapshot", "Deal", "User", "Tenant", "DealStage", "Team", "Role", "Permission", "RolePermission", "UserRole" CASCADE',
+      'TRUNCATE TABLE "Notification", "Widget", "Dashboard", "ForecastSnapshot", "Deal", "User", "Report", "Tenant", "DealStage", "Team", "Role", "Permission", "RolePermission", "UserRole" CASCADE',
     )
 
     // Seed tenants

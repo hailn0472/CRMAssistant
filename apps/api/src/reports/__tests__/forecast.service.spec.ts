@@ -535,6 +535,49 @@ describe('ForecastService', () => {
       expect(dealsService.findMany).not.toHaveBeenCalled()
       expect(prisma.deal.findMany).toHaveBeenCalled()
     })
+
+    it('narrows by stage/product/currency filters (story 6.2 focused regression fix, AC 24/28/40/30)', async () => {
+      dealsService.buildDealWhere.mockResolvedValue({ tenantId: TENANT_ID, deletedAt: null })
+      prisma.deal.findMany.mockResolvedValue([])
+
+      await service.salesForecast(TENANT_ID, USER_ID, {
+        startDate: '2026-08-01',
+        endDate: '2026-10-01',
+        groupBy: 'MONTH',
+        stageId: 'stage-7',
+        productId: 'product-9',
+        currency: 'EUR',
+      })
+
+      expect(prisma.deal.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            AND: expect.arrayContaining([
+              { stageId: 'stage-7' },
+              { lineItems: { some: { productId: 'product-9', deletedAt: null } } },
+              { currency: 'EUR' },
+            ]),
+          }),
+        }),
+      )
+    })
+
+    it('leaves the predicate un-narrowed when the optional filters are absent', async () => {
+      dealsService.buildDealWhere.mockResolvedValue({ tenantId: TENANT_ID, deletedAt: null })
+      prisma.deal.findMany.mockResolvedValue([])
+
+      await service.salesForecast(TENANT_ID, USER_ID, {
+        startDate: '2026-08-01',
+        endDate: '2026-10-01',
+        groupBy: 'MONTH',
+      })
+
+      const where = (prisma.deal.findMany.mock.calls[0][0] as { where: Record<string, unknown> })
+        .where
+      expect(where.stageId).toBeUndefined()
+      expect(where.currency).toBeUndefined()
+      expect(where.lineItems).toBeUndefined()
+    })
   })
 
   describe('captureSnapshots (write-through)', () => {
