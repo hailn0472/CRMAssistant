@@ -36,7 +36,9 @@ global.IntersectionObserver = class IntersectionObserver {
   observe(): void {}
   unobserve(): void {}
   disconnect(): void {}
-  takeRecords(): IntersectionObserverEntry[] { return [] }
+  takeRecords(): IntersectionObserverEntry[] {
+    return []
+  }
 }
 
 // jsdom does not implement scrollIntoView, which is used by cmdk during

@@ -17,8 +17,24 @@ describe('forecast.service', () => {
     const mockResponse = {
       salesForecast: {
         buckets: [
-          { key: '2026-07', label: 'Jul 2026', periodStart: '2026-07-01', periodEnd: '2026-07-31', weightedValue: 0, totalValue: 0, count: 0 },
-          { key: '2026-08', label: 'Aug 2026', periodStart: '2026-08-01', periodEnd: '2026-08-31', weightedValue: 15000, totalValue: 30000, count: 1 },
+          {
+            key: '2026-07',
+            label: 'Jul 2026',
+            periodStart: '2026-07-01',
+            periodEnd: '2026-07-31',
+            weightedValue: 0,
+            totalValue: 0,
+            count: 0,
+          },
+          {
+            key: '2026-08',
+            label: 'Aug 2026',
+            periodStart: '2026-08-01',
+            periodEnd: '2026-08-31',
+            weightedValue: 15000,
+            totalValue: 30000,
+            count: 1,
+          },
         ],
         commit: { weightedValue: 37500, totalValue: 50000, count: 1 },
         bestCase: { weightedValue: 52500, totalValue: 80000, count: 2 },
@@ -69,7 +85,14 @@ describe('forecast.service', () => {
     it('returns accuracy periods', async () => {
       const mockData = {
         forecastAccuracy: [
-          { periodStart: '2026-06-01', periodEnd: '2026-06-30', forecastValue: 50000, actualValue: 45000, variance: -5000, accuracyPct: 90 },
+          {
+            periodStart: '2026-06-01',
+            periodEnd: '2026-06-30',
+            forecastValue: 50000,
+            actualValue: 45000,
+            variance: -5000,
+            accuracyPct: 90,
+          },
         ],
       }
       mockGraphqlRequest.mockResolvedValue(mockData)

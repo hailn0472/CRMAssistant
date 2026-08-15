@@ -76,7 +76,7 @@ export default async function UserDetailPage({
 
   return (
     <main className="space-y-6 p-6 text-slate-950">
-<WorkspacePanel className="p-6">
+      <WorkspacePanel className="p-6">
         <div className="grid gap-4 md:grid-cols-2">
           <Detail label="Email" value={user.email} />
           <Detail label="Phone" value={user.phone ?? '—'} />

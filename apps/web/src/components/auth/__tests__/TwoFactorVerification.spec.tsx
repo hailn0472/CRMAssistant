@@ -3,26 +3,14 @@ import { TwoFactorVerification } from '../TwoFactorVerification'
 
 describe('TwoFactorVerification', () => {
   it('renders 6 digit input boxes', () => {
-    render(
-      <TwoFactorVerification
-        onSubmit={jest.fn()}
-        isSubmitting={false}
-        error={null}
-      />,
-    )
+    render(<TwoFactorVerification onSubmit={jest.fn()} isSubmitting={false} error={null} />)
 
     const inputs = screen.getAllByRole('textbox')
     expect(inputs).toHaveLength(6)
   })
 
   it('renders submit button', () => {
-    render(
-      <TwoFactorVerification
-        onSubmit={jest.fn()}
-        isSubmitting={false}
-        error={null}
-      />,
-    )
+    render(<TwoFactorVerification onSubmit={jest.fn()} isSubmitting={false} error={null} />)
 
     expect(screen.getByText('Xác thực')).toBeInTheDocument()
   })
@@ -40,13 +28,7 @@ describe('TwoFactorVerification', () => {
   })
 
   it('disables inputs when submitting', () => {
-    render(
-      <TwoFactorVerification
-        onSubmit={jest.fn()}
-        isSubmitting={true}
-        error={null}
-      />,
-    )
+    render(<TwoFactorVerification onSubmit={jest.fn()} isSubmitting={true} error={null} />)
 
     const inputs = screen.getAllByRole('textbox')
     for (const input of inputs) {

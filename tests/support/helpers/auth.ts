@@ -15,7 +15,8 @@ function encodeBase64Url(value: string): string {
 
 /** @internal shared implementation */
 function buildTestJwt(secretOverride?: string, rolesOverride?: string[]): string {
-  const secret = secretOverride ?? process.env['JWT_SECRET'] ?? 'playwright-test-secret-min-32-chars!!'
+  const secret =
+    secretOverride ?? process.env['JWT_SECRET'] ?? 'playwright-test-secret-min-32-chars!!'
   const roles = rolesOverride ?? ['SALES_REP']
   // Allow overrides via env vars so E2E tests can match a real tenant/user
   const userId = process.env['PLAYWRIGHT_USER_ID'] ?? 'playwright-user-1'

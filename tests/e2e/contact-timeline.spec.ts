@@ -39,34 +39,22 @@ function activityIndexToType(i: number): string {
   return ACTIVITY_TYPES[i % ACTIVITY_TYPES.length]
 }
 
-function createMockNode(
-  idx: number,
-  contactId: string,
-  type?: string,
-): MockNode {
+function createMockNode(idx: number, contactId: string, type?: string): MockNode {
   const t = type ?? activityIndexToType(idx)
   const hourOffset = idx + 1
   return {
     id: `e2e-act-${idx + 1}`,
     contactId,
     type: t,
-    title: t
-      .replace(/_/g, ' ')
-      .replace(/\b\w/g, (c) => c.toUpperCase()),
+    title: t.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()),
     description:
-      idx % 3 === 0
-        ? `Automated test — activity #${idx + 1} created for E2E validation`
-        : null,
+      idx % 3 === 0 ? `Automated test — activity #${idx + 1} created for E2E validation` : null,
     createdAt: new Date(Date.now() - hourOffset * 3_600_000).toISOString(),
     createdBy: 'E2E Tester',
   }
 }
 
-function createMockEdges(
-  count: number,
-  contactId: string,
-  startIndex = 0,
-): MockEdge[] {
+function createMockEdges(count: number, contactId: string, startIndex = 0): MockEdge[] {
   return Array.from({ length: count }, (_, i) => {
     const idx = startIndex + i
     const node = createMockNode(idx, contactId)
@@ -91,9 +79,10 @@ function createTypeSpecificEdges(
 // ---------------------------------------------------------------------------
 // Mock route helpers
 // ---------------------------------------------------------------------------
-type MockHandler = (
-  postData: { query: string; variables?: Record<string, unknown> },
-) => Promise<{ status?: number; body: unknown }> | { status?: number; body: unknown }
+type MockHandler = (postData: {
+  query: string
+  variables?: Record<string, unknown>
+}) => Promise<{ status?: number; body: unknown }> | { status?: number; body: unknown }
 
 async function setupGraphqlMock(
   page: import('@playwright/test').Page,
@@ -201,12 +190,7 @@ const AUTH_USER = API_ADMIN_USER
 const AUTH_TENANT = API_ADMIN_TENANT
 
 /** Build a JWT for the API with full control over sub/tenant/roles. */
-function buildApiJwt(
-  secret: string,
-  sub: string,
-  tenantId: string,
-  roles: string[],
-): string {
+function buildApiJwt(secret: string, sub: string, tenantId: string, roles: string[]): string {
   const { createHmac } = require('crypto')
   const e = (v: string) => Buffer.from(v).toString('base64url')
   const header = e(JSON.stringify({ alg: 'HS256', typ: 'JWT' }))
@@ -308,9 +292,7 @@ test.describe('Contact Timeline — Story 5.4', () => {
   // ====================================================================
   // E2E-01: Timeline section renders on contact detail page
   // ====================================================================
-  test('[P1] E2E-01: Timeline section renders on contact detail page', async ({
-    page,
-  }) => {
+  test('[P1] E2E-01: Timeline section renders on contact detail page', async ({ page }) => {
     test.skip(setupFailed, 'API not available — test contact not created')
     test.skip(!contactId, 'Contact ID not available')
 
@@ -326,9 +308,7 @@ test.describe('Contact Timeline — Story 5.4', () => {
     await expect(page.getByText(/^\s*\(/).first()).toBeVisible({ timeout: 5_000 })
 
     // "Add Note" button is present
-    await expect(
-      page.getByRole('button', { name: /add note/i }),
-    ).toBeVisible()
+    await expect(page.getByRole('button', { name: /add note/i })).toBeVisible()
 
     // Filter tabs are visible
     await expect(page.getByRole('button', { name: /^all$/i })).toBeVisible()
@@ -339,9 +319,7 @@ test.describe('Contact Timeline — Story 5.4', () => {
   // ====================================================================
   // E2E-02: Timeline loads first batch of activities automatically
   // ====================================================================
-  test('[P1] E2E-02: Timeline loads activities on page load', async ({
-    page,
-  }) => {
+  test('[P1] E2E-02: Timeline loads activities on page load', async ({ page }) => {
     test.skip(setupFailed, 'API not available')
     test.skip(!contactId, 'Contact ID not available')
 
@@ -351,9 +329,7 @@ test.describe('Contact Timeline — Story 5.4', () => {
     await page.goto(`/contacts/${contactId!}`)
 
     // Wait for activity cards to render
-    await expect(
-      page.getByText(/e2e tester/i).first(),
-    ).toBeVisible({ timeout: 15_000 })
+    await expect(page.getByText(/e2e tester/i).first()).toBeVisible({ timeout: 15_000 })
 
     // Verify multiple cards are rendered
     const cards = page.locator('h4').filter({ hasText: /^[A-Z]/ })
@@ -363,9 +339,7 @@ test.describe('Contact Timeline — Story 5.4', () => {
   // ====================================================================
   // E2E-03: Loading skeleton during initial fetch
   // ====================================================================
-  test('[P2] E2E-03: Loading skeleton visible during initial load', async ({
-    page,
-  }) => {
+  test('[P2] E2E-03: Loading skeleton visible during initial load', async ({ page }) => {
     test.skip(setupFailed, 'API not available')
     test.skip(!contactId, 'Contact ID not available')
 
@@ -396,22 +370,16 @@ test.describe('Contact Timeline — Story 5.4', () => {
     // Skeleton is rendered as divs with animate-pulse class
     // The skeleton container is the loading state of ContactTimeline
     // It contains multiple animate-pulse divs
-    await expect(
-      page.locator('.animate-pulse').first(),
-    ).toBeVisible({ timeout: 5_000 })
+    await expect(page.locator('.animate-pulse').first()).toBeVisible({ timeout: 5_000 })
 
     // Wait for skeleton to disappear after data loads
-    await expect(
-      page.locator('.animate-pulse').first(),
-    ).not.toBeVisible({ timeout: 10_000 })
+    await expect(page.locator('.animate-pulse').first()).not.toBeVisible({ timeout: 10_000 })
   })
 
   // ====================================================================
   // E2E-04: Empty timeline state for new contact with no activities
   // ====================================================================
-  test('[P1] E2E-04: Empty state visible when no activities exist', async ({
-    page,
-  }) => {
+  test('[P1] E2E-04: Empty state visible when no activities exist', async ({ page }) => {
     test.skip(setupFailed, 'API not available')
     test.skip(!contactId, 'Contact ID not available')
 
@@ -419,14 +387,10 @@ test.describe('Contact Timeline — Story 5.4', () => {
     await page.goto(`/contacts/${contactId!}`)
 
     // Should show the empty state message
-    await expect(
-      page.getByText(/no activity recorded yet/i),
-    ).toBeVisible({ timeout: 15_000 })
+    await expect(page.getByText(/no activity recorded yet/i)).toBeVisible({ timeout: 15_000 })
 
     // Add Note button still visible in empty state
-    await expect(
-      page.getByRole('button', { name: /add note/i }),
-    ).toBeVisible()
+    await expect(page.getByRole('button', { name: /add note/i })).toBeVisible()
   })
 
   // ====================================================================
@@ -450,16 +414,12 @@ test.describe('Contact Timeline — Story 5.4', () => {
 
     // Each card has an h4 with the activity title
     const firstTitle = edges[0].node.title
-    await expect(
-      page.getByRole('heading', { name: firstTitle }),
-    ).toBeVisible()
+    await expect(page.getByRole('heading', { name: firstTitle })).toBeVisible()
 
     // Description shown for every 3rd activity (our mock creates desc for idx % 3 === 0)
     const descActivity = edges.find((e) => e.node.description)
     if (descActivity) {
-      await expect(
-        page.getByText(descActivity.node.description!),
-      ).toBeVisible()
+      await expect(page.getByText(descActivity.node.description!)).toBeVisible()
     }
 
     // Activity icons are rendered as circular divs (rounded-full)
@@ -473,9 +433,7 @@ test.describe('Contact Timeline — Story 5.4', () => {
   // ====================================================================
   // E2E-06: Infinite scroll — scroll to bottom loads next batch
   // ====================================================================
-  test('[P1] E2E-06: Infinite scroll loads more activities when scrolling', async ({
-    page,
-  }) => {
+  test('[P1] E2E-06: Infinite scroll loads more activities when scrolling', async ({ page }) => {
     test.skip(setupFailed, 'API not available')
     test.skip(!contactId, 'Contact ID not available')
 
@@ -554,17 +512,13 @@ test.describe('Contact Timeline — Story 5.4', () => {
     // After scrolling, the IntersectionObserver triggers fetchMore.
     // Wait for the next batch to complete and "No more activities" to appear.
     // The loading indicator transitions too quickly to reliably assert on.
-    await expect(
-      page.getByText(/no more activities/i),
-    ).toBeVisible({ timeout: 10_000 })
+    await expect(page.getByText(/no more activities/i)).toBeVisible({ timeout: 10_000 })
   })
 
   // ====================================================================
   // E2E-07: "No more activities" message at end of timeline
   // ====================================================================
-  test('[P2] E2E-07: "No more activities" shown when all loaded', async ({
-    page,
-  }) => {
+  test('[P2] E2E-07: "No more activities" shown when all loaded', async ({ page }) => {
     test.skip(setupFailed, 'API not available')
     test.skip(!contactId, 'Contact ID not available')
 
@@ -580,17 +534,13 @@ test.describe('Contact Timeline — Story 5.4', () => {
     })
 
     // "No more activities" should appear immediately since hasNextPage=false
-    await expect(
-      page.getByText(/no more activities/i),
-    ).toBeVisible({ timeout: 5_000 })
+    await expect(page.getByText(/no more activities/i)).toBeVisible({ timeout: 5_000 })
   })
 
   // ====================================================================
   // E2E-08: Click "Add Note" → inline textarea appears
   // ====================================================================
-  test('[P1] E2E-08: Add Note button opens inline note composer', async ({
-    page,
-  }) => {
+  test('[P1] E2E-08: Add Note button opens inline note composer', async ({ page }) => {
     test.skip(setupFailed, 'API not available')
     test.skip(!contactId, 'Contact ID not available')
 
@@ -603,25 +553,19 @@ test.describe('Contact Timeline — Story 5.4', () => {
     await addNoteBtn.click()
 
     // Textarea with aria-label "Note text" should appear
-    await expect(
-      page.getByRole('textbox', { name: /note text/i }),
-    ).toBeVisible()
+    await expect(page.getByRole('textbox', { name: /note text/i })).toBeVisible()
 
     // Character counter should appear
     await expect(page.getByText(/0\/1000/)).toBeVisible()
 
     // Save button should be disabled initially (empty)
-    await expect(
-      page.getByRole('button', { name: /^save$/i }),
-    ).toBeDisabled()
+    await expect(page.getByRole('button', { name: /^save$/i })).toBeDisabled()
   })
 
   // ====================================================================
   // E2E-09: Type note → Save → note appears in timeline
   // ====================================================================
-  test('[P1] E2E-09: Type a note, save it, and see it appear instantly', async ({
-    page,
-  }) => {
+  test('[P1] E2E-09: Type a note, save it, and see it appear instantly', async ({ page }) => {
     test.skip(setupFailed, 'API not available')
     test.skip(!contactId, 'Contact ID not available')
 
@@ -637,15 +581,11 @@ test.describe('Contact Timeline — Story 5.4', () => {
 
     // Open note composer
     await page.getByRole('button', { name: /add note/i }).click()
-    await expect(
-      page.getByRole('textbox', { name: /note text/i }),
-    ).toBeVisible()
+    await expect(page.getByRole('textbox', { name: /note text/i })).toBeVisible()
 
     // Type a note
     const noteText = 'This is an E2E test note — checking the full flow.'
-    await page
-      .getByRole('textbox', { name: /note text/i })
-      .fill(noteText)
+    await page.getByRole('textbox', { name: /note text/i }).fill(noteText)
 
     // Save should be enabled
     const saveBtn = page.getByRole('button', { name: /^save$/i })
@@ -656,17 +596,13 @@ test.describe('Contact Timeline — Story 5.4', () => {
 
     // The note should appear in the timeline (optimistic update) — use role to avoid
     // strict-mode ambiguity (both the card title h4 and the description p match).
-    await expect(
-      page.getByRole('heading', { name: noteText }),
-    ).toBeVisible({ timeout: 5_000 })
+    await expect(page.getByRole('heading', { name: noteText })).toBeVisible({ timeout: 5_000 })
   })
 
   // ====================================================================
   // E2E-10: Submit empty note → button disabled
   // ====================================================================
-  test('[P2] E2E-10: Save button disabled when note text is empty', async ({
-    page,
-  }) => {
+  test('[P2] E2E-10: Save button disabled when note text is empty', async ({ page }) => {
     test.skip(setupFailed, 'API not available')
     test.skip(!contactId, 'Contact ID not available')
 
@@ -677,9 +613,7 @@ test.describe('Contact Timeline — Story 5.4', () => {
     await page.getByRole('button', { name: /add note/i }).click()
 
     // Save button should be disabled (empty textarea)
-    await expect(
-      page.getByRole('button', { name: /^save$/i }),
-    ).toBeDisabled()
+    await expect(page.getByRole('button', { name: /^save$/i })).toBeDisabled()
 
     // Character count shows 0/1000
     await expect(page.getByText('0/1000')).toBeVisible()
@@ -711,9 +645,7 @@ test.describe('Contact Timeline — Story 5.4', () => {
     await expect(page.getByText(/1001\/1000/)).toBeVisible()
 
     // Save button should be disabled
-    await expect(
-      page.getByRole('button', { name: /^save$/i }),
-    ).toBeDisabled()
+    await expect(page.getByRole('button', { name: /^save$/i })).toBeDisabled()
 
     // Counter text should be red (text-red-600 class applied)
     // We check the spans that contain the counter
@@ -724,9 +656,7 @@ test.describe('Contact Timeline — Story 5.4', () => {
   // ====================================================================
   // E2E-12: Network failure on note save → error toast
   // ====================================================================
-  test('[P2] E2E-12: Failed note mutation shows error toast', async ({
-    page,
-  }) => {
+  test('[P2] E2E-12: Failed note mutation shows error toast', async ({ page }) => {
     test.skip(setupFailed, 'API not available')
     test.skip(!contactId, 'Contact ID not available')
 
@@ -762,24 +692,20 @@ test.describe('Contact Timeline — Story 5.4', () => {
 
     // Open composer and submit
     await page.getByRole('button', { name: /add note/i }).click()
-    await page
-      .getByRole('textbox', { name: /note text/i })
-      .fill('This note will fail to save')
+    await page.getByRole('textbox', { name: /note text/i }).fill('This note will fail to save')
     await page.getByRole('button', { name: /^save$/i }).click()
 
     // Toast should appear with error message
     // The app uses react-hot-toast which renders toast containers
-    await expect(
-      page.getByText(/failed to save note|failed to create note/i),
-    ).toBeVisible({ timeout: 5_000 })
+    await expect(page.getByText(/failed to save note|failed to create note/i)).toBeVisible({
+      timeout: 5_000,
+    })
   })
 
   // ====================================================================
   // E2E-13/14/15: Filter tabs — All / Sales / System
   // ====================================================================
-  test('[P1] E2E-13/14/15: Filter tabs correctly filter activities', async ({
-    page,
-  }) => {
+  test('[P1] E2E-13/14/15: Filter tabs correctly filter activities', async ({ page }) => {
     test.skip(setupFailed, 'API not available')
     test.skip(!contactId, 'Contact ID not available')
 
@@ -812,9 +738,7 @@ test.describe('Contact Timeline — Story 5.4', () => {
     const allCards = page.locator('h4')
     // We check that specific titles are visible
     for (const edge of mixedEdges) {
-      await expect(
-        page.getByRole('heading', { name: edge.node.title }),
-      ).toBeVisible()
+      await expect(page.getByRole('heading', { name: edge.node.title })).toBeVisible()
     }
 
     // --- Click "Sales" filter ---
@@ -833,15 +757,11 @@ test.describe('Contact Timeline — Story 5.4', () => {
 
     // Sales activities should be visible
     for (const edge of salesEdges) {
-      await expect(
-        page.getByRole('heading', { name: edge.node.title }),
-      ).toBeVisible()
+      await expect(page.getByRole('heading', { name: edge.node.title })).toBeVisible()
     }
     // System activities should be hidden
     for (const edge of systemEdges) {
-      await expect(
-        page.getByRole('heading', { name: edge.node.title }),
-      ).not.toBeVisible()
+      await expect(page.getByRole('heading', { name: edge.node.title })).not.toBeVisible()
     }
 
     // "No system activities" should NOT be visible since we're in Sales filter
@@ -857,15 +777,11 @@ test.describe('Contact Timeline — Story 5.4', () => {
 
     // System activities should be visible
     for (const edge of systemEdges) {
-      await expect(
-        page.getByRole('heading', { name: edge.node.title }),
-      ).toBeVisible()
+      await expect(page.getByRole('heading', { name: edge.node.title })).toBeVisible()
     }
     // Sales activities should be hidden
     for (const edge of salesEdges) {
-      await expect(
-        page.getByRole('heading', { name: edge.node.title }),
-      ).not.toBeVisible()
+      await expect(page.getByRole('heading', { name: edge.node.title })).not.toBeVisible()
     }
 
     // --- Click "All" filter again ---
@@ -874,18 +790,14 @@ test.describe('Contact Timeline — Story 5.4', () => {
 
     // All activities should be visible again
     for (const edge of mixedEdges) {
-      await expect(
-        page.getByRole('heading', { name: edge.node.title }),
-      ).toBeVisible()
+      await expect(page.getByRole('heading', { name: edge.node.title })).toBeVisible()
     }
   })
 
   // ====================================================================
   // Mobile responsive
   // ====================================================================
-  test('[P2] E2E-16: Timeline renders correctly on mobile viewport', async ({
-    page,
-  }) => {
+  test('[P2] E2E-16: Timeline renders correctly on mobile viewport', async ({ page }) => {
     test.skip(setupFailed, 'API not available')
     test.skip(!contactId, 'Contact ID not available')
 
@@ -898,19 +810,16 @@ test.describe('Contact Timeline — Story 5.4', () => {
     await page.goto(`/contacts/${contactId!}`)
 
     // Timeline section should be visible
-    await expect(
-      page.getByRole('heading', { name: /activity timeline/i }),
-    ).toBeVisible({ timeout: 20_000 })
+    await expect(page.getByRole('heading', { name: /activity timeline/i })).toBeVisible({
+      timeout: 20_000,
+    })
 
     // Activity cards should render
-    await expect(
-      page.getByText(/by e2e tester/i).first(),
-    ).toBeVisible({ timeout: 15_000 })
+    await expect(page.getByText(/by e2e tester/i).first()).toBeVisible({ timeout: 15_000 })
 
     // No horizontal overflow on mobile
     const hasOverflow = await page.evaluate(() => {
-      return document.documentElement.scrollWidth >
-        document.documentElement.clientWidth
+      return document.documentElement.scrollWidth > document.documentElement.clientWidth
     })
     expect(hasOverflow).toBe(false)
 
@@ -920,17 +829,11 @@ test.describe('Contact Timeline — Story 5.4', () => {
     await addNoteBtn.click()
 
     // Note composer textarea should be usable on mobile
-    await expect(
-      page.getByRole('textbox', { name: /note text/i }),
-    ).toBeVisible()
+    await expect(page.getByRole('textbox', { name: /note text/i })).toBeVisible()
 
     // Type and verify on mobile
-    await page
-      .getByRole('textbox', { name: /note text/i })
-      .fill('Mobile note test')
+    await page.getByRole('textbox', { name: /note text/i }).fill('Mobile note test')
 
-    await expect(
-      page.getByRole('button', { name: /^save$/i }),
-    ).toBeEnabled()
+    await expect(page.getByRole('button', { name: /^save$/i })).toBeEnabled()
   })
 })

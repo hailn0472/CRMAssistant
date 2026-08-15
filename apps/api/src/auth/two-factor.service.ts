@@ -45,7 +45,10 @@ export class TwoFactorService {
     try {
       // otplib v13 verify accepts { token, secret } at runtime despite TS types
       type VerifyResult = { valid: boolean }
-      type VerifyFn = (opts: { token: string; secret: string }) => VerifyResult | Promise<VerifyResult>
+      type VerifyFn = (opts: {
+        token: string
+        secret: string
+      }) => VerifyResult | Promise<VerifyResult>
       const result = await (totp.verify as unknown as VerifyFn)({ token: code, secret })
       return result.valid === true
     } catch {

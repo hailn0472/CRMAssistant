@@ -87,9 +87,7 @@ export function TwoFactorVerification({
     <div className="space-y-4">
       <div className="text-center">
         <p className="text-sm font-medium text-slate-700">Nhập mã xác thực</p>
-        <p className="mt-1 text-xs text-slate-500">
-          Nhập mã 6 chữ số từ ứng dụng xác thực của bạn
-        </p>
+        <p className="mt-1 text-xs text-slate-500">Nhập mã 6 chữ số từ ứng dụng xác thực của bạn</p>
       </div>
 
       {backupCodesRemaining !== undefined && backupCodesRemaining <= 3 && (
@@ -102,7 +100,9 @@ export function TwoFactorVerification({
         {digits.map((digit, index) => (
           <Input
             key={index}
-            ref={(el) => { inputRefs.current[index] = el }}
+            ref={(el) => {
+              inputRefs.current[index] = el
+            }}
             type="text"
             inputMode="numeric"
             maxLength={1}

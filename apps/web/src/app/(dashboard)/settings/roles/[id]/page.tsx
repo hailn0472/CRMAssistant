@@ -127,7 +127,7 @@ function RoleDetailContent(): React.JSX.Element {
 export default function RoleDetailPage(): React.JSX.Element {
   return (
     <main className="space-y-6 p-6 text-slate-950">
-<QueryProvider>
+      <QueryProvider>
         <RoleDetailContent />
       </QueryProvider>
     </main>

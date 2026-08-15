@@ -44,18 +44,15 @@ export function TwoFactorSetup({
       <div className="text-center">
         <p className="text-sm font-medium text-slate-700">Thiết lập xác thực hai yếu tố</p>
         <p className="mt-1 text-xs text-slate-500">
-          Quét mã QR bên dưới bằng ứng dụng xác thực (Google Authenticator, Authy, Microsoft Authenticator)
+          Quét mã QR bên dưới bằng ứng dụng xác thực (Google Authenticator, Authy, Microsoft
+          Authenticator)
         </p>
       </div>
 
       {qrCodeDataUrl && (
         <div className="flex justify-center">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={qrCodeDataUrl}
-            alt="QR Code for 2FA"
-            className="h-48 w-48"
-          />
+          <img src={qrCodeDataUrl} alt="QR Code for 2FA" className="h-48 w-48" />
         </div>
       )}
 

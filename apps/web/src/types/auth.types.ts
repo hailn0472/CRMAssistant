@@ -37,7 +37,10 @@ export type TwoFactorSetupRequiredResponse = {
   tempToken: string
 }
 
-export type LoginResponse = AuthTokenResponse | TwoFactorRequiredResponse | TwoFactorSetupRequiredResponse
+export type LoginResponse =
+  | AuthTokenResponse
+  | TwoFactorRequiredResponse
+  | TwoFactorSetupRequiredResponse
 
 export type LoginCredentials = {
   email: string

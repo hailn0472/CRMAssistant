@@ -90,7 +90,7 @@ function ApiKeysContent(): React.JSX.Element {
 
   return (
     <main className="space-y-6 p-6 text-slate-950">
-{/* Rotate result dialog */}
+      {/* Rotate result dialog */}
       {rotateResult && (
         <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
           <h3 className="mb-2 font-semibold text-amber-800">Key Rotated — New Key Shown Once</h3>

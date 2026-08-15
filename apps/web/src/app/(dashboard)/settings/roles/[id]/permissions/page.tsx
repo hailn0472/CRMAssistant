@@ -112,7 +112,7 @@ function PermissionMatrixContent(): React.JSX.Element {
 export default function PermissionMatrixPage(): React.JSX.Element {
   return (
     <main className="space-y-6 p-6 text-slate-950">
-<QueryProvider>
+      <QueryProvider>
         <PermissionMatrixContent />
       </QueryProvider>
     </main>

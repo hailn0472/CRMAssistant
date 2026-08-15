@@ -37,39 +37,51 @@ export const twoFactorService = {
   },
 
   async verify2FA(code: string): Promise<{ success: boolean }> {
-    return graphqlRequest(`
+    return graphqlRequest(
+      `
       mutation Verify2FA($code: String!) {
         verify2FA(code: $code) {
           success
         }
       }
-    `, { code })
+    `,
+      { code },
+    )
   },
 
   async disable2FA(password: string): Promise<boolean> {
-    return graphqlRequest(`
+    return graphqlRequest(
+      `
       mutation Disable2FA($password: String!) {
         disable2FA(password: $password)
       }
-    `, { password })
+    `,
+      { password },
+    )
   },
 
   async regenerateBackupCodes(password: string): Promise<string[]> {
-    return graphqlRequest(`
+    return graphqlRequest(
+      `
       mutation RegenerateBackupCodes($password: String!) {
         regenerateBackupCodes(password: $password)
       }
-    `, { password })
+    `,
+      { password },
+    )
   },
 
   async updateTenantSettings(enforce2FA: boolean): Promise<{ enforce2FA: boolean }> {
-    return graphqlRequest(`
+    return graphqlRequest(
+      `
       mutation UpdateTenantSettings($enforce2FA: Boolean!) {
         updateTenantSettings(enforce2FA: $enforce2FA) {
           enforce2FA
         }
       }
-    `, { enforce2FA })
+    `,
+      { enforce2FA },
+    )
   },
 
   async getCurrentUser(): Promise<{ ssoProvider: string | null }> {

@@ -50,7 +50,7 @@ export default function NewRolePage(): React.JSX.Element {
 
   return (
     <main className="space-y-6 p-6 text-slate-950">
-<Card className="border-slate-200 bg-white text-slate-950 shadow-sm">
+      <Card className="border-slate-200 bg-white text-slate-950 shadow-sm">
         <CardHeader className="border-b border-slate-100">
           <CardTitle className="text-lg">Role details</CardTitle>
         </CardHeader>

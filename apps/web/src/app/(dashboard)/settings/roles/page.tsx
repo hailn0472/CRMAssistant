@@ -15,7 +15,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 export default function RolesPage(): React.JSX.Element {
   return (
     <main className="space-y-6 p-6 text-slate-950">
-<QueryProvider>
+      <QueryProvider>
         <RolesTable />
       </QueryProvider>
     </main>

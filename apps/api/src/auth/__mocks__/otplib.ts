@@ -6,7 +6,11 @@ const mockTOTP = {
   generateSecret: jest.fn().mockReturnValue('MOCK_SECRET'),
   generate: jest.fn().mockResolvedValue('123456'),
   verify: jest.fn().mockResolvedValue({ valid: true }),
-  toURI: jest.fn().mockReturnValue('otpauth://totp/CRMAssistant:test@test.com?secret=MOCK_SECRET&issuer=CRMAssistant'),
+  toURI: jest
+    .fn()
+    .mockReturnValue(
+      'otpauth://totp/CRMAssistant:test@test.com?secret=MOCK_SECRET&issuer=CRMAssistant',
+    ),
 }
 
 export const TOTP = jest.fn().mockImplementation(() => mockTOTP)

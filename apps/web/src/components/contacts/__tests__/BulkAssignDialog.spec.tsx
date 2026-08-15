@@ -41,7 +41,9 @@ describe('BulkAssignDialog', () => {
   })
 
   it('should show success toast on successful bulk assign', async () => {
-    const onAssignBulk = jest.fn().mockResolvedValue({ successCount: 2, failedCount: 0, errors: [] })
+    const onAssignBulk = jest
+      .fn()
+      .mockResolvedValue({ successCount: 2, failedCount: 0, errors: [] })
     const onOpenChange = jest.fn()
     render(
       <BulkAssignDialog

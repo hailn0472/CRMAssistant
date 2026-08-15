@@ -9,7 +9,10 @@ interface BackupCodesDisplayProps {
   onConfirmed?: () => void
 }
 
-export function BackupCodesDisplay({ codes, onConfirmed }: BackupCodesDisplayProps): React.JSX.Element {
+export function BackupCodesDisplay({
+  codes,
+  onConfirmed,
+}: BackupCodesDisplayProps): React.JSX.Element {
   const [copied, setCopied] = useState(false)
 
   const handleCopy = useCallback(async (): Promise<void> => {

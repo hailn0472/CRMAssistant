@@ -6,7 +6,13 @@ describe('OwnerCell', () => {
     render(
       <OwnerCell
         ownerId="u1"
-        owner={{ id: 'u1', firstName: 'Alice', lastName: 'Smith', email: 'alice@x.com', avatar: null }}
+        owner={{
+          id: 'u1',
+          firstName: 'Alice',
+          lastName: 'Smith',
+          email: 'alice@x.com',
+          avatar: null,
+        }}
       />,
     )
     expect(screen.getByText('AS')).toBeInTheDocument()
@@ -22,7 +28,13 @@ describe('OwnerCell', () => {
     render(
       <OwnerCell
         ownerId="u1"
-        owner={{ id: 'u1', firstName: 'Alice', lastName: 'Smith', email: 'alice@x.com', avatar: 'https://example.com/avatar.png' }}
+        owner={{
+          id: 'u1',
+          firstName: 'Alice',
+          lastName: 'Smith',
+          email: 'alice@x.com',
+          avatar: 'https://example.com/avatar.png',
+        }}
       />,
     )
     const img = screen.getByRole('img')
