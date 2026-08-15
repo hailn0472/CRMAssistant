@@ -1,6 +1,6 @@
 # Story 6.3: Custom Report Builder with Drag-and-Drop Interface
 
-Status: review
+Status: done
 
 Epic: 6 — Reporting & Analytics Dashboard  
 FR: **FR42** — “Users can build custom reports using drag-and-drop interface” [Source: `_bmad-output/planning-artifacts/prd.md:981-990`]  
