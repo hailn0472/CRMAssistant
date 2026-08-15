@@ -146,6 +146,7 @@ model Tenant {
   notifications            Notification[]
   dashboards               Dashboard[]
   widgets                  Widget[]
+  reports                  Report[]
 }
 
 /// Tenant-scoped user model with authentication support.
@@ -1442,4 +1443,32 @@ model Widget {
 
   @@index([tenantId])
   @@index([tenantId, dashboardId, position])
+}
+
+/// Report model (Story 6.2) — tenant-scoped saved sales reports.
+/// `config` is JSON — strictly validated on write (validateReportConfig) and
+/// defensively parsed on read (parseReportConfig); it is exposed over GraphQL
+/// as a typed ReportConfig Pothos object, never a raw JSON scalar.
+/// No @@unique on name-bearing columns — active-name uniqueness per
+/// (tenantId, createdBy) is enforced in SalesReportsService so soft-deleted
+/// names can be reused (AC 2, AC 8).
+model Report {
+  id        String   @id @default(uuid())
+  tenantId  String
+  name      String
+  type      String
+  config    Json
+  createdBy String
+  isPublic  Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  updatedBy String
+  deletedAt DateTime?
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([tenantId, createdBy])
+  @@index([tenantId, type])
+  @@index([tenantId, isPublic])
 }

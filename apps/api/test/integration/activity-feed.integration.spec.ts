@@ -68,7 +68,7 @@ function makeFakeProvider(): CalendarProviderPort {
 
 // The spec's own TRUNCATE list (AC 44) — there is no shared harness.
 const TRUNCATE_TABLES =
-  'TRUNCATE TABLE "Notification", "Widget", "Dashboard", "TaskCalendarEvent", "CalendarConnection", "UserActivityLogPreference", "Activity", "TaskDependency", "Task", "Deal", "DealStage", "Note", "Contact", "User", "UserRole", "Role", "Permission", "RolePermission", "Team", "Tenant", "AuditLog" RESTART IDENTITY CASCADE'
+  'TRUNCATE TABLE "Notification", "Widget", "Dashboard", "TaskCalendarEvent", "CalendarConnection", "UserActivityLogPreference", "Activity", "TaskDependency", "Task", "Deal", "DealStage", "Note", "Contact", "User", "UserRole", "Role", "Permission", "RolePermission", "Team", "Report", "Tenant", "AuditLog" RESTART IDENTITY CASCADE'
 
 const FEED_QUERY = `
   query Feed($filter: ActivityFeedFilterInput, $pagination: ActivityFeedPaginationInput) {

@@ -205,7 +205,7 @@ describe('Sharing Rules (integration)', () => {
 
   afterEach(async () => {
     await prisma.$executeRawUnsafe(
-      'TRUNCATE TABLE "Notification", "Widget", "Dashboard", "SharingRule", "Note", "Contact" RESTART IDENTITY CASCADE',
+      'TRUNCATE TABLE "Notification", "Widget", "Dashboard", "SharingRule", "Report", "Note", "Contact" RESTART IDENTITY CASCADE',
     )
   })
 

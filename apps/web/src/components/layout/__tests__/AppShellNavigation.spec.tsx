@@ -70,8 +70,9 @@ describe('AppShellNavigation', () => {
     renderNav()
 
     const nav = screen.getByRole('navigation', { name: 'CRM navigation' })
+    // Story 6.2 (AC 65): primary Reports entry points at /reports/sales.
     const forecastLink = within(nav).getByRole('link', { name: 'Reports' })
-    expect(forecastLink).toHaveAttribute('href', '/reports/forecast')
+    expect(forecastLink).toHaveAttribute('href', '/reports/sales')
 
     const winLossLink = within(nav).getByRole('link', { name: 'Win/Loss' })
     expect(winLossLink).toHaveAttribute('href', '/reports/win-loss')

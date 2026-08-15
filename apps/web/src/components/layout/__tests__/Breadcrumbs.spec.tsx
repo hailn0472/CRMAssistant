@@ -66,6 +66,15 @@ describe('Breadcrumbs', () => {
     expect(screen.getByText('Win/Loss')).toHaveAttribute('aria-current', 'page')
   })
 
+  it('labels the sales segment — not "Chi tiết" (Story 6.2, AC 65)', () => {
+    mockUsePathname.mockReturnValue('/reports/sales')
+
+    render(<Breadcrumbs />)
+    expect(screen.getByRole('link', { name: 'Reports' })).toHaveAttribute('href', '/reports')
+    expect(screen.getByText('Sales')).toHaveAttribute('aria-current', 'page')
+    expect(screen.queryByText('Chi tiết')).not.toBeInTheDocument()
+  })
+
   it('labels the productivity segment instead of the "Chi tiết" fallback (AC #45)', () => {
     mockUsePathname.mockReturnValue('/reports/productivity')
 
