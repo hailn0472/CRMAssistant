@@ -5,8 +5,12 @@ import { ForecastService } from './forecast.service'
 import { WinLossService } from './win-loss.service'
 import { ProductivityService } from './productivity.service'
 import { SalesReportsService } from './sales-reports.service'
+import { CustomReportsService } from './custom-reports.service'
 import { PrismaModule } from '../prisma/prisma.module'
 import { DealsModule } from '../deals/deals.module'
+import { ContactsModule } from '../contacts/contacts.module'
+import { TasksModule } from '../tasks/tasks.module'
+import { ActivitiesModule } from '../activities/activities.module'
 import { AuditModule } from '../audit/audit.module'
 import { TimeTrackingModule } from '../time-tracking/time-tracking.module'
 
@@ -17,10 +21,35 @@ import { TimeTrackingModule } from '../time-tracking/time-tracking.module'
 // ForecastService/WinLossService (existing math) and AuditService (service-level
 // audit rows). DealsModule/ProductsModule never import ReportsModule — no
 // circular dependency.
+// Story 6.3: CustomReportsService composes the four shared visibility
+// predicates (ContactsService.buildContactWhere, DealsService.buildDealWhere,
+// TasksService.buildTaskWhere, ActivityService.buildFeedWhere) and the shared
+// sales persistence invariants (SalesReportsService). No module imports
+// ReportsModule, so the extra imports stay acyclic.
 @Module({
-  imports: [PrismaModule, DealsModule, AuditModule, TimeTrackingModule],
-  providers: [ForecastService, WinLossService, ProductivityService, SalesReportsService],
-  exports: [ForecastService, WinLossService, ProductivityService, SalesReportsService],
+  imports: [
+    PrismaModule,
+    DealsModule,
+    ContactsModule,
+    TasksModule,
+    ActivitiesModule,
+    AuditModule,
+    TimeTrackingModule,
+  ],
+  providers: [
+    ForecastService,
+    WinLossService,
+    ProductivityService,
+    SalesReportsService,
+    CustomReportsService,
+  ],
+  exports: [
+    ForecastService,
+    WinLossService,
+    ProductivityService,
+    SalesReportsService,
+    CustomReportsService,
+  ],
 })
 export class ReportsModule implements OnModuleInit {
   constructor(
@@ -28,6 +57,7 @@ export class ReportsModule implements OnModuleInit {
     private readonly winLossService: WinLossService,
     private readonly productivityService: ProductivityService,
     private readonly salesReportsService: SalesReportsService,
+    private readonly customReportsService: CustomReportsService,
   ) {}
 
   onModuleInit(): void {
@@ -36,6 +66,7 @@ export class ReportsModule implements OnModuleInit {
       this.winLossService,
       this.productivityService,
       this.salesReportsService,
+      this.customReportsService,
     )
   }
 }

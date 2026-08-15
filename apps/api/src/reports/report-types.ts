@@ -19,6 +19,15 @@ export const REPORT_TYPES = [
 
 export type ReportType = (typeof REPORT_TYPES)[number]
 
+/**
+ * Story 6.3 (Contract C.22): the platform report vocabulary adds CUSTOM while
+ * REPORT_TYPES stays the explicit six-value sales subset. CUSTOM reports are
+ * never routed through the six-type sales calculation switch.
+ */
+export const PLATFORM_REPORT_TYPES = [...REPORT_TYPES, 'CUSTOM'] as const
+
+export type PlatformReportType = (typeof PLATFORM_REPORT_TYPES)[number]
+
 export const REPORT_GROUP_BY = ['MONTH', 'QUARTER', 'YEAR', 'OWNER', 'TEAM', 'PRODUCT'] as const
 
 export type ReportGroupBy = (typeof REPORT_GROUP_BY)[number]
@@ -86,6 +95,10 @@ export const REPORT_DRILL_METRICS: Record<ReportType, readonly ReportMetricKey[]
 
 export function isReportType(value: unknown): value is ReportType {
   return typeof value === 'string' && (REPORT_TYPES as readonly string[]).includes(value)
+}
+
+export function isPlatformReportType(value: unknown): value is PlatformReportType {
+  return typeof value === 'string' && (PLATFORM_REPORT_TYPES as readonly string[]).includes(value)
 }
 
 export function isReportGroupBy(value: unknown): value is ReportGroupBy {

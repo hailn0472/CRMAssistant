@@ -1,5 +1,5 @@
 generated: 2026-05-09 05:39:46.484000+00:00
-last_updated: '2026-08-15T16:55:10.000Z'
+last_updated: '2026-08-15T21:03:34.000Z'
 project: CRMAssistant
 project_key: NOKEY
 tracking_system: file-system
@@ -82,7 +82,7 @@ development_status:
   epic-6: in-progress
   6-1-role-based-dashboard-with-customizable-widgets: done
   6-2-sales-reports-with-drill-down-comparative-analysis: done
-  6-3-custom-report-builder-with-drag-and-drop-interface: backlog
+  6-3-custom-report-builder-with-drag-and-drop-interface: review
   6-4-data-visualization-with-multiple-chart-types: backlog
   6-5-scheduled-report-delivery-via-email: backlog
   6-6-report-export-in-multiple-formats-pdf-excel-csv: backlog

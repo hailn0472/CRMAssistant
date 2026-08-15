@@ -15,6 +15,7 @@ import {
   UserCog,
   Settings,
   BarChart3,
+  SlidersHorizontal,
   LogOut,
   type LucideIcon,
 } from 'lucide-react'
@@ -88,6 +89,14 @@ const navigationSections: NavigationSection[] = [
         label: 'Reports',
         href: '/reports/sales',
         icon: BarChart3,
+        permission: { resource: 'REPORT', action: 'READ' },
+      },
+      {
+        // Story 6.3 (Contract D.31): the custom report builder is a
+        // first-class report destination, gated on REPORT:READ.
+        label: 'Builder',
+        href: '/reports/builder',
+        icon: SlidersHorizontal,
         permission: { resource: 'REPORT', action: 'READ' },
       },
       {

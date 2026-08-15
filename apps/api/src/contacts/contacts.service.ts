@@ -55,6 +55,12 @@ export type UpdateContactInput = {
   notes?: string | null
 }
 
+/** Visibility/sharing scope resolved once per list and reused across queries. */
+export type ContactOwnerScope = {
+  ownerConditions: Prisma.ContactWhereInput[]
+  sharedIds: string[]
+}
+
 export type ContactFilterInput = {
   search?: string
   company?: string
@@ -382,10 +388,7 @@ export class ContactsService {
 
   /// Resolves the owner/sharing conditions that scope a list query to what the user may see.
   /// Returns an empty condition list when the user has unrestricted visibility (ALL/ADMIN).
-  private async resolveOwnerScope(
-    tenantId: string,
-    userId: string,
-  ): Promise<{ ownerConditions: Prisma.ContactWhereInput[]; sharedIds: string[] }> {
+  private async resolveOwnerScope(tenantId: string, userId: string): Promise<ContactOwnerScope> {
     const visibilityFilter = await resolveVisibilityFilter(userId, tenantId)
     const sharedIds = await resolveSharedRecordIds(userId, tenantId, 'CONTACT')
 
@@ -407,12 +410,9 @@ export class ContactsService {
   /// Scoped with the same visibility/sharing rules as findMany so the totals
   /// always match what the user can actually list.
   async getStats(tenantId: string, userId: string): Promise<ContactStats> {
-    const { ownerConditions } = await this.resolveOwnerScope(tenantId, userId)
-
-    const scope: Prisma.ContactWhereInput = { tenantId, deletedAt: null }
-    if (ownerConditions.length > 0) {
-      scope.AND = [{ OR: ownerConditions }]
-    }
+    // Story 6.3: the shared predicate drives the stats too — totals always
+    // match what the user can actually list (findMany uses the same builder).
+    const scope = await this.buildContactWhere(tenantId, userId)
 
     const monthStart = new Date()
     monthStart.setDate(1)
@@ -441,18 +441,22 @@ export class ContactsService {
     return { total, addedThisMonth, withOpenDeals, unassigned }
   }
 
-  async findMany(
+  /**
+   * Shared visibility predicate for CONTACTS (Story 6.3): tenant + active +
+   * own/team/all + sharing-rule scope, exactly as findMany/getStats use it.
+   * Exposed so the reports engine reuses the SAME predicate — never a second
+   * copy of the visibility rules.
+   */
+  async buildContactWhere(
     tenantId: string,
     userId: string,
     filter: ContactFilterInput = {},
-    pagination: ContactPaginationInput = {},
-  ): Promise<ContactConnection> {
-    const page = Math.max(pagination.page ?? DEFAULT_PAGE, 1)
-    const pageSize = Math.min(Math.max(pagination.pageSize ?? DEFAULT_PAGE_SIZE, 1), MAX_PAGE_SIZE)
+    ownerScope?: ContactOwnerScope,
+  ): Promise<Prisma.ContactWhereInput> {
     const search = filter.search?.trim()
     const company = filter.company?.trim()
     const jobTitle = filter.jobTitle?.trim()
-    const { ownerConditions, sharedIds } = await this.resolveOwnerScope(tenantId, userId)
+    const { ownerConditions } = ownerScope ?? (await this.resolveOwnerScope(tenantId, userId))
 
     const where: Prisma.ContactWhereInput = {
       tenantId,
@@ -518,6 +522,23 @@ export class ContactsService {
       where.AND = andConditions
     }
 
+    return where
+  }
+
+  async findMany(
+    tenantId: string,
+    userId: string,
+    filter: ContactFilterInput = {},
+    pagination: ContactPaginationInput = {},
+  ): Promise<ContactConnection> {
+    const page = Math.max(pagination.page ?? DEFAULT_PAGE, 1)
+    const pageSize = Math.min(Math.max(pagination.pageSize ?? DEFAULT_PAGE_SIZE, 1), MAX_PAGE_SIZE)
+    // Resolve the visibility/sharing scope ONCE and reuse it for both the where
+    // predicate and the sharedWithMe flags (no duplicate DB round-trip).
+    const ownerScope = await this.resolveOwnerScope(tenantId, userId)
+
+    const where = await this.buildContactWhere(tenantId, userId, filter, ownerScope)
+
     const [items, total] = await Promise.all([
       this.prisma.contact.findMany({
         where,
@@ -530,7 +551,7 @@ export class ContactsService {
     ])
 
     return {
-      items: items.map((c) => ({ ...c, sharedWithMe: sharedIds.includes(c.id) })),
+      items: items.map((c) => ({ ...c, sharedWithMe: ownerScope.sharedIds.includes(c.id) })),
       total,
       page,
       pageSize,

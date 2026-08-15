@@ -11,6 +11,7 @@
  * data/drill keys (AC 76), guarded against StrictMode double-connect.
  */
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useRouter } from 'next/navigation'
 import {
   ArrowDownRight,
   ArrowUpRight,
@@ -108,6 +109,7 @@ function TrendBadge({ metric }: { metric: ReportMetric }): React.JSX.Element | n
 
 export function SalesReportsWorkspace(): React.JSX.Element {
   const queryClient = useQueryClient()
+  const router = useRouter()
   const clientRef = useRef<GraphqlSubscriptionClient | null>(null)
   const connectGuardRef = useRef(false)
 
@@ -180,7 +182,13 @@ export function SalesReportsWorkspace(): React.JSX.Element {
     queryKey: ['salesReports', 'data', selectedReportId, filters, drillInput],
     queryFn: () => getReportData(selectedReportId as string, filters, drillInput ?? undefined),
     enabled:
-      !!selectedReportId && canReadReport && canReadDeals && selectedReport?.isSupported !== false,
+      !!selectedReportId &&
+      canReadReport &&
+      canReadDeals &&
+      selectedReport?.isSupported !== false &&
+      // Story 6.3 (AC 12): CUSTOM rows are never dispatched to getReportData —
+      // they navigate to the builder instead.
+      selectedReport?.type !== 'CUSTOM',
   })
 
   // ─── Realtime (AC 76): existing subscription invalidates data keys only ──
@@ -224,6 +232,12 @@ export function SalesReportsWorkspace(): React.JSX.Element {
   const data = dataQuery.data
 
   function selectReport(report: ReportRow): void {
+    // Story 6.3 (AC 12): custom reports open in the builder editor instead of
+    // being dispatched to getReportData.
+    if (report.type === 'CUSTOM') {
+      router.push(`/reports/builder?reportId=${report.id}`)
+      return
+    }
     setSelectedReportId(report.id)
     setDrill(null)
     setDrillPage(1)
@@ -331,6 +345,11 @@ export function SalesReportsWorkspace(): React.JSX.Element {
                   }`}
                 >
                   {report.name}
+                  {report.type === 'CUSTOM' ? (
+                    <span className="rounded-full border border-[#ddd6fe] bg-[#f5f3ff] px-2 py-0.5 text-[11px] font-semibold text-[#7c3aed]">
+                      Custom
+                    </span>
+                  ) : null}
                   {!report.isSupported ? (
                     <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800">
                       Unsupported type
@@ -411,7 +430,7 @@ export function SalesReportsWorkspace(): React.JSX.Element {
               <label className="flex flex-col gap-1.5">
                 <span className="text-[11.5px] font-medium text-[#8c8c96]">Preset</span>
                 <select
-                  value={filters.datePreset ?? selectedReport.config.datePreset}
+                  value={filters.datePreset ?? selectedReport.config?.datePreset}
                   onChange={(e) =>
                     setFilters((f) => ({
                       ...f,
@@ -426,13 +445,13 @@ export function SalesReportsWorkspace(): React.JSX.Element {
                   <option value="CUSTOM">Custom range</option>
                 </select>
               </label>
-              {(filters.datePreset ?? selectedReport.config.datePreset) === 'CUSTOM' ? (
+              {(filters.datePreset ?? selectedReport.config?.datePreset) === 'CUSTOM' ? (
                 <>
                   <label className="flex flex-col gap-1.5">
                     <span className="text-[11.5px] font-medium text-[#8c8c96]">Start</span>
                     <input
                       type="date"
-                      value={filters.startDate ?? selectedReport.config.startDate ?? ''}
+                      value={filters.startDate ?? selectedReport.config?.startDate ?? ''}
                       onChange={(e) =>
                         setFilters((f) => ({ ...f, startDate: e.target.value || null }))
                       }
@@ -443,7 +462,7 @@ export function SalesReportsWorkspace(): React.JSX.Element {
                     <span className="text-[11.5px] font-medium text-[#8c8c96]">End</span>
                     <input
                       type="date"
-                      value={filters.endDate ?? selectedReport.config.endDate ?? ''}
+                      value={filters.endDate ?? selectedReport.config?.endDate ?? ''}
                       onChange={(e) =>
                         setFilters((f) => ({ ...f, endDate: e.target.value || null }))
                       }
@@ -455,7 +474,7 @@ export function SalesReportsWorkspace(): React.JSX.Element {
               <label className="flex flex-col gap-1.5">
                 <span className="text-[11.5px] font-medium text-[#8c8c96]">Comparison</span>
                 <select
-                  value={filters.comparisonMode ?? selectedReport.config.comparisonMode}
+                  value={filters.comparisonMode ?? selectedReport.config?.comparisonMode}
                   onChange={(e) =>
                     setFilters((f) => ({
                       ...f,
@@ -470,7 +489,7 @@ export function SalesReportsWorkspace(): React.JSX.Element {
                   <option value="CUSTOM">Custom dates</option>
                 </select>
               </label>
-              {(filters.comparisonMode ?? selectedReport.config.comparisonMode) === 'CUSTOM' ? (
+              {(filters.comparisonMode ?? selectedReport.config?.comparisonMode) === 'CUSTOM' ? (
                 <>
                   <label className="flex flex-col gap-1.5">
                     <span className="text-[11.5px] font-medium text-[#8c8c96]">
@@ -480,7 +499,7 @@ export function SalesReportsWorkspace(): React.JSX.Element {
                       type="date"
                       value={
                         filters.comparisonStartDate ??
-                        selectedReport.config.comparisonStartDate ??
+                        selectedReport.config?.comparisonStartDate ??
                         ''
                       }
                       onChange={(e) =>
@@ -494,7 +513,7 @@ export function SalesReportsWorkspace(): React.JSX.Element {
                     <input
                       type="date"
                       value={
-                        filters.comparisonEndDate ?? selectedReport.config.comparisonEndDate ?? ''
+                        filters.comparisonEndDate ?? selectedReport.config?.comparisonEndDate ?? ''
                       }
                       onChange={(e) =>
                         setFilters((f) => ({ ...f, comparisonEndDate: e.target.value || null }))
@@ -507,7 +526,7 @@ export function SalesReportsWorkspace(): React.JSX.Element {
               <label className="flex flex-col gap-1.5">
                 <span className="text-[11.5px] font-medium text-[#8c8c96]">Group by</span>
                 <select
-                  value={filters.groupBy ?? selectedReport.config.groupBy}
+                  value={filters.groupBy ?? selectedReport.config?.groupBy}
                   onChange={(e) =>
                     setFilters((f) => ({ ...f, groupBy: e.target.value as ReportGroupBy }))
                   }
