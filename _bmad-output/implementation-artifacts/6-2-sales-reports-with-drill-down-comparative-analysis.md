@@ -1,6 +1,6 @@
 # Story 6.2: Sales Reports with Drill-Down & Comparative Analysis
 
-Status: review
+Status: done
 
 Epic: 6 — Reporting & Analytics Dashboard
 FR: **FR41** — "Users can generate sales reports with drill-down and comparative analysis" [Source: `_bmad-output/planning-artifacts/prd.md:981-989`]
