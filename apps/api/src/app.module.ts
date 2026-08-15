@@ -34,6 +34,7 @@ import { ChannelDispatcherBindingModule } from './facebook/channel-dispatcher-bi
 import { ImportExportModule } from './import-export/import-export.module'
 import { ReportsModule } from './reports/reports.module'
 import { TimeTrackingModule } from './time-tracking/time-tracking.module'
+import { DashboardsModule } from './dashboards/dashboards.module'
 
 @Module({
   imports: [
@@ -63,6 +64,9 @@ import { TimeTrackingModule } from './time-tracking/time-tracking.module'
     // Story 4.8 (AC 50): NotificationsModule registers notifications.graphql
     // fields — must sit ABOVE AppGraphqlModule so the barrel sees the refs.
     NotificationsModule,
+    // Story 6.1 (AC 58): DashboardsModule registers dashboards.graphql fields
+    // — must sit ABOVE AppGraphqlModule so the barrel sees the refs.
+    DashboardsModule,
     AppGraphqlModule,
     ContactsModule,
     DealsModule,

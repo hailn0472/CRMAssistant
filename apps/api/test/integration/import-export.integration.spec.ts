@@ -65,7 +65,7 @@ describe('Contact import/export endpoints (integration)', () => {
 
   afterEach(async () => {
     await prisma.$executeRawUnsafe(
-      'TRUNCATE TABLE "Notification", "ContactTag", "Tag", "Note", "Contact", "User", "UserRole", "Role", "Team", "Tenant" RESTART IDENTITY CASCADE',
+      'TRUNCATE TABLE "Notification", "Widget", "Dashboard", "ContactTag", "Tag", "Note", "Contact", "User", "UserRole", "Role", "Team", "Tenant" RESTART IDENTITY CASCADE',
     )
   })
 

@@ -33,6 +33,9 @@ export type AuditAction =
   | 'API_KEY_REVOKED'
   | 'API_KEY_ROTATED'
   | 'CONTACT_IMPORTED'
+  | 'DASHBOARD_CREATED'
+  | 'DASHBOARD_UPDATED'
+  | 'DASHBOARD_DELETED'
 
 export type AuditLogFilter = {
   userId?: string

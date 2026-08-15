@@ -83,7 +83,7 @@ describe('Task CRUD with templates and assignment (integration)', () => {
   // AC 89 — TaskDependency first (children before parents), then Task/TaskTemplate.
   afterEach(async () => {
     await prisma.$executeRawUnsafe(
-      'TRUNCATE TABLE "Notification", "TaskDependency", "Task", "TaskTemplate", "Deal", "DealStage", "Note", "Contact", "User", "UserRole", "Role", "Permission", "RolePermission", "Team", "Tenant", "AuditLog" RESTART IDENTITY CASCADE',
+      'TRUNCATE TABLE "Notification", "Widget", "Dashboard", "TaskDependency", "Task", "TaskTemplate", "Deal", "DealStage", "Note", "Contact", "User", "UserRole", "Role", "Permission", "RolePermission", "Team", "Tenant", "AuditLog" RESTART IDENTITY CASCADE',
     )
   })
 

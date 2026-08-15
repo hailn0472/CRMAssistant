@@ -54,6 +54,7 @@ export type UpdateTaskInput = {
 export type TaskFilterInput = {
   search?: string
   status?: string
+  statuses?: string[]
   priority?: string
   assignedTo?: string
   contactId?: string
@@ -553,6 +554,10 @@ export class TasksService {
 
     if (filter.status) {
       andConditions.push({ status: filter.status as TaskStatus })
+    }
+
+    if (filter.statuses && filter.statuses.length > 0) {
+      andConditions.push({ status: { in: filter.statuses as TaskStatus[] } })
     }
 
     if (filter.priority) {

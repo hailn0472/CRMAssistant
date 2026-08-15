@@ -54,6 +54,7 @@ enum ResourceType {
   CONTACT
   DEAL
   TASK
+  DASHBOARD
 }
 
 // Task status/priority are closed, standard, cross-story vocabularies (4.4
@@ -143,6 +144,8 @@ model Tenant {
   timeEntries              TimeEntry[]
   taskDependencies         TaskDependency[]
   notifications            Notification[]
+  dashboards               Dashboard[]
+  widgets                  Widget[]
 }
 
 /// Tenant-scoped user model with authentication support.
@@ -201,6 +204,7 @@ model User {
   timeEntries           TimeEntry[]              @relation("TimeEntryUser")
   authoredNotes         Note[]                   @relation("NoteAuthor")
   notifications         Notification[]           @relation("NotificationRecipient")
+  dashboards            Dashboard[]              @relation("DashboardOwner")
 
   // Email is unique per tenant, NOT globally unique
   @@unique([tenantId, email])
@@ -1387,4 +1391,55 @@ model Notification {
   @@index([tenantId])
   @@index([tenantId, userId, createdAt(sort: Desc)])
   @@index([tenantId, userId, readAt])
+}
+
+/// Dashboard model (Story 6.1) — user-owned configurable dashboards.
+/// No @@unique — duplicate names are allowed; "one default per user" is
+/// enforced in DashboardsService inside a transaction.
+/// No `layout` column — Widget.position + Widget.size are the single source
+/// of truth for layout (arbitrated 2026-08-12).
+model Dashboard {
+  id               String    @id @default(uuid())
+  tenantId         String
+  userId           String // the owner
+  name             String
+  isDefault        Boolean   @default(false)
+  isSystemGenerated Boolean  @default(false)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  createdBy        String    @default("system")
+  updatedBy        String    @default("system")
+  deletedAt        DateTime?
+
+  tenant   Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  owner    User     @relation("DashboardOwner", fields: [userId], references: [id], onDelete: Cascade)
+  widgets  Widget[]
+
+  @@index([tenantId])
+  @@index([tenantId, userId, createdAt])
+}
+
+/// Widget model (Story 6.1) — individual dashboard widgets.
+/// config is JSON — parsed and validated by a pure module, exposed over
+/// GraphQL as a typed WidgetConfig Pothos object (not a JSON scalar).
+model Widget {
+  id           String    @id @default(uuid())
+  tenantId     String
+  dashboardId  String
+  type         String
+  title        String
+  config       Json
+  position     Int
+  size         String
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  createdBy    String    @default("system")
+  updatedBy    String    @default("system")
+  deletedAt    DateTime?
+
+  tenant    Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  dashboard Dashboard @relation(fields: [dashboardId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([tenantId, dashboardId, position])
 }
