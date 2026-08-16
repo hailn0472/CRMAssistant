@@ -1,5 +1,6 @@
 'use client'
 
+import { useEffect } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -89,6 +90,24 @@ export function CompetitorForm({
       createMutation.mutate(values)
     }
   }
+
+  // The form is rendered unconditionally (the Dialog mounts/unmounts only its
+  // content), so react-hook-form's `defaultValues` are captured once on first
+  // mount with competitor=null and never re-applied. Sync the fields whenever
+  // the competitor prop changes so the edit dialog pre-populates (AC #15).
+  useEffect(() => {
+    reset(
+      competitor
+        ? {
+            name: competitor.name,
+            website: competitor.website ?? '',
+            strengths: competitor.strengths ?? '',
+            weaknesses: competitor.weaknesses ?? '',
+            isActive: competitor.isActive,
+          }
+        : { name: '', website: '', strengths: '', weaknesses: '', isActive: true },
+    )
+  }, [competitor, reset])
 
   const handleClose = (): void => {
     reset()

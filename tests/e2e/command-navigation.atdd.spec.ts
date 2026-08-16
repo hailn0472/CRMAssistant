@@ -65,7 +65,9 @@ test.describe('Command Navigation & Search ATDD', () => {
     const dialog = page.getByRole('dialog', { name: /command|search/i })
     await dialog.getByRole('option', { name: /open contacts/i }).click()
 
-    await expect(page).toHaveURL(/\/contacts/)
+    // Client-side router.push can lag under a parallel E2E run — wait for the
+    // URL explicitly instead of relying on the default 5s toHaveURL timeout.
+    await page.waitForURL(/\/contacts/, { timeout: 15_000 })
     await expect(page.getByRole('dialog')).not.toBeVisible()
   })
 

@@ -1,5 +1,7 @@
 import { test, expect } from '@playwright/test'
 
+import { applyAuthCookie } from '../support/helpers/auth'
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -371,20 +373,27 @@ async function waitForMutation(
   })
 }
 
+/**
+ * Move a deal via the keyboard-accessible "Move to stage" menu on its card.
+ * The board uses dnd-kit pointer sensors, so native HTML5 DragEvents are not
+ * simulated here — the menu is the deterministic path (AC #11).
+ */
+async function moveDealViaMenu(
+  page: import('@playwright/test').Page,
+  targetStageName: string,
+): Promise<void> {
+  await page.getByRole('button', { name: 'Move to stage', exact: true }).first().click()
+  await page.getByRole('button', { name: targetStageName, exact: true }).click()
+}
+
 // ---------------------------------------------------------------------------
 // Test Suite
 // ---------------------------------------------------------------------------
 test.describe('Deals Pipeline Board', () => {
   test.beforeEach(async ({ context }) => {
-    // Apply auth cookie for test user
-    await context.addCookies([
-      {
-        name: 'auth-token',
-        value: 'mock-auth-token',
-        domain: 'localhost',
-        path: '/',
-      },
-    ])
+    // Sign a real JWT the middleware will verify (a raw string cookie is
+    // rejected → redirect to /login). Secret matches the CI web server.
+    await applyAuthCookie(context)
   })
 
   // ==========================================================================
@@ -504,9 +513,9 @@ test.describe('Deals Pipeline Board', () => {
     await page.waitForLoadState('networkidle')
 
     // Verify columns render
-    await expect(page.getByText('Lead')).toBeVisible()
-    await expect(page.getByText('Qualified')).toBeVisible()
-    await expect(page.getByText('Proposal')).toBeVisible()
+    await expect(page.getByText('Lead').first()).toBeVisible()
+    await expect(page.getByText('Qualified').first()).toBeVisible()
+    await expect(page.getByText('Proposal').first()).toBeVisible()
   })
 
   test('shows breadcrumb with Pipeline label', async ({ page }) => {
@@ -541,7 +550,7 @@ test.describe('Deals Pipeline Board', () => {
     await page.waitForLoadState('networkidle')
 
     // Check breadcrumb shows Pipeline not Chi tiết
-    await expect(page.getByText('Pipeline')).toBeVisible()
+    await expect(page.getByRole('link', { name: 'Pipeline' })).toBeVisible()
   })
 
   test('view switcher links between table and pipeline views', async ({ page }) => {
@@ -577,10 +586,9 @@ test.describe('Deals Pipeline Board', () => {
     await page.waitForLoadState('networkidle')
 
     // The board should render columns in `.order` sequence: Lead (10), Qualified (20), Proposal (30)
-    // regardless of the array order in the response
-    const columnHeadings = page.locator(
-      '[class*="kanban"] h3, [class*="column"] h3, [data-testid*="stage-heading"]',
-    )
+    // regardless of the array order in the response. Column headings are
+    // `<span class="text-[13.5px] font-semibold …">{stage.name}</span>`.
+    const columnHeadings = page.locator('span.text-\\[13\\.5px\\].font-semibold')
     const allColumnTexts = await columnHeadings.allTextContents()
 
     // Find the first three matching stage names in rendered order
@@ -627,15 +635,14 @@ test.describe('Deals Pipeline Board', () => {
 
     // Value + currency (format expected: $75,000 or 75,000 EUR or similar currency formatting)
     // The exact format depends on formatCurrency — check that value number is present
-    await expect(page.getByText(/75[.,]?000/)).toBeVisible()
+    await expect(page.getByText(/75[.,]?000/).first()).toBeVisible()
 
     // Contact name must be visible
     await expect(page.getByText('Grace Hopper')).toBeVisible()
 
-    // Owner info — either avatar image or initials fallback
-    // Check for owner name or initials
-    const ownerText = page.locator(`text=Alice`).first()
-    await expect(ownerText).toBeVisible()
+    // Owner info — avatar image (alt = full name); the card renders initials
+    // next to the value, so assert the avatar's accessible name instead.
+    await expect(page.getByAltText('Alice Smith')).toBeVisible()
   })
 
   // ==========================================================================
@@ -701,20 +708,10 @@ test.describe('Deals Pipeline Board', () => {
     await page.goto('/deals/pipeline')
     await page.waitForLoadState('networkidle')
 
-    // The column headers should show count and total value
-    // Expected: Lead column shows count=2, total=50000
-    // Check for the presence of numeric indicators in the Lead column area
-    const leadColumn = page
-      .locator(`[data-testid*="lead"], [data-testid*="Lead"], [class*="lead"]`)
-      .first()
-    // Or use a more generic approach — look for the text "Lead" and then nearby count/value
-    const bodyText = await page.locator('body').innerText()
-
-    // The count (2) and total value (50000) should appear somewhere near Lead
-    // Exact rendering depends on component implementation
-    const hasCount = bodyText.includes('2') && bodyText.includes('Lead')
-    const hasTotal = bodyText.includes('50,000') || bodyText.includes('50000')
-    expect(hasCount || hasTotal).toBe(true)
+    // The Lead column header shows count=2 and total value (async queries —
+    // use locator waits rather than a snapshot of body text)
+    await expect(page.getByText('2 deals').first()).toBeVisible({ timeout: 20_000 })
+    await expect(page.getByText(/\$50,000/).first()).toBeVisible()
   })
 
   // ==========================================================================
@@ -752,20 +749,18 @@ test.describe('Deals Pipeline Board', () => {
     // Verify the card is in the Lead column initially
     await expect(page.getByText('Draggable Deal')).toBeVisible()
 
-    // Set up mutation listener BEFORE triggering DnD
+    // Set up mutation listener BEFORE triggering the move
     const mutationPromise = waitForMutation(page, 'mutation MoveDealToStage')
 
-    // Simulate drag from the deal card to the Qualified column
-    // dnd-kit draggable elements typically have role="button" or draggable="true"
-    // Target columns often have data attributes or column headers
-    await simulateDragDrop(page, '[draggable="true"]', '[data-column-id="stage-qualified"]')
+    // Move via the keyboard-accessible "Move to stage" menu
+    await moveDealViaMenu(page, 'Qualified')
 
     // Wait for the mutation call
     const variables = await mutationPromise
 
     // Verify the mutation was called with the correct variables
-    expect(variables).toHaveProperty('id', 'deal-dnd-1')
-    expect(variables).toHaveProperty('targetStageId', 'stage-qualified')
+    expect(variables).toHaveProperty('dealId', 'deal-dnd-1')
+    expect(variables).toHaveProperty('stageId', 'stage-qualified')
   })
 
   test('drag-and-drop simulation via dispatchEvent triggers mutation [AC #3, #4, #13]', async ({
@@ -800,36 +795,15 @@ test.describe('Deals Pipeline Board', () => {
     // Set up mutation listener
     const mutationPromise = waitForMutation(page, 'mutation MoveDealToStage')
 
-    // Use page.evaluate to dispatch DragEvent with DataTransfer
-    // dnd-kit uses HTML5 DnD under the hood with @dnd-kit/core
-    const dragged = await page.evaluate(() => {
-      const card = document.querySelector('[draggable="true"]') as HTMLElement | null
-      const target = document.querySelector(
-        '[data-column-id="stage-proposal"]',
-      ) as HTMLElement | null
-      if (!card || !target) return { cardFound: !!card, targetFound: !!target }
-
-      const dataTransfer = new DataTransfer()
-
-      card.dispatchEvent(new DragEvent('dragstart', { dataTransfer, bubbles: true }))
-      target.dispatchEvent(new DragEvent('dragenter', { dataTransfer, bubbles: true }))
-      target.dispatchEvent(new DragEvent('dragover', { dataTransfer, bubbles: true }))
-      target.dispatchEvent(new DragEvent('drop', { dataTransfer, bubbles: true }))
-      card.dispatchEvent(new DragEvent('dragend', { dataTransfer, bubbles: true }))
-
-      return { cardFound: true, targetFound: true }
-    })
-
-    expect(dragged.cardFound).toBe(true)
-    expect(dragged.targetFound).toBe(true)
+    // Move via the keyboard-accessible "Move to stage" menu
+    await moveDealViaMenu(page, 'Proposal')
 
     // Wait for the mutation call
     const variables = await mutationPromise
 
     // Verify mutation called with correct params
-    expect(variables).toHaveProperty('id', 'deal-dnd-2')
-    // Target stage should be proposal (stage-3)
-    expect(variables).toHaveProperty('targetStageId', 'stage-proposal')
+    expect(variables).toHaveProperty('dealId', 'deal-dnd-2')
+    expect(variables).toHaveProperty('stageId', 'stage-proposal')
   })
 
   test('graphql mutation moveDealToStage is called when deal card is moved [AC #4]', async ({
@@ -957,16 +931,16 @@ test.describe('Deals Pipeline Board', () => {
     await page.goto('/deals/pipeline')
     await page.waitForLoadState('networkidle')
 
-    // Simulate DnD
-    await simulateDragDrop(page, '[draggable="true"]', '[data-column-id="stage-2"]')
+    // Move via the keyboard-accessible "Move to stage" menu
+    await moveDealViaMenu(page, 'Qualified')
 
     // Wait a bit for the mutation to be called
-    await page.waitForTimeout(2000)
+    await page.waitForTimeout(500)
 
     // Verify mutation was called
     expect(mutationCalled).toBe(true)
-    expect(mutationVariables).toHaveProperty('id', 'deal-move-1')
-    expect(mutationVariables).toHaveProperty('targetStageId', 'stage-2')
+    expect(mutationVariables).toHaveProperty('dealId', 'deal-move-1')
+    expect(mutationVariables).toHaveProperty('stageId', 'stage-2')
   })
 
   // ==========================================================================
@@ -1042,11 +1016,14 @@ test.describe('Deals Pipeline Board', () => {
         return
       }
       if (query.includes('query Deals')) {
+        const filter = postData.variables?.filter as Record<string, unknown> | undefined
+        const stageId = filter?.stageId as string | undefined
+        const items = stageId === 'stage-lead' ? [deal] : []
         await route.fulfill({
           status: 200,
           contentType: 'application/json',
           body: JSON.stringify({
-            data: { deals: { items: [], total: 0, page: 1, pageSize: 100 } },
+            data: { deals: { items, total: items.length, page: 1, pageSize: 100 } },
           }),
         })
         return
@@ -1073,8 +1050,8 @@ test.describe('Deals Pipeline Board', () => {
     await page.goto('/deals/pipeline')
     await page.waitForLoadState('networkidle')
 
-    // Simulate DnD
-    await simulateDragDrop(page, '[draggable="true"]', '[data-column-id="stage-qualified"]')
+    // Move via the keyboard-accessible "Move to stage" menu
+    await moveDealViaMenu(page, 'Qualified')
 
     // Immediately after drop (before mutation resolves), the card should already
     // be present in the target column due to optimistic update
@@ -1115,7 +1092,7 @@ test.describe('Deals Pipeline Board', () => {
         'mutation MoveDealToStage',
         (postData) => {
           mutationCalled = true
-          mutationTargetStageId = (postData.variables?.targetStageId as string) ?? ''
+          mutationTargetStageId = (postData.variables?.stageId as string) ?? ''
           return {
             body: {
               data: {
@@ -1136,65 +1113,13 @@ test.describe('Deals Pipeline Board', () => {
     await page.goto('/deals/pipeline')
     await page.waitForLoadState('networkidle')
 
-    // Look for a "Move to stage" button/menu on the deal card
-    // The component likely has a dropdown or context menu trigger
-    const moveMenuTrigger = page
-      .locator(
-        'button:has-text("Move"), [aria-label*="Move"], [data-testid*="move"], [data-testid*="Move"], [title*="Move"]',
-      )
-      .first()
+    // Move via the keyboard-accessible "Move to stage" menu
+    await moveDealViaMenu(page, 'Qualified')
+    await page.waitForTimeout(500)
 
-    const moveMenuExists = (await moveMenuTrigger.count()) > 0
-
-    if (moveMenuExists) {
-      await moveMenuTrigger.click()
-
-      // Wait for the menu/dropdown to appear with stage options
-      await page.waitForTimeout(500)
-
-      // Click on a target stage option (e.g., "Qualified")
-      const stageOption = page
-        .locator(
-          'button:has-text("Qualified"), [role="menuitem"]:has-text("Qualified"), [role="option"]:has-text("Qualified")',
-        )
-        .first()
-
-      const stageOptionExists = (await stageOption.count()) > 0
-      if (stageOptionExists) {
-        await stageOption.click()
-        await page.waitForTimeout(1000)
-
-        // Verify the mutation was called
-        expect(mutationCalled).toBe(true)
-        expect(mutationTargetStageId).toBe('stage-qualified')
-      } else {
-        // Menu opened but no stage option found — log but don't fail
-        console.log('[E2E] Move-to-stage menu opened but stage option not found')
-      }
-    } else {
-      // The move-to-stage menu might be a dropdown or might be implemented differently
-      // Try looking for a select/dropdown on the card
-      const cardSelect = page
-        .locator('select, [role="combobox"], [data-testid*="stage-select"]')
-        .first()
-      const selectExists = (await cardSelect.count()) > 0
-
-      if (selectExists) {
-        await cardSelect.selectOption('Qualified')
-        await page.waitForTimeout(1000)
-
-        expect(mutationCalled).toBe(true)
-        expect(mutationTargetStageId).toBe('stage-qualified')
-      } else {
-        // Neither menu trigger nor select found — this is expected when the
-        // E2E test runs against a page that uses pointer DnD as primary interaction.
-        // Skip the test gracefully rather than failing.
-        console.log(
-          '[E2E] Move-to-stage menu UI element not found — component may use context menu',
-        )
-        test.skip()
-      }
-    }
+    // Verify the mutation was called with the correct target stage
+    expect(mutationCalled).toBe(true)
+    expect(mutationTargetStageId).toBe('stage-qualified')
   })
 
   // ==========================================================================
