@@ -78,6 +78,25 @@ describe('AppShellNavigation', () => {
     expect(winLossLink).toHaveAttribute('href', '/reports/win-loss')
   })
 
+  it('exposes the Builder entry with href /reports/builder (Story 6.3, D.31)', () => {
+    renderNav()
+
+    const nav = screen.getByRole('navigation', { name: 'CRM navigation' })
+    const builderLink = within(nav).getByRole('link', { name: 'Builder' })
+    expect(builderLink).toHaveAttribute('href', '/reports/builder')
+  })
+
+  it('marks the builder route as active when on /reports/builder', () => {
+    mockUsePathname.mockReturnValue('/reports/builder')
+    renderNav()
+
+    const nav = screen.getByRole('navigation', { name: 'CRM navigation' })
+    expect(within(nav).getByRole('link', { name: 'Builder' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    )
+  })
+
   it('exposes the Productivity entry with href /reports/productivity (Story 4.5, AC 44)', () => {
     renderNav()
 

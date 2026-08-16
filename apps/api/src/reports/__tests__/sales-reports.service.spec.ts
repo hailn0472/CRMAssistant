@@ -1160,6 +1160,19 @@ describe('SalesReportsService', () => {
       )
     })
 
+    it('rejects CUSTOM before the six-type calculation map (Story 6.3 Contract C.22)', async () => {
+      mockPrisma.report.findFirst.mockResolvedValue(makeReportRow({ type: 'CUSTOM' }))
+      await expect(service.reportData('tenant-1', 'user-1', 'report-1')).rejects.toThrow(
+        new BadRequestException('Custom reports must be executed through customReportData'),
+      )
+      await expect(service.runReport('tenant-1', 'user-1', 'report-1')).rejects.toThrow(
+        new BadRequestException('Custom reports must be executed through customReportData'),
+      )
+      // No sales computation must run for a CUSTOM report.
+      expect(mockPrisma.deal.aggregate).not.toHaveBeenCalled()
+      expect(mockPrisma.deal.groupBy).not.toHaveBeenCalled()
+    })
+
     it('returns a structurally complete result for an empty scope (AC 43)', async () => {
       mockPrisma.report.findFirst.mockResolvedValue(makeReportRow())
       mockPrisma.deal.aggregate.mockResolvedValue({ _sum: { value: 0 }, _count: { _all: 0 } })

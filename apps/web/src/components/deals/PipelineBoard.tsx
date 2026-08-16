@@ -415,16 +415,18 @@ export function PipelineBoard(): React.JSX.Element {
             onDragStart={handleDragStart}
             onDragEnd={handleDragEnd}
           >
-            {stages.map((stage) => (
-              <StageColumn
-                key={stage.id}
-                stage={stage}
-                filter={filter}
-                summary={summaryMap.get(stage.id)}
-                stages={stages}
-                onMoveToStage={handleMoveToStage}
-              />
-            ))}
+            {[...stages]
+              .sort((a, b) => a.order - b.order)
+              .map((stage) => (
+                <StageColumn
+                  key={stage.id}
+                  stage={stage}
+                  filter={filter}
+                  summary={summaryMap.get(stage.id)}
+                  stages={stages}
+                  onMoveToStage={handleMoveToStage}
+                />
+              ))}
             <DragOverlay dropAnimation={null}>
               {activeDeal ? (
                 <div className="w-72 rotate-3 shadow-xl">

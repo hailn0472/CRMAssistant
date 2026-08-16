@@ -27,6 +27,7 @@ const SEGMENT_LABELS: Record<string, string> = {
   inbox: 'Inbox',
   reports: 'Reports',
   sales: 'Sales', // Story 6.2 (AC 65)
+  builder: 'Builder', // Story 6.3 (Contract D.31)
   forecast: 'Forecast',
   users: 'Users',
   settings: 'Settings',

@@ -75,6 +75,15 @@ describe('Breadcrumbs', () => {
     expect(screen.queryByText('Chi tiết')).not.toBeInTheDocument()
   })
 
+  it('labels the builder segment — not "Chi tiết" (Story 6.3, D.31)', () => {
+    mockUsePathname.mockReturnValue('/reports/builder')
+
+    render(<Breadcrumbs />)
+    expect(screen.getByRole('link', { name: 'Reports' })).toHaveAttribute('href', '/reports')
+    expect(screen.getByText('Builder')).toHaveAttribute('aria-current', 'page')
+    expect(screen.queryByText('Chi tiết')).not.toBeInTheDocument()
+  })
+
   it('labels the productivity segment instead of the "Chi tiết" fallback (AC #45)', () => {
     mockUsePathname.mockReturnValue('/reports/productivity')
 

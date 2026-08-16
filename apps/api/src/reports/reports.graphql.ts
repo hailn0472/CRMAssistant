@@ -242,7 +242,7 @@ import type {
   ReportFiltersInput,
   ReportDrillDownInput,
 } from './sales-reports.service'
-import { isReportType } from './report-types'
+import { isPlatformReportType } from './report-types'
 import type { ReportType } from './report-types'
 
 const ReportTypeRef = builder.enumType('ReportType', { values: REPORT_TYPES })
@@ -285,11 +285,18 @@ ReportRef.implement({
   fields: (t) => ({
     id: t.exposeID('id'),
     name: t.exposeString('name'),
-    // Raw type string — an unknown persisted type is surfaced as
-    // isSupported:false so the saved-report list can flag it (AC 42).
+    // Raw type string — CUSTOM rows are supported platform reports (Custom
+    // badge in the saved list) while truly unknown persisted types surface as
+    // isSupported:false (Story 6.2 AC 42 + Story 6.3 Contract D.30).
     type: t.exposeString('type'),
-    isSupported: t.boolean({ resolve: (r) => isReportType(r.type) }),
-    config: t.field({ type: ReportConfigRef, resolve: (r) => parseReportConfig(r.config, r.type) }),
+    isSupported: t.boolean({ resolve: (r) => isPlatformReportType(r.type) }),
+    config: t.field({
+      type: ReportConfigRef,
+      nullable: true,
+      // A CUSTOM row carries a custom config that must never be parsed as a
+      // sales config — expose null instead of a fabricated sales default.
+      resolve: (r) => (r.type === 'CUSTOM' ? null : parseReportConfig(r.config, r.type)),
+    }),
     isPublic: t.exposeBoolean('isPublic'),
     createdAt: t.string({ resolve: (r) => r.createdAt.toISOString() }),
     updatedAt: t.string({ resolve: (r) => r.updatedAt.toISOString() }),
@@ -499,6 +506,475 @@ const ReportPaginationInputRef = builder.inputType('ReportPaginationInput', {
   }),
 })
 
+// ─── Custom Report Types (Story 6.3) ────────────────────────────────
+// Enums derive from the const tuples in custom-report-types.ts; object refs
+// derive from the service/catalogue return types (Contract B.11, C.15-C.19).
+// No raw JSON crosses GraphQL — cells carry exactly one typed value slot.
+// ────────────────────────────────────────────────────────────────────
+
+import { catalogFor } from './custom-report-catalog'
+import {
+  CUSTOM_REPORT_AGGREGATIONS,
+  CUSTOM_REPORT_CALCULATED_DIMENSION_KINDS,
+  CUSTOM_REPORT_CHART_TYPES,
+  CUSTOM_REPORT_COLUMN_ROLES,
+  CUSTOM_REPORT_DATA_SOURCES,
+  CUSTOM_REPORT_FIELD_ROLES,
+  CUSTOM_REPORT_FILTER_OPERATORS,
+  CUSTOM_REPORT_GRANULARITIES,
+  CUSTOM_REPORT_ORIENTATIONS,
+  CUSTOM_REPORT_RELATION_KINDS,
+  CUSTOM_REPORT_SORT_DIRECTIONS,
+  CUSTOM_REPORT_VALUE_TYPES,
+  CUSTOM_REPORT_WARNING_CODES,
+} from './custom-report-types'
+import type {
+  CustomReportCalculatedDimension,
+  CustomReportConfig as CustomReportConfigShape,
+  CustomReportDataSource,
+  CustomReportDimension,
+  CustomReportFilter,
+  CustomReportMetric,
+  CustomReportSort,
+  CustomReportVisualization,
+} from './custom-report-types'
+import type {
+  CustomReportsService,
+  CustomReportCell,
+  CustomReportColumn,
+  CustomReportOutput,
+  CustomReportPagination,
+  CustomReportResult,
+  CustomReportRow,
+  CustomReportSeries,
+  CustomReportSeriesPoint,
+  CustomReportWarning,
+} from './custom-reports.service'
+import type { CustomReportField } from './custom-report-catalog'
+
+const CustomReportDataSourceRef = builder.enumType('CustomReportDataSource', {
+  values: CUSTOM_REPORT_DATA_SOURCES,
+})
+const CustomReportAggregationRef = builder.enumType('CustomReportAggregation', {
+  values: CUSTOM_REPORT_AGGREGATIONS,
+})
+const CustomReportGranularityRef = builder.enumType('CustomReportGranularity', {
+  values: CUSTOM_REPORT_GRANULARITIES,
+})
+const CustomReportChartTypeRef = builder.enumType('CustomReportChartType', {
+  values: CUSTOM_REPORT_CHART_TYPES,
+})
+const CustomReportValueTypeRef = builder.enumType('CustomReportValueType', {
+  values: CUSTOM_REPORT_VALUE_TYPES,
+})
+const CustomReportFilterOperatorRef = builder.enumType('CustomReportFilterOperator', {
+  values: CUSTOM_REPORT_FILTER_OPERATORS,
+})
+const CustomReportSortDirectionRef = builder.enumType('CustomReportSortDirection', {
+  values: CUSTOM_REPORT_SORT_DIRECTIONS,
+})
+const CustomReportOrientationRef = builder.enumType('CustomReportOrientation', {
+  values: CUSTOM_REPORT_ORIENTATIONS,
+})
+const CustomReportFieldRoleRef = builder.enumType('CustomReportFieldRole', {
+  values: CUSTOM_REPORT_FIELD_ROLES,
+})
+const CustomReportColumnRoleRef = builder.enumType('CustomReportColumnRole', {
+  values: CUSTOM_REPORT_COLUMN_ROLES,
+})
+const CustomReportCalculatedDimensionKindRef = builder.enumType(
+  'CustomReportCalculatedDimensionKind',
+  { values: CUSTOM_REPORT_CALCULATED_DIMENSION_KINDS },
+)
+const CustomReportRelationKindRef = builder.enumType('CustomReportRelationKind', {
+  values: CUSTOM_REPORT_RELATION_KINDS,
+})
+const CustomReportWarningCodeRef = builder.enumType('CustomReportWarningCode', {
+  values: CUSTOM_REPORT_WARNING_CODES,
+})
+
+// ── Output object refs (derive from service shapes — Contract C.19) ──
+
+const CustomReportFieldRef = builder.objectRef<CustomReportField>('CustomReportField')
+
+CustomReportFieldRef.implement({
+  fields: (t) => ({
+    key: t.exposeString('key'),
+    label: t.exposeString('label'),
+    valueType: t.field({ type: CustomReportValueTypeRef, resolve: (f) => f.valueType }),
+    roles: t.field({ type: [CustomReportFieldRoleRef], resolve: (f) => f.roles }),
+    aggregations: t.field({ type: [CustomReportAggregationRef], resolve: (f) => f.aggregations }),
+    filterOperators: t.field({
+      type: [CustomReportFilterOperatorRef],
+      resolve: (f) => f.filterOperators,
+    }),
+    relationKind: t.field({
+      type: CustomReportRelationKindRef,
+      nullable: true,
+      resolve: (f) => f.relationKind,
+    }),
+    isNumeric: t.exposeBoolean('isNumeric'),
+    isCurrency: t.exposeBoolean('isCurrency'),
+    isDate: t.exposeBoolean('isDate'),
+  }),
+})
+
+const CustomReportCatalogRef = builder.objectRef<{
+  dataSource: CustomReportDataSource
+  fields: CustomReportField[]
+}>('CustomReportCatalog')
+
+CustomReportCatalogRef.implement({
+  fields: (t) => ({
+    dataSource: t.field({ type: CustomReportDataSourceRef, resolve: (c) => c.dataSource }),
+    fields: t.field({ type: [CustomReportFieldRef], resolve: (c) => c.fields }),
+  }),
+})
+
+const CustomReportFilterRef = builder.objectRef<CustomReportFilter>('CustomReportFilter')
+
+CustomReportFilterRef.implement({
+  fields: (t) => ({
+    id: t.exposeID('id'),
+    fieldId: t.exposeString('fieldId'),
+    operator: t.field({ type: CustomReportFilterOperatorRef, resolve: (f) => f.operator }),
+    stringValue: t.string({ nullable: true, resolve: (f) => f.stringValue }),
+    numberValue: t.float({ nullable: true, resolve: (f) => f.numberValue }),
+    booleanValue: t.boolean({ nullable: true, resolve: (f) => f.booleanValue }),
+    dateValue: t.string({ nullable: true, resolve: (f) => f.dateValue }),
+    stringValues: t.stringList({ nullable: true, resolve: (f) => f.stringValues }),
+    numberValues: t.floatList({ nullable: true, resolve: (f) => f.numberValues }),
+    dateValues: t.stringList({ nullable: true, resolve: (f) => f.dateValues }),
+  }),
+})
+
+const CustomReportCalculatedDimensionRef = builder.objectRef<CustomReportCalculatedDimension>(
+  'CustomReportCalculatedDimension',
+)
+
+CustomReportCalculatedDimensionRef.implement({
+  fields: (t) => ({
+    kind: t.field({ type: CustomReportCalculatedDimensionKindRef, resolve: (d) => d.kind }),
+    sourceFieldId: t.exposeString('sourceFieldId'),
+    granularity: t.field({
+      type: CustomReportGranularityRef,
+      nullable: true,
+      resolve: (d) => (d.kind === 'DATE_PART' ? d.granularity : null),
+    }),
+    bucketSize: t.float({
+      nullable: true,
+      resolve: (d) => (d.kind === 'NUMBER_BUCKET' ? d.bucketSize : null),
+    }),
+  }),
+})
+
+const CustomReportDimensionRef = builder.objectRef<CustomReportDimension>('CustomReportDimension')
+
+CustomReportDimensionRef.implement({
+  fields: (t) => ({
+    id: t.exposeID('id'),
+    fieldId: t.string({ nullable: true, resolve: (d) => d.fieldId }),
+    calculation: t.field({
+      type: CustomReportCalculatedDimensionRef,
+      nullable: true,
+      resolve: (d) => d.calculation,
+    }),
+    granularity: t.field({
+      type: CustomReportGranularityRef,
+      nullable: true,
+      resolve: (d) => d.granularity,
+    }),
+  }),
+})
+
+const CustomReportMetricRef = builder.objectRef<CustomReportMetric>('CustomReportMetric')
+
+CustomReportMetricRef.implement({
+  fields: (t) => ({
+    id: t.exposeID('id'),
+    fieldId: t.exposeString('fieldId'),
+    aggregation: t.field({ type: CustomReportAggregationRef, resolve: (m) => m.aggregation }),
+    alias: t.exposeString('alias'),
+  }),
+})
+
+const CustomReportCalculatedFieldRef = builder.objectRef<{
+  id: string
+  alias: string
+  label: string | null
+  expression: string
+}>('CustomReportCalculatedField')
+
+CustomReportCalculatedFieldRef.implement({
+  fields: (t) => ({
+    id: t.exposeID('id'),
+    alias: t.exposeString('alias'),
+    label: t.string({ nullable: true, resolve: (c) => c.label }),
+    expression: t.exposeString('expression'),
+  }),
+})
+
+const CustomReportSortRef = builder.objectRef<CustomReportSort>('CustomReportSort')
+
+CustomReportSortRef.implement({
+  fields: (t) => ({
+    id: t.exposeID('id'),
+    targetId: t.exposeString('targetId'),
+    direction: t.field({ type: CustomReportSortDirectionRef, resolve: (s) => s.direction }),
+  }),
+})
+
+const CustomReportVisualizationRef = builder.objectRef<CustomReportVisualization>(
+  'CustomReportVisualization',
+)
+
+CustomReportVisualizationRef.implement({
+  fields: (t) => ({
+    type: t.field({ type: CustomReportChartTypeRef, resolve: (v) => v.type }),
+    title: t.string({ nullable: true, resolve: (v) => v.title }),
+    showLegend: t.exposeBoolean('showLegend'),
+    showDataLabels: t.exposeBoolean('showDataLabels'),
+    xAxisLabel: t.string({ nullable: true, resolve: (v) => v.xAxisLabel }),
+    yAxisLabel: t.string({ nullable: true, resolve: (v) => v.yAxisLabel }),
+    orientation: t.field({
+      type: CustomReportOrientationRef,
+      nullable: true,
+      resolve: (v) => v.orientation,
+    }),
+  }),
+})
+
+const CustomReportConfigRef = builder.objectRef<CustomReportConfigShape>('CustomReportConfig')
+
+CustomReportConfigRef.implement({
+  fields: (t) => ({
+    version: t.exposeInt('version'),
+    dataSource: t.field({ type: CustomReportDataSourceRef, resolve: (c) => c.dataSource }),
+    filters: t.field({ type: [CustomReportFilterRef], resolve: (c) => c.filters }),
+    dimensions: t.field({ type: [CustomReportDimensionRef], resolve: (c) => c.dimensions }),
+    metrics: t.field({ type: [CustomReportMetricRef], resolve: (c) => c.metrics }),
+    calculatedFields: t.field({
+      type: [CustomReportCalculatedFieldRef],
+      resolve: (c) => c.calculatedFields,
+    }),
+    visualization: t.field({ type: CustomReportVisualizationRef, resolve: (c) => c.visualization }),
+    sort: t.field({ type: [CustomReportSortRef], resolve: (c) => c.sort }),
+  }),
+})
+
+const CustomReportColumnRef = builder.objectRef<CustomReportColumn>('CustomReportColumn')
+
+CustomReportColumnRef.implement({
+  fields: (t) => ({
+    fieldId: t.exposeString('fieldId'),
+    label: t.exposeString('label'),
+    valueType: t.field({ type: CustomReportValueTypeRef, resolve: (c) => c.valueType }),
+    role: t.field({ type: CustomReportColumnRoleRef, resolve: (c) => c.role }),
+    aggregation: t.field({
+      type: CustomReportAggregationRef,
+      nullable: true,
+      resolve: (c) => c.aggregation,
+    }),
+    granularity: t.field({
+      type: CustomReportGranularityRef,
+      nullable: true,
+      resolve: (c) => c.granularity,
+    }),
+    isCalculated: t.exposeBoolean('isCalculated'),
+  }),
+})
+
+const CustomReportCellRef = builder.objectRef<CustomReportCell>('CustomReportCell')
+
+CustomReportCellRef.implement({
+  fields: (t) => ({
+    fieldId: t.exposeString('fieldId'),
+    label: t.exposeString('label'),
+    valueType: t.field({ type: CustomReportValueTypeRef, resolve: (c) => c.valueType }),
+    stringValue: t.string({ nullable: true, resolve: (c) => c.stringValue }),
+    numberValue: t.float({ nullable: true, resolve: (c) => c.numberValue }),
+    booleanValue: t.boolean({ nullable: true, resolve: (c) => c.booleanValue }),
+    dateValue: t.string({ nullable: true, resolve: (c) => c.dateValue }),
+    isNull: t.exposeBoolean('isNull'),
+  }),
+})
+
+const CustomReportRowRef = builder.objectRef<CustomReportRow>('CustomReportRow')
+
+CustomReportRowRef.implement({
+  fields: (t) => ({
+    key: t.exposeString('key'),
+    cells: t.field({ type: [CustomReportCellRef], resolve: (r) => r.cells }),
+  }),
+})
+
+const CustomReportSeriesPointRef =
+  builder.objectRef<CustomReportSeriesPoint>('CustomReportSeriesPoint')
+
+CustomReportSeriesPointRef.implement({
+  fields: (t) => ({
+    label: t.exposeString('label'),
+    value: t.float({ nullable: true, resolve: (p) => p.value }),
+  }),
+})
+
+const CustomReportSeriesRef = builder.objectRef<CustomReportSeries>('CustomReportSeries')
+
+CustomReportSeriesRef.implement({
+  fields: (t) => ({
+    metricId: t.exposeString('metricId'),
+    label: t.exposeString('label'),
+    points: t.field({ type: [CustomReportSeriesPointRef], resolve: (s) => s.points }),
+  }),
+})
+
+const CustomReportWarningRef = builder.objectRef<CustomReportWarning>('CustomReportWarning')
+
+CustomReportWarningRef.implement({
+  fields: (t) => ({
+    code: t.field({ type: CustomReportWarningCodeRef, resolve: (w) => w.code }),
+    message: t.exposeString('message'),
+  }),
+})
+
+const CustomReportPaginationRef =
+  builder.objectRef<CustomReportPagination>('CustomReportPagination')
+
+CustomReportPaginationRef.implement({
+  fields: (t) => ({
+    page: t.exposeInt('page'),
+    pageSize: t.exposeInt('pageSize'),
+    totalPages: t.exposeInt('totalPages'),
+  }),
+})
+
+const CustomReportResultRef = builder.objectRef<CustomReportResult>('CustomReportResult')
+
+CustomReportResultRef.implement({
+  fields: (t) => ({
+    reportId: t.id({ nullable: true, resolve: (r) => r.reportId }),
+    generatedAt: t.exposeString('generatedAt'),
+    config: t.field({ type: CustomReportConfigRef, resolve: (r) => r.config }),
+    columns: t.field({ type: [CustomReportColumnRef], resolve: (r) => r.columns }),
+    rows: t.field({ type: [CustomReportRowRef], resolve: (r) => r.rows }),
+    totalRows: t.exposeInt('totalRows'),
+    series: t.field({ type: [CustomReportSeriesRef], resolve: (r) => r.series }),
+    warnings: t.field({ type: [CustomReportWarningRef], resolve: (r) => r.warnings }),
+    pagination: t.field({ type: CustomReportPaginationRef, resolve: (r) => r.pagination }),
+    truncated: t.exposeBoolean('truncated'),
+  }),
+})
+
+const CustomReportRef = builder.objectRef<CustomReportOutput>('CustomReport')
+
+CustomReportRef.implement({
+  fields: (t) => ({
+    id: t.exposeID('id'),
+    name: t.exposeString('name'),
+    isPublic: t.exposeBoolean('isPublic'),
+    createdAt: t.string({ resolve: (r) => r.createdAt.toISOString() }),
+    updatedAt: t.string({ resolve: (r) => r.updatedAt.toISOString() }),
+    createdBy: t.exposeString('createdBy'),
+    config: t.field({ type: CustomReportConfigRef, resolve: (r) => r.config }),
+  }),
+})
+
+// ── Input types (typed value slots — never raw JSON) ─────────────────
+
+const CustomReportFilterInputRef = builder.inputType('CustomReportFilterInput', {
+  fields: (t) => ({
+    id: t.id({ required: true }),
+    fieldId: t.string({ required: true }),
+    operator: t.field({ type: CustomReportFilterOperatorRef, required: true }),
+    stringValue: t.string(),
+    numberValue: t.float(),
+    booleanValue: t.boolean(),
+    dateValue: t.string(),
+    stringValues: t.stringList(),
+    numberValues: t.floatList(),
+    dateValues: t.stringList(),
+  }),
+})
+
+const CustomReportDimensionCalculationInputRef = builder.inputType(
+  'CustomReportDimensionCalculationInput',
+  {
+    fields: (t) => ({
+      kind: t.field({ type: CustomReportCalculatedDimensionKindRef, required: true }),
+      sourceFieldId: t.string({ required: true }),
+      granularity: t.field({ type: CustomReportGranularityRef }),
+      bucketSize: t.float(),
+    }),
+  },
+)
+
+const CustomReportDimensionInputRef = builder.inputType('CustomReportDimensionInput', {
+  fields: (t) => ({
+    id: t.id({ required: true }),
+    fieldId: t.string(),
+    calculation: t.field({ type: CustomReportDimensionCalculationInputRef }),
+    granularity: t.field({ type: CustomReportGranularityRef }),
+  }),
+})
+
+const CustomReportMetricInputRef = builder.inputType('CustomReportMetricInput', {
+  fields: (t) => ({
+    id: t.id({ required: true }),
+    fieldId: t.string({ required: true }),
+    aggregation: t.field({ type: CustomReportAggregationRef, required: true }),
+    alias: t.string(),
+  }),
+})
+
+const CustomReportCalculatedFieldInputRef = builder.inputType('CustomReportCalculatedFieldInput', {
+  fields: (t) => ({
+    id: t.id({ required: true }),
+    alias: t.string({ required: true }),
+    label: t.string(),
+    expression: t.string({ required: true }),
+  }),
+})
+
+const CustomReportSortInputRef = builder.inputType('CustomReportSortInput', {
+  fields: (t) => ({
+    id: t.id({ required: true }),
+    targetId: t.string({ required: true }),
+    direction: t.field({ type: CustomReportSortDirectionRef, required: true }),
+  }),
+})
+
+const CustomReportVisualizationInputRef = builder.inputType('CustomReportVisualizationInput', {
+  fields: (t) => ({
+    type: t.field({ type: CustomReportChartTypeRef, required: true }),
+    title: t.string(),
+    showLegend: t.boolean(),
+    showDataLabels: t.boolean(),
+    xAxisLabel: t.string(),
+    yAxisLabel: t.string(),
+    orientation: t.field({ type: CustomReportOrientationRef }),
+  }),
+})
+
+const CustomReportConfigInputRef = builder.inputType('CustomReportConfigInput', {
+  fields: (t) => ({
+    version: t.int({ required: true }),
+    dataSource: t.field({ type: CustomReportDataSourceRef, required: true }),
+    filters: t.field({ type: [CustomReportFilterInputRef], required: true }),
+    dimensions: t.field({ type: [CustomReportDimensionInputRef], required: true }),
+    metrics: t.field({ type: [CustomReportMetricInputRef], required: true }),
+    calculatedFields: t.field({ type: [CustomReportCalculatedFieldInputRef], required: true }),
+    visualization: t.field({ type: CustomReportVisualizationInputRef, required: true }),
+    sort: t.field({ type: [CustomReportSortInputRef], required: true }),
+  }),
+})
+
+const CustomReportPaginationInputRef = builder.inputType('CustomReportPaginationInput', {
+  fields: (t) => ({
+    page: t.int(),
+    pageSize: t.int(),
+  }),
+})
+
 const ReportDrillDownInputRef = builder.inputType('ReportDrillDownInput', {
   fields: (t) => ({
     metricKey: t.field({ type: ReportMetricKeyRef, required: true }),
@@ -514,6 +990,7 @@ let forecastService: ForecastService | undefined
 let winLossService: WinLossService | undefined
 let productivityService: ProductivityService | undefined
 let salesReportsService: SalesReportsService | undefined
+let customReportsService: CustomReportsService | undefined
 
 function getForecastService(): ForecastService {
   if (!forecastService) {
@@ -541,6 +1018,27 @@ function getSalesReportsService(): SalesReportsService {
     throw new Error('SalesReportsService is not initialized')
   }
   return salesReportsService
+}
+
+function getCustomReportsService(): CustomReportsService {
+  if (!customReportsService) {
+    throw new Error('CustomReportsService is not initialized')
+  }
+  return customReportsService
+}
+
+/**
+ * Story 6.3 (Contract B.12, security invariant 1-2): every custom report
+ * read/run additionally requires the selected source-domain READ gate.
+ * ACTIVITIES derives visibility from its active parent Contact, so its gate is
+ * CONTACT:READ. Public visibility never bypasses this gate.
+ */
+function requireCustomSourceRead(
+  context: GraphqlContext,
+  source: CustomReportDataSource,
+): Promise<void> {
+  const resource = catalogFor(source).readGate
+  return requirePermission(context, resource, 'READ')
 }
 
 function requireUser(context: GraphqlContext): JwtPayload {
@@ -676,6 +1174,62 @@ builder.queryFields((t) => ({
       )
     },
   }),
+  // ─── Story 6.3 custom reports (Contract C.16) ────────────────────────
+  // Every custom read requires REPORT:READ + the source-domain READ gate.
+  customReportFieldCatalog: t.field({
+    type: CustomReportCatalogRef,
+    args: {
+      dataSource: t.arg({ type: CustomReportDataSourceRef, required: true }),
+    },
+    resolve: async (_parent, args, context) => {
+      await requirePermission(context, 'REPORT', 'READ')
+      await requireCustomSourceRead(context, args.dataSource)
+      return {
+        dataSource: args.dataSource,
+        fields: catalogFor(args.dataSource).fields,
+      }
+    },
+  }),
+  customReportPreview: t.field({
+    type: CustomReportResultRef,
+    args: {
+      config: t.arg({ type: CustomReportConfigInputRef, required: true }),
+      pagination: t.arg({ type: CustomReportPaginationInputRef }),
+    },
+    resolve: async (_parent, args, context) => {
+      const user = requireUser(context)
+      await requirePermission(context, 'REPORT', 'READ')
+      const config = args.config as unknown as { dataSource: CustomReportDataSource }
+      await requireCustomSourceRead(context, config.dataSource)
+      return getCustomReportsService().preview(user.tenantId, user.userId, args.config, {
+        page: args.pagination?.page ?? undefined,
+        pageSize: args.pagination?.pageSize ?? undefined,
+      })
+    },
+  }),
+  customReportData: t.field({
+    type: CustomReportResultRef,
+    args: {
+      reportId: t.arg.id({ required: true }),
+      pagination: t.arg({ type: CustomReportPaginationInputRef }),
+    },
+    resolve: async (_parent, args, context) => {
+      const user = requireUser(context)
+      await requirePermission(context, 'REPORT', 'READ')
+      // Resolve the source from the saved CUSTOM report first so the correct
+      // source-domain gate applies (identical Report not found semantics).
+      const source = await getCustomReportsService().resolveReportDataSource(
+        user.tenantId,
+        user.userId,
+        args.reportId,
+      )
+      await requireCustomSourceRead(context, source)
+      return getCustomReportsService().customReportData(user.tenantId, user.userId, args.reportId, {
+        page: args.pagination?.page ?? undefined,
+        pageSize: args.pagination?.pageSize ?? undefined,
+      })
+    },
+  }),
 }))
 
 // ─── Story 6.2 report mutations (AC 58) ─────────────────────────────
@@ -745,6 +1299,35 @@ builder.mutationFields((t) => ({
       )
     },
   }),
+  // ─── Story 6.3 saveCustomReport (Contract C.16-C.18) ────────────────
+  // `reportId` absent → create (REPORT:CREATE); present → update the
+  // creator-owned active CUSTOM row (REPORT:UPDATE + ownership). Both require
+  // the source-domain READ gate. Exactly one service-level audit row.
+  saveCustomReport: t.field({
+    type: CustomReportRef,
+    args: {
+      reportId: t.arg.id(),
+      name: t.arg.string({ required: true }),
+      config: t.arg({ type: CustomReportConfigInputRef, required: true }),
+      isPublic: t.arg.boolean(),
+    },
+    resolve: async (_parent, args, context) => {
+      const user = requireUser(context)
+      const config = args.config as unknown as { dataSource: CustomReportDataSource }
+      if (args.reportId) {
+        await requirePermission(context, 'REPORT', 'UPDATE')
+      } else {
+        await requirePermission(context, 'REPORT', 'CREATE')
+      }
+      await requireCustomSourceRead(context, config.dataSource)
+      return getCustomReportsService().saveCustomReport(user.tenantId, user.userId, {
+        reportId: args.reportId ?? undefined,
+        name: args.name,
+        config: args.config,
+        isPublic: args.isPublic ?? undefined,
+      })
+    },
+  }),
 }))
 
 // ─── Registration ─────────────────────────────────────────
@@ -754,9 +1337,11 @@ export function registerReportsGraphql(
   winLoss: WinLossService,
   productivity: ProductivityService,
   salesReports: SalesReportsService,
+  customReports: CustomReportsService,
 ): void {
   forecastService = service
   winLossService = winLoss
   productivityService = productivity
   salesReportsService = salesReports
+  customReportsService = customReports
 }

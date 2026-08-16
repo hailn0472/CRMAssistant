@@ -674,6 +674,105 @@ describe('ContactsService', () => {
         }),
       )
     })
+
+    it('resolves the owner scope exactly once per list (no duplicate lookup)', async () => {
+      prisma.contact.findMany.mockResolvedValue([makeContact()])
+      prisma.contact.count.mockResolvedValue(1)
+      ;(resolveVisibilityFilter as jest.Mock).mockResolvedValue(USER_ID)
+      ;(resolveSharedRecordIds as jest.Mock).mockResolvedValue(['shared-contact'])
+      // This spec does not clearAllMocks per test — reset call history so the
+      // assertion counts only this findMany invocation.
+      ;(resolveVisibilityFilter as jest.Mock).mockClear()
+      ;(resolveSharedRecordIds as jest.Mock).mockClear()
+
+      await service.findMany(TENANT_ID, USER_ID)
+
+      expect(resolveVisibilityFilter).toHaveBeenCalledTimes(1)
+      expect(resolveSharedRecordIds).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  describe('buildContactWhere() — shared visibility predicate (Story 6.3)', () => {
+    it('returns the tenant + active scope with no visibility narrowing for ALL/ADMIN', async () => {
+      const where = await service.buildContactWhere(TENANT_ID, USER_ID)
+      expect(where).toEqual({ tenantId: TENANT_ID, deletedAt: null })
+    })
+
+    it('narrows to owned + shared contacts for OWN visibility', async () => {
+      ;(resolveVisibilityFilter as jest.Mock).mockResolvedValue(USER_ID)
+      ;(resolveSharedRecordIds as jest.Mock).mockResolvedValue(['shared-contact'])
+
+      const where = await service.buildContactWhere(TENANT_ID, USER_ID)
+
+      expect(where).toEqual({
+        tenantId: TENANT_ID,
+        deletedAt: null,
+        AND: [
+          {
+            OR: [{ ownerId: USER_ID }, { id: { in: ['shared-contact'] } }],
+          },
+        ],
+      })
+    })
+
+    it('narrows to the team member set for TEAM visibility', async () => {
+      ;(resolveVisibilityFilter as jest.Mock).mockResolvedValue({ in: ['user-1', 'user-2'] })
+      ;(resolveSharedRecordIds as jest.Mock).mockResolvedValue([])
+
+      const where = await service.buildContactWhere(TENANT_ID, USER_ID)
+
+      expect(where).toEqual({
+        tenantId: TENANT_ID,
+        deletedAt: null,
+        AND: [
+          {
+            OR: [{ ownerId: { in: ['user-1', 'user-2'] } }],
+          },
+        ],
+      })
+    })
+
+    it('applies list filters on top of the visibility scope (byte-for-byte equivalence)', async () => {
+      ;(resolveVisibilityFilter as jest.Mock).mockResolvedValue(USER_ID)
+      ;(resolveSharedRecordIds as jest.Mock).mockResolvedValue([])
+
+      const where = await service.buildContactWhere(TENANT_ID, USER_ID, {
+        company: 'Acme',
+        ownerId: 'user-9',
+        search: 'ada',
+      })
+
+      expect(where).toEqual({
+        tenantId: TENANT_ID,
+        deletedAt: null,
+        AND: [
+          { company: { contains: 'Acme', mode: 'insensitive' } },
+          { ownerId: 'user-9' },
+          {
+            OR: [
+              { email: { contains: 'ada', mode: 'insensitive' } },
+              { firstName: { contains: 'ada', mode: 'insensitive' } },
+              { lastName: { contains: 'ada', mode: 'insensitive' } },
+              { company: { contains: 'ada', mode: 'insensitive' } },
+            ],
+          },
+          { OR: [{ ownerId: USER_ID }] },
+        ],
+      })
+    })
+
+    it('drives findMany and getStats with the identical predicate', async () => {
+      ;(resolveVisibilityFilter as jest.Mock).mockResolvedValue(USER_ID)
+      ;(resolveSharedRecordIds as jest.Mock).mockResolvedValue(['shared-contact'])
+      prisma.contact.findMany.mockResolvedValue([makeContact()])
+      prisma.contact.count.mockResolvedValue(1)
+
+      await service.findMany(TENANT_ID, USER_ID)
+      const listWhere = prisma.contact.findMany.mock.calls[0][0].where
+      const statsWhere = await service.buildContactWhere(TENANT_ID, USER_ID)
+
+      expect(listWhere).toEqual(statsWhere)
+    })
   })
 
   describe('getStats()', () => {

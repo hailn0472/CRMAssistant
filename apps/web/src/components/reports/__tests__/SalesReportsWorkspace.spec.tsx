@@ -46,6 +46,12 @@ jest.mock('react-hot-toast', () => ({
   error: jest.fn(),
 }))
 
+// Story 6.3 (AC 12): CUSTOM rows navigate to the builder via useRouter.
+const mockRouterPush = jest.fn()
+jest.mock('next/navigation', () => ({
+  useRouter: (): { push: jest.Mock } => ({ push: mockRouterPush }),
+}))
+
 const mockSubscribe = jest.fn()
 const mockDisconnect = jest.fn()
 jest.mock('@/lib/graphql-subscription', () => ({
@@ -122,7 +128,20 @@ const REPORT_DATA: ReportData = {
   currency: 'USD',
   mixedCurrencies: false,
   availableCurrencies: ['USD'],
-  appliedFilters: REPORT.config,
+  appliedFilters: REPORT.config ?? {
+    datePreset: 'THIS_MONTH',
+    startDate: null,
+    endDate: null,
+    comparisonMode: 'PREVIOUS_PERIOD',
+    comparisonStartDate: null,
+    comparisonEndDate: null,
+    groupBy: 'MONTH',
+    ownerId: null,
+    teamId: null,
+    stageId: null,
+    productId: null,
+    currency: null,
+  },
   current: {
     startDate: '2026-08-01',
     endDate: '2026-08-31',
@@ -306,6 +325,34 @@ describe('SalesReportsWorkspace', () => {
     expect(await screen.findByText('Unsupported type')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: /Legacy report/ }))
     await waitFor(() => expect(mockGetReportData).not.toHaveBeenCalled())
+  })
+
+  // ─── Story 6.3 (AC 12): Custom badge + builder navigation ───────────
+  it('shows a Custom badge for CUSTOM rows and navigates to the builder instead of running them', async () => {
+    grantAll()
+    mockGetReports.mockResolvedValue({
+      items: [
+        { ...REPORT, id: 'custom-1', name: 'Revenue by stage', type: 'CUSTOM', config: null },
+      ],
+      total: 1,
+      page: 1,
+      pageSize: 20,
+    })
+    renderWorkspace()
+    expect(await screen.findByText('Custom')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /Revenue by stage/ }))
+    await waitFor(() =>
+      expect(mockRouterPush).toHaveBeenCalledWith('/reports/builder?reportId=custom-1'),
+    )
+    expect(mockGetReportData).not.toHaveBeenCalled()
+  })
+
+  it('keeps six sales report behavior: selecting a sales row never navigates to the builder', async () => {
+    grantAll()
+    renderWorkspace()
+    fireEvent.click(await screen.findByRole('button', { name: /August Overview/ }))
+    await waitFor(() => expect(mockGetReportData).toHaveBeenCalled())
+    expect(mockRouterPush).not.toHaveBeenCalled()
   })
 
   // ─── AC 66/75: selection + data flow ────────────────────────────────

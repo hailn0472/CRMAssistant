@@ -74,7 +74,8 @@ export type ReportRow = {
   name: string
   type: string
   isSupported: boolean
-  config: ReportConfig
+  /** Null for CUSTOM and other non-sales types (Story 6.3 Contract: config:null). */
+  config: ReportConfig | null
   isPublic: boolean
   createdAt: string
   updatedAt: string

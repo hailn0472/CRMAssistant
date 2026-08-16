@@ -896,6 +896,8 @@ test.describe('Story 3-6 Deal Document Attachment & Collaboration — E2E', () =
   test('[P2] E2E-36-21: Uploaded document appears in the list without a manual reload', async ({
     page,
   }) => {
+    test.skip(setupFailed, 'API unavailable — login failed')
+
     await page.goto(`/deals/${dealId}`)
     await expect(page.getByRole('button', { name: 'Attach a document' })).toBeVisible({
       timeout: 30_000,

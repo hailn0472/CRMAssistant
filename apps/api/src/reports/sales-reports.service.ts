@@ -502,14 +502,7 @@ export class SalesReportsService {
     }
 
     // Max 50 active reports per creator (AC 8).
-    const count = await this.prisma.report.count({
-      where: { tenantId, createdBy: userId, deletedAt: null },
-    })
-    if (count >= MAX_ACTIVE_REPORTS_PER_CREATOR) {
-      throw new BadRequestException(
-        `You cannot have more than ${MAX_ACTIVE_REPORTS_PER_CREATOR} reports`,
-      )
-    }
+    await this.assertUnderActiveLimit(tenantId, userId)
 
     // Case-insensitive active-name uniqueness per (tenantId, createdBy) (AC 8).
     await this.assertNameAvailable(tenantId, userId, name)
@@ -631,7 +624,27 @@ export class SalesReportsService {
     return true
   }
 
-  private async assertNameAvailable(
+  /**
+   * Shared persistence invariant (Story 6.2 AC 8, reused by Story 6.3 custom
+   * save): at most MAX_ACTIVE_REPORTS_PER_CREATOR active reports per creator,
+   * counting every type (sales + custom).
+   */
+  async assertUnderActiveLimit(tenantId: string, userId: string): Promise<void> {
+    const count = await this.prisma.report.count({
+      where: { tenantId, createdBy: userId, deletedAt: null },
+    })
+    if (count >= MAX_ACTIVE_REPORTS_PER_CREATOR) {
+      throw new BadRequestException(
+        `You cannot have more than ${MAX_ACTIVE_REPORTS_PER_CREATOR} reports`,
+      )
+    }
+  }
+
+  /**
+   * Shared persistence invariant (Story 6.2 AC 8, reused by Story 6.3 custom
+   * save): case-insensitive active-name uniqueness per (tenantId, createdBy).
+   */
+  async assertNameAvailable(
     tenantId: string,
     userId: string,
     name: string,
@@ -666,6 +679,11 @@ export class SalesReportsService {
     drillDown?: ReportDrillDownInput,
   ): Promise<ReportData> {
     const report = await this.report(tenantId, userId, reportId)
+    // Story 6.3 (Contract C.22): CUSTOM is a platform report type but never
+    // enters the six-type sales calculation map — reject it before dispatch.
+    if (report.type === 'CUSTOM') {
+      throw new BadRequestException('Custom reports must be executed through customReportData')
+    }
     if (!isReportType(report.type)) {
       throw new BadRequestException('Unsupported report type')
     }

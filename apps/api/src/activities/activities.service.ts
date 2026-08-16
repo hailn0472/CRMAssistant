@@ -487,8 +487,11 @@ export class ActivityService {
 
   /**
    * Shared where-builder for findFeed / getFeedStats (AC 5).
+   * Public since Story 6.3: the custom-report engine reuses this predicate so
+   * activity visibility (derived from the active parent Contact) is the SAME
+   * for aggregates, preview rows and saved results.
    */
-  private async buildFeedWhere(
+  async buildFeedWhere(
     tenantId: string,
     userId: string,
     filter: ActivityFeedFilter,

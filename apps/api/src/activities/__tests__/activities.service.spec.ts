@@ -948,6 +948,20 @@ describe('ActivityService', () => {
       expect(where.OR).toContainEqual({ contact: { ownerId: { in: ['user-1', 'user-2'] } } })
     })
 
+    it('exposes buildFeedWhere publicly with identical predicate (Story 6.3)', async () => {
+      ;(resolveVisibilityFilter as jest.Mock).mockResolvedValue(USER_ID)
+      ;(resolveSharedRecordIds as jest.Mock).mockResolvedValue(['contact-shared'])
+      mockFeedRows([makeFeedActivity()])
+
+      await service.findFeed(TENANT_ID, USER_ID, {})
+      const listWhere = prisma.activity.findMany.mock.calls[0]![0].where
+
+      const sharedWhere = await service.buildFeedWhere(TENANT_ID, USER_ID, {})
+      expect(sharedWhere).toEqual(listWhere)
+      expect(sharedWhere.OR).toContainEqual({ contact: { ownerId: USER_ID } })
+      expect(sharedWhere.OR).toContainEqual({ contactId: { in: ['contact-shared'] } })
+    })
+
     it('case 4: sharing rules add a contactId { in } OR branch (AC 5)', async () => {
       ;(resolveVisibilityFilter as jest.Mock).mockResolvedValue(USER_ID)
       ;(resolveSharedRecordIds as jest.Mock).mockResolvedValue(['contact-shared'])

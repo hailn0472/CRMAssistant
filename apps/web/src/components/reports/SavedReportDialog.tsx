@@ -142,8 +142,10 @@ export function SavedReportDialog({
     if (open) {
       setConfirmingDelete(false)
       if (report) {
+        // Story 6.3: CUSTOM/non-sales rows carry config:null — the dialog only
+        // ever edits sales rows, so fall back to empty values defensively.
         reset({
-          ...configToValues(report.config),
+          ...(report.config ? configToValues(report.config) : {}),
           name: report.name,
           type: report.type as ReportType,
           isPublic: report.isPublic,
