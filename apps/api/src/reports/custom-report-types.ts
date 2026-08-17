@@ -25,8 +25,60 @@ export type CustomReportAggregation = (typeof CUSTOM_REPORT_AGGREGATIONS)[number
 export const CUSTOM_REPORT_GRANULARITIES = ['DAY', 'WEEK', 'MONTH', 'QUARTER', 'YEAR'] as const
 export type CustomReportGranularity = (typeof CUSTOM_REPORT_GRANULARITIES)[number]
 
-export const CUSTOM_REPORT_CHART_TYPES = ['TABLE', 'LINE', 'BAR', 'PIE', 'FUNNEL'] as const
+export const CUSTOM_REPORT_CHART_TYPES = [
+  'TABLE',
+  'LINE',
+  'BAR',
+  'PIE',
+  'DONUT',
+  'AREA',
+  'FUNNEL',
+  'SCATTER',
+  'HEATMAP',
+] as const
 export type CustomReportChartType = (typeof CUSTOM_REPORT_CHART_TYPES)[number]
+
+export const CUSTOM_REPORT_LEGEND_POSITIONS = ['TOP', 'RIGHT', 'BOTTOM', 'LEFT'] as const
+export type CustomReportLegendPosition = (typeof CUSTOM_REPORT_LEGEND_POSITIONS)[number]
+
+/**
+ * Story 6.4 (Contract A.1): closed color-token vocabulary mapped to the
+ * approved shared chart palette. The web stage maps each token to its hex;
+ * arbitrary CSS colors never reach the DOM/SVG. Token order doubles as the
+ * default series order.
+ */
+export const CUSTOM_REPORT_COLOR_TOKENS = [
+  'BLUE',
+  'VIOLET',
+  'GREEN',
+  'AMBER',
+  'RED',
+  'CYAN',
+  'PINK',
+  'LIME',
+  'INDIGO',
+  'TEAL',
+] as const
+export type CustomReportColorToken = (typeof CUSTOM_REPORT_COLOR_TOKENS)[number]
+
+/** Approved shared chart palette (hex) in token order — single source of truth. */
+export const CUSTOM_REPORT_COLOR_TOKEN_HEX: Record<CustomReportColorToken, string> = {
+  BLUE: '#2563eb',
+  VIOLET: '#7c3aed',
+  GREEN: '#059669',
+  AMBER: '#d97706',
+  RED: '#dc2626',
+  CYAN: '#0891b2',
+  PINK: '#db2777',
+  LIME: '#65a30d',
+  INDIGO: '#4f46e5',
+  TEAL: '#0f766e',
+}
+
+/** Empty `colors` input normalizes to this full default palette (Contract A.2). */
+export const CUSTOM_REPORT_DEFAULT_COLORS: readonly CustomReportColorToken[] = [
+  ...CUSTOM_REPORT_COLOR_TOKENS,
+]
 
 export const CUSTOM_REPORT_VALUE_TYPES = [
   'STRING',
@@ -121,6 +173,19 @@ export function isCustomReportChartType(value: unknown): value is CustomReportCh
   )
 }
 
+export function isCustomReportLegendPosition(value: unknown): value is CustomReportLegendPosition {
+  return (
+    typeof value === 'string' &&
+    (CUSTOM_REPORT_LEGEND_POSITIONS as readonly string[]).includes(value)
+  )
+}
+
+export function isCustomReportColorToken(value: unknown): value is CustomReportColorToken {
+  return (
+    typeof value === 'string' && (CUSTOM_REPORT_COLOR_TOKENS as readonly string[]).includes(value)
+  )
+}
+
 export function isCustomReportFilterOperator(value: unknown): value is CustomReportFilterOperator {
   return (
     typeof value === 'string' &&
@@ -209,6 +274,21 @@ export interface CustomReportVisualization {
   showDataLabels: boolean
   xAxisLabel: string | null
   yAxisLabel: string | null
+  /** Only valid for BAR; v2 normalizes a missing BAR orientation to VERTICAL. */
+  orientation: CustomReportOrientation | null
+  /** 1–10 approved tokens in series order; empty input normalizes to the default palette. */
+  colors: CustomReportColorToken[]
+  legendPosition: CustomReportLegendPosition
+}
+
+/** Story 6.3 persisted v1 visualization shape (no colors/legendPosition). */
+export interface CustomReportVisualizationV1 {
+  type: CustomReportChartType
+  title: string | null
+  showLegend: boolean
+  showDataLabels: boolean
+  xAxisLabel: string | null
+  yAxisLabel: string | null
   /** Only valid for BAR. */
   orientation: CustomReportOrientation | null
 }
@@ -221,7 +301,8 @@ export interface CustomReportSort {
 }
 
 export interface CustomReportConfig {
-  version: 1
+  /** In-memory configs are always normalized v2 (v1 input is normalized on load). */
+  version: 2
   dataSource: CustomReportDataSource
   filters: CustomReportFilter[]
   dimensions: CustomReportDimension[]
@@ -231,4 +312,17 @@ export interface CustomReportConfig {
   sort: CustomReportSort[]
 }
 
-export const CUSTOM_REPORT_CONFIG_VERSION = 1
+/** The persisted Story 6.3 v1 config shape (accepted for read + lazy re-save). */
+export interface CustomReportConfigV1 {
+  version: 1
+  dataSource: CustomReportDataSource
+  filters: CustomReportFilter[]
+  dimensions: CustomReportDimension[]
+  metrics: CustomReportMetric[]
+  calculatedFields: CustomReportCalculatedField[]
+  visualization: CustomReportVisualizationV1
+  sort: CustomReportSort[]
+}
+
+export const CUSTOM_REPORT_CONFIG_VERSION = 2
+export const CUSTOM_REPORT_CONFIG_VERSION_V1 = 1

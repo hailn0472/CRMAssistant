@@ -20,19 +20,25 @@ import {
   isCustomReportAggregation,
   isCustomReportCalculatedDimensionKind,
   isCustomReportChartType,
+  isCustomReportColorToken,
   isCustomReportDataSource,
   isCustomReportFilterOperator,
   isCustomReportGranularity,
+  isCustomReportLegendPosition,
   isCustomReportOrientation,
   isCustomReportSortDirection,
+  CUSTOM_REPORT_DEFAULT_COLORS,
 } from './custom-report-types'
 import type {
   CustomReportCalculatedDimension,
+  CustomReportColorToken,
   CustomReportConfig,
   CustomReportDataSource,
   CustomReportDimension,
   CustomReportFilter,
+  CustomReportLegendPosition,
   CustomReportMetric,
+  CustomReportOrientation,
   CustomReportSort,
   CustomReportVisualization,
 } from './custom-report-types'
@@ -402,6 +408,94 @@ function round2(value: number): number {
   return Math.round((value + Number.EPSILON) * 100) / 100
 }
 
+// ─── Chart-type compatibility matrix (Contract A.4) ─────────────────────────
+
+/**
+ * Closed chart-type compatibility check shared by the strict validator and
+ * the client-facing compatibility mirror. Returns the human-readable errors
+ * for the configured chart type; an empty array means the combination is
+ * supported. `validateCustomReportConfig` throws the first error verbatim so
+ * the two surfaces can never drift.
+ */
+export function chartCompatibilityErrors(config: CustomReportConfig): string[] {
+  const errors: string[] = []
+  const source = config.dataSource
+  const chartType = config.visualization.type
+  const dimensions = config.dimensions
+  const metrics = config.metrics
+  const calculatedFields = config.calculatedFields
+  const totalMetrics = metrics.length + calculatedFields.length
+  const hasNumericMetric = metrics.some(isNumericMetric) || calculatedFields.length > 0
+  const firstDimensionIsDate = dimensions.length > 0 && isDateLikeDimension(dimensions[0], source)
+  const dimensionIsDateLike = (d: CustomReportDimension): boolean => isDateLikeDimension(d, source)
+
+  switch (chartType) {
+    case 'TABLE':
+      // Any otherwise valid Story 6.3 config is a valid table.
+      break
+    case 'LINE':
+    case 'AREA':
+      if (!firstDimensionIsDate) {
+        errors.push(`${chartType} charts require a date dimension as the first dimension`)
+      }
+      if (!hasNumericMetric) {
+        errors.push(`${chartType} charts require at least one numeric metric`)
+      }
+      break
+    case 'BAR':
+      if (dimensions.length < 1 || dimensions.length > 2) {
+        errors.push('BAR charts require one or two dimensions')
+      }
+      if (!hasNumericMetric) {
+        errors.push('BAR charts require at least one numeric metric')
+      }
+      break
+    case 'PIE':
+    case 'DONUT':
+      if (dimensions.length !== 1 || dimensionIsDateLike(dimensions[0])) {
+        errors.push(`${chartType} charts require exactly one categorical (non-date) dimension`)
+      }
+      if (totalMetrics !== 1 || !hasNumericMetric) {
+        errors.push(`${chartType} charts require exactly one numeric metric`)
+      }
+      break
+    case 'FUNNEL':
+      if (source !== 'DEALS') {
+        errors.push('FUNNEL charts require the DEALS data source')
+      }
+      if (dimensions.length !== 1 || dimensions[0].fieldId !== 'deal.stage') {
+        errors.push('FUNNEL charts require exactly one stage dimension')
+      }
+      if (
+        totalMetrics !== 1 ||
+        metrics.length !== 1 ||
+        (metrics[0].aggregation !== 'COUNT' && metrics[0].aggregation !== 'SUM')
+      ) {
+        errors.push('FUNNEL charts require exactly one COUNT or SUM metric')
+      }
+      break
+    case 'SCATTER':
+      if (dimensions.length !== 1 || dimensionIsDateLike(dimensions[0])) {
+        errors.push('SCATTER charts require exactly one identifying (non-date) dimension')
+      }
+      if (totalMetrics !== 2 || !metrics.every(isNumericMetric)) {
+        errors.push(
+          'SCATTER charts require exactly two numeric metrics (metric order binds X then Y)',
+        )
+      }
+      break
+    case 'HEATMAP':
+      if (dimensions.length !== 2) {
+        errors.push('HEATMAP charts require exactly two dimensions (order binds X then Y)')
+      }
+      if (totalMetrics !== 1 || !hasNumericMetric) {
+        errors.push('HEATMAP charts require exactly one numeric metric (binds intensity)')
+      }
+      break
+  }
+  return errors
+}
+
 // ─── Strict write-path validation (Contract A.3-A.10) ────────────────────────
 
 /**
@@ -429,9 +523,10 @@ export function validateCustomReportConfig(raw: unknown): CustomReportConfig {
     'Custom report config',
   )
 
-  if (obj.version !== 1) {
-    throw new Error('Custom report config version must be 1')
+  if (obj.version !== 1 && obj.version !== 2) {
+    throw new Error('Custom report config version must be 1 or 2')
   }
+  const isV1 = obj.version === 1
   if (!isCustomReportDataSource(obj.dataSource)) {
     throw new Error(
       'Custom report config dataSource must be one of CONTACTS, DEALS, TASKS, ACTIVITIES',
@@ -763,25 +858,41 @@ export function validateCustomReportConfig(raw: unknown): CustomReportConfig {
     return { id, alias, label, expression }
   })
 
-  // ── visualization (Contract A.10) ──────────────────────────────────────
+  // ── visualization (Contract A.2, A.10) ───────────────────────────────
   if (!isPlainObject(obj.visualization)) {
     throw new Error('Custom report config visualization must be an object')
   }
+  // v1 persisted rows carry the Story 6.3 seven-field shape; v2 adds the
+  // approved color tokens and legend position. Version/key mixing fails closed.
   assertKeys(
     obj.visualization,
-    [
-      'type',
-      'title',
-      'showLegend',
-      'showDataLabels',
-      'xAxisLabel',
-      'yAxisLabel',
-      'orientation',
-    ] as const,
+    isV1
+      ? ([
+          'type',
+          'title',
+          'showLegend',
+          'showDataLabels',
+          'xAxisLabel',
+          'yAxisLabel',
+          'orientation',
+        ] as const)
+      : ([
+          'type',
+          'title',
+          'showLegend',
+          'showDataLabels',
+          'xAxisLabel',
+          'yAxisLabel',
+          'orientation',
+          'colors',
+          'legendPosition',
+        ] as const),
     'Custom report visualization',
   )
   if (!isCustomReportChartType(obj.visualization.type)) {
-    throw new Error('Custom report visualization type must be one of TABLE, LINE, BAR, PIE, FUNNEL')
+    throw new Error(
+      'Custom report visualization type must be one of TABLE, LINE, BAR, PIE, DONUT, AREA, FUNNEL, SCATTER, HEATMAP',
+    )
   }
   const chartType = obj.visualization.type
   const title = requireNullableString(obj.visualization.title, 'Visualization title')
@@ -795,67 +906,59 @@ export function validateCustomReportConfig(raw: unknown): CustomReportConfig {
       : requireBoolean(obj.visualization.showDataLabels, 'Visualization showDataLabels')
   const xAxisLabel = requireNullableString(obj.visualization.xAxisLabel, 'Visualization xAxisLabel')
   const yAxisLabel = requireNullableString(obj.visualization.yAxisLabel, 'Visualization yAxisLabel')
-  const orientation =
-    obj.visualization.orientation === undefined || obj.visualization.orientation === null
-      ? null
-      : obj.visualization.orientation
-  if (orientation !== null) {
-    if (!isCustomReportOrientation(orientation)) {
+  const rawOrientation = obj.visualization.orientation
+  let orientation: CustomReportOrientation | null = null
+  if (rawOrientation !== undefined && rawOrientation !== null) {
+    if (!isCustomReportOrientation(rawOrientation)) {
       throw new Error('Visualization orientation must be VERTICAL or HORIZONTAL')
     }
+    orientation = rawOrientation
     if (chartType !== 'BAR') {
       throw new Error('Visualization orientation is only valid for BAR charts')
     }
+  } else if (chartType === 'BAR') {
+    // Contract A.4: BAR orientation is required/defaulted to VERTICAL.
+    orientation = 'VERTICAL'
   }
 
-  const hasNumericMetric = metrics.some(isNumericMetric) || calculatedFields.length > 0
-  const firstDimensionIsDate =
-    dimensions.length > 0 && isDateLikeDimension(dimensions[0], dataSource)
-  const dimensionIsDateLike = (d: CustomReportDimension): boolean =>
-    isDateLikeDimension(d, dataSource)
-
-  switch (chartType) {
-    case 'TABLE':
-      break
-    case 'LINE':
-      if (!firstDimensionIsDate) {
-        throw new Error('LINE charts require a date dimension as the first dimension')
+  // ── v2 colors + legend position (Contract A.2) ───────────────────────
+  let colors: CustomReportColorToken[]
+  if (isV1) {
+    // v1 rows never carry colors — normalize to the full default palette.
+    colors = [...CUSTOM_REPORT_DEFAULT_COLORS]
+  } else if (obj.visualization.colors === undefined || obj.visualization.colors === null) {
+    colors = [...CUSTOM_REPORT_DEFAULT_COLORS]
+  } else {
+    const rawColors = obj.visualization.colors
+    if (!Array.isArray(rawColors)) {
+      throw new Error('Visualization colors must be an array of approved color tokens')
+    }
+    if (rawColors.length === 0) {
+      // Empty input normalizes to the full default palette (Contract A.2).
+      colors = [...CUSTOM_REPORT_DEFAULT_COLORS]
+    } else {
+      if (rawColors.length > 10) {
+        throw new Error('Visualization colors must contain at most 10 approved color tokens')
       }
-      if (!hasNumericMetric) {
-        throw new Error('LINE charts require at least one numeric metric')
+      if (!rawColors.every(isCustomReportColorToken)) {
+        throw new Error('Visualization colors must be approved color tokens (no arbitrary colors)')
       }
-      break
-    case 'BAR':
-      if (dimensions.length < 1 || dimensions.length > 2) {
-        throw new Error('BAR charts require one or two dimensions')
-      }
-      if (!hasNumericMetric) {
-        throw new Error('BAR charts require at least one numeric metric')
-      }
-      break
-    case 'PIE':
-      if (dimensions.length !== 1 || dimensionIsDateLike(dimensions[0])) {
-        throw new Error('PIE charts require exactly one categorical (non-date) dimension')
-      }
-      if (totalMetrics !== 1 || !hasNumericMetric) {
-        throw new Error('PIE charts require exactly one numeric metric')
-      }
-      break
-    case 'FUNNEL':
-      if (dataSource !== 'DEALS') {
-        throw new Error('FUNNEL charts require the DEALS data source')
-      }
-      if (dimensions.length !== 1 || dimensions[0].fieldId !== 'deal.stage') {
-        throw new Error('FUNNEL charts require exactly one stage dimension')
-      }
-      if (
-        totalMetrics !== 1 ||
-        metrics.length !== 1 ||
-        (metrics[0].aggregation !== 'COUNT' && metrics[0].aggregation !== 'SUM')
-      ) {
-        throw new Error('FUNNEL charts require exactly one COUNT or SUM metric')
-      }
-      break
+      colors = rawColors as CustomReportColorToken[]
+    }
+  }
+  let legendPosition: CustomReportLegendPosition
+  if (isV1) {
+    legendPosition = 'BOTTOM'
+  } else if (
+    obj.visualization.legendPosition === undefined ||
+    obj.visualization.legendPosition === null
+  ) {
+    legendPosition = 'BOTTOM'
+  } else {
+    if (!isCustomReportLegendPosition(obj.visualization.legendPosition)) {
+      throw new Error('Visualization legendPosition must be TOP, RIGHT, BOTTOM or LEFT')
+    }
+    legendPosition = obj.visualization.legendPosition
   }
 
   const visualization: CustomReportVisualization = {
@@ -866,6 +969,27 @@ export function validateCustomReportConfig(raw: unknown): CustomReportConfig {
     xAxisLabel,
     yAxisLabel,
     orientation,
+    colors,
+    legendPosition,
+  }
+
+  // Chart-type compatibility comes from the SAME closed matrix exported as
+  // `chartCompatibilityErrors` — backend validation and the client-side
+  // mirror can never drift (Contract A.4). Thrown before sort validation to
+  // keep the historical error precedence.
+  const pendingConfig: CustomReportConfig = {
+    version: 2,
+    dataSource,
+    filters,
+    dimensions,
+    metrics,
+    calculatedFields,
+    visualization,
+    sort: [],
+  }
+  const compatibilityErrors = chartCompatibilityErrors(pendingConfig)
+  if (compatibilityErrors.length > 0) {
+    throw new Error(compatibilityErrors[0])
   }
 
   // ── sort (Contract A.9) ────────────────────────────────────────────────
@@ -900,7 +1024,7 @@ export function validateCustomReportConfig(raw: unknown): CustomReportConfig {
   })
 
   return {
-    version: 1,
+    version: 2,
     dataSource,
     filters,
     dimensions,

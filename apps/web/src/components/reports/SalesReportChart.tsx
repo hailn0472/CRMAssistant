@@ -1,26 +1,16 @@
 'use client'
 
 /**
- * Story 6.2 — minimal accessible report chart (AC 72-73, 80).
+ * Story 6.2 / 6.4 (Contract F.33) — SalesReportChart adapter for ReportChart.
  *
- * Recharts is mocked wholesale in specs; the semantic contract asserted there:
- * custom tooltip, explicit legend, role="img" label, and a hand-written
- * sr-only table containing EVERY datum (the v3 accessibilityLayer never
- * replaces the table alternative). Keyboard users get an explicit
- * "View underlying deals" button per bucket (AC 72) — never a chart-only path.
+ * Converts sales report series data into a NormalizedBarChart and renders via
+ * the shared ReportChart framework. Preserves role="img", custom title,
+ * keyboard drill path, sr-only table, empty behavior, and onDrill callback.
  */
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Legend,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from 'recharts'
+import React, { useMemo } from 'react'
 
-import { cn } from '@/lib/utils'
+import { ReportChart } from '@/components/reports/charting/ReportChart'
+import type { NormalizedBarChart } from '@/lib/report-chart'
 
 export type ChartDatum = {
   key: string
@@ -30,7 +20,7 @@ export type ChartDatum = {
   formatted: string
 }
 
-type SalesReportChartProps = {
+export type SalesReportChartProps = {
   title: string
   ariaLabel: string
   series: ChartDatum[]
@@ -43,7 +33,7 @@ type TooltipPayloadItem = {
   payload?: { label?: string; count?: number; formatted?: string }
 }
 
-function ChartTooltip({
+function SalesReportTooltip({
   active,
   payload,
 }: {
@@ -52,7 +42,7 @@ function ChartTooltip({
 }): React.JSX.Element | null {
   if (!active || !payload || payload.length === 0) return null
   const item = payload[0]
-  const datum = item.payload
+  const datum = item?.payload
   if (!datum) return null
   return (
     <div className="rounded-lg border border-[#e6e6eb] bg-white px-3 py-2 shadow-md">
@@ -72,6 +62,60 @@ export function SalesReportChart({
   onDrill,
   emptyMessage = 'No data for the selected period.',
 }: SalesReportChartProps): React.JSX.Element {
+  const seriesByLabel = useMemo(() => new Map(series.map((d) => [d.label, d])), [series])
+
+  const normalizedChart: NormalizedBarChart = useMemo(
+    () => ({
+      type: 'BAR',
+      title,
+      showLegend: true,
+      showDataLabels: false,
+      colors: ['BLUE'],
+      legendPosition: 'BOTTOM',
+      orientation: 'VERTICAL',
+      xAxisLabel: null,
+      yAxisLabel: null,
+      series: [
+        {
+          metricId: 'value',
+          label: title,
+        },
+      ],
+      points: series.map((datum) => ({
+        key: datum.key,
+        label: datum.label,
+        dimensionLabels: [datum.label],
+        values: {
+          value: datum.value,
+        },
+      })),
+      totalPoints: series.length,
+      srTable: {
+        headers: ['Period', 'Value', 'Deals'],
+        rows: series.map((datum) => [datum.label, datum.formatted, String(datum.count)]),
+      },
+    }),
+    [title, series],
+  )
+
+  const customTooltip: React.ComponentProps<typeof ReportChart>['customTooltip'] = (props) => {
+    if (!props.active || !props.payload || props.payload.length === 0) return null
+    const item = props.payload[0]
+    const label = item?.payload?.label
+    const datum = label ? seriesByLabel.get(label) : undefined
+    return (
+      <SalesReportTooltip
+        active={props.active}
+        payload={[
+          {
+            value: item?.value as number | undefined,
+            payload: datum ?? { label },
+          },
+        ]}
+      />
+    )
+  }
+
   return (
     <section
       aria-labelledby="sales-report-chart-title"
@@ -84,27 +128,17 @@ export function SalesReportChart({
         <p className="mt-6 text-center text-[13px] text-[#8c8c96]">{emptyMessage}</p>
       ) : (
         <>
-          <div role="img" aria-label={ariaLabel} className="mt-4 h-[280px] w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={series} margin={{ top: 8, right: 8, left: 8, bottom: 8 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e6e6eb" />
-                <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#77777f' }} />
-                <YAxis tick={{ fontSize: 11, fill: '#77777f' }} width={64} />
-                <Tooltip content={<ChartTooltip />} />
-                <Legend wrapperStyle={{ fontSize: 12 }} />
-                <Bar
-                  dataKey="value"
-                  name={title}
-                  fill="#2563eb"
-                  radius={[4, 4, 0, 0]}
-                  onClick={(datum: unknown) => {
-                    const d = datum as { key?: string }
-                    if (d?.key) onDrill(d.key)
-                  }}
-                  cursor="pointer"
-                />
-              </BarChart>
-            </ResponsiveContainer>
+          <div className="mt-4">
+            <ReportChart
+              chart={normalizedChart}
+              minHeight={280}
+              hideControls={true}
+              hideSrTable={true}
+              hideDrillMarksBar={true}
+              ariaLabel={ariaLabel}
+              customTooltip={customTooltip}
+              onDrillDown={(req) => onDrill(req.pointKey)}
+            />
           </div>
 
           {/* Keyboard path: an explicit "View underlying deals" button per datum (AC 72). */}
@@ -136,7 +170,7 @@ export function SalesReportChart({
             </thead>
             <tbody>
               {series.map((datum) => (
-                <tr key={datum.key} className={cn('sr-only')}>
+                <tr key={datum.key} className="sr-only">
                   <td>{datum.label}</td>
                   <td>{datum.formatted}</td>
                   <td>{datum.count}</td>

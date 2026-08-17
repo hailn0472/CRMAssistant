@@ -1,7 +1,8 @@
 /**
- * Story 6.3 (AC 9, E1): CustomReportVisualizationPanel RTL — five chart
- * choices, compatible display options and inline chart-compatibility errors
- * that never issue preview/save requests (Contract A.10).
+ * Story 6.3 & 6.4 (AC 4, 16, 17, Contract G.39): CustomReportVisualizationPanel RTL — nine visualization
+ * choices (Table + 8 charts), static previews, color tokens, legend position,
+ * compatible display options and inline chart-compatibility errors
+ * that never issue preview/save requests (Contract A.4 / A.10).
  */
 import { fireEvent, render, screen } from '@testing-library/react'
 
@@ -63,7 +64,9 @@ const CATALOG: CustomReportCatalog = {
   ],
 }
 
-function draftFor(chartType: 'TABLE' | 'LINE' | 'BAR' | 'PIE' | 'FUNNEL'): CustomReportDraft {
+function draftFor(
+  chartType: 'TABLE' | 'LINE' | 'BAR' | 'PIE' | 'DONUT' | 'AREA' | 'FUNNEL' | 'SCATTER' | 'HEATMAP',
+): CustomReportDraft {
   const draft = createEmptyDraft()
   draft.source = 'DEALS'
   draft.dimensions = [
@@ -88,33 +91,46 @@ function renderPanel(props: Partial<typeof defaultProps> = {}): void {
   render(<CustomReportVisualizationPanel {...defaultProps} {...props} />)
 }
 
-describe('CustomReportVisualizationPanel (AC 9, E1)', () => {
+describe('CustomReportVisualizationPanel (AC 4, 16, 17, Contract G.39)', () => {
   beforeEach(() => {
     jest.clearAllMocks()
   })
 
-  it('renders the five chart choices', () => {
+  it('renders all nine visualization options (Table + 8 charts)', () => {
     renderPanel()
-    for (const label of ['Table', 'Line', 'Bar', 'Pie', 'Funnel']) {
-      expect(screen.getByRole('button', { name: new RegExp(label) })).toBeInTheDocument()
+    const expectedOptions = [
+      'Table',
+      'Line Chart',
+      'Bar Chart',
+      'Pie Chart',
+      'Donut Chart',
+      'Area Chart',
+      'Funnel Chart',
+      'Scatter Plot',
+      'Heatmap',
+    ]
+    for (const label of expectedOptions) {
+      expect(screen.getByRole('button', { name: new RegExp(label, 'i') })).toBeInTheDocument()
     }
   })
 
   it('selecting a chart reports the type', () => {
     const onSetChartType = jest.fn()
     renderPanel({ onSetChartType })
-    fireEvent.click(screen.getByRole('button', { name: /Bar/ }))
+    fireEvent.click(screen.getByRole('button', { name: /Bar Chart/i }))
     expect(onSetChartType).toHaveBeenCalledWith('BAR')
   })
 
-  it('renders display options: title, labels, toggles and orientation', () => {
+  it('renders display options: title, labels, toggles, orientation, legend position and color tokens', () => {
     renderPanel({ draft: draftFor('BAR') })
     expect(screen.getByLabelText('Chart title')).toBeInTheDocument()
+    expect(screen.getByLabelText('Legend position')).toBeInTheDocument()
     expect(screen.getByLabelText('X axis label')).toBeInTheDocument()
     expect(screen.getByLabelText('Y axis label')).toBeInTheDocument()
     expect(screen.getByLabelText('Show legend')).toBeInTheDocument()
     expect(screen.getByLabelText('Show data labels')).toBeInTheDocument()
     expect(screen.getByLabelText('Orientation')).toBeInTheDocument()
+    expect(screen.getByRole('group', { name: 'Chart color palette' })).toBeInTheDocument()
   })
 
   it('updates display options through the callbacks', () => {
@@ -126,6 +142,19 @@ describe('CustomReportVisualizationPanel (AC 9, E1)', () => {
     expect(onUpdateVisualization).toHaveBeenCalledWith({ showDataLabels: true })
     fireEvent.change(screen.getByLabelText('Orientation'), { target: { value: 'HORIZONTAL' } })
     expect(onUpdateVisualization).toHaveBeenCalledWith({ orientation: 'HORIZONTAL' })
+    fireEvent.change(screen.getByLabelText('Legend position'), { target: { value: 'TOP' } })
+    expect(onUpdateVisualization).toHaveBeenCalledWith({ legendPosition: 'TOP' })
+  })
+
+  it('toggles color tokens in the palette', () => {
+    const onUpdateVisualization = jest.fn()
+    const draft = draftFor('BAR')
+    draft.visualization.colors = ['BLUE', 'VIOLET']
+    renderPanel({ draft, onUpdateVisualization })
+
+    const greenBtn = screen.getByRole('button', { name: 'Color GREEN' })
+    fireEvent.click(greenBtn)
+    expect(onUpdateVisualization).toHaveBeenCalledWith({ colors: ['BLUE', 'VIOLET', 'GREEN'] })
   })
 
   it('hides the orientation control for non-BAR charts', () => {

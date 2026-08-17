@@ -1,14 +1,18 @@
 'use client'
 
-import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+/**
+ * Story 6.4 (Contract F.34) — DailyTimeChart adapter for ReportChart BAR primitive.
+ *
+ * Renders daily/weekly/monthly tracked time bar chart via ReportChart framework.
+ * Preserves duration formatters, sr-only accessibility table, and aria-labels.
+ */
+import React, { useMemo } from 'react'
 
-import { formatDurationShort, formatDurationTick } from '@/lib/time-format'
+import { ReportChart } from '@/components/reports/charting/ReportChart'
+import type { NormalizedBarChart } from '@/lib/report-chart'
+import { formatDurationShort } from '@/lib/time-format'
 import type { ProductivityBucket, ProductivityTimeBucket } from '@/services/productivity.service'
 
-// Story 4.5 daily/weekly/monthly bar chart (AC 41-42). BarChart is a first
-// use in this repo; the theming block copies ForecastChart's AreaChart
-// exactly (CartesianGrid #ececf0, axis ticks #8c8c96, custom Tooltip,
-// role="img" + sr-only table).
 export function DailyTimeChart({
   buckets,
   bucket,
@@ -18,10 +22,51 @@ export function DailyTimeChart({
 }): React.JSX.Element {
   const unitLabel = bucket === 'DAY' ? 'day' : bucket === 'WEEK' ? 'week' : 'month'
   const ariaLabel = `Time tracked per ${unitLabel}`
-  const chartData = buckets.map((b) => ({
-    ...b,
-    label: b.bucketStart.slice(0, 10),
-  }))
+
+  const chartData = useMemo(
+    () =>
+      buckets.map((b) => ({
+        ...b,
+        label: b.bucketStart.slice(0, 10),
+      })),
+    [buckets],
+  )
+
+  const normalizedChart: NormalizedBarChart = useMemo(() => {
+    return {
+      type: 'BAR',
+      title: null,
+      showLegend: false,
+      showDataLabels: false,
+      colors: ['INDIGO'],
+      legendPosition: 'BOTTOM',
+      orientation: 'VERTICAL',
+      xAxisLabel: null,
+      yAxisLabel: null,
+      series: [
+        {
+          metricId: 'totalSeconds',
+          label: 'Total Seconds',
+        },
+      ],
+      points: chartData.map((d) => ({
+        key: d.bucketStart,
+        label: d.label,
+        dimensionLabels: [d.label],
+        values: {
+          totalSeconds: d.totalSeconds,
+        },
+      })),
+      totalPoints: chartData.length,
+      srTable: {
+        headers: [
+          unitLabel === 'day' ? 'Day' : unitLabel === 'week' ? 'Week starting' : 'Month',
+          'Time tracked',
+        ],
+        rows: chartData.map((entry) => [entry.label, formatDurationShort(entry.totalSeconds)]),
+      },
+    }
+  }, [chartData, unitLabel])
 
   return (
     <section className="rounded-[14px] border border-[#ececf0] bg-white px-[22px] pb-4 pt-5">
@@ -33,42 +78,12 @@ export function DailyTimeChart({
       </div>
 
       <div role="img" aria-label={ariaLabel}>
-        <ResponsiveContainer width="100%" height={250}>
-          <BarChart data={chartData}>
-            <CartesianGrid stroke="#ececf0" vertical={false} />
-            <XAxis
-              dataKey="label"
-              fontSize={11.5}
-              tick={{ fill: '#8c8c96' }}
-              axisLine={{ stroke: '#ececf0' }}
-              tickLine={false}
-              interval="preserveStartEnd"
-            />
-            <YAxis
-              fontSize={11}
-              tick={{ fill: '#a0a0aa' }}
-              axisLine={false}
-              tickLine={false}
-              tickFormatter={formatDurationTick}
-            />
-            <Tooltip
-              content={({ active, payload }) => {
-                if (!active || !payload?.length) return null
-                const datum = payload[0]?.payload as
-                  | { label: string; totalSeconds: number }
-                  | undefined
-                if (!datum) return null
-                return (
-                  <div className="rounded-[9px] border border-[#ececf0] bg-white px-3 py-2 text-[13px] shadow-md">
-                    <p className="font-medium text-[#1b1b1f]">{datum.label}</p>
-                    <p className="text-[#4f46e5]">{formatDurationShort(datum.totalSeconds)}</p>
-                  </div>
-                )
-              }}
-            />
-            <Bar dataKey="totalSeconds" fill="#4f46e5" radius={[4, 4, 0, 0]} maxBarSize={36} />
-          </BarChart>
-        </ResponsiveContainer>
+        <ReportChart
+          chart={normalizedChart}
+          minHeight={250}
+          hideControls={true}
+          hideSrTable={true}
+        />
       </div>
 
       {/* sr-only table for accessibility (AC 42) */}

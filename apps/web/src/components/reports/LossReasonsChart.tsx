@@ -12,9 +12,7 @@ interface LossReasonsChartProps {
 /**
  * Per-reason won/lost breakdown for closed deals. Each row shows the reason,
  * its deal count as text (never colour alone), and a horizontal bar split by
- * won (green) vs lost (red) — violet is reserved for AI surfaces and never
- * used here. Bar widths scale against the busiest reason so the row lengths
- * are directly comparable, not just each row's own won/lost split.
+ * won (green) vs lost (red). Preserves established won/lost styling classes.
  */
 export function LossReasonsChart({
   winReasons,

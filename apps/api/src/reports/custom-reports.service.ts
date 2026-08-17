@@ -62,6 +62,12 @@ const MAX_PAGE_SIZE = 100
 const MIXED_CURRENCY_MESSAGE =
   'Mixed currencies detected — money values are null until a single currency filter or a currency dimension is used (no FX conversion).'
 
+/** Default drill-down page size (Contract E.27). */
+const DEFAULT_DRILL_PAGE_SIZE = 20
+
+/** Server-recognizable synthetic key for the PIE/DONUT `Other` point (Contract B.11). */
+export const CUSTOM_REPORT_SYNTHETIC_OTHER_KEY = 'synthetic:other'
+
 // ─── Result types (Pothos refs derive from these) ────────────────────────────
 
 export type CustomReportWarning = {
@@ -96,8 +102,12 @@ export type CustomReportRow = {
 }
 
 export type CustomReportSeriesPoint = {
+  /** Stable server-derived identity — the internal grouped-row key (Contract B.7). */
+  key: string
   label: string
   value: number | null
+  /** Dimension labels in configured dimension order (never parsed by clients). */
+  dimensionLabels: string[]
 }
 
 export type CustomReportSeries = {
@@ -140,6 +150,33 @@ export type CustomReportPaginationInput = {
   pageSize?: number
 }
 
+// ─── Story 6.4 drill-down types (Contract E.25-E.27) ─────────────────────────
+
+export type CustomReportDrillDownItem = {
+  id: string
+  primaryLabel: string | null
+  secondaryLabel: string | null
+  relatedRecordId: string | null
+}
+
+export type CustomReportDrillDownConnection = {
+  source: CustomReportDataSource
+  pointLabel: string
+  items: CustomReportDrillDownItem[]
+  total: number
+  page: number
+  pageSize: number
+  totalPages: number
+}
+
+export type CustomReportDrillDownInput = {
+  reportId?: string | null
+  config?: unknown
+  pointKey: string
+  metricId: string
+  pagination?: CustomReportPaginationInput
+}
+
 export type CustomReportSaveInput = {
   reportId?: string | null
   name: string
@@ -157,6 +194,9 @@ function idOf(value: unknown): string | null {
 
 const CONTACT_ROW_SELECT = {
   id: true,
+  firstName: true,
+  lastName: true,
+  email: true,
   ownerId: true,
   teamId: true,
   company: true,
@@ -184,6 +224,7 @@ const CONTACT_ROW_SELECT = {
 
 const DEAL_ROW_SELECT = {
   id: true,
+  title: true,
   value: true,
   probability: true,
   currency: true,
@@ -246,6 +287,7 @@ const TASK_ROW_SELECT = {
 
 const ACTIVITY_ROW_SELECT = {
   id: true,
+  title: true,
   type: true,
   source: true,
   createdBy: true,
@@ -796,9 +838,12 @@ class GroupEngine {
 
   // ── grouping ──────────────────────────────────────────────────────────
 
+  private readonly rowIdsByGroup = new Map<string, string[]>()
+
   group(rows: RawRow[]): Map<string, GroupAcc> {
     const groups = new Map<string, GroupAcc>()
     for (const row of rows) {
+      const rowId = idOf(row.id)
       const dimValues = this.dimSpecs.map((s) => s.extract(row))
 
       // Stage order capture for FUNNEL series ordering (by stage order, not value).
@@ -843,6 +888,14 @@ class GroupEngine {
           group = { key, dimValues: combo, metrics: this.metricSpecs.map(() => freshAcc()) }
           groups.set(key, group)
         }
+        if (rowId) {
+          let ids = this.rowIdsByGroup.get(key)
+          if (!ids) {
+            ids = []
+            this.rowIdsByGroup.set(key, ids)
+          }
+          ids.push(rowId)
+        }
         this.metricSpecs.forEach((spec, i) => {
           const acc = group.metrics[i]
           for (const contribution of spec.extractValues(row)) {
@@ -852,6 +905,11 @@ class GroupEngine {
       }
     }
     return groups
+  }
+
+  /** Raw-row ids that contributed to a group key (used by drill-down only). */
+  rowIdsFor(key: string): string[] {
+    return this.rowIdsByGroup.get(key) ?? []
   }
 
   private dimKey(value: DimValue): string | null {
@@ -1117,7 +1175,18 @@ class GroupEngine {
 
   // ── series ────────────────────────────────────────────────────────────
 
-  buildSeries(rows: InternalRow[]): CustomReportSeries[] {
+  /**
+   * Builds chart series over ALL bounded rows (never the paginated table
+   * slice) with stable point keys + ordered dimensionLabels (Contract B.7).
+   * Returns the contributor group keys per point key so drill-down can
+   * resolve contributing raw rows without client-supplied predicates
+   * (Contract B.11, E.26).
+   */
+  buildSeriesWithContributors(rows: InternalRow[]): {
+    series: CustomReportSeries[]
+    contributors: Map<string, string[]>
+  } {
+    const contributors = new Map<string, string[]>()
     const series: CustomReportSeries[] = []
     const seriesDefs: Array<{
       id: string
@@ -1130,22 +1199,50 @@ class GroupEngine {
     this.calcSpecs.forEach((calc, i) => {
       seriesDefs.push({ id: calc.id, label: calc.alias, values: (r) => r.calcValues[i] })
     })
+    const isCumulative = this.config.visualization.type === 'AREA'
     for (const def of seriesDefs) {
-      series.push({
-        metricId: def.id,
-        label: def.label,
-        points: rows.map((r) => ({ label: r.dimLabels.join(' · '), value: def.values(r) })),
+      const points = rows.map((r, i) => {
+        if (isCumulative) {
+          // AREA point contributors span the first server-ordered bucket
+          // through this bucket (Contract E.28).
+          contributors.set(
+            r.key,
+            rows.slice(0, i + 1).map((row) => row.key),
+          )
+        } else {
+          contributors.set(r.key, [r.key])
+        }
+        return {
+          key: r.key,
+          label: r.dimLabels.join(' · '),
+          value: def.values(r),
+          dimensionLabels: r.dimLabels.map((label) => label ?? 'Unassigned'),
+        }
       })
+      series.push({ metricId: def.id, label: def.label, points })
     }
 
-    if (this.config.visualization.type === 'PIE' && series.length === 1) {
-      // Top 10 slices + combined `Other` remainder (Contract A.10).
+    if (
+      (this.config.visualization.type === 'PIE' || this.config.visualization.type === 'DONUT') &&
+      series.length === 1
+    ) {
+      // Top 10 slices + combined `Other` remainder (Contract A.10/B.11).
       const points = series[0].points
       const sorted = [...points].sort((x, y) => (y.value ?? -Infinity) - (x.value ?? -Infinity))
       const top = sorted.slice(0, 10)
       const rest = sorted.slice(10)
       if (rest.length > 0) {
-        top.push({ label: 'Other', value: rest.reduce((sum, p) => sum + (p.value ?? 0), 0) })
+        const otherKey = CUSTOM_REPORT_SYNTHETIC_OTHER_KEY
+        top.push({
+          key: otherKey,
+          label: 'Other',
+          value: rest.reduce((sum, p) => sum + (p.value ?? 0), 0),
+          dimensionLabels: [],
+        })
+        contributors.set(
+          otherKey,
+          rest.map((p) => p.key),
+        )
       }
       series[0].points = top
     }
@@ -1159,7 +1256,11 @@ class GroupEngine {
       )
     }
 
-    return series
+    return { series, contributors }
+  }
+
+  buildSeries(rows: InternalRow[]): CustomReportSeries[] {
+    return this.buildSeriesWithContributors(rows).series
   }
 }
 
@@ -1406,66 +1507,16 @@ export class CustomReportsService {
     const generatedAt = this.clock().toISOString()
     const page = Math.max(pagination.page ?? 1, 1)
     const pageSize = Math.min(Math.max(pagination.pageSize ?? DEFAULT_PAGE_SIZE, 1), MAX_PAGE_SIZE)
-    const warnings: CustomReportWarning[] = []
-    const warningCodes = new Set<string>()
+    const { moneyMetricIndexes, mixedCurrencies, warnings, warningCodes, total, rows } =
+      await this.loadScope(tenantId, userId, config)
     const source = config.dataSource
 
-    // 1. Shared visibility predicate (Contract C.14).
-    const base = await this.buildBaseWhere(tenantId, userId, source)
-
-    // 2. Same-tenant relation filter validation (Contract C.18, S2/S9).
-    await this.validateRelationFilterIds(tenantId, config)
-
-    // 3. Filters always NARROW the visible scope (Contract C.14).
-    let where: Record<string, unknown> = base
-    for (const filter of config.filters) {
-      where = this.withAnd(where, this.buildFilterCondition(source, filter))
-    }
-
-    // 4. Money no-FX guard (Contract A.7): mixed currencies null money metrics
-    //    unless a currency filter or currency dimension narrows the scope.
-    const moneyMetricIndexes = new Set<number>()
-    config.metrics.forEach((metric, i) => {
-      if (
-        source === 'DEALS' &&
-        (metric.fieldId === 'deal.value' || metric.fieldId === 'deal.lineItem.total')
-      ) {
-        moneyMetricIndexes.add(i)
-      }
-    })
-    // A currency filter only pins a single currency when it narrows to exactly
-    // one value (EQ one value, or IN with one element). NOT_EQ / multi-value IN
-    // still span multiple currencies — fall through to normal detection so
-    // unlike currencies are never summed (Contract A.7).
-    const hasCurrencyFilter = config.filters.some((f) => {
-      if (f.fieldId !== 'deal.currency') return false
-      if (f.operator === 'EQ' && f.stringValue) return true
-      if (f.operator === 'IN' && f.stringValues?.length === 1) return true
-      return false
-    })
-    const hasCurrencyDimension = config.dimensions.some((d) => d.fieldId === 'deal.currency')
-    let mixedCurrencies = false
-    if (
-      moneyMetricIndexes.size > 0 &&
-      !hasCurrencyFilter &&
-      !hasCurrencyDimension &&
-      source === 'DEALS'
-    ) {
-      const currencies = await this.detectCurrencies(where)
-      mixedCurrencies = currencies.length > 1
-      if (mixedCurrencies) {
-        warnings.push({ code: 'MIXED_CURRENCY', message: MIXED_CURRENCY_MESSAGE })
-      }
-    }
-
-    // 5. Bounded reads (Contract C.20): explicit failure, never truncation.
-    const total = await this.countRows(source, where)
+    // Bounded reads (Contract C.20): explicit failure, never truncation.
     if (total > MAX_CUSTOM_SCOPE_ROWS) {
       throw new BadRequestException(
         `This report scope exceeds ${MAX_CUSTOM_SCOPE_ROWS} rows — narrow your filters or date range and try again`,
       )
     }
-    const rows = await this.fetchRows(source, where)
 
     // Activity creator labels (one bounded same-tenant lookup).
     let creatorLabels: ReadonlyMap<string, string> = new Map()
@@ -1504,10 +1555,274 @@ export class CustomReportsService {
       rows: slice.map((r) => engine.renderRow(r)),
       totalRows,
       // Contract C.21: empty scopes return zero series — never a stub series.
-      series: internalRows.length === 0 ? [] : engine.buildSeries(slice),
+      // Chart series cover ALL bounded groups while table rows stay paginated
+      // (Contract B.7).
+      series: internalRows.length === 0 ? [] : engine.buildSeries(internalRows),
       warnings,
       pagination: { page, pageSize, totalPages },
       truncated: false,
+    }
+  }
+
+  /**
+   * Shared bounded scope loading: visibility predicate, same-tenant relation
+   * validation, config filters, money no-FX guard and the bounded raw reads.
+   * Used identically by preview/saved execution and drill-down so the exact
+   * series membership is recomputed from the same closed predicate
+   * (Contract E.26).
+   */
+  private async loadScope(
+    tenantId: string,
+    userId: string,
+    config: CustomReportConfig,
+  ): Promise<{
+    moneyMetricIndexes: Set<number>
+    mixedCurrencies: boolean
+    warnings: CustomReportWarning[]
+    warningCodes: Set<string>
+    total: number
+    rows: RawRow[]
+  }> {
+    const source = config.dataSource
+
+    // 1. Shared visibility predicate (Contract C.14).
+    const base = await this.buildBaseWhere(tenantId, userId, source)
+
+    // 2. Same-tenant relation filter validation (Contract C.18, S2/S9).
+    await this.validateRelationFilterIds(tenantId, config)
+
+    // 3. Filters always NARROW the visible scope (Contract C.14).
+    let where: Record<string, unknown> = base
+    for (const filter of config.filters) {
+      where = this.withAnd(where, this.buildFilterCondition(source, filter))
+    }
+
+    // 4. Money no-FX guard (Contract A.7): mixed currencies null money metrics
+    //    unless a currency filter or currency dimension narrows the scope.
+    const moneyMetricIndexes = new Set<number>()
+    config.metrics.forEach((metric, i) => {
+      if (
+        source === 'DEALS' &&
+        (metric.fieldId === 'deal.value' || metric.fieldId === 'deal.lineItem.total')
+      ) {
+        moneyMetricIndexes.add(i)
+      }
+    })
+    // A currency filter only pins a single currency when it narrows to exactly
+    // one value (EQ one value, or IN with one element). NOT_EQ / multi-value IN
+    // still span multiple currencies — fall through to normal detection so
+    // unlike currencies are never summed (Contract A.7).
+    const hasCurrencyFilter = config.filters.some((f) => {
+      if (f.fieldId !== 'deal.currency') return false
+      if (f.operator === 'EQ' && f.stringValue) return true
+      if (f.operator === 'IN' && f.stringValues?.length === 1) return true
+      return false
+    })
+    const hasCurrencyDimension = config.dimensions.some((d) => d.fieldId === 'deal.currency')
+    const warnings: CustomReportWarning[] = []
+    const warningCodes = new Set<string>()
+    let mixedCurrencies = false
+    if (
+      moneyMetricIndexes.size > 0 &&
+      !hasCurrencyFilter &&
+      !hasCurrencyDimension &&
+      source === 'DEALS'
+    ) {
+      const currencies = await this.detectCurrencies(where)
+      mixedCurrencies = currencies.length > 1
+      if (mixedCurrencies) {
+        warnings.push({ code: 'MIXED_CURRENCY', message: MIXED_CURRENCY_MESSAGE })
+      }
+    }
+
+    // 5. Bounded reads (Contract C.20): explicit failure, never truncation.
+    const total = await this.countRows(source, where)
+    if (total > MAX_CUSTOM_SCOPE_ROWS) {
+      throw new BadRequestException(
+        `This report scope exceeds ${MAX_CUSTOM_SCOPE_ROWS} rows — narrow your filters or date range and try again`,
+      )
+    }
+    const rows = await this.fetchRows(source, where)
+
+    return { moneyMetricIndexes, mixedCurrencies, warnings, warningCodes, total, rows }
+  }
+
+  // ─── Drill-down (Contract E.25-E.28) ──────────────────────────────────
+
+  async customReportDrillDown(
+    tenantId: string,
+    userId: string,
+    input: CustomReportDrillDownInput,
+  ): Promise<CustomReportDrillDownConnection> {
+    const hasReportId =
+      input.reportId !== undefined && input.reportId !== null && input.reportId !== ''
+    const hasConfig = input.config !== undefined && input.config !== null
+    if (hasReportId === hasConfig) {
+      throw new BadRequestException(
+        'customReportDrillDown requires exactly one of reportId or config',
+      )
+    }
+
+    let config: CustomReportConfig
+    if (hasReportId) {
+      // Saved mode: active owned/public CUSTOM row only — any other id shape
+      // yields the same `Report not found` (Contract E.25, S1/S3/S4).
+      const report = await this.findOwnedOrPublicCustomReport(
+        tenantId,
+        userId,
+        input.reportId as string,
+      )
+      const parsed = parseCustomReportConfig(report.config)
+      if (!parsed.ok) {
+        throw new BadRequestException(
+          `Saved custom report config is invalid: ${parsed.warnings[0]}`,
+        )
+      }
+      config = parsed.config
+    } else {
+      // Preview mode: strictly validate/normalize supported v1/v2 config.
+      config = this.validate(input.config)
+    }
+
+    return this.executeDrillDown(
+      tenantId,
+      userId,
+      config,
+      input.pointKey,
+      input.metricId,
+      input.pagination ?? {},
+    )
+  }
+
+  private async executeDrillDown(
+    tenantId: string,
+    userId: string,
+    config: CustomReportConfig,
+    pointKey: string,
+    metricId: string,
+    pagination: CustomReportPaginationInput,
+  ): Promise<CustomReportDrillDownConnection> {
+    const page = Math.max(pagination.page ?? 1, 1)
+    const pageSize = Math.min(
+      Math.max(pagination.pageSize ?? DEFAULT_DRILL_PAGE_SIZE, 1),
+      MAX_PAGE_SIZE,
+    )
+    const source = config.dataSource
+    const { moneyMetricIndexes, mixedCurrencies, warnings, warningCodes, total, rows } =
+      await this.loadScope(tenantId, userId, config)
+
+    // Bounded reads (Contract C.20): explicit failure, never truncation.
+    if (total > MAX_CUSTOM_SCOPE_ROWS) {
+      throw new BadRequestException(
+        `This report scope exceeds ${MAX_CUSTOM_SCOPE_ROWS} rows — narrow your filters or date range and try again`,
+      )
+    }
+
+    let creatorLabels: ReadonlyMap<string, string> = new Map()
+    if (source === 'ACTIVITIES' && rows.length > 0) {
+      creatorLabels = await this.loadCreatorLabels(tenantId, rows)
+    }
+
+    // Recompute the bounded groups/series with the exact preview semantics.
+    const engine = new GroupEngine(source, config, creatorLabels)
+    const groups = engine.group(rows)
+    const moneyNullIndexes = mixedCurrencies ? moneyMetricIndexes : null
+    const internalRows: InternalRow[] = Array.from(groups.values()).map((group) => {
+      const metricValues = engine.metricValuesFor(group, moneyNullIndexes)
+      const calcValues = engine.calcValuesFor(group, metricValues, warnings, warningCodes)
+      return engine.toInternalRow(group, metricValues, calcValues)
+    })
+    engine.sortRows(internalRows, config.sort)
+
+    if (internalRows.length > MAX_GROUPED_ROWS) {
+      throw new BadRequestException(
+        `This report produces more than ${MAX_GROUPED_ROWS} groups — narrow your filters or date range and try again`,
+      )
+    }
+
+    const { series, contributors } = engine.buildSeriesWithContributors(internalRows)
+
+    // The client never becomes a Prisma path/predicate: metricId and pointKey
+    // must exist in the recomputed result (Contract E.26, S2/S3/S9).
+    const targetSeries = series.find((s) => s.metricId === metricId)
+    if (!targetSeries) {
+      throw new NotFoundException('Report metric not found')
+    }
+    const point = targetSeries.points.find((p) => p.key === pointKey)
+    if (!point) {
+      throw new NotFoundException('Report point not found')
+    }
+
+    // Derive contributing raw rows internally from the already-scoped rows.
+    const groupKeys = contributors.get(pointKey) ?? []
+    const rowIds = [...new Set(groupKeys.flatMap((key) => engine.rowIdsFor(key)))]
+    const rowsById = new Map(rows.map((row) => [String(row.id), row]))
+    const contributing = rowIds
+      .map((id) => rowsById.get(id))
+      .filter((row): row is RawRow => row !== undefined)
+
+    const items = contributing
+      .map((row) => this.drillItemFor(source, row))
+      .sort((a, b) => a.id.localeCompare(b.id))
+
+    const totalItems = items.length
+    const totalPages = totalItems === 0 ? 0 : Math.ceil(totalItems / pageSize)
+    const slice = items.slice((page - 1) * pageSize, (page - 1) * pageSize + pageSize)
+
+    return {
+      source,
+      pointLabel: point.label,
+      items: slice,
+      total: totalItems,
+      page,
+      pageSize,
+      totalPages,
+    }
+  }
+
+  /** Minimal source-specific drill labels (Contract E.27, S8). */
+  private drillItemFor(source: CustomReportDataSource, row: RawRow): CustomReportDrillDownItem {
+    switch (source) {
+      case 'CONTACTS': {
+        const name = fullName({
+          firstName: row.firstName as string | null,
+          lastName: row.lastName as string | null,
+        })
+        return {
+          id: String(row.id),
+          primaryLabel: name ?? String(row.id),
+          secondaryLabel: typeof row.email === 'string' && row.email.length > 0 ? row.email : null,
+          relatedRecordId: null,
+        }
+      }
+      case 'DEALS': {
+        const stage = row.stage as RawRow | null
+        return {
+          id: String(row.id),
+          primaryLabel:
+            typeof row.title === 'string' && row.title.length > 0 ? row.title : String(row.id),
+          secondaryLabel: typeof stage?.name === 'string' ? stage.name : null,
+          relatedRecordId: idOf(row.contactId),
+        }
+      }
+      case 'TASKS': {
+        return {
+          id: String(row.id),
+          primaryLabel:
+            typeof row.title === 'string' && row.title.length > 0 ? row.title : String(row.id),
+          secondaryLabel: typeof row.status === 'string' ? row.status : null,
+          relatedRecordId: idOf(row.contactId) ?? idOf(row.dealId),
+        }
+      }
+      case 'ACTIVITIES': {
+        return {
+          id: String(row.id),
+          primaryLabel:
+            typeof row.title === 'string' && row.title.length > 0 ? row.title : String(row.id),
+          secondaryLabel: typeof row.type === 'string' ? row.type : null,
+          relatedRecordId: idOf(row.contactId),
+        }
+      }
     }
   }
 

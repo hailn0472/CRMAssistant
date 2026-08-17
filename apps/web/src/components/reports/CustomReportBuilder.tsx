@@ -1,15 +1,10 @@
 'use client'
 
 /**
- * Story 6.3 — /reports/builder orchestrator (AC 3-4, 10-11, 15-16, D.23-29).
+ * Story 6.3 & 6.4 — /reports/builder orchestrator (Contract F.32, AC 15).
  *
- * Thin App Router page renders this component. It owns the local draft
- * reducer, the ['customReports']-rooted TanStack server state (catalogue,
- * preview, saved report), the 300 ms debounced/cancelled preview flow that
- * never requests invalid drafts, permission gating (REPORT:READ + selected
- * source read; save only with REPORT CREATE/UPDATE — no fake disabled
- * mutation affordance) and the React Hook Form + Zod save dialog with query
- * invalidation and URL transition to edit mode.
+ * App Router builder page component owning drill sheet state, draft reducer,
+ * query state, debounced preview, and save modal.
  */
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query'
 import { useRouter, useSearchParams } from 'next/navigation'
@@ -51,6 +46,8 @@ import { CustomReportDataSourcePanel } from './CustomReportDataSourcePanel'
 import { CustomReportFieldsPanel } from './CustomReportFieldsPanel'
 import { CustomReportVisualizationPanel } from './CustomReportVisualizationPanel'
 import { CustomReportPreview } from './CustomReportPreview'
+import { CustomReportDrillDownSheet } from './CustomReportDrillDownSheet'
+import type { DrillDownRequest } from './charting/ReportChart'
 
 const PREVIEW_DEBOUNCE_MS = 300
 
@@ -194,6 +191,10 @@ export function CustomReportBuilder(): React.JSX.Element {
   const [seeded, setSeeded] = useState(false)
   const [saveOpen, setSaveOpen] = useState(false)
   const [mobileSection, setMobileSection] = useState<'source' | 'fields' | 'viz'>('source')
+
+  // Drill-down Sheet state
+  const [drillOpen, setDrillOpen] = useState(false)
+  const [drillTarget, setDrillTarget] = useState<DrillDownRequest | null>(null)
 
   // ─── Edit mode (Contract D.23): load the saved typed config ──────────
   const editQuery = useQuery({
@@ -343,6 +344,11 @@ export function CustomReportBuilder(): React.JSX.Element {
   }
   const handleUpdateVisualization = (patch: Partial<CustomReportVisualization>): void => {
     dispatch({ type: 'UPDATE_VISUALIZATION', patch })
+  }
+
+  const handleDrillDown = (req: DrillDownRequest) => {
+    setDrillTarget(req)
+    setDrillOpen(true)
   }
 
   // ─── Permission gate (Contract D.31) ─────────────────────────────────
@@ -502,6 +508,7 @@ export function CustomReportBuilder(): React.JSX.Element {
             isError={previewQuery.isError && !previewQuery.data}
             errorMessage={previewQuery.isError ? (previewQuery.error as Error).message : null}
             onRetry={() => previewQuery.refetch()}
+            onDrillDown={handleDrillDown}
           />
           {/* Announced preview result changes (Contract D.32) */}
           <span role="status" className="sr-only">
@@ -524,6 +531,16 @@ export function CustomReportBuilder(): React.JSX.Element {
             isPublic: values.isPublic,
           })
         }}
+      />
+
+      <CustomReportDrillDownSheet
+        open={drillOpen}
+        onOpenChange={setDrillOpen}
+        reportId={reportId ?? undefined}
+        config={!reportId && config ? config : undefined}
+        pointKey={drillTarget?.pointKey ?? null}
+        metricId={drillTarget?.metricId ?? null}
+        pointLabel={drillTarget?.label}
       />
     </div>
   )

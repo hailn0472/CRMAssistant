@@ -7,18 +7,59 @@
 import {
   validateCustomReportConfig,
   parseCustomReportConfig,
+  chartCompatibilityErrors,
   MAX_CUSTOM_FILTERS,
   MAX_CUSTOM_DIMENSIONS,
   MAX_CUSTOM_METRICS,
   MAX_EXPRESSION_TOKENS,
   CUSTOM_REPORT_CONFIG_VERSION,
 } from '../custom-report-config'
-import { CUSTOM_REPORT_CHART_TYPES } from '../custom-report-types'
-import type { CustomReportConfig } from '../custom-report-types'
+import {
+  CUSTOM_REPORT_CHART_TYPES,
+  CUSTOM_REPORT_COLOR_TOKENS,
+  CUSTOM_REPORT_DEFAULT_COLORS,
+  CUSTOM_REPORT_LEGEND_POSITIONS,
+} from '../custom-report-types'
+import type {
+  CustomReportCalculatedField,
+  CustomReportChartType,
+  CustomReportConfig,
+  CustomReportDataSource,
+  CustomReportDimension,
+  CustomReportMetric,
+} from '../custom-report-types'
 
 function validConfig(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
     version: CUSTOM_REPORT_CONFIG_VERSION,
+    dataSource: 'DEALS',
+    filters: [],
+    dimensions: [{ id: 'dim-stage', fieldId: 'deal.stage', calculation: null, granularity: null }],
+    metrics: [
+      { id: 'metric-deals', fieldId: 'deal.id', aggregation: 'COUNT', alias: 'deals' },
+      { id: 'metric-value', fieldId: 'deal.value', aggregation: 'SUM', alias: 'revenue' },
+    ],
+    calculatedFields: [],
+    visualization: {
+      type: 'TABLE',
+      title: null,
+      showLegend: false,
+      showDataLabels: false,
+      xAxisLabel: null,
+      yAxisLabel: null,
+      orientation: null,
+      colors: [],
+      legendPosition: 'BOTTOM',
+    },
+    sort: [],
+    ...overrides,
+  }
+}
+
+/** A persisted Story 6.3 v1 config (no colors/legendPosition, version 1). */
+function v1Config(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    version: 1,
     dataSource: 'DEALS',
     filters: [],
     dimensions: [{ id: 'dim-stage', fieldId: 'deal.stage', calculation: null, granularity: null }],
@@ -88,9 +129,10 @@ describe('validateCustomReportConfig — strict write path', () => {
     expectInvalid(validConfig({ dataSourceExtra: 'DEALS' }), 'unknown key')
   })
 
-  it('rejects a wrong version', () => {
-    expectInvalid(validConfig({ version: 2 }), 'version')
+  it('rejects unknown versions but accepts 1 and 2', () => {
+    expectInvalid(validConfig({ version: 3 }), 'version')
     expectInvalid(validConfig({ version: '1' }), 'version')
+    expect(() => validateCustomReportConfig(v1Config())).not.toThrow()
   })
 
   it('rejects an unknown data source', () => {
@@ -1059,7 +1101,7 @@ describe('validateCustomReportConfig — strict write path', () => {
     })
 
     it('rejects an unknown chart type', () => {
-      expectInvalid(validConfig({ visualization: { type: 'SCATTER' } }), 'type')
+      expectInvalid(validConfig({ visualization: { type: 'DOUGHNUT' } }), 'type')
     })
   })
 
@@ -1189,14 +1231,535 @@ describe('parseCustomReportConfig — defensive read path', () => {
 })
 
 describe('chart type vocabulary integrity', () => {
-  it('exposes exactly the five binding chart types', () => {
-    expect(CUSTOM_REPORT_CHART_TYPES).toEqual(['TABLE', 'LINE', 'BAR', 'PIE', 'FUNNEL'])
+  it('exposes exactly the nine binding chart types', () => {
+    expect(CUSTOM_REPORT_CHART_TYPES).toEqual([
+      'TABLE',
+      'LINE',
+      'BAR',
+      'PIE',
+      'DONUT',
+      'AREA',
+      'FUNNEL',
+      'SCATTER',
+      'HEATMAP',
+    ])
   })
 
-  it('validated configs carry typed CustomReportConfig values', () => {
+  it('validated configs carry typed v2 CustomReportConfig values', () => {
     const config = validateCustomReportConfig(validConfig()) as CustomReportConfig
-    expect(config.version).toBe(1)
+    expect(config.version).toBe(CUSTOM_REPORT_CONFIG_VERSION)
     expect(config.filters).toEqual([])
     expect(config.sort).toEqual([])
+    expect(config.visualization.colors).toEqual([...CUSTOM_REPORT_DEFAULT_COLORS])
+    expect(config.visualization.legendPosition).toBe('BOTTOM')
+  })
+})
+
+describe('v1 → v2 normalization (Contract A.2-A.3)', () => {
+  it('accepts a valid v1 config and normalizes it to an in-memory v2 config', () => {
+    const config = validateCustomReportConfig(
+      v1Config({
+        visualization: {
+          type: 'BAR',
+          title: 'Pipeline',
+          showLegend: true,
+          showDataLabels: true,
+          xAxisLabel: 'Stage',
+          yAxisLabel: 'Deals',
+          orientation: 'HORIZONTAL',
+        },
+      }),
+    )
+    expect(config.version).toBe(2)
+    // Unchanged v1 choices survive.
+    expect(config.visualization.type).toBe('BAR')
+    expect(config.visualization.title).toBe('Pipeline')
+    expect(config.visualization.showLegend).toBe(true)
+    expect(config.visualization.orientation).toBe('HORIZONTAL')
+    expect(config.dataSource).toBe('DEALS')
+    expect(config.metrics).toHaveLength(2)
+    // v2-only fields are defaulted: full palette + BOTTOM.
+    expect(config.visualization.colors).toEqual([...CUSTOM_REPORT_DEFAULT_COLORS])
+    expect(config.visualization.legendPosition).toBe('BOTTOM')
+  })
+
+  it('normalizes v1 through the defensive read path (saved-report load)', () => {
+    const parsed = parseCustomReportConfig(v1Config())
+    expect(parsed.ok).toBe(true)
+    if (parsed.ok) {
+      expect(parsed.config.version).toBe(2)
+      expect(parsed.config.visualization.colors).toEqual([...CUSTOM_REPORT_DEFAULT_COLORS])
+      expect(parsed.config.visualization.legendPosition).toBe('BOTTOM')
+    }
+  })
+
+  it('persists v2 on the next save (round-trip write)', () => {
+    const config = validateCustomReportConfig(v1Config())
+    // Re-validating the normalized v2 output is stable (idempotent).
+    const again = validateCustomReportConfig(config)
+    expect(again.version).toBe(2)
+    expect(again.visualization.colors).toEqual([...CUSTOM_REPORT_DEFAULT_COLORS])
+  })
+
+  it('rejects v1 configs carrying v2-only keys (fail closed during rolling deploy)', () => {
+    const v1WithV2Key: Record<string, unknown> = {
+      ...v1Config(),
+      visualization: {
+        type: 'TABLE',
+        title: null,
+        showLegend: false,
+        showDataLabels: false,
+        xAxisLabel: null,
+        yAxisLabel: null,
+        orientation: null,
+        colors: ['BLUE'],
+      },
+    }
+    expectInvalid(v1WithV2Key, 'unknown key')
+  })
+
+  it('rejects unknown versions and unknown keys on both paths', () => {
+    expectInvalid(validConfig({ version: 3 }), 'version')
+    expectInvalid(validConfig({ version: 99 }), 'version')
+    expectInvalid(validConfig({ futureKey: true }), 'unknown key')
+    const parsed = parseCustomReportConfig(validConfig({ version: 3 }))
+    expect(parsed.ok).toBe(false)
+  })
+
+  it('rejects corrupt persisted v1 JSON on the defensive path', () => {
+    const parsed = parseCustomReportConfig(v1Config({ dataSource: 'INVOICES' }))
+    expect(parsed.ok).toBe(false)
+    if (!parsed.ok) expect(parsed.warnings.join(' ')).toMatch(/dataSource/i)
+  })
+})
+
+describe('v2 visualization — colors and legend position (Contract A.2)', () => {
+  it('normalizes an empty colors array to the full default palette', () => {
+    const config = validateCustomReportConfig(validConfig({ visualization: { type: 'TABLE' } }))
+    expect(config.visualization.colors).toEqual([...CUSTOM_REPORT_DEFAULT_COLORS])
+  })
+
+  it('accepts 1–10 approved tokens in series order and preserves them', () => {
+    const colors = ['BLUE', 'RED', 'TEAL']
+    const config = validateCustomReportConfig(
+      validConfig({ visualization: { type: 'TABLE', colors } }),
+    )
+    expect(config.visualization.colors).toEqual(colors)
+  })
+
+  it('rejects more than 10 tokens', () => {
+    const tooMany = [...CUSTOM_REPORT_COLOR_TOKENS, 'BLUE']
+    expectInvalid(validConfig({ visualization: { type: 'TABLE', colors: tooMany } }), '10')
+  })
+
+  it('rejects unknown / arbitrary color tokens', () => {
+    expectInvalid(validConfig({ visualization: { type: 'TABLE', colors: ['#ff0000'] } }), 'color')
+    expectInvalid(validConfig({ visualization: { type: 'TABLE', colors: ['ORANGE'] } }), 'color')
+    expectInvalid(validConfig({ visualization: { type: 'TABLE', colors: [42] } }), 'color')
+  })
+
+  it('defaults legendPosition to BOTTOM when omitted', () => {
+    const config = validateCustomReportConfig(validConfig({ visualization: { type: 'TABLE' } }))
+    expect(config.visualization.legendPosition).toBe('BOTTOM')
+  })
+
+  it('accepts every approved legend position and rejects unknown ones', () => {
+    for (const position of CUSTOM_REPORT_LEGEND_POSITIONS) {
+      const config = validateCustomReportConfig(
+        validConfig({ visualization: { type: 'TABLE', legendPosition: position } }),
+      )
+      expect(config.visualization.legendPosition).toBe(position)
+    }
+    expectInvalid(
+      validConfig({ visualization: { type: 'TABLE', legendPosition: 'CENTER' } }),
+      'legendPosition',
+    )
+  })
+
+  it('keeps title and axis-label strictness for v2', () => {
+    expectInvalid(validConfig({ visualization: { type: 'TABLE', title: '   ' } }), 'title')
+    expectInvalid(validConfig({ visualization: { type: 'TABLE', xAxisLabel: '' } }), 'xAxisLabel')
+  })
+
+  it('defaults BAR orientation to VERTICAL and keeps HORIZONTAL', () => {
+    const vertical = validateCustomReportConfig(
+      validConfig({
+        visualization: { type: 'BAR' },
+      }),
+    )
+    expect(vertical.visualization.orientation).toBe('VERTICAL')
+    const horizontal = validateCustomReportConfig(
+      validConfig({
+        visualization: { type: 'BAR', orientation: 'HORIZONTAL' },
+      }),
+    )
+    expect(horizontal.visualization.orientation).toBe('HORIZONTAL')
+  })
+})
+
+describe('chartCompatibilityErrors — closed matrix (Contract A.4)', () => {
+  const DATE_DIM = {
+    id: 'd-1',
+    fieldId: 'deal.expectedCloseDate',
+    calculation: null,
+    granularity: 'MONTH',
+  } as const
+  const STAGE_DIM = {
+    id: 'd-1',
+    fieldId: 'deal.stage',
+    calculation: null,
+    granularity: null,
+  } as const
+  const SUM_METRIC = {
+    id: 'm-1',
+    fieldId: 'deal.value',
+    aggregation: 'SUM',
+    alias: 'revenue',
+  } as const
+  const COUNT_METRIC = {
+    id: 'm-1',
+    fieldId: 'deal.id',
+    aggregation: 'COUNT',
+    alias: 'deals',
+  } as const
+  const AVG_METRIC = {
+    id: 'm-1',
+    fieldId: 'deal.value',
+    aggregation: 'AVERAGE',
+    alias: 'avg',
+  } as const
+
+  const configFor = (
+    chartType: string,
+    extra: Record<string, unknown> = {},
+  ): CustomReportConfig => {
+    // Build a structurally valid typed config (a TABLE base) and then apply
+    // the raw overrides so chartCompatibilityErrors can be exercised on
+    // incompatible combinations that the strict validator would reject.
+    const raw = validConfig({ visualization: { type: 'TABLE' }, ...extra })
+    const base = validateCustomReportConfig(validConfig({ visualization: { type: 'TABLE' } }))
+    return {
+      ...base,
+      dataSource: raw.dataSource as CustomReportDataSource,
+      dimensions: raw.dimensions as CustomReportDimension[],
+      metrics: raw.metrics as CustomReportMetric[],
+      calculatedFields: (raw.calculatedFields ?? []) as CustomReportCalculatedField[],
+      visualization: { ...base.visualization, type: chartType as CustomReportChartType },
+    }
+  }
+
+  const expectCompatible = (config: CustomReportConfig): void => {
+    expect(chartCompatibilityErrors(config)).toEqual([])
+  }
+  const expectErrors = (config: CustomReportConfig, messagePart: string): void => {
+    const errors = chartCompatibilityErrors(config)
+    expect(errors.length).toBeGreaterThan(0)
+    expect(errors.join(' | ')).toMatch(messagePart)
+  }
+
+  it('TABLE accepts any otherwise valid config', () => {
+    expectCompatible(configFor('TABLE'))
+  })
+
+  describe('LINE / AREA', () => {
+    it('accepts a date-like first dimension with a numeric metric', () => {
+      for (const type of ['LINE', 'AREA'] as const) {
+        expectCompatible(configFor(type, { dimensions: [DATE_DIM], metrics: [SUM_METRIC] }))
+      }
+    })
+
+    it('rejects a non-date first dimension', () => {
+      for (const type of ['LINE', 'AREA'] as const) {
+        expectErrors(configFor(type, { dimensions: [STAGE_DIM], metrics: [SUM_METRIC] }), 'date')
+      }
+    })
+
+    it('rejects zero numeric metrics', () => {
+      for (const type of ['LINE', 'AREA'] as const) {
+        expectErrors(
+          configFor(type, { dimensions: [DATE_DIM], metrics: [COUNT_METRIC] }),
+          'numeric',
+        )
+      }
+    })
+  })
+
+  describe('BAR', () => {
+    it('accepts one or two dimensions with a numeric metric', () => {
+      expectCompatible(configFor('BAR', { dimensions: [STAGE_DIM], metrics: [SUM_METRIC] }))
+      expectCompatible(
+        configFor('BAR', {
+          dimensions: [
+            STAGE_DIM,
+            { id: 'd-2', fieldId: 'deal.owner', calculation: null, granularity: null },
+          ],
+          metrics: [SUM_METRIC],
+        }),
+      )
+    })
+
+    it('rejects zero or three dimensions', () => {
+      expectErrors(
+        configFor('BAR', {
+          dimensions: [],
+          metrics: [SUM_METRIC],
+        }),
+        'one or two',
+      )
+    })
+
+    it('rejects a missing numeric metric', () => {
+      expectErrors(
+        configFor('BAR', { dimensions: [STAGE_DIM], metrics: [COUNT_METRIC] }),
+        'numeric',
+      )
+    })
+  })
+
+  describe('PIE / DONUT', () => {
+    it('accepts exactly one categorical dimension and one numeric metric', () => {
+      for (const type of ['PIE', 'DONUT'] as const) {
+        expectCompatible(configFor(type, { dimensions: [STAGE_DIM], metrics: [SUM_METRIC] }))
+      }
+    })
+
+    it('rejects a date dimension', () => {
+      for (const type of ['PIE', 'DONUT'] as const) {
+        expectErrors(
+          configFor(type, { dimensions: [DATE_DIM], metrics: [SUM_METRIC] }),
+          'categorical',
+        )
+      }
+    })
+
+    it('rejects two dimensions', () => {
+      for (const type of ['PIE', 'DONUT'] as const) {
+        expectErrors(
+          configFor(type, {
+            dimensions: [
+              STAGE_DIM,
+              { id: 'd-2', fieldId: 'deal.owner', calculation: null, granularity: null },
+            ],
+            metrics: [SUM_METRIC],
+          }),
+          'one',
+        )
+      }
+    })
+
+    it('rejects zero or two metrics', () => {
+      for (const type of ['PIE', 'DONUT'] as const) {
+        expectErrors(configFor(type, { dimensions: [STAGE_DIM], metrics: [] }), 'metric')
+        expectErrors(
+          configFor(type, {
+            dimensions: [STAGE_DIM],
+            metrics: [
+              SUM_METRIC,
+              { id: 'm-2', fieldId: 'deal.value', aggregation: 'AVERAGE', alias: 'avg' },
+            ],
+          }),
+          'metric',
+        )
+      }
+    })
+
+    it('rejects a COUNT-only metric (non-numeric)', () => {
+      for (const type of ['PIE', 'DONUT'] as const) {
+        expectErrors(
+          configFor(type, { dimensions: [STAGE_DIM], metrics: [COUNT_METRIC] }),
+          'numeric',
+        )
+      }
+    })
+  })
+
+  describe('FUNNEL', () => {
+    it('accepts DEALS source, one stage dimension and one COUNT/SUM metric', () => {
+      expectCompatible(configFor('FUNNEL', { dimensions: [STAGE_DIM], metrics: [COUNT_METRIC] }))
+    })
+
+    it('rejects a non-DEALS source', () => {
+      expectErrors(
+        configFor('FUNNEL', {
+          dataSource: 'CONTACTS',
+          dimensions: [
+            { id: 'd-1', fieldId: 'contact.owner', calculation: null, granularity: null },
+          ],
+          metrics: [{ id: 'm-1', fieldId: 'contact.id', aggregation: 'COUNT', alias: 'count' }],
+        }),
+        'DEALS',
+      )
+    })
+
+    it('rejects a non-stage dimension', () => {
+      expectErrors(
+        configFor('FUNNEL', {
+          dimensions: [{ id: 'd-1', fieldId: 'deal.owner', calculation: null, granularity: null }],
+          metrics: [COUNT_METRIC],
+        }),
+        'stage',
+      )
+    })
+
+    it('rejects non-COUNT/SUM metrics', () => {
+      expectErrors(
+        configFor('FUNNEL', { dimensions: [STAGE_DIM], metrics: [AVG_METRIC] }),
+        'COUNT or SUM',
+      )
+    })
+  })
+
+  describe('SCATTER', () => {
+    it('accepts exactly one identifying dimension and exactly two numeric metrics', () => {
+      expectCompatible(
+        configFor('SCATTER', {
+          dimensions: [STAGE_DIM],
+          metrics: [
+            SUM_METRIC,
+            { id: 'm-2', fieldId: 'deal.value', aggregation: 'AVERAGE', alias: 'avg' },
+          ],
+        }),
+      )
+    })
+
+    it('rejects a date-like identifying dimension', () => {
+      expectErrors(
+        configFor('SCATTER', {
+          dimensions: [DATE_DIM],
+          metrics: [
+            SUM_METRIC,
+            { id: 'm-2', fieldId: 'deal.value', aggregation: 'AVERAGE', alias: 'avg' },
+          ],
+        }),
+        'identifying',
+      )
+    })
+
+    it('rejects two dimensions', () => {
+      expectErrors(
+        configFor('SCATTER', {
+          dimensions: [
+            STAGE_DIM,
+            { id: 'd-2', fieldId: 'deal.owner', calculation: null, granularity: null },
+          ],
+          metrics: [
+            SUM_METRIC,
+            { id: 'm-2', fieldId: 'deal.value', aggregation: 'AVERAGE', alias: 'avg' },
+          ],
+        }),
+        'one',
+      )
+    })
+
+    it('rejects one or three metrics', () => {
+      expectErrors(configFor('SCATTER', { dimensions: [STAGE_DIM], metrics: [SUM_METRIC] }), 'two')
+      expectErrors(
+        configFor('SCATTER', {
+          dimensions: [STAGE_DIM],
+          metrics: [
+            SUM_METRIC,
+            { id: 'm-2', fieldId: 'deal.value', aggregation: 'AVERAGE', alias: 'avg' },
+            { id: 'm-3', fieldId: 'deal.value', aggregation: 'MIN', alias: 'min' },
+          ],
+        }),
+        'two',
+      )
+    })
+
+    it('rejects a non-numeric metric', () => {
+      expectErrors(
+        configFor('SCATTER', {
+          dimensions: [STAGE_DIM],
+          metrics: [
+            COUNT_METRIC,
+            { id: 'm-2', fieldId: 'deal.value', aggregation: 'AVERAGE', alias: 'avg' },
+          ],
+        }),
+        'numeric',
+      )
+    })
+  })
+
+  describe('HEATMAP', () => {
+    it('accepts exactly two dimensions and one numeric metric', () => {
+      expectCompatible(
+        configFor('HEATMAP', {
+          dimensions: [
+            STAGE_DIM,
+            { id: 'd-2', fieldId: 'deal.owner', calculation: null, granularity: null },
+          ],
+          metrics: [SUM_METRIC],
+        }),
+      )
+    })
+
+    it('rejects one or three dimensions', () => {
+      expectErrors(configFor('HEATMAP', { dimensions: [STAGE_DIM], metrics: [SUM_METRIC] }), 'two')
+    })
+
+    it('rejects zero or two numeric metrics', () => {
+      expectErrors(
+        configFor('HEATMAP', {
+          dimensions: [
+            STAGE_DIM,
+            { id: 'd-2', fieldId: 'deal.owner', calculation: null, granularity: null },
+          ],
+          metrics: [],
+        }),
+        'metric',
+      )
+      expectErrors(
+        configFor('HEATMAP', {
+          dimensions: [
+            STAGE_DIM,
+            { id: 'd-2', fieldId: 'deal.owner', calculation: null, granularity: null },
+          ],
+          metrics: [
+            SUM_METRIC,
+            { id: 'm-2', fieldId: 'deal.value', aggregation: 'AVERAGE', alias: 'avg' },
+          ],
+        }),
+        'metric',
+      )
+    })
+
+    it('rejects a COUNT-only metric (non-numeric)', () => {
+      expectErrors(
+        configFor('HEATMAP', {
+          dimensions: [
+            STAGE_DIM,
+            { id: 'd-2', fieldId: 'deal.owner', calculation: null, granularity: null },
+          ],
+          metrics: [COUNT_METRIC],
+        }),
+        'numeric',
+      )
+    })
+  })
+
+  it('validateCustomReportConfig throws the identical chart-compatibility errors', () => {
+    const raw = validConfig({
+      visualization: { type: 'PIE' },
+      metrics: [COUNT_METRIC],
+    })
+    const viaValidator = ((): string[] => {
+      try {
+        validateCustomReportConfig(raw)
+        return []
+      } catch (err) {
+        return [(err as Error).message]
+      }
+    })()
+    // chartCompatibilityErrors operates on a structurally valid (but
+    // incompatible) typed config — the same check the validator runs.
+    const base = validateCustomReportConfig(validConfig())
+    const pieConfig: CustomReportConfig = {
+      ...base,
+      visualization: { ...base.visualization, type: 'PIE' },
+      metrics: [COUNT_METRIC],
+    }
+    const viaMatrix = chartCompatibilityErrors(pieConfig)
+    expect(viaMatrix.join(' | ')).toMatch(/numeric/)
+    expect(viaValidator.join(' | ')).toMatch(/numeric/)
   })
 })

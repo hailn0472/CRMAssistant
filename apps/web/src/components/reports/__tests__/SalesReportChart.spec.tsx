@@ -1,15 +1,13 @@
 /**
- * Story 6.2 (AC 72-73, 80, 89): Recharts is mocked WHOLESALE so jsdom
- * zero-size containers cannot produce vacuous passing tests. We assert the
- * semantic chart wrapper (role="img") and the sr-only alternative table
- * separately, plus the keyboard "View underlying deals" path.
+ * Story 6.2 / 6.4 (AC 72-73, 80, 89): SalesReportChart tests.
+ *
+ * Asserts the semantic chart wrapper (role="img"), sr-only alternative table,
+ * keyboard "View underlying deals" path, and ReportChart adapter integration.
  */
 jest.mock('recharts', () => {
   const React = require('react')
   const MockContainer = ({ children }: { children?: React.ReactNode }) =>
     React.createElement('div', null, children)
-  // recharts v3 passes Tooltip content as a React ELEMENT — clone it with
-  // active payload instead of createElement (which would treat it as a type).
   const MockTooltip = ({
     content,
   }: {
@@ -27,11 +25,9 @@ jest.mock('recharts', () => {
     ResponsiveContainer: MockContainer,
     BarChart: MockContainer,
     Bar: ({ onClick }: { onClick?: (datum: unknown) => void }) => {
-      // A real button so specs can fire a datum click (function values are
-      // not rendered into data-* DOM attributes by React).
       return React.createElement('button', {
         'data-testid': 'recharts-bar',
-        onClick: () => onClick?.({ key: '2026-08' }),
+        onClick: () => onClick?.({ key: '2026-08', label: 'Aug 2026' }),
       })
     },
     XAxis: () => React.createElement('div'),
@@ -62,7 +58,7 @@ describe('SalesReportChart (AC 72-73)', () => {
         onDrill={jest.fn()}
       />,
     )
-    expect(screen.getByText('Revenue')).toBeInTheDocument()
+    expect(screen.getAllByText('Revenue').length).toBeGreaterThanOrEqual(1)
     expect(screen.getByText('No data for the selected period.')).toBeInTheDocument()
     expect(screen.queryByRole('img')).not.toBeInTheDocument()
   })

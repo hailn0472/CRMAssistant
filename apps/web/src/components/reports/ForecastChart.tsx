@@ -1,17 +1,17 @@
 'use client'
 
-import {
-  ResponsiveContainer,
-  AreaChart,
-  Area,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-} from 'recharts'
+/**
+ * Story 6.4 (Contract F.34) — ForecastChart adapter for ReportChart AREA primitive.
+ *
+ * Renders sales forecast trend via the ReportChart framework. Preserves
+ * currency/duration formatters, range subtitle, header legend, sr-only
+ * accessibility table, and aria-labels.
+ */
+import React, { useMemo } from 'react'
 
 import { formatCurrency } from '@/components/deals/deal-display'
-import { formatAxisTick } from '@/lib/forecast-format'
+import { ReportChart } from '@/components/reports/charting/ReportChart'
+import type { NormalizedAreaChart } from '@/lib/report-chart'
 import type { ForecastBucket, ForecastGroupBy } from '@/services/forecast.service'
 
 interface ForecastChartProps {
@@ -32,19 +32,52 @@ export function ForecastChart({
   groupBy,
   currency,
 }: ForecastChartProps): React.JSX.Element {
-  const chartData = buckets.map((b) => ({
-    label: b.label,
-    weightedValue: b.weightedValue,
-    totalValue: b.totalValue,
-    count: b.count,
-  }))
-
   const groupByLabel = GROUP_BY_LABEL[groupBy]
   const ariaLabel = `Weighted sales forecast by ${groupByLabel}`
   const rangeLabel =
     buckets.length > 1
       ? `${buckets[0]!.label} – ${buckets[buckets.length - 1]!.label}`
       : buckets[0]?.label
+
+  const normalizedChart: NormalizedAreaChart = useMemo(() => {
+    return {
+      type: 'AREA',
+      title: null,
+      showLegend: false,
+      showDataLabels: false,
+      colors: ['INDIGO'],
+      legendPosition: 'BOTTOM',
+      xAxisLabel: null,
+      yAxisLabel: null,
+      series: [
+        {
+          metricId: 'weightedValue',
+          label: 'Weighted Forecast',
+        },
+      ],
+      points: buckets.map((b) => ({
+        key: b.key,
+        label: b.label,
+        dimensionLabels: [b.label],
+        values: {
+          weightedValue: b.weightedValue,
+        },
+        rawValues: {
+          weightedValue: b.weightedValue,
+        },
+      })),
+      totalPoints: buckets.length,
+      srTable: {
+        headers: ['Period', 'Weighted Value', 'Total Value', 'Deal Count'],
+        rows: buckets.map((b) => [
+          b.label,
+          formatCurrency(b.weightedValue, currency),
+          formatCurrency(b.totalValue, currency),
+          String(b.count),
+        ]),
+      },
+    }
+  }, [buckets, currency])
 
   return (
     <section className="rounded-[14px] border border-[#ececf0] bg-white px-[22px] pb-4 pt-5">
@@ -65,50 +98,12 @@ export function ForecastChart({
       </div>
 
       <div role="img" aria-label={ariaLabel}>
-        <ResponsiveContainer width="100%" height={250}>
-          <AreaChart data={chartData}>
-            <CartesianGrid stroke="#ececf0" vertical={false} />
-            <XAxis
-              dataKey="label"
-              tickFormatter={formatAxisTick}
-              fontSize={11.5}
-              tick={{ fill: '#8c8c96' }}
-              axisLine={{ stroke: '#ececf0' }}
-              tickLine={false}
-            />
-            <YAxis
-              fontSize={11}
-              tick={{ fill: '#a0a0aa' }}
-              axisLine={false}
-              tickLine={false}
-              tickFormatter={(v: number) => (v >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(v))}
-            />
-            <Tooltip
-              content={({ active, payload }) => {
-                if (!active || !payload?.length) return null
-                return (
-                  <div className="rounded-[9px] border border-[#ececf0] bg-white px-3 py-2 text-[13px] shadow-md">
-                    <p className="font-medium text-[#1b1b1f]">{payload[0]!.payload.label}</p>
-                    <p className="text-[#4f46e5]">
-                      {formatCurrency(Number(payload[0]!.value), currency)}
-                    </p>
-                  </div>
-                )
-              }}
-            />
-            <Area
-              type="monotone"
-              dataKey="weightedValue"
-              name="Weighted Forecast"
-              stroke="#4f46e5"
-              strokeWidth={2.5}
-              fill="#4f46e5"
-              fillOpacity={0.07}
-              dot={{ r: 4, fill: '#fff', stroke: '#4f46e5', strokeWidth: 2.5 }}
-              activeDot={{ r: 5 }}
-            />
-          </AreaChart>
-        </ResponsiveContainer>
+        <ReportChart
+          chart={normalizedChart}
+          minHeight={250}
+          hideControls={true}
+          hideSrTable={true}
+        />
       </div>
       {/* sr-only table for accessibility */}
       <table className="sr-only" aria-label={ariaLabel}>

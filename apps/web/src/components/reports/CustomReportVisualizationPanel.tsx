@@ -1,23 +1,30 @@
 'use client'
 
 /**
- * Story 6.3 — Visualization section of the custom report builder (AC 9, D.24).
+ * Story 6.3 & 6.4 — Visualization section of the custom report builder (AC 4, 16, 17).
  *
- * Five chart choices (table/line/bar/pie/funnel), compatible display controls
- * and inline chart-compatibility errors (Contract A.10). Invalid chart/config
- * combinations show errors and never issue preview/save requests — the builder
- * gates requests via validateDraft, which includes these checks.
+ * 9 chart choices (table + 8 charts), static previews, color tokens, legend position,
+ * and inline chart-compatibility guidance.
  */
-import { BarChart3, PieChart, Rows3, TrendingUp, Filter as FunnelIcon } from 'lucide-react'
-import type { LucideIcon } from 'lucide-react'
-
+import React from 'react'
 import type {
   CustomReportCatalog,
   CustomReportChartType,
+  CustomReportColorToken,
   CustomReportDraft,
+  CustomReportLegendPosition,
   CustomReportVisualization,
 } from '@/lib/custom-report-builder'
-import { CUSTOM_REPORT_ORIENTATIONS, chartCompatibilityErrors } from '@/lib/custom-report-builder'
+import {
+  CUSTOM_REPORT_CHART_TYPES,
+  CUSTOM_REPORT_COLOR_TOKENS,
+  CUSTOM_REPORT_COLOR_TOKEN_HEX,
+  CUSTOM_REPORT_LEGEND_POSITIONS,
+  CUSTOM_REPORT_ORIENTATIONS,
+  LEGEND_POSITION_LABELS,
+  chartCompatibilityErrors,
+} from '@/lib/custom-report-builder'
+import { ReportChartTypePreview } from './charting/ReportChartTypePreview'
 
 type CustomReportVisualizationPanelProps = {
   draft: CustomReportDraft
@@ -25,18 +32,6 @@ type CustomReportVisualizationPanelProps = {
   onSetChartType: (chartType: CustomReportChartType) => void
   onUpdateVisualization: (patch: Partial<CustomReportVisualization>) => void
 }
-
-const CHART_OPTIONS: Array<{
-  type: CustomReportChartType
-  label: string
-  icon: LucideIcon
-}> = [
-  { type: 'TABLE', label: 'Table', icon: Rows3 },
-  { type: 'LINE', label: 'Line', icon: TrendingUp },
-  { type: 'BAR', label: 'Bar', icon: BarChart3 },
-  { type: 'PIE', label: 'Pie', icon: PieChart },
-  { type: 'FUNNEL', label: 'Funnel', icon: FunnelIcon },
-]
 
 const fieldClass =
   'h-9 rounded-[9px] border border-[#e6e6eb] bg-white px-2.5 text-[13px] text-[#1b1b1f] outline-none transition-colors focus:border-[#1b1b1f]'
@@ -83,6 +78,27 @@ export function CustomReportVisualizationPanel({
   const viz = draft.visualization
   const compatibilityErrors = chartCompatibilityErrors(viz.type, draft, catalog)
   const isBar = viz.type === 'BAR'
+  const isTable = viz.type === 'TABLE'
+
+  const selectedColors = viz.colors ?? []
+
+  const toggleColorToken = (token: CustomReportColorToken) => {
+    let next: CustomReportColorToken[]
+    if (selectedColors.includes(token)) {
+      if (selectedColors.length > 1) {
+        next = selectedColors.filter((t) => t !== token)
+      } else {
+        next = selectedColors
+      }
+    } else {
+      if (selectedColors.length < 10) {
+        next = [...selectedColors, token]
+      } else {
+        next = selectedColors
+      }
+    }
+    onUpdateVisualization({ colors: next })
+  }
 
   return (
     <section
@@ -96,36 +112,21 @@ export function CustomReportVisualizationPanel({
         <div>
           <h2 className="text-[15px] font-semibold text-[#1b1b1f]">Visualization</h2>
           <p className="mt-0.5 text-[12.5px] text-[#77777f]">
-            Choose a chart type and configure display options.
+            Choose from 9 visualizations and configure presentation options.
           </p>
         </div>
       </div>
 
-      <div className="mt-3.5 grid grid-cols-5 gap-2">
-        {CHART_OPTIONS.map(({ type, label, icon: Icon }) => {
+      <div className="mt-3.5 grid grid-cols-3 sm:grid-cols-5 md:grid-cols-9 gap-2">
+        {CUSTOM_REPORT_CHART_TYPES.map((type) => {
           const selected = viz.type === type
           return (
-            <button
+            <ReportChartTypePreview
               key={type}
-              type="button"
-              aria-pressed={selected}
+              type={type}
+              selected={selected}
               onClick={() => onSetChartType(type)}
-              className={`flex min-h-[56px] flex-col items-center gap-1 rounded-[10px] border px-1 py-2.5 transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1b1b1f] ${
-                selected
-                  ? 'border-[#1b1b1f] bg-[#1b1b1f] text-white'
-                  : 'border-[#e6e6eb] bg-[#fafafb] text-[#4b4b55] hover:border-[#1b1b1f]'
-              }`}
-            >
-              <Icon
-                aria-hidden="true"
-                className={`h-5 w-5 ${selected ? 'text-white' : 'text-[#8c8c96]'}`}
-              />
-              <span
-                className={`text-[11.5px] font-medium ${selected ? 'text-white' : 'text-[#4b4b55]'}`}
-              >
-                {label}
-              </span>
-            </button>
+            />
           )
         })}
       </div>
@@ -142,6 +143,29 @@ export function CustomReportVisualizationPanel({
             className={fieldClass}
           />
         </label>
+
+        {!isTable && (
+          <label className="flex flex-col gap-1">
+            <span className="text-[11.5px] font-medium text-[#8c8c96]">Legend position</span>
+            <select
+              aria-label="Legend position"
+              value={viz.legendPosition ?? 'BOTTOM'}
+              onChange={(e) =>
+                onUpdateVisualization({
+                  legendPosition: e.target.value as CustomReportLegendPosition,
+                })
+              }
+              className={`${fieldClass} cursor-pointer`}
+            >
+              {CUSTOM_REPORT_LEGEND_POSITIONS.map((pos) => (
+                <option key={pos} value={pos}>
+                  {LEGEND_POSITION_LABELS[pos]}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+
         <label className="flex flex-col gap-1">
           <span className="text-[11.5px] font-medium text-[#8c8c96]">X axis label</span>
           <input
@@ -162,7 +186,7 @@ export function CustomReportVisualizationPanel({
             className={fieldClass}
           />
         </label>
-        {isBar ? (
+        {isBar && (
           <label className="flex flex-col gap-1">
             <span className="text-[11.5px] font-medium text-[#8c8c96]">Orientation</span>
             <select
@@ -182,8 +206,6 @@ export function CustomReportVisualizationPanel({
               ))}
             </select>
           </label>
-        ) : (
-          <div />
         )}
         <Toggle
           label="Show legend"
@@ -196,6 +218,41 @@ export function CustomReportVisualizationPanel({
           onChange={(checked) => onUpdateVisualization({ showDataLabels: checked })}
         />
       </div>
+
+      {/* Palette Color Token Selector */}
+      {!isTable && (
+        <div className="mt-3.5 border-t border-slate-100 pt-3">
+          <span className="text-[11.5px] font-medium text-[#8c8c96] block mb-1.5">
+            Chart color palette (1–10 tokens)
+          </span>
+          <div className="flex flex-wrap gap-1.5" role="group" aria-label="Chart color palette">
+            {CUSTOM_REPORT_COLOR_TOKENS.map((token) => {
+              const active = selectedColors.includes(token)
+              const hex = CUSTOM_REPORT_COLOR_TOKEN_HEX[token]
+              return (
+                <button
+                  key={token}
+                  type="button"
+                  onClick={() => toggleColorToken(token)}
+                  aria-pressed={active}
+                  aria-label={`Color ${token}`}
+                  className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs border transition-all ${
+                    active
+                      ? 'border-slate-800 bg-slate-900 text-white font-medium'
+                      : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+                  }`}
+                >
+                  <span
+                    className="h-2.5 w-2.5 rounded-full ring-1 ring-black/10"
+                    style={{ backgroundColor: hex }}
+                  />
+                  {token}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      )}
 
       {compatibilityErrors.length > 0 ? (
         <div

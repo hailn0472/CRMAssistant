@@ -4,6 +4,24 @@ import { render, screen } from '@testing-library/react'
 import { FunnelWidget } from '../FunnelWidget'
 import type { WidgetResultData } from '@/services/dashboard.service'
 
+// ── Recharts mock ────────────────────────────────────────────────────────────
+
+jest.mock('recharts', () => {
+  const ReactMod = require('react')
+  return {
+    ResponsiveContainer: ({ children }: { children: React.ReactNode }) =>
+      ReactMod.createElement('div', null, children),
+    FunnelChart: ({ children }: { children: React.ReactNode }) =>
+      ReactMod.createElement('div', null, children),
+    Funnel: ({ children }: { children: React.ReactNode }) =>
+      ReactMod.createElement('div', null, children),
+    Cell: () => ReactMod.createElement('div'),
+    LabelList: () => ReactMod.createElement('div'),
+    Tooltip: () => ReactMod.createElement('div'),
+    Legend: () => ReactMod.createElement('div'),
+  }
+})
+
 // ── Service mocks ────────────────────────────────────────────────────────────
 
 jest.mock('@tanstack/react-query', () => ({
@@ -68,7 +86,7 @@ describe('FunnelWidget (renderer)', () => {
     jest.clearAllMocks()
   })
 
-  it('renders funnel stages with values', () => {
+  it('renders funnel stages with values in legend and table', () => {
     useWidgetData.mockReturnValue({
       data: baseData,
       isLoading: false,
@@ -78,10 +96,9 @@ describe('FunnelWidget (renderer)', () => {
 
     render(<WidgetDataRenderer widgetId="w-1" />)
 
-    // Inline bar label + hand-rolled legend both carry the label:value text.
-    expect(screen.getAllByText('Lead: 100').length).toBeGreaterThanOrEqual(2)
-    expect(screen.getAllByText('Negotiation: 50').length).toBeGreaterThanOrEqual(2)
-    expect(screen.getAllByText('Closed Won: 25').length).toBeGreaterThanOrEqual(2)
+    expect(screen.getByText('Lead: 100')).toBeInTheDocument()
+    expect(screen.getByText('Negotiation: 50')).toBeInTheDocument()
+    expect(screen.getByText('Closed Won: 25')).toBeInTheDocument()
   })
 
   it('renders a hand-rolled legend with swatch + label + value (AC 76)', () => {

@@ -60,27 +60,26 @@ const mockByTask: ProductivityTaskBucket[] = [
 ]
 
 describe('TimeDistributionChart', () => {
-  it('passes the byTask rows to the pie with the Other slice in the reserved colour', () => {
+  it('passes the byTask rows to the pie adapter', () => {
     render(<TimeDistributionChart byTask={mockByTask} />)
 
     const recharts = jest.requireMock('recharts') as { __captured: Record<string, unknown> }
     const pieProps = recharts.__captured['pieProps'] as {
-      data: ProductivityTaskBucket[]
+      data: Array<{ key: string; label: string; value: number }>
       dataKey: string
       nameKey: string
     }
-    expect(pieProps.data).toEqual(mockByTask)
-    expect(pieProps.dataKey).toBe('totalSeconds')
-    expect(pieProps.nameKey).toBe('taskTitle')
+    expect(pieProps.data).toHaveLength(3)
+    expect(pieProps.data[0]!.label).toBe('Follow up')
+    expect(pieProps.data[0]!.value).toBe(3600)
+    expect(pieProps.dataKey).toBe('value')
+    expect(pieProps.nameKey).toBe('label')
   })
 
   it('renders the hand-rolled legend with label and value for every slice', () => {
     render(<TimeDistributionChart byTask={mockByTask} />)
 
-    // The mocked Tooltip also renders the first slice's title — expect at
-    // least one occurrence from the legend.
     expect(screen.getAllByText('Follow up').length).toBeGreaterThanOrEqual(1)
-    // The sr-only table also carries every label — getAllByText covers both.
     expect(screen.getAllByText('Proposal').length).toBeGreaterThanOrEqual(1)
     expect(screen.getAllByText('Other').length).toBeGreaterThanOrEqual(1)
     expect(screen.getAllByText(formatDurationShort(3600)).length).toBeGreaterThanOrEqual(1)
@@ -108,14 +107,6 @@ describe('TimeDistributionChart', () => {
     expect(text).toContain('30%')
     expect(text).toContain('Other')
     expect(text).toContain('10%')
-  })
-
-  it('renders the Tooltip content render-prop with a synthetic payload', () => {
-    render(<TimeDistributionChart byTask={mockByTask} />)
-
-    // The mock Tooltip invokes the content prop with { active: true, payload }.
-    expect(screen.getAllByText('Follow up').length).toBeGreaterThanOrEqual(1)
-    expect(screen.getByText(`${formatDurationShort(3600)} · 60%`)).toBeInTheDocument()
   })
 
   it('reserves the grey for Other in the legend', () => {

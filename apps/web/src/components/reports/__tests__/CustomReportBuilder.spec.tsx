@@ -61,18 +61,16 @@ const mockGetCatalog = jest.fn()
 const mockPreview = jest.fn()
 const mockGetData = jest.fn()
 const mockSave = jest.fn()
-jest.mock('@/services/custom-report.service', () => ({
-  getCustomReportFieldCatalog: (...args: unknown[]) => mockGetCatalog(...args),
-  previewCustomReport: (...args: unknown[]) => mockPreview(...args),
-  getCustomReportData: (...args: unknown[]) => mockGetData(...args),
-  saveCustomReport: (...args: unknown[]) => mockSave(...args),
-  CUSTOM_REPORT_SOURCE_READ_GATE: {
-    CONTACTS: 'CONTACT:READ',
-    DEALS: 'DEAL:READ',
-    TASKS: 'TASK:READ',
-    ACTIVITIES: 'CONTACT:READ',
-  },
-}))
+jest.mock('@/services/custom-report.service', () => {
+  const actual = jest.requireActual('@/services/custom-report.service')
+  return {
+    ...actual,
+    getCustomReportFieldCatalog: (...args: unknown[]) => mockGetCatalog(...args),
+    previewCustomReport: (...args: unknown[]) => mockPreview(...args),
+    getCustomReportData: (...args: unknown[]) => mockGetData(...args),
+    saveCustomReport: (...args: unknown[]) => mockSave(...args),
+  }
+})
 
 // ─── Fixtures ──────────────────────────────────────────────────────────
 

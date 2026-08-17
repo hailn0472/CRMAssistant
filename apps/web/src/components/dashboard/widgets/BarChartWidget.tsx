@@ -1,46 +1,80 @@
 'use client'
 
-import { BarChart, Bar, ResponsiveContainer, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts'
-import { WIDGET_SERIES_COLORS } from '@/lib/widget-format'
+/**
+ * Story 6.4 (Contract F.33) — BarChartWidget adapter for ReportChart.
+ *
+ * Adapts WidgetResultData to NormalizedBarChart and renders via ReportChart.
+ * Preserves widget legend (swatch + label + total), sr-only accessibility table,
+ * empty state behavior, and color assignments.
+ */
+import React, { useMemo } from 'react'
+
+import { getPaletteHexArray } from '@/components/reports/charting/report-chart-theme'
+import { ReportChart } from '@/components/reports/charting/ReportChart'
+import type { NormalizedBarChart } from '@/lib/report-chart'
+import type { CustomReportColorToken } from '@/services/custom-report.service'
 import type { WidgetResultData } from '@/services/dashboard.service'
 
-type TooltipEntry = { value?: number | string; color?: string; name?: string }
-
-function ChartTooltip({
-  active,
-  payload,
-  label,
-}: {
-  active?: boolean
-  payload?: TooltipEntry[]
-  label?: string | number
-}): React.JSX.Element | null {
-  if (!active || !payload?.length) return null
-  return (
-    <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs shadow-md">
-      <p className="font-medium text-slate-900">{label}</p>
-      {payload.map((p) => (
-        <p key={p.name ?? 'value'} style={{ color: p.color }} className="tabular-nums">
-          {p.name}: {p.value}
-        </p>
-      ))}
-    </div>
-  )
-}
+const WIDGET_CHART_COLORS: CustomReportColorToken[] = ['BLUE', 'GREEN', 'AMBER', 'RED', 'VIOLET']
+const WIDGET_PALETTE_HEX = getPaletteHexArray(WIDGET_CHART_COLORS)
 
 export function BarChartWidget({ data }: { data: WidgetResultData }): React.JSX.Element {
   const { series } = data
-  if (!series.length) return <p className="text-sm text-slate-500">No data available</p>
 
-  const allKeys = Array.from(new Set(series.flatMap((s) => s.points.map((p) => p.key)))).sort()
-  const chartData = allKeys.map((key) => {
-    const row: Record<string, string | number> = { key }
-    for (const s of series) {
-      const pt = s.points.find((p) => p.key === key)
-      row[s.label] = pt?.value ?? 0
+  const allKeys = useMemo(
+    () => Array.from(new Set(series.flatMap((s) => s.points.map((p) => p.key)))).sort(),
+    [series],
+  )
+
+  const normalizedChart: NormalizedBarChart = useMemo(() => {
+    const points = allKeys.map((key) => {
+      const values: Record<string, number | null> = {}
+      for (const s of series) {
+        const pt = s.points.find((p) => p.key === key)
+        values[s.key] = pt?.value ?? 0
+      }
+      return {
+        key,
+        label: key,
+        dimensionLabels: [key],
+        values,
+      }
+    })
+
+    const srHeaders = ['Label', ...series.map((s) => s.label)]
+    const srRows = allKeys.map((key) => {
+      const row = [key]
+      for (const s of series) {
+        const pt = s.points.find((p) => p.key === key)
+        row.push(String(pt?.value ?? 0))
+      }
+      return row
+    })
+
+    return {
+      type: 'BAR',
+      title: null,
+      showLegend: false,
+      showDataLabels: false,
+      colors: WIDGET_CHART_COLORS,
+      legendPosition: 'BOTTOM',
+      orientation: 'VERTICAL',
+      xAxisLabel: null,
+      yAxisLabel: null,
+      series: series.map((s) => ({
+        metricId: s.key,
+        label: s.label,
+      })),
+      points,
+      totalPoints: points.length,
+      srTable: {
+        headers: srHeaders,
+        rows: srRows,
+      },
     }
-    return row
-  })
+  }, [allKeys, series])
+
+  if (!series.length) return <p className="text-sm text-slate-500">No data available</p>
 
   return (
     <div>
@@ -68,23 +102,7 @@ export function BarChartWidget({ data }: { data: WidgetResultData }): React.JSX.
           </tbody>
         </table>
       </div>
-      <div role="img" aria-label="Bar chart">
-        <ResponsiveContainer width="100%" height={200}>
-          <BarChart data={chartData}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="key" tick={{ fontSize: 11 }} />
-            <YAxis tick={{ fontSize: 11 }} />
-            <Tooltip content={<ChartTooltip />} />
-            {series.map((s, i) => (
-              <Bar
-                key={s.key}
-                dataKey={s.label}
-                fill={WIDGET_SERIES_COLORS[i % WIDGET_SERIES_COLORS.length]}
-              />
-            ))}
-          </BarChart>
-        </ResponsiveContainer>
-      </div>
+      <ReportChart chart={normalizedChart} minHeight={200} hideControls={true} hideSrTable={true} />
       {/* Hand-rolled legend: swatch + label + value (no datum encoded by colour alone) */}
       <div className="mt-2 flex flex-wrap gap-3">
         {series.map((s, i) => {
@@ -93,7 +111,7 @@ export function BarChartWidget({ data }: { data: WidgetResultData }): React.JSX.
             <div key={s.key} className="flex items-center gap-1.5 text-xs text-slate-600">
               <span
                 className="h-2 w-2 rounded-full"
-                style={{ backgroundColor: WIDGET_SERIES_COLORS[i % WIDGET_SERIES_COLORS.length] }}
+                style={{ backgroundColor: WIDGET_PALETTE_HEX[i % WIDGET_PALETTE_HEX.length] }}
               />
               {s.label}: {total.toLocaleString()}
             </div>

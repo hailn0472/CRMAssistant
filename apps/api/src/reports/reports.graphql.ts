@@ -1,4 +1,4 @@
-import { UnauthorizedException } from '@nestjs/common'
+import { BadRequestException, UnauthorizedException } from '@nestjs/common'
 
 /* eslint-disable @typescript-eslint/explicit-function-return-type, @typescript-eslint/explicit-module-boundary-types */
 
@@ -517,11 +517,13 @@ import {
   CUSTOM_REPORT_AGGREGATIONS,
   CUSTOM_REPORT_CALCULATED_DIMENSION_KINDS,
   CUSTOM_REPORT_CHART_TYPES,
+  CUSTOM_REPORT_COLOR_TOKENS,
   CUSTOM_REPORT_COLUMN_ROLES,
   CUSTOM_REPORT_DATA_SOURCES,
   CUSTOM_REPORT_FIELD_ROLES,
   CUSTOM_REPORT_FILTER_OPERATORS,
   CUSTOM_REPORT_GRANULARITIES,
+  CUSTOM_REPORT_LEGEND_POSITIONS,
   CUSTOM_REPORT_ORIENTATIONS,
   CUSTOM_REPORT_RELATION_KINDS,
   CUSTOM_REPORT_SORT_DIRECTIONS,
@@ -542,6 +544,8 @@ import type {
   CustomReportsService,
   CustomReportCell,
   CustomReportColumn,
+  CustomReportDrillDownConnection,
+  CustomReportDrillDownItem,
   CustomReportOutput,
   CustomReportPagination,
   CustomReportResult,
@@ -563,6 +567,12 @@ const CustomReportGranularityRef = builder.enumType('CustomReportGranularity', {
 })
 const CustomReportChartTypeRef = builder.enumType('CustomReportChartType', {
   values: CUSTOM_REPORT_CHART_TYPES,
+})
+const CustomReportLegendPositionRef = builder.enumType('CustomReportLegendPosition', {
+  values: CUSTOM_REPORT_LEGEND_POSITIONS,
+})
+const CustomReportColorTokenRef = builder.enumType('CustomReportColorToken', {
+  values: CUSTOM_REPORT_COLOR_TOKENS,
 })
 const CustomReportValueTypeRef = builder.enumType('CustomReportValueType', {
   values: CUSTOM_REPORT_VALUE_TYPES,
@@ -741,6 +751,11 @@ CustomReportVisualizationRef.implement({
       nullable: true,
       resolve: (v) => v.orientation,
     }),
+    colors: t.field({ type: [CustomReportColorTokenRef], resolve: (v) => v.colors }),
+    legendPosition: t.field({
+      type: CustomReportLegendPositionRef,
+      resolve: (v) => v.legendPosition,
+    }),
   }),
 })
 
@@ -813,8 +828,12 @@ const CustomReportSeriesPointRef =
 
 CustomReportSeriesPointRef.implement({
   fields: (t) => ({
+    key: t.exposeString('key'),
     label: t.exposeString('label'),
     value: t.float({ nullable: true, resolve: (p) => p.value }),
+    dimensionLabels: t.stringList({
+      resolve: (p) => p.dimensionLabels,
+    }),
   }),
 })
 
@@ -876,6 +895,37 @@ CustomReportRef.implement({
     updatedAt: t.string({ resolve: (r) => r.updatedAt.toISOString() }),
     createdBy: t.exposeString('createdBy'),
     config: t.field({ type: CustomReportConfigRef, resolve: (r) => r.config }),
+  }),
+})
+
+// ── Story 6.4 drill-down output refs (Contract E.27) ─────────────────
+
+const CustomReportDrillDownItemRef = builder.objectRef<CustomReportDrillDownItem>(
+  'CustomReportDrillDownItem',
+)
+
+CustomReportDrillDownItemRef.implement({
+  fields: (t) => ({
+    id: t.exposeID('id'),
+    primaryLabel: t.string({ nullable: true, resolve: (i) => i.primaryLabel }),
+    secondaryLabel: t.string({ nullable: true, resolve: (i) => i.secondaryLabel }),
+    relatedRecordId: t.id({ nullable: true, resolve: (i) => i.relatedRecordId }),
+  }),
+})
+
+const CustomReportDrillDownConnectionRef = builder.objectRef<CustomReportDrillDownConnection>(
+  'CustomReportDrillDownConnection',
+)
+
+CustomReportDrillDownConnectionRef.implement({
+  fields: (t) => ({
+    source: t.field({ type: CustomReportDataSourceRef, resolve: (c) => c.source }),
+    pointLabel: t.exposeString('pointLabel'),
+    items: t.field({ type: [CustomReportDrillDownItemRef], resolve: (c) => c.items }),
+    total: t.exposeInt('total'),
+    page: t.exposeInt('page'),
+    pageSize: t.exposeInt('pageSize'),
+    totalPages: t.exposeInt('totalPages'),
   }),
 })
 
@@ -952,6 +1002,8 @@ const CustomReportVisualizationInputRef = builder.inputType('CustomReportVisuali
     xAxisLabel: t.string(),
     yAxisLabel: t.string(),
     orientation: t.field({ type: CustomReportOrientationRef }),
+    colors: t.field({ type: [CustomReportColorTokenRef] }),
+    legendPosition: t.field({ type: CustomReportLegendPositionRef }),
   }),
 })
 
@@ -1227,6 +1279,55 @@ builder.queryFields((t) => ({
       return getCustomReportsService().customReportData(user.tenantId, user.userId, args.reportId, {
         page: args.pagination?.page ?? undefined,
         pageSize: args.pagination?.pageSize ?? undefined,
+      })
+    },
+  }),
+  // ─── Story 6.4 drill-down (Contract E.25) ────────────────────────────
+  // Exactly one of reportId/config is required. Both paths require
+  // REPORT:READ + the source-domain READ gate; the service recomputes the
+  // bounded result and never lets client point keys become DB predicates.
+  customReportDrillDown: t.field({
+    type: CustomReportDrillDownConnectionRef,
+    args: {
+      reportId: t.arg.id(),
+      config: t.arg({ type: CustomReportConfigInputRef }),
+      pointKey: t.arg.string({ required: true }),
+      metricId: t.arg.string({ required: true }),
+      pagination: t.arg({ type: CustomReportPaginationInputRef }),
+    },
+    resolve: async (_parent, args, context) => {
+      const user = requireUser(context)
+      await requirePermission(context, 'REPORT', 'READ')
+      const hasReportId = args.reportId !== undefined && args.reportId !== null
+      const hasConfig = args.config !== undefined && args.config !== null
+      if (hasReportId === hasConfig) {
+        throw new BadRequestException(
+          'customReportDrillDown requires exactly one of reportId or config',
+        )
+      }
+      if (hasReportId) {
+        // Saved mode: resolve the source from the saved CUSTOM report first so
+        // the correct source-domain gate applies (identical not-found
+        // semantics as customReportData).
+        const source = await getCustomReportsService().resolveReportDataSource(
+          user.tenantId,
+          user.userId,
+          args.reportId as string,
+        )
+        await requireCustomSourceRead(context, source)
+      } else {
+        const config = args.config as unknown as { dataSource: CustomReportDataSource }
+        await requireCustomSourceRead(context, config.dataSource)
+      }
+      return getCustomReportsService().customReportDrillDown(user.tenantId, user.userId, {
+        reportId: args.reportId ?? undefined,
+        config: args.config ?? undefined,
+        pointKey: args.pointKey,
+        metricId: args.metricId,
+        pagination: {
+          page: args.pagination?.page ?? undefined,
+          pageSize: args.pagination?.pageSize ?? undefined,
+        },
       })
     },
   }),
