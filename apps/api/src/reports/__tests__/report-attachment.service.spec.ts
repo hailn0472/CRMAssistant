@@ -18,6 +18,7 @@ import {
 import type {
   ScheduledReportPayload,
   ScheduledReportRow,
+  ScheduledReportCell,
 } from '../scheduled-report-payload.service'
 
 function payload(overrides: Partial<ScheduledReportPayload> = {}): ScheduledReportPayload {
@@ -109,6 +110,15 @@ function payload(overrides: Partial<ScheduledReportPayload> = {}): ScheduledRepo
     currency: 'USD',
     mixedCurrencies: true,
     crmUrl: 'https://crm.example/reports/sales?reportId=rep-1234567890',
+    // Story 6.6 shared-payload fields (additive; schedule output unchanged)
+    filterSummary: 'All configured data',
+    dateRangeStart: '2026-01-01',
+    dateRangeEnd: '2026-01-31',
+    visualization: null,
+    chartSeries: [],
+    calculatedFields: [],
+    metricAliases: [],
+    filterTokens: [],
     ...overrides,
   }
 }
@@ -275,5 +285,275 @@ describe('ReportAttachmentService', () => {
     }))
     await expect(service.render(payload({ rows }), 'CSV')).rejects.toThrow(AttachmentLimitError)
     expect(MAX_ATTACHMENT_BYTES).toBeGreaterThan(0)
+  })
+
+  // ─── I2: type-aware CSV serialization ─────────────────────────────────────
+
+  function numericCell(fieldId: string, label: string, numberValue: number): ScheduledReportCell {
+    return {
+      fieldId,
+      label,
+      valueType: 'CURRENCY' as const,
+      stringValue: null,
+      numberValue,
+      booleanValue: null,
+      dateValue: null,
+      isNull: false,
+    }
+  }
+
+  function stringCell(fieldId: string, label: string, stringValue: string): ScheduledReportCell {
+    return {
+      fieldId,
+      label,
+      valueType: 'STRING' as const,
+      stringValue,
+      numberValue: null,
+      booleanValue: null,
+      dateValue: null,
+      isNull: false,
+    }
+  }
+
+  it('I2: writes legitimate negative finite numbers as raw numerics in CSV (never text)', async () => {
+    const attachment = await service.render(
+      payload({
+        columns: [
+          {
+            fieldId: 'bucket.label',
+            label: 'Period',
+            valueType: 'STRING',
+            role: 'DIMENSION',
+            aggregation: null,
+            granularity: null,
+            isCalculated: false,
+          },
+          {
+            fieldId: 'bucket.value',
+            label: 'Value',
+            valueType: 'CURRENCY',
+            role: 'METRIC',
+            aggregation: 'SUM',
+            granularity: null,
+            isCalculated: false,
+          },
+        ],
+        rows: [
+          {
+            key: 'r1',
+            cells: [
+              stringCell('bucket.label', 'Period', 'Jan'),
+              numericCell('bucket.value', 'Value', -5000),
+            ],
+          },
+          {
+            key: 'r2',
+            cells: [
+              stringCell('bucket.label', 'Period', 'Feb'),
+              numericCell('bucket.value', 'Value', -12.5),
+            ],
+          },
+        ],
+      }),
+      'CSV',
+    )
+
+    const records = parseCsv(attachment.content.toString('utf8').replace(/^\uFEFF/, ''), {
+      bom: false,
+      columns: true,
+    }) as Record<string, string>[]
+    expect(records[0]!.Value).toBe('-5000')
+    expect(records[1]!.Value).toBe('-12.5')
+    // raw tokens: never quoted, never apostrophe-neutralized
+    expect(attachment.content.toString('utf8')).not.toContain("'-5000")
+    expect(attachment.content.toString('utf8')).not.toContain("'-12.5")
+    expect(attachment.content.toString('utf8')).not.toContain('"-5000"')
+  })
+
+  it('I2: numeric-looking STRING cells stay neutralized safe text; injection probes are quoted', async () => {
+    const attachment = await service.render(
+      payload({
+        columns: [
+          {
+            fieldId: 'c1',
+            label: 'Text',
+            valueType: 'STRING',
+            role: 'DIMENSION',
+            aggregation: null,
+            granularity: null,
+            isCalculated: false,
+          },
+        ],
+        rows: [
+          { key: 'r1', cells: [stringCell('c1', 'Text', '-5000')] }, // numeric-LOOKING string
+          { key: 'r2', cells: [stringCell('c1', 'Text', '=SUM(A1:A9)')] },
+          { key: 'r3', cells: [stringCell('c1', 'Text', '@cmd')] },
+          { key: 'r4', cells: [stringCell('c1', 'Text', '+123')] },
+          { key: 'r5', cells: [stringCell('c1', 'Text', 'plain')] },
+        ],
+      }),
+      'CSV',
+    )
+
+    const records = parseCsv(attachment.content.toString('utf8').replace(/^\uFEFF/, ''), {
+      bom: false,
+      columns: true,
+    }) as Record<string, string>[]
+    expect(records[0]!.Text).toBe("'-5000") // string source → neutralized, safe text
+    expect(records[1]!.Text).toBe("'=SUM(A1:A9)")
+    expect(records[2]!.Text).toBe("'@cmd")
+    expect(records[3]!.Text).toBe("'+123")
+    expect(records[4]!.Text).toBe('plain')
+  })
+
+  it('I2: null, boolean and date cells round-trip type-appropriately', async () => {
+    const attachment = await service.render(
+      payload({
+        columns: [
+          {
+            fieldId: 'c1',
+            label: 'Flag',
+            valueType: 'BOOLEAN',
+            role: 'DIMENSION',
+            aggregation: null,
+            granularity: null,
+            isCalculated: false,
+          },
+          {
+            fieldId: 'c2',
+            label: 'When',
+            valueType: 'DATE',
+            role: 'DIMENSION',
+            aggregation: null,
+            granularity: null,
+            isCalculated: false,
+          },
+          {
+            fieldId: 'c3',
+            label: 'Empty',
+            valueType: 'CURRENCY',
+            role: 'METRIC',
+            aggregation: 'SUM',
+            granularity: null,
+            isCalculated: false,
+          },
+        ],
+        rows: [
+          {
+            key: 'r1',
+            cells: [
+              {
+                fieldId: 'c1',
+                label: 'Flag',
+                valueType: 'BOOLEAN',
+                stringValue: null,
+                numberValue: null,
+                booleanValue: true,
+                dateValue: null,
+                isNull: false,
+              },
+              {
+                fieldId: 'c2',
+                label: 'When',
+                valueType: 'DATE',
+                stringValue: null,
+                numberValue: null,
+                booleanValue: null,
+                dateValue: '2026-01-15',
+                isNull: false,
+              },
+              {
+                fieldId: 'c3',
+                label: 'Empty',
+                valueType: 'CURRENCY',
+                stringValue: null,
+                numberValue: null,
+                booleanValue: null,
+                dateValue: null,
+                isNull: true,
+              },
+            ],
+          },
+        ],
+      }),
+      'CSV',
+    )
+
+    const records = parseCsv(attachment.content.toString('utf8').replace(/^\uFEFF/, ''), {
+      bom: false,
+      columns: true,
+    }) as Record<string, string>[]
+    expect(records[0]!.Flag).toBe('true')
+    expect(records[0]!.When).toBe('2026-01-15')
+    expect(records[0]!.Empty).toBe('')
+  })
+
+  // ─── M6: XLSX metadata-cell formula neutralization ────────────────────────
+
+  it('M6: Summary/Charts metadata cells are formula-neutralized and ordinary values pass through', async () => {
+    const attachment = await service.render(
+      payload({
+        reportName: '=HYPERLINK("http://evil.example","Q1")',
+        filterSummary: '=-1+2',
+        visualization: {
+          type: 'BAR',
+          title: '=cmd|/C calc',
+          showLegend: true,
+          showDataLabels: false,
+          xAxisLabel: null,
+          yAxisLabel: null,
+          orientation: 'VERTICAL',
+          colors: ['#2563eb'],
+          legendPosition: 'BOTTOM',
+        },
+        chartSeries: [
+          {
+            metricId: 'm1',
+            label: '=SUM(A1)',
+            points: [{ key: 'p1', label: '=-5', value: 10, dimensionLabels: [] }],
+          },
+        ],
+        summaryMetrics: [{ key: 'k', label: 'Plain metric', value: 5, unit: 'COUNT' }],
+      }),
+      'EXCEL',
+      { profile: 'USER_EXPORT' },
+    )
+
+    const workbook = new ExcelJS.Workbook()
+    await workbook.xlsx.load(attachment.content as unknown as ArrayBuffer)
+
+    const summary = workbook.getWorksheet('Summary')!
+    expect(summary.getCell('B1').value).toBe('\'=HYPERLINK("http://evil.example","Q1")')
+    expect(typeof summary.getCell('B1').value).toBe('string') // never a formula object
+    expect(summary.getCell('B5').value).toBe("'=-1+2") // Filters row
+
+    const charts = workbook.getWorksheet('Charts')!
+    // Chart metadata rows sit below the embedded image; scan for the labels.
+    const metaCells: Record<string, ExcelJS.Cell | undefined> = {}
+    charts.getColumn(1).eachCell((cell, rowNumber) => {
+      const label = String(cell.value ?? '')
+      if (label === 'Chart title' || label === 'Chart type') {
+        metaCells[label] = charts.getCell(rowNumber, 2)
+      }
+      if (label === 'Series') {
+        // Data row below the header: col1 = series label, col2 = point label
+        metaCells['series'] = charts.getCell(rowNumber + 1, 1)
+        metaCells['point'] = charts.getCell(rowNumber + 1, 2)
+      }
+    })
+    expect(metaCells['Chart title']?.value).toBe("'=cmd|/C calc")
+    expect(metaCells['Chart type']?.value).toBe('BAR') // enum value preserved ordinary
+    expect(metaCells['series']?.value).toBe("'=SUM(A1)")
+    expect(metaCells['point']?.value).toBe("'=-5")
+  })
+
+  it('M6: ordinary metadata values are preserved unchanged in the reopened workbook', async () => {
+    const attachment = await service.render(payload(), 'EXCEL', { profile: 'USER_EXPORT' })
+    const workbook = new ExcelJS.Workbook()
+    await workbook.xlsx.load(attachment.content as unknown as ArrayBuffer)
+
+    const summary = workbook.getWorksheet('Summary')!
+    expect(summary.getCell('B1').value).toBe('Q1 Pipeline Report')
+    expect(summary.getCell('B3').value).toBe('2026-01-01 — 2026-01-31') // Date range row (USER_EXPORT adds Tenant at row 2)
   })
 })

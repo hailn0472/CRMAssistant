@@ -48,6 +48,7 @@ import { CustomReportVisualizationPanel } from './CustomReportVisualizationPanel
 import { CustomReportPreview } from './CustomReportPreview'
 import { CustomReportDrillDownSheet } from './CustomReportDrillDownSheet'
 import { ScheduleReportDialog } from './ScheduleReportDialog'
+import { ExportReportMenu } from './ExportReportMenu'
 import type { DrillDownRequest } from './charting/ReportChart'
 
 const PREVIEW_DEBOUNCE_MS = 300
@@ -445,6 +446,14 @@ export function CustomReportBuilder(): React.JSX.Element {
                 <span className="sr-only">Save report draft first before scheduling</span>
               )}
             </div>
+          ) : null}
+          {canReadReport ? (
+            <ExportReportMenu
+              reportId={reportId}
+              reportName="Custom Report"
+              disabled={!reportId}
+              disabledReason="Please save your report draft first before exporting."
+            />
           ) : null}
         </div>
       </div>

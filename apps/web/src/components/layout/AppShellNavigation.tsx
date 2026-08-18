@@ -108,6 +108,13 @@ const navigationSections: NavigationSection[] = [
         permission: { resource: 'REPORT', action: 'READ' },
       },
       {
+        // Story 6.6 (Contract E.34): Export history list page, gated on REPORT:READ.
+        label: 'Exports',
+        href: '/reports/exports',
+        icon: BarChart3,
+        permission: { resource: 'REPORT', action: 'READ' },
+      },
+      {
         label: 'Win/Loss',
         href: '/reports/win-loss',
         icon: BarChart3,

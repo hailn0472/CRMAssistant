@@ -493,6 +493,10 @@ const ReportFiltersInputRef = builder.inputType('ReportFiltersInput', {
   }),
 })
 
+// Story 6.6 (Contract B8): reused verbatim by report-exports.graphql.ts so the
+// export mutation argument is the SAME existing sales-filter input type.
+export { ReportFiltersInputRef }
+
 const ReportListFilterInputRef = builder.inputType('ReportListFilterInput', {
   fields: (t) => ({
     type: t.field({ type: ReportTypeRef }),

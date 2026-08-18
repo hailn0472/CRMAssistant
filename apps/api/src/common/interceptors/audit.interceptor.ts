@@ -128,6 +128,13 @@ export const MUTATION_AUDIT_MAP: Record<string, { action: string; entity: string
   deleteSchedule: { action: 'DELETE', entity: 'REPORT_SCHEDULE' },
   pauseSchedule: { action: 'UPDATE', entity: 'REPORT_SCHEDULE' },
   resumeSchedule: { action: 'UPDATE', entity: 'REPORT_SCHEDULE' },
+
+  // Report export mutations (Story 6.6, Contract B11). Decorative for
+  // GraphQL — the interceptor never fires — but kept for documentation
+  // parity; ReportExportsService writes exactly one service-level audit row
+  // per accepted export request and per delete. No double write.
+  exportReport: { action: 'CREATE', entity: 'REPORT_EXPORT' },
+  deleteReportExport: { action: 'DELETE', entity: 'REPORT_EXPORT' },
 }
 
 @Injectable()

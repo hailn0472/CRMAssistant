@@ -691,6 +691,29 @@ export class SalesReportsService {
     return this.computeReportData(tenantId, userId, report, config, drillDown)
   }
 
+  /**
+   * Story 6.6 (Contract B10/M7): execute a sales report DIRECTLY from an
+   * already-normalized effective config — the immutable export snapshot —
+   * without re-parsing/re-merging the CURRENT saved config. This is what
+   * makes replay structural: fields added or changed on the saved report
+   * after the export was requested cannot alter the export scope.
+   */
+  async reportDataWithConfig(
+    tenantId: string,
+    userId: string,
+    report: ReportRow,
+    config: ReportConfig,
+    drillDown?: ReportDrillDownInput,
+  ): Promise<ReportData> {
+    if (report.type === 'CUSTOM') {
+      throw new BadRequestException('Custom reports must be executed through customReportData')
+    }
+    if (!isReportType(report.type)) {
+      throw new BadRequestException('Unsupported report type')
+    }
+    return this.computeReportData(tenantId, userId, report, config, drillDown)
+  }
+
   /** Compatibility mutation — same ReportData, no persistence, no audit (AC 28). */
   async runReport(
     tenantId: string,

@@ -12,13 +12,16 @@ import {
 
 describe('notification-types', () => {
   describe('NOTIFICATION_TYPES', () => {
-    it('contains exactly the four shipped members', () => {
+    it('contains exactly the six shipped members', () => {
       expect(NOTIFICATION_TYPES).toEqual([
         'TASK_ASSIGNED',
         'DEAL_REMINDER',
         'DEAL_MENTION',
         // Story 6.5 (AC 15): added for terminal schedule delivery failures.
         'REPORT_SCHEDULE_FAILED',
+        // Story 6.6 (AC 9): added for user-triggered export ready/failed.
+        'REPORT_EXPORT_READY',
+        'REPORT_EXPORT_FAILED',
       ])
     })
   })
@@ -76,10 +79,27 @@ describe('notification-types', () => {
       })
     })
 
-    it('throws when both are set', () => {
+    it('throws when more than one target is set (deal/task/report-export exactly one)', () => {
       expect(() => resolveNotificationTarget({ dealId: 'd-1', taskId: 't-1' })).toThrow(
-        'A notification may reference at most one of dealId or taskId',
+        'A notification may reference at most one of dealId, taskId or reportExportId',
       )
+      expect(() => resolveNotificationTarget({ dealId: 'd-1', reportExportId: 'e-1' })).toThrow(
+        'A notification may reference at most one of dealId, taskId or reportExportId',
+      )
+      expect(() => resolveNotificationTarget({ taskId: 't-1', reportExportId: 'e-1' })).toThrow(
+        'A notification may reference at most one of dealId, taskId or reportExportId',
+      )
+    })
+
+    it('resolves the REPORT_EXPORT target (Story 6.6)', () => {
+      expect(resolveNotificationTarget({ reportExportId: 'e-1' })).toEqual({
+        target: 'REPORT_EXPORT',
+        id: 'e-1',
+      })
+      expect(resolveNotificationTarget({ dealId: 'd-1' })).toEqual({
+        target: 'DEAL',
+        id: 'd-1',
+      })
     })
   })
 

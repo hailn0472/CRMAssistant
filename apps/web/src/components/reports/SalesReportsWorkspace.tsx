@@ -61,6 +61,7 @@ import { SalesReportChart } from './SalesReportChart'
 import { SalesReportDrillDown } from './SalesReportDrillDown'
 import { SavedReportDialog } from './SavedReportDialog'
 import { ScheduleReportDialog } from './ScheduleReportDialog'
+import { ExportReportMenu } from './ExportReportMenu'
 import { Button } from '@/components/ui/button'
 
 const DRILL_PAGE_SIZE = 20
@@ -396,7 +397,7 @@ export function SalesReportsWorkspace(): React.JSX.Element {
           </div>
 
           {selectedReport ? (
-            <div className="mt-3 flex flex-wrap gap-2">
+            <div className="mt-3 flex flex-wrap items-center gap-2">
               {canUpdateReport ? (
                 <Button
                   variant="outline"
@@ -420,6 +421,13 @@ export function SalesReportsWorkspace(): React.JSX.Element {
                   <CalendarClock aria-hidden="true" className="h-4 w-4 text-indigo-700" />
                   Schedule
                 </Button>
+              ) : null}
+              {canReadReport ? (
+                <ExportReportMenu
+                  reportId={selectedReport.id}
+                  reportName={selectedReport.name}
+                  filters={filters}
+                />
               ) : null}
             </div>
           ) : null}

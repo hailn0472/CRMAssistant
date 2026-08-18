@@ -43,6 +43,22 @@ describe('notificationHref', () => {
       '/deals/deal-1',
     )
   })
+
+  it('returns download link when reportExportId is present and type is REPORT_EXPORT_READY', () => {
+    expect(
+      notificationHref(
+        makeNotification({ reportExportId: 'export-123', type: 'REPORT_EXPORT_READY' }),
+      ),
+    ).toBe('/reports/exports?download=export-123')
+  })
+
+  it('returns export details link when reportExportId is present and type is REPORT_EXPORT_FAILED', () => {
+    expect(
+      notificationHref(
+        makeNotification({ reportExportId: 'export-123', type: 'REPORT_EXPORT_FAILED' }),
+      ),
+    ).toBe('/reports/exports?exportId=export-123')
+  })
 })
 
 describe('notificationTypeLabel', () => {
@@ -56,6 +72,14 @@ describe('notificationTypeLabel', () => {
 
   it('maps DEAL_MENTION to "Mention"', () => {
     expect(notificationTypeLabel('DEAL_MENTION')).toBe('Mention')
+  })
+
+  it('maps REPORT_EXPORT_READY to "Report export ready"', () => {
+    expect(notificationTypeLabel('REPORT_EXPORT_READY')).toBe('Report export ready')
+  })
+
+  it('maps REPORT_EXPORT_FAILED to "Report export failed"', () => {
+    expect(notificationTypeLabel('REPORT_EXPORT_FAILED')).toBe('Report export failed')
   })
 
   it('falls back to the raw type for unknown values', () => {
@@ -74,6 +98,11 @@ describe('notificationTypeIconName', () => {
 
   it('returns CheckSquare for TASK_ASSIGNED', () => {
     expect(notificationTypeIconName('TASK_ASSIGNED')).toBe('CheckSquare')
+  })
+
+  it('returns Download for REPORT_EXPORT_READY and REPORT_EXPORT_FAILED', () => {
+    expect(notificationTypeIconName('REPORT_EXPORT_READY')).toBe('Download')
+    expect(notificationTypeIconName('REPORT_EXPORT_FAILED')).toBe('Download')
   })
 
   it('returns Bell for unknown types', () => {

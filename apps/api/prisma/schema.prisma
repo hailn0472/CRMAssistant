@@ -153,6 +153,7 @@ model Tenant {
   reports                    Report[]
   reportSchedules            ReportSchedule[]
   ReportScheduleExecution    ReportScheduleExecution[]
+  reportExports              ReportExport[]
 }
 
 /// Tenant-scoped user model with authentication support.
@@ -213,6 +214,7 @@ model User {
   notifications         Notification[]             @relation("NotificationRecipient")
   dashboards            Dashboard[]                @relation("DashboardOwner")
   reportSchedules       ReportSchedule[]
+  reportExports         ReportExport[]
 
   // Email is unique per tenant, NOT globally unique
   @@unique([tenantId, email])
@@ -1382,6 +1384,7 @@ model Notification {
   body      String?
   dealId    String?
   taskId    String?
+  reportExportId String? // Story 6.6 — third mutually-exclusive target
   dedupeKey String?
   readAt    DateTime?
   createdAt DateTime  @default(now())
@@ -1394,11 +1397,16 @@ model Notification {
   recipient User   @relation("NotificationRecipient", fields: [userId], references: [id], onDelete: Cascade)
   deal      Deal?  @relation("DealNotification", fields: [dealId], references: [id], onDelete: Cascade)
   task      Task?  @relation("TaskNotification", fields: [taskId], references: [id], onDelete: Cascade)
+  // Story 6.6: third mutually-exclusive notification target (deal/task/
+  // report-export exactly one). Never carries the signed URL — only the
+  // export row id; the frontend mints a fresh URL on owner download.
+  reportExport ReportExport? @relation("ReportExportNotification", fields: [reportExportId], references: [id], onDelete: Cascade)
 
   @@unique([tenantId, dedupeKey])
   @@index([tenantId])
   @@index([tenantId, userId, createdAt(sort: Desc)])
   @@index([tenantId, userId, readAt])
+  @@index([reportExportId])
 }
 
 /// Dashboard model (Story 6.1) — user-owned configurable dashboards.
@@ -1478,6 +1486,8 @@ model Report {
   // ReportSchedule.reportId (onDelete: Cascade).
   schedules               ReportSchedule[]
   ReportScheduleExecution ReportScheduleExecution[]
+  // Story 6.6: user-triggered export history rows for this report.
+  exports                 ReportExport[]
 
   @@index([tenantId])
   @@index([tenantId, createdBy])
@@ -1502,6 +1512,18 @@ enum ReportDeliveryFormat {
   PDF
   EXCEL
   CSV
+}
+
+/// Durable user-triggered export status (Story 6.6). PROCESSING is an
+/// internal claim state and is never presented as a completed export;
+/// READY/FAILED are terminal. READY requires filename/contentType/objectPath/
+/// fileSizeBytes; FAILED carries safe error metadata and no downloadable
+/// object.
+enum ReportExportStatus {
+  PENDING
+  PROCESSING
+  READY
+  FAILED
 }
 
 /// Durable execution-log status. PROCESSING is an internal claim state and is
@@ -1585,4 +1607,57 @@ model ReportScheduleExecution {
   @@index([status, nextRetryAt])
   // Latest-execution lookups per schedule
   @@index([tenantId, scheduleId, createdAt(sort: Desc)])
+}
+
+// ─── Story 6.6: user-triggered report export (FR45) ─────────────────────────
+
+/// Durable tenant-scoped export history row for the unified Report model.
+/// The requester (`userId`) is the execution identity, history owner and
+/// download authorizer — ADMIN never bypasses export-row ownership.
+/// `filters` stores the immutable server-normalized EFFECTIVE filter/config
+/// snapshot: for sales the FULL validated effective config (saved config
+/// merged with validated request overrides — never raw GraphQL objects), so
+/// background replay reproduces the exact effective scope even if the saved
+/// config changes mid-flight; `CUSTOM` exports always replay the saved
+/// config, so their snapshot is null. `objectPath` is the private storage
+/// path and is never exposed by GraphQL; signed URLs are never persisted.
+model ReportExport {
+  id                  String             @id @default(uuid())
+  tenantId            String
+  reportId            String
+  userId              String // requester, execution identity, history owner
+  format              ReportDeliveryFormat
+  status              ReportExportStatus @default(PENDING)
+  filters             Json? // immutable server-normalized effective sales config snapshot
+  filterSummary       String // safe human-readable effective scope
+  dateRangeStart      DateTime?
+  dateRangeEnd        DateTime?
+  filename            String?
+  contentType         String?
+  objectPath          String? // private; never exposed by GraphQL
+  fileSizeBytes       Int?
+  expectedTotalRows   Int? // request-time authoritative CUSTOM total (Contract C14); null for sales
+  attemptCount        Int                @default(0)
+  nextRetryAt         DateTime?
+  processingStartedAt DateTime?
+  completedAt         DateTime?
+  errorCode           String?
+  errorMessage        String? // sanitized/truncated; no data/storage URL
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+  createdBy           String
+  updatedBy           String
+  deletedAt           DateTime?
+
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  report   Report @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  owner    User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  notifications Notification[] @relation("ReportExportNotification")
+
+  // Owner history listing — newest first
+  @@index([tenantId, userId, createdAt(sort: Desc)])
+  // Worker scans: pending/retryable due rows and stale-claim recovery
+  @@index([status, nextRetryAt, createdAt])
+  // Report lookup
+  @@index([tenantId, reportId, createdAt(sort: Desc)])
 }
