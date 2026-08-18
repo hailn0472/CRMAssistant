@@ -8,7 +8,7 @@
  */
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { RotateCcw, Save } from 'lucide-react'
+import { CalendarClock, RotateCcw, Save } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useReducer, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -47,6 +47,7 @@ import { CustomReportFieldsPanel } from './CustomReportFieldsPanel'
 import { CustomReportVisualizationPanel } from './CustomReportVisualizationPanel'
 import { CustomReportPreview } from './CustomReportPreview'
 import { CustomReportDrillDownSheet } from './CustomReportDrillDownSheet'
+import { ScheduleReportDialog } from './ScheduleReportDialog'
 import type { DrillDownRequest } from './charting/ReportChart'
 
 const PREVIEW_DEBOUNCE_MS = 300
@@ -194,6 +195,7 @@ export function CustomReportBuilder(): React.JSX.Element {
 
   // Drill-down Sheet state
   const [drillOpen, setDrillOpen] = useState(false)
+  const [scheduleOpen, setScheduleOpen] = useState(false)
   const [drillTarget, setDrillTarget] = useState<DrillDownRequest | null>(null)
 
   // ─── Edit mode (Contract D.23): load the saved typed config ──────────
@@ -422,6 +424,28 @@ export function CustomReportBuilder(): React.JSX.Element {
               Save report
             </button>
           ) : null}
+          {canCreateReport ? (
+            <div className="relative group">
+              <button
+                type="button"
+                disabled={!reportId}
+                onClick={() => setScheduleOpen(true)}
+                className="inline-flex min-h-[44px] items-center gap-1.5 rounded-[9px] border border-indigo-600 bg-indigo-50 px-3.5 text-[13px] font-semibold text-indigo-700 hover:bg-indigo-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                title={
+                  !reportId
+                    ? 'Please save your report draft first before scheduling automated delivery.'
+                    : 'Schedule automated report delivery'
+                }
+                aria-label="Schedule report delivery"
+              >
+                <CalendarClock aria-hidden="true" className="h-4 w-4 text-indigo-700" />
+                <span>Schedule</span>
+              </button>
+              {!reportId && (
+                <span className="sr-only">Save report draft first before scheduling</span>
+              )}
+            </div>
+          ) : null}
         </div>
       </div>
 
@@ -542,6 +566,16 @@ export function CustomReportBuilder(): React.JSX.Element {
         metricId={drillTarget?.metricId ?? null}
         pointLabel={drillTarget?.label}
       />
+
+      {reportId && (
+        <ScheduleReportDialog
+          open={scheduleOpen}
+          onOpenChange={setScheduleOpen}
+          reportId={reportId}
+          reportName={editQuery.data?.config?.visualization?.title || 'Custom Report'}
+          reportType="CUSTOM"
+        />
+      )}
     </div>
   )
 }

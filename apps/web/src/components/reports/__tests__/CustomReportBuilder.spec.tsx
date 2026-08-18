@@ -440,6 +440,16 @@ describe('CustomReportBuilder (AC 3-4, 10-11, 15-16)', () => {
       await waitFor(() => expect(mockGetData).toHaveBeenCalled())
       expect(screen.queryByRole('button', { name: /Save report/ })).not.toBeInTheDocument()
     })
+
+    it('enables Schedule button in edit mode and disables in draft mode', async () => {
+      mockSearchParams = new URLSearchParams('reportId=report-1')
+      renderBuilder()
+      await waitFor(() => expect(mockGetData).toHaveBeenCalled())
+      await waitFor(() =>
+        expect(screen.getByRole('button', { name: /save report/i })).toBeInTheDocument(),
+      )
+      expect(screen.getByRole('button', { name: /schedule report delivery/i })).toBeEnabled()
+    })
   })
 
   it('shows an error state when the saved report cannot be loaded', async () => {

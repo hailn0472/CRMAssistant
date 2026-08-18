@@ -48,8 +48,10 @@ jest.mock('react-hot-toast', () => ({
 
 // Story 6.3 (AC 12): CUSTOM rows navigate to the builder via useRouter.
 const mockRouterPush = jest.fn()
+let mockSearchParams = new URLSearchParams()
 jest.mock('next/navigation', () => ({
   useRouter: (): { push: jest.Mock } => ({ push: mockRouterPush }),
+  useSearchParams: (): URLSearchParams => mockSearchParams,
 }))
 
 const mockSubscribe = jest.fn()
@@ -253,6 +255,19 @@ describe('SalesReportsWorkspace', () => {
       pageSize: 20,
     })
     mockGetReportData.mockResolvedValue(REPORT_DATA)
+    mockSearchParams = new URLSearchParams()
+  })
+
+  it('auto-selects a report when ?reportId= matches a visible saved report (Contract D21, AA-1)', async () => {
+    grantAll()
+    mockSearchParams = new URLSearchParams('reportId=report-2')
+    renderWorkspace()
+
+    // report-2 (Public wins) should be auto-selected and its data loaded
+    await waitFor(() => {
+      expect(mockGetReportData).toHaveBeenCalledWith('report-2', expect.any(Object), undefined)
+    })
+    expect(await screen.findByText('Total revenue')).toBeInTheDocument()
   })
 
   // ─── AC 67: permission gate ─────────────────────────────────────────
@@ -451,6 +466,16 @@ describe('SalesReportsWorkspace', () => {
     // Stage/product/group-by remain.
     expect(screen.getByLabelText('Stage')).toBeInTheDocument()
     expect(screen.getByLabelText('Product')).toBeInTheDocument()
+  })
+
+  it('renders a Schedule button for saved sales reports when user has permission', async () => {
+    grantAll()
+    renderWorkspace()
+
+    await screen.findByRole('button', { name: /August Overview/ })
+    fireEvent.click(screen.getByRole('button', { name: /August Overview/ }))
+
+    expect(screen.getByRole('button', { name: /schedule report delivery/i })).toBeInTheDocument()
   })
 
   // ─── AC 53/72: drill-down ───────────────────────────────────────────

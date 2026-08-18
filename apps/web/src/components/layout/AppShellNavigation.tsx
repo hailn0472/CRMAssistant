@@ -11,6 +11,7 @@ import {
   Briefcase,
   CheckSquare,
   CalendarDays,
+  CalendarClock,
   Timer,
   UserCog,
   Settings,
@@ -97,6 +98,13 @@ const navigationSections: NavigationSection[] = [
         label: 'Builder',
         href: '/reports/builder',
         icon: SlidersHorizontal,
+        permission: { resource: 'REPORT', action: 'READ' },
+      },
+      {
+        // Story 6.5 (Contract F.34): Scheduled reports list page, gated on REPORT:READ.
+        label: 'Schedules',
+        href: '/reports/schedules',
+        icon: CalendarClock,
         permission: { resource: 'REPORT', action: 'READ' },
       },
       {

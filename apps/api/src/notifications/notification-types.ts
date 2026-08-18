@@ -11,7 +11,14 @@
  * before every insert.
  */
 
-export const NOTIFICATION_TYPES = ['TASK_ASSIGNED', 'DEAL_REMINDER', 'DEAL_MENTION'] as const
+export const NOTIFICATION_TYPES = [
+  'TASK_ASSIGNED',
+  'DEAL_REMINDER',
+  'DEAL_MENTION',
+  // Story 6.5 (AC 15): terminal schedule delivery failure — emitted once per
+  // execution with dedupe key `report-schedule-failed:<executionId>`.
+  'REPORT_SCHEDULE_FAILED',
+] as const
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number]
 
 export const MAX_NOTIFICATION_TITLE_LENGTH = 200

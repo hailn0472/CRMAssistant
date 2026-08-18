@@ -12,8 +12,14 @@ import {
 
 describe('notification-types', () => {
   describe('NOTIFICATION_TYPES', () => {
-    it('contains exactly three members', () => {
-      expect(NOTIFICATION_TYPES).toEqual(['TASK_ASSIGNED', 'DEAL_REMINDER', 'DEAL_MENTION'])
+    it('contains exactly the four shipped members', () => {
+      expect(NOTIFICATION_TYPES).toEqual([
+        'TASK_ASSIGNED',
+        'DEAL_REMINDER',
+        'DEAL_MENTION',
+        // Story 6.5 (AC 15): added for terminal schedule delivery failures.
+        'REPORT_SCHEDULE_FAILED',
+      ])
     })
   })
 
