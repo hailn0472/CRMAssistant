@@ -1,5 +1,5 @@
 ---
-Status: review
+Status: done
 Story Key: 6-5-scheduled-report-delivery-via-email
 Story ID: "6.5"
 Epic: "6 — Reporting & Analytics Dashboard"
