@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common'
 import { APP_INTERCEPTOR } from '@nestjs/core'
 import { ConfigModule } from '@nestjs/config'
+import { ScheduleModule } from '@nestjs/schedule'
 
 import { AuditModule } from './audit/audit.module'
 import { AuthModule } from './auth/auth.module'
@@ -82,6 +83,13 @@ import { DashboardsModule } from './dashboards/dashboards.module'
     FacebookModule,
     ChannelDispatcherBindingModule,
     ImportExportModule,
+    // Story 6.5 (AC 9): the Nest scheduler wakes the report processor — the
+    // cron is only a trigger; PostgreSQL execution rows are the durable source
+    // of truth. Registered once at the root.
+    ScheduleModule.forRoot(),
+    // ReportsModule must sit ABOVE AppGraphqlModule so the barrel (which
+    // builds the SDL) sees the schedule refs at import time. Registration
+    // order is load-bearing (docs/project-context.md:84).
     ReportsModule,
   ],
   providers: [

@@ -103,50 +103,56 @@ enum CalendarSyncStatus {
 }
 
 model Tenant {
-  id         String   @id @default(uuid())
-  name       String
-  enforce2FA Boolean  @default(false)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id           String   @id @default(uuid())
+  name         String
+  enforce2FA   Boolean  @default(false)
+  // Story 6.5 (AC 12): tenant email branding — validated defensively by the
+  // email renderer (never server-fetched; HTML uses an escaped HTTPS URL).
+  logoUrl      String?
+  primaryColor String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
-  users                    User[]
-  contacts                 Contact[]
-  tags                     Tag[]
-  savedSegments            SavedSegment[]
-  roles                    Role[]
-  auditLogs                AuditLog[]
-  apiKeys                  ApiKey[]
-  teams                    Team[]
-  sharingRules             SharingRule[]
-  conversations            Conversation[]
-  channelConnections       ChannelConnection[]
-  contactChannelIdentities ContactChannelIdentity[]
-  activities               Activity[]
-  deals                    Deal[]
-  dealStages               DealStage[]
-  forecastSnapshots        ForecastSnapshot[]
-  products                 Product[]
-  dealLineItems            DealLineItem[]
-  competitors              Competitor[]
-  dealCompetitors          DealCompetitor[]
-  dealDocuments            DealDocument[]
-  dealComments             DealComment[]
-  dealCommentMentions      DealCommentMention[]
-  notes                    Note[]
-  dealReminders            DealReminder[]
-  dealReminderSnoozes      DealReminderSnooze[]
-  userReminderPreferences  UserReminderPreference[]
+  users                      User[]
+  contacts                   Contact[]
+  tags                       Tag[]
+  savedSegments              SavedSegment[]
+  roles                      Role[]
+  auditLogs                  AuditLog[]
+  apiKeys                    ApiKey[]
+  teams                      Team[]
+  sharingRules               SharingRule[]
+  conversations              Conversation[]
+  channelConnections         ChannelConnection[]
+  contactChannelIdentities   ContactChannelIdentity[]
+  activities                 Activity[]
+  deals                      Deal[]
+  dealStages                 DealStage[]
+  forecastSnapshots          ForecastSnapshot[]
+  products                   Product[]
+  dealLineItems              DealLineItem[]
+  competitors                Competitor[]
+  dealCompetitors            DealCompetitor[]
+  dealDocuments              DealDocument[]
+  dealComments               DealComment[]
+  dealCommentMentions        DealCommentMention[]
+  notes                      Note[]
+  dealReminders              DealReminder[]
+  dealReminderSnoozes        DealReminderSnooze[]
+  userReminderPreferences    UserReminderPreference[]
   userActivityLogPreferences UserActivityLogPreference[]
-  tasks                    Task[]
-  taskTemplates            TaskTemplate[]
-  calendarConnections      CalendarConnection[]
-  taskCalendarEvents       TaskCalendarEvent[]
-  timeEntries              TimeEntry[]
-  taskDependencies         TaskDependency[]
-  notifications            Notification[]
-  dashboards               Dashboard[]
-  widgets                  Widget[]
-  reports                  Report[]
+  tasks                      Task[]
+  taskTemplates              TaskTemplate[]
+  calendarConnections        CalendarConnection[]
+  taskCalendarEvents         TaskCalendarEvent[]
+  timeEntries                TimeEntry[]
+  taskDependencies           TaskDependency[]
+  notifications              Notification[]
+  dashboards                 Dashboard[]
+  widgets                    Widget[]
+  reports                    Report[]
+  reportSchedules            ReportSchedule[]
+  ReportScheduleExecution    ReportScheduleExecution[]
 }
 
 /// Tenant-scoped user model with authentication support.
@@ -182,30 +188,31 @@ model User {
   updatedBy            String    @default("system")
   deletedAt            DateTime? // soft delete — null means active
 
-  tenant                Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  team                  Team?                @relation(fields: [teamId], references: [id], onDelete: SetNull)
-  managedTeam           Team[]               @relation("TeamManager")
+  tenant                Tenant                     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  team                  Team?                      @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  managedTeam           Team[]                     @relation("TeamManager")
   userRoles             UserRole[]
   auditLogs             AuditLog[]
   apiKeys               ApiKey[]
-  ownedContacts         Contact[]            @relation("ContactOwner")
-  assignedConversations Conversation[]       @relation("ConversationAssignee")
-  sharedWithRules       SharingRule[]        @relation("SharedWithUser")
+  ownedContacts         Contact[]                  @relation("ContactOwner")
+  assignedConversations Conversation[]             @relation("ConversationAssignee")
+  sharedWithRules       SharingRule[]              @relation("SharedWithUser")
   MessageReadReceipt    MessageReadReceipt[]
-  deals                 Deal[]               @relation("DealOwner")
-  uploadedDealDocuments DealDocument[]       @relation("DealDocumentUploader")
-  dealComments          DealComment[]        @relation("DealCommentAuthor")
-  dealCommentMentions   DealCommentMention[] @relation("DealCommentMentionedUser")
-  dealReminders         DealReminder[]       @relation("DealReminderRecipient")
-  dealReminderSnoozes   DealReminderSnooze[] @relation("DealReminderSnoozeUser")
-  reminderPreference    UserReminderPreference? @relation("UserReminderPreference")
+  deals                 Deal[]                     @relation("DealOwner")
+  uploadedDealDocuments DealDocument[]             @relation("DealDocumentUploader")
+  dealComments          DealComment[]              @relation("DealCommentAuthor")
+  dealCommentMentions   DealCommentMention[]       @relation("DealCommentMentionedUser")
+  dealReminders         DealReminder[]             @relation("DealReminderRecipient")
+  dealReminderSnoozes   DealReminderSnooze[]       @relation("DealReminderSnoozeUser")
+  reminderPreference    UserReminderPreference?    @relation("UserReminderPreference")
   activityLogPreference UserActivityLogPreference? @relation("UserActivityLogPreference")
-  assignedTasks         Task[]                   @relation("TaskAssignee")
-  calendarConnections   CalendarConnection[]     @relation("UserCalendarConnection")
-  timeEntries           TimeEntry[]              @relation("TimeEntryUser")
-  authoredNotes         Note[]                   @relation("NoteAuthor")
-  notifications         Notification[]           @relation("NotificationRecipient")
-  dashboards            Dashboard[]              @relation("DashboardOwner")
+  assignedTasks         Task[]                     @relation("TaskAssignee")
+  calendarConnections   CalendarConnection[]       @relation("UserCalendarConnection")
+  timeEntries           TimeEntry[]                @relation("TimeEntryUser")
+  authoredNotes         Note[]                     @relation("NoteAuthor")
+  notifications         Notification[]             @relation("NotificationRecipient")
+  dashboards            Dashboard[]                @relation("DashboardOwner")
+  reportSchedules       ReportSchedule[]
 
   // Email is unique per tenant, NOT globally unique
   @@unique([tenantId, email])
@@ -360,32 +367,32 @@ model RolePermission {
 /// Tenant-scoped contact model for CRM contact management.
 /// Extended in Story 2.4: added ownerId + owner relation for data visibility.
 model Contact {
-  id        String    @id @default(uuid())
-  tenantId  String
-  email     String
-  firstName String
-  lastName  String
-  phone     String?
-  company   String?
-  jobTitle  String?
-  ownerId   String    @default("system")
-  teamId    String?
+  id             String    @id @default(uuid())
+  tenantId       String
+  email          String
+  firstName      String
+  lastName       String
+  phone          String?
+  company        String?
+  jobTitle       String?
+  ownerId        String    @default("system")
+  teamId         String?
   // Enrichment fields — optional data collected to build a 360° contact profile
-  linkedin      String?
-  twitter       String?
-  addressStreet String?
-  addressCity   String?
+  linkedin       String?
+  twitter        String?
+  addressStreet  String?
+  addressCity    String?
   addressCountry String?
-  department    String?
-  timezone      String?
-  language      String?
-  source        String?    // How the contact was acquired: Website, Referral, Event, etc.
-  notes         String?    // Internal notes about the contact
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  createdBy String    @default("system")
-  updatedBy String    @default("system")
-  deletedAt DateTime?
+  department     String?
+  timezone       String?
+  language       String?
+  source         String? // How the contact was acquired: Website, Referral, Event, etc.
+  notes          String? // Internal notes about the contact
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  createdBy      String    @default("system")
+  updatedBy      String    @default("system")
+  deletedAt      DateTime?
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   owner  User   @relation("ContactOwner", fields: [ownerId], references: [id], onDelete: Cascade)
@@ -631,12 +638,12 @@ model DealStage {
   updatedBy   String    @default("system")
   deletedAt   DateTime?
 
-  tenant Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   deals  Deal[]
 
+  @@unique([tenantId, name])
   @@index([tenantId])
   @@index([tenantId, order])
-  @@unique([tenantId, name])
 }
 
 /// Tenant-scoped deal model for tracking opportunities through the sales pipeline.
@@ -660,23 +667,23 @@ model Deal {
   updatedBy         String    @default("system")
   deletedAt         DateTime?
 
-  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  stage   DealStage @relation(fields: [stageId], references: [id])
-  contact Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
-  owner   User    @relation("DealOwner", fields: [ownerId], references: [id], onDelete: Cascade)
-  lineItems          DealLineItem[]
-  competitors        DealCompetitor[]
-  documents          DealDocument[]
-  comments           DealComment[]
-  notes              Note[]                   @relation("DealNote")
-  reminders          DealReminder[]
-  reminderSnoozes    DealReminderSnooze[]
-  tasks              Task[]
-  notifications      Notification[]           @relation("DealNotification")
-  competitor         Competitor? @relation("DealWinLossCompetitor", fields: [competitorId], references: [id], onDelete: Restrict)
-  winLossReason      String?
-  winLossNote        String?
-  competitorId       String?
+  tenant          Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  stage           DealStage            @relation(fields: [stageId], references: [id])
+  contact         Contact              @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  owner           User                 @relation("DealOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  lineItems       DealLineItem[]
+  competitors     DealCompetitor[]
+  documents       DealDocument[]
+  comments        DealComment[]
+  notes           Note[]               @relation("DealNote")
+  reminders       DealReminder[]
+  reminderSnoozes DealReminderSnooze[]
+  tasks           Task[]
+  notifications   Notification[]       @relation("DealNotification")
+  competitor      Competitor?          @relation("DealWinLossCompetitor", fields: [competitorId], references: [id], onDelete: Restrict)
+  winLossReason   String?
+  winLossNote     String?
+  competitorId    String?
 
   @@index([tenantId])
   @@index([tenantId, stageId])
@@ -701,7 +708,7 @@ model Product {
   updatedBy   String    @default("system")
   deletedAt   DateTime?
 
-  tenant   Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant    Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   lineItems DealLineItem[]
 
   @@index([tenantId])
@@ -768,15 +775,15 @@ model Competitor {
 /// onDelete: Restrict on competitorId — prevents accidental hard DELETE of
 /// referenced competitors.
 model DealCompetitor {
-  id           String   @id @default(uuid())
+  id           String    @id @default(uuid())
   tenantId     String
   dealId       String
   competitorId String
   note         String?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  createdBy    String   @default("system")
-  updatedBy    String   @default("system")
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  createdBy    String    @default("system")
+  updatedBy    String    @default("system")
   deletedAt    DateTime?
 
   tenant     Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
@@ -796,7 +803,7 @@ model DealCompetitor {
 /// onDelete: Restrict on uploadedBy — an uploader must not be hard-deletable out
 /// from under an attributed document.
 model DealDocument {
-  id          String   @id @default(uuid())
+  id          String    @id @default(uuid())
   tenantId    String
   dealId      String
   fileName    String
@@ -804,10 +811,10 @@ model DealDocument {
   fileSize    Int
   mimeType    String
   uploadedBy  String
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  createdBy   String   @default("system")
-  updatedBy   String   @default("system")
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  createdBy   String    @default("system")
+  updatedBy   String    @default("system")
   deletedAt   DateTime?
 
   tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
@@ -824,20 +831,20 @@ model DealDocument {
 /// onDelete: Restrict on userId — an author must not be hard-deletable out from
 /// under an attributed comment.
 model DealComment {
-  id        String   @id @default(uuid())
+  id        String    @id @default(uuid())
   tenantId  String
   dealId    String
   userId    String
   comment   String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  createdBy String   @default("system")
-  updatedBy String   @default("system")
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  createdBy String    @default("system")
+  updatedBy String    @default("system")
   deletedAt DateTime?
 
-  tenant   Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  deal     Deal                @relation(fields: [dealId], references: [id], onDelete: Cascade)
-  author   User                @relation("DealCommentAuthor", fields: [userId], references: [id], onDelete: Restrict)
+  tenant   Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  deal     Deal                 @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  author   User                 @relation("DealCommentAuthor", fields: [userId], references: [id], onDelete: Restrict)
   mentions DealCommentMention[]
 
   @@index([tenantId])
@@ -856,9 +863,9 @@ model DealCommentMention {
   mentionedUserId String
   createdAt       DateTime @default(now())
 
-  tenant        Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant        Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   comment       DealComment @relation(fields: [commentId], references: [id], onDelete: Cascade)
-  mentionedUser User       @relation("DealCommentMentionedUser", fields: [mentionedUserId], references: [id], onDelete: Cascade)
+  mentionedUser User        @relation("DealCommentMentionedUser", fields: [mentionedUserId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
   @@index([commentId])
@@ -964,18 +971,18 @@ model DealReminderSnooze {
 /// treated as all-defaults (DAILY, all toggles true) — reads must not create
 /// rows as a side effect.
 model UserReminderPreference {
-  id                 String   @id @default(uuid())
-  tenantId           String
-  userId             String   @unique // 1:1 with User — user IDs are globally unique UUIDs
-  emailFrequency     String   @default("DAILY")
-  notifyNoActivity   Boolean  @default(true)
-  notifyClosingSoon  Boolean  @default(true)
-  notifyAtRisk       Boolean  @default(true)
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
-  createdBy          String   @default("system")
-  updatedBy          String   @default("system")
-  deletedAt          DateTime?
+  id                String    @id @default(uuid())
+  tenantId          String
+  userId            String    @unique // 1:1 with User — user IDs are globally unique UUIDs
+  emailFrequency    String    @default("DAILY")
+  notifyNoActivity  Boolean   @default(true)
+  notifyClosingSoon Boolean   @default(true)
+  notifyAtRisk      Boolean   @default(true)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  createdBy         String    @default("system")
+  updatedBy         String    @default("system")
+  deletedAt         DateTime?
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   user   User   @relation("UserReminderPreference", fields: [userId], references: [id], onDelete: Cascade)
@@ -991,19 +998,19 @@ model UserReminderPreference {
 /// though @@unique([tenantId, userId]) also exists — Prisma requires the FK
 /// column itself to be unique for a 1:1 relation.
 model UserActivityLogPreference {
-  id                  String   @id @default(uuid())
+  id                  String    @id @default(uuid())
   tenantId            String
-  userId              String   @unique // 1:1 with User — user IDs are globally unique UUIDs
-  logTaskCompleted    Boolean  @default(true)
-  logDealCreated      Boolean  @default(true)
-  logDealStageChanged Boolean  @default(true)
-  logMessageSent      Boolean  @default(true)
-  logMessageReceived  Boolean  @default(true)
-  logMeetingScheduled Boolean  @default(true)
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
-  createdBy           String   @default("system")
-  updatedBy           String   @default("system")
+  userId              String    @unique // 1:1 with User — user IDs are globally unique UUIDs
+  logTaskCompleted    Boolean   @default(true)
+  logDealCreated      Boolean   @default(true)
+  logDealStageChanged Boolean   @default(true)
+  logMessageSent      Boolean   @default(true)
+  logMessageReceived  Boolean   @default(true)
+  logMeetingScheduled Boolean   @default(true)
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  createdBy           String    @default("system")
+  updatedBy           String    @default("system")
   deletedAt           DateTime?
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
@@ -1022,7 +1029,7 @@ model ForecastSnapshot {
   tenantId      String
   periodStart   DateTime
   periodEnd     DateTime
-  snapshotDate  DateTime  // normalized to UTC midnight — one row per tenant/period/day
+  snapshotDate  DateTime // normalized to UTC midnight — one row per tenant/period/day
   forecastValue Float     @default(0)
   commitValue   Float     @default(0)
   bestCaseValue Float     @default(0)
@@ -1161,11 +1168,11 @@ model Task {
   occurrences Task[] @relation("TaskRecurrence")
 
   dependencies TaskDependency[] @relation("TaskDependencyDependent") // edges where THIS task is blocked
-  dependents   TaskDependency[] @relation("TaskDependencyBlocker")   // edges where THIS task blocks others
+  dependents   TaskDependency[] @relation("TaskDependencyBlocker") // edges where THIS task blocks others
 
   calendarEvents TaskCalendarEvent[]
   timeEntries    TimeEntry[]
-  notifications  Notification[] @relation("TaskNotification")
+  notifications  Notification[]      @relation("TaskNotification")
 
   @@index([tenantId])
   @@index([tenantId, assignedTo])
@@ -1210,12 +1217,12 @@ model TaskTemplate {
 /// below safe — the DealStage soft-delete + @@unique trap only bites a
 /// soft-deleting model.
 model TaskDependency {
-  id               String   @id @default(uuid())
-  tenantId         String
-  taskId           String
-  dependsOnTaskId  String
-  createdAt        DateTime @default(now())
-  createdBy        String   @default("system")
+  id              String   @id @default(uuid())
+  tenantId        String
+  taskId          String
+  dependsOnTaskId String
+  createdAt       DateTime @default(now())
+  createdBy       String   @default("system")
 
   tenant        Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   task          Task   @relation("TaskDependencyDependent", fields: [taskId], references: [id], onDelete: Cascade)
@@ -1274,26 +1281,26 @@ model TimeEntry {
 /// Access tokens are encrypted at rest via common/crypto/token-crypto.ts —
 /// never plaintext, never exposed over GraphQL (AC 5).
 model CalendarConnection {
-  id                     String           @id @default(uuid())
-  tenantId               String
-  userId                 String
-  provider               CalendarProvider
-  externalAccountId      String // Google `sub` / Graph `id`
-  externalAccountEmail   String?
-  accessTokenEncrypted   String? // encrypted at rest via token-crypto; nulled on disconnect (AC 19)
-  refreshTokenEncrypted  String? // nullable — a provider may not return one on re-consent
-  accessTokenExpiresAt   DateTime? // drives proactive refresh (AC 17)
-  scope                  String? // granted scopes as returned
-  calendarId             String           @default("primary") // Google `primary`; Outlook default calendar
-  status                 String           @default("ACTIVE") // ACTIVE | REAUTH_REQUIRED | DISCONNECTED
-  syncToken              String? // Google nextSyncToken / Graph @odata.deltaLink. Null = never synced
-  lastSyncedAt           DateTime? // also the 15-minute throttle watermark (AC 26)
-  lastSyncError          String?
-  createdAt              DateTime         @default(now())
-  updatedAt              DateTime         @updatedAt
-  createdBy              String           @default("system")
-  updatedBy              String           @default("system")
-  deletedAt              DateTime?
+  id                    String           @id @default(uuid())
+  tenantId              String
+  userId                String
+  provider              CalendarProvider
+  externalAccountId     String // Google `sub` / Graph `id`
+  externalAccountEmail  String?
+  accessTokenEncrypted  String? // encrypted at rest via token-crypto; nulled on disconnect (AC 19)
+  refreshTokenEncrypted String? // nullable — a provider may not return one on re-consent
+  accessTokenExpiresAt  DateTime? // drives proactive refresh (AC 17)
+  scope                 String? // granted scopes as returned
+  calendarId            String           @default("primary") // Google `primary`; Outlook default calendar
+  status                String           @default("ACTIVE") // ACTIVE | REAUTH_REQUIRED | DISCONNECTED
+  syncToken             String? // Google nextSyncToken / Graph @odata.deltaLink. Null = never synced
+  lastSyncedAt          DateTime? // also the 15-minute throttle watermark (AC 26)
+  lastSyncError         String?
+  createdAt             DateTime         @default(now())
+  updatedAt             DateTime         @updatedAt
+  createdBy             String           @default("system")
+  updatedBy             String           @default("system")
+  deletedAt             DateTime?
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   user   User   @relation("UserCalendarConnection", fields: [userId], references: [id], onDelete: Cascade)
@@ -1367,21 +1374,21 @@ model TaskCalendarEvent {
 /// row is derived from an already-audited mutation, so no AuditLog rows are
 /// written for notifications (the Activity derived-record carve-out applies).
 model Notification {
-  id         String    @id @default(uuid())
-  tenantId   String
-  userId     String // the recipient
-  type       String // TASK_ASSIGNED | DEAL_REMINDER | DEAL_MENTION
-  title      String
-  body       String?
-  dealId     String?
-  taskId     String?
-  dedupeKey  String?
-  readAt     DateTime?
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
-  createdBy  String    @default("system")
-  updatedBy  String    @default("system")
-  deletedAt  DateTime?
+  id        String    @id @default(uuid())
+  tenantId  String
+  userId    String // the recipient
+  type      String // TASK_ASSIGNED | DEAL_REMINDER | DEAL_MENTION
+  title     String
+  body      String?
+  dealId    String?
+  taskId    String?
+  dedupeKey String?
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  createdBy String    @default("system")
+  updatedBy String    @default("system")
+  deletedAt DateTime?
 
   tenant    Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   recipient User   @relation("NotificationRecipient", fields: [userId], references: [id], onDelete: Cascade)
@@ -1400,21 +1407,21 @@ model Notification {
 /// No `layout` column — Widget.position + Widget.size are the single source
 /// of truth for layout (arbitrated 2026-08-12).
 model Dashboard {
-  id               String    @id @default(uuid())
-  tenantId         String
-  userId           String // the owner
-  name             String
-  isDefault        Boolean   @default(false)
-  isSystemGenerated Boolean  @default(false)
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
-  createdBy        String    @default("system")
-  updatedBy        String    @default("system")
-  deletedAt        DateTime?
+  id                String    @id @default(uuid())
+  tenantId          String
+  userId            String // the owner
+  name              String
+  isDefault         Boolean   @default(false)
+  isSystemGenerated Boolean   @default(false)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  createdBy         String    @default("system")
+  updatedBy         String    @default("system")
+  deletedAt         DateTime?
 
-  tenant   Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  owner    User     @relation("DashboardOwner", fields: [userId], references: [id], onDelete: Cascade)
-  widgets  Widget[]
+  tenant  Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  owner   User     @relation("DashboardOwner", fields: [userId], references: [id], onDelete: Cascade)
+  widgets Widget[]
 
   @@index([tenantId])
   @@index([tenantId, userId, createdAt])
@@ -1424,19 +1431,19 @@ model Dashboard {
 /// config is JSON — parsed and validated by a pure module, exposed over
 /// GraphQL as a typed WidgetConfig Pothos object (not a JSON scalar).
 model Widget {
-  id           String    @id @default(uuid())
-  tenantId     String
-  dashboardId  String
-  type         String
-  title        String
-  config       Json
-  position     Int
-  size         String
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
-  createdBy    String    @default("system")
-  updatedBy    String    @default("system")
-  deletedAt    DateTime?
+  id          String    @id @default(uuid())
+  tenantId    String
+  dashboardId String
+  type        String
+  title       String
+  config      Json
+  position    Int
+  size        String
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  createdBy   String    @default("system")
+  updatedBy   String    @default("system")
+  deletedAt   DateTime?
 
   tenant    Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   dashboard Dashboard @relation(fields: [dashboardId], references: [id], onDelete: Cascade)
@@ -1453,22 +1460,129 @@ model Widget {
 /// (tenantId, createdBy) is enforced in SalesReportsService so soft-deleted
 /// names can be reused (AC 2, AC 8).
 model Report {
-  id        String   @id @default(uuid())
+  id        String    @id @default(uuid())
   tenantId  String
   name      String
   type      String
   config    Json
   createdBy String
-  isPublic  Boolean  @default(false)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  isPublic  Boolean   @default(false)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
   updatedBy String
   deletedAt DateTime?
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
+  // Story 6.5: unified Report rows are schedulable — inverse collection for
+  // ReportSchedule.reportId (onDelete: Cascade).
+  schedules               ReportSchedule[]
+  ReportScheduleExecution ReportScheduleExecution[]
+
   @@index([tenantId])
   @@index([tenantId, createdBy])
   @@index([tenantId, type])
   @@index([tenantId, isPublic])
+}
+
+// ─── Story 6.5: scheduled report delivery (FR44) ────────────────────────────
+
+/// Five supported cadences. `CUSTOM_CRON` is a validated five-field
+/// expression whose cadence is no more frequent than hourly.
+enum ReportScheduleFrequency {
+  DAILY
+  WEEKLY
+  MONTHLY
+  QUARTERLY
+  CUSTOM_CRON
+}
+
+/// Attachment format selected by the schedule owner.
+enum ReportDeliveryFormat {
+  PDF
+  EXCEL
+  CSV
+}
+
+/// Durable execution-log status. PROCESSING is an internal claim state and is
+/// never presented as a completed run; SUCCESS/FAILED/SKIPPED are terminal.
+enum ReportScheduleExecutionStatus {
+  PROCESSING
+  SUCCESS
+  FAILED
+  SKIPPED
+}
+
+/// A durable tenant-safe schedule that executes the unified Report row through
+/// the existing sales/custom report services and emails a rendered attachment.
+/// `nextRunAt` is always server-computed UTC; the schedule keeps the owner's
+/// local wall-clock (`scheduledTime` + IANA `timezone`) as the source cadence.
+model ReportSchedule {
+  id             String                  @id @default(uuid())
+  tenantId       String
+  reportId       String
+  userId         String // schedule owner and execution identity
+  frequency      ReportScheduleFrequency
+  recipients     String[]
+  format         ReportDeliveryFormat
+  timezone       String // validated IANA identifier
+  scheduledTime  String // HH:mm local wall-clock
+  dayOfWeek      Int? // 0–6, only WEEKLY
+  dayOfMonth     Int? // 1–31, MONTHLY/QUARTERLY
+  startMonth     Int? // 1–12, only QUARTERLY
+  cronExpression String? // five fields, only CUSTOM_CRON
+  nextRunAt      DateTime // UTC
+  lastRunAt      DateTime?
+  isActive       Boolean                 @default(true)
+  createdAt      DateTime                @default(now())
+  updatedAt      DateTime                @updatedAt
+  createdBy      String
+  updatedBy      String
+  deletedAt      DateTime?
+
+  tenant     Tenant                    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  report     Report                    @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  owner      User                      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  executions ReportScheduleExecution[]
+
+  @@index([tenantId])
+  // Owner listing (reportSchedules query)
+  @@index([tenantId, userId, deletedAt])
+  // Hourly due scan — active, non-deleted, due-next
+  @@index([isActive, deletedAt, nextRunAt])
+  // Report lookup
+  @@index([tenantId, reportId, deletedAt])
+}
+
+/// Durable operational log of every occurrence attempt. One execution row per
+/// (scheduleId, scheduledFor) under a unique constraint is the atomic claim
+/// that prevents multi-instance duplicate sends. Executions are retained when
+/// a schedule is soft-deleted (normal GraphQL deletion never physically
+/// deletes a schedule).
+model ReportScheduleExecution {
+  id                  String                        @id @default(uuid())
+  tenantId            String
+  scheduleId          String
+  reportId            String
+  scheduledFor        DateTime // occurrence identity, UTC
+  status              ReportScheduleExecutionStatus
+  attemptCount        Int                           @default(0) // total attempts, max 4
+  nextRetryAt         DateTime?
+  processingStartedAt DateTime?
+  completedAt         DateTime?
+  errorCode           String?
+  errorMessage        String? // sanitized/truncated; no secrets or recipient list
+  providerMessageId   String?
+  createdAt           DateTime                      @default(now())
+  updatedAt           DateTime                      @updatedAt
+
+  tenant   Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  schedule ReportSchedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+  report   Report         @relation(fields: [reportId], references: [id], onDelete: Cascade)
+
+  @@unique([scheduleId, scheduledFor])
+  // Retry scan — due retries in status order
+  @@index([status, nextRetryAt])
+  // Latest-execution lookups per schedule
+  @@index([tenantId, scheduleId, createdAt(sort: Desc)])
 }

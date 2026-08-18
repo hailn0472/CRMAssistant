@@ -1,3 +1,10 @@
+## Deferred from: 6-5-scheduled-report-delivery-via-email
+
+- **Document Export & Storage (PDF, Excel, CSV, storage, history) — Story 6.6 boundary.** Story 6.5 implements an internal, reusable attachment renderer (`ReportAttachmentService`) generating memory buffers for automated email dispatch only. User-triggered on-demand export, export history rows, Supabase Storage integration, signed download URLs, and the `exportReport` public mutation remain owned by Story 6.6.
+- **Email Delivery Provider.** Delivery uses an injectable SMTP transport (Nodemailer) configurable via `SMTP_*` environment variables. Multi-provider vendor integrations (Resend, SendGrid, Gmail OAuth, Outlook Graph) and webhooks remain deferred.
+- **Tenant Branding Administration Screen.** Persisted `Tenant.logoUrl` and `Tenant.primaryColor` are rendered defensively in branded emails with fallback to tenant name and CRM palette; a tenant settings UI to customize branding is out of scope.
+- **At-least-once Delivery Edge.** Job processing claims occurrences atomically in PostgreSQL, but process termination after SMTP acceptance before DB update results in at-least-once delivery; exactly-once SMTP is physically impossible across process failure.
+
 ## Deferred from: 6-4-data-visualization-with-multiple-chart-types
 
 - **Document/Data Export (PDF, Excel, CSV, storage, history) — Story 6.6 boundary.** Story 6.4 implements purely client-side rendered PNG and SVG export of the currently visible chart figure. Background export jobs, PDF document generation, Excel/CSV table downloads, and Supabase Storage persistence remain deferred to Story 6.6.

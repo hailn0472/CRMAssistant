@@ -11,11 +11,12 @@
  * data/drill keys (AC 76), guarded against StrictMode double-connect.
  */
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import {
   ArrowDownRight,
   ArrowUpRight,
   BarChart3,
+  CalendarClock,
   CalendarDays,
   Minus,
   Plus,
@@ -59,6 +60,7 @@ import { PermissionLimitedState } from '@/components/shared/PermissionLimitedSta
 import { SalesReportChart } from './SalesReportChart'
 import { SalesReportDrillDown } from './SalesReportDrillDown'
 import { SavedReportDialog } from './SavedReportDialog'
+import { ScheduleReportDialog } from './ScheduleReportDialog'
 import { Button } from '@/components/ui/button'
 
 const DRILL_PAGE_SIZE = 20
@@ -110,6 +112,8 @@ function TrendBadge({ metric }: { metric: ReportMetric }): React.JSX.Element | n
 export function SalesReportsWorkspace(): React.JSX.Element {
   const queryClient = useQueryClient()
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const urlReportId = searchParams.get('reportId')
   const clientRef = useRef<GraphqlSubscriptionClient | null>(null)
   const connectGuardRef = useRef(false)
 
@@ -124,6 +128,7 @@ export function SalesReportsWorkspace(): React.JSX.Element {
   const [listPage, setListPage] = useState(1)
   const [filters, setFilters] = useState<ReportFilters>({})
   const [dialogOpen, setDialogOpen] = useState(false)
+  const [scheduleDialogOpen, setScheduleDialogOpen] = useState(false)
   const [editingReport, setEditingReport] = useState<ReportRow | null>(null)
   const [drill, setDrill] = useState<{
     metricKey: ReportMetricKey
@@ -138,6 +143,20 @@ export function SalesReportsWorkspace(): React.JSX.Element {
     queryFn: () => getReports(listPage, 20),
     enabled: canReadReport && canReadDeals,
   })
+
+  // Deep link support (?reportId=...): auto-select matching visible report (Contract D21, AA-1)
+  useEffect(() => {
+    if (urlReportId && reportsQuery.data?.items) {
+      const match = reportsQuery.data.items.find((r) => r.id === urlReportId)
+      if (match) {
+        if (match.type === 'CUSTOM') {
+          router.push(`/reports/builder?reportId=${match.id}`)
+        } else {
+          setSelectedReportId(match.id)
+        }
+      }
+    }
+  }, [urlReportId, reportsQuery.data?.items, router])
 
   // Catalogues for the filter toolbar (AC 68-69). Owner/team selectors are
   // hidden when their catalogue fails — the page never fails as a whole.
@@ -376,18 +395,32 @@ export function SalesReportsWorkspace(): React.JSX.Element {
             ) : null}
           </div>
 
-          {selectedReport && canUpdateReport ? (
-            <div className="mt-3 flex gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  setEditingReport(selectedReport)
-                  setDialogOpen(true)
-                }}
-              >
-                Edit
-              </Button>
+          {selectedReport ? (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {canUpdateReport ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setEditingReport(selectedReport)
+                    setDialogOpen(true)
+                  }}
+                >
+                  Edit
+                </Button>
+              ) : null}
+              {canCreateReport ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setScheduleDialogOpen(true)}
+                  className="inline-flex items-center gap-1.5 border-indigo-600 text-indigo-700 hover:bg-indigo-50"
+                  aria-label="Schedule report delivery"
+                >
+                  <CalendarClock aria-hidden="true" className="h-4 w-4 text-indigo-700" />
+                  Schedule
+                </Button>
+              ) : null}
             </div>
           ) : null}
         </section>
@@ -772,6 +805,16 @@ export function SalesReportsWorkspace(): React.JSX.Element {
           }
         }}
       />
+
+      {selectedReport && (
+        <ScheduleReportDialog
+          open={scheduleDialogOpen}
+          onOpenChange={setScheduleDialogOpen}
+          reportId={selectedReport.id}
+          reportName={selectedReport.name}
+          reportType={selectedReport.type}
+        />
+      )}
     </div>
   )
 }

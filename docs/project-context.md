@@ -73,6 +73,11 @@ When this file and the code disagree, **the code wins** — and fix this file in
 - **Framework**: NestJS 10+
 - **Language**: TypeScript 5.4+
 - **Runtime**: Node.js 20+ LTS
+- **Background Jobs & Email Delivery (Story 6.5) [SHIPPED]**:
+  - Direct runtime dependencies: `@nestjs/schedule` (6.1.3), `cron-parser` (5.10.0), `nodemailer` (9.0.5), `pdfkit` (0.19.1), `exceljs` (4.4.0).
+  - Environment Contract: `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASSWORD`, `REPORT_EMAIL_FROM`, `CRM_WEB_BASE_URL`.
+  - Durable state & idempotent claims: PostgreSQL `ReportScheduleExecution` with unique constraint on `(scheduleId, scheduledFor)`.
+  - Delivery semantics: At-least-once across process crashes after SMTP acceptance; exponential retry backoff (1m, 2m, 4m) up to max 4 total attempts, followed by terminal `FAILED` status and deduped in-app notification (`REPORT_SCHEDULE_FAILED`).
 - **API Architecture**:
   - **GraphQL** (Code-first with Pothos) — CRUD for all domains **[SHIPPED]**
   - **REST** — Text-to-SQL endpoint (`POST /api/query`) **[PLANNED]** (Epic 10, backlog). REST today is limited to health, auth callbacks, the Facebook webhook and import/export.

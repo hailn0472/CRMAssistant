@@ -86,6 +86,25 @@ describe('AppShellNavigation', () => {
     expect(builderLink).toHaveAttribute('href', '/reports/builder')
   })
 
+  it('exposes the Schedules entry with href /reports/schedules (Story 6.5, F.34)', () => {
+    renderNav()
+
+    const nav = screen.getByRole('navigation', { name: 'CRM navigation' })
+    const schedulesLink = within(nav).getByRole('link', { name: 'Schedules' })
+    expect(schedulesLink).toHaveAttribute('href', '/reports/schedules')
+  })
+
+  it('marks the schedules route as active when on /reports/schedules', () => {
+    mockUsePathname.mockReturnValue('/reports/schedules')
+    renderNav()
+
+    const nav = screen.getByRole('navigation', { name: 'CRM navigation' })
+    expect(within(nav).getByRole('link', { name: 'Schedules' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    )
+  })
+
   it('marks the builder route as active when on /reports/builder', () => {
     mockUsePathname.mockReturnValue('/reports/builder')
     renderNav()
