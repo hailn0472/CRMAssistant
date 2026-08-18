@@ -1,15 +1,19 @@
 'use client'
 
-import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts'
+/**
+ * Story 6.4 (Contract F.34) — TimeDistributionChart adapter for ReportChart PIE primitive.
+ *
+ * Renders time distribution pie chart via ReportChart framework. Preserves
+ * duration formatters, Other slice color, hand-rolled legend, sr-only table,
+ * and aria-labels.
+ */
+import React, { useMemo } from 'react'
 
+import { ReportChart } from '@/components/reports/charting/ReportChart'
+import type { NormalizedPieChart } from '@/lib/report-chart'
 import { TIME_CHART_COLORS, TIME_OTHER_COLOR, formatDurationShort } from '@/lib/time-format'
 import type { ProductivityTaskBucket } from '@/services/productivity.service'
 
-// Story 4.5 time-distribution pie (AC 41-42). recharts PieChart is a first
-// use in this repo — the house contract from ForecastChart applies: plain
-// card shell, custom Tooltip render prop, role="img" wrapper, sr-only table
-// with every datum, hand-rolled legend (swatch + label + value). No datum may
-// be encoded by colour alone.
 export function TimeDistributionChart({
   byTask,
 }: {
@@ -17,6 +21,40 @@ export function TimeDistributionChart({
 }): React.JSX.Element {
   const ariaLabel = 'Time distribution by task'
   const totalSeconds = byTask.reduce((sum, entry) => sum + entry.totalSeconds, 0)
+
+  const normalizedChart: NormalizedPieChart = useMemo(() => {
+    const slices = byTask.map((entry) => ({
+      key: entry.taskId || entry.taskTitle,
+      label: entry.taskTitle,
+      value: entry.totalSeconds,
+      percentage: entry.percentage,
+      dimensionLabels: [entry.taskTitle],
+      metricId: 'totalSeconds',
+    }))
+
+    return {
+      type: 'PIE',
+      isDonut: false,
+      title: null,
+      showLegend: false,
+      showDataLabels: false,
+      colors: ['BLUE', 'VIOLET', 'GREEN', 'AMBER', 'RED'],
+      legendPosition: 'BOTTOM',
+      metricId: 'totalSeconds',
+      metricLabel: 'Time Tracked',
+      total: totalSeconds,
+      slices,
+      totalPoints: slices.length,
+      srTable: {
+        headers: ['Task', 'Time tracked', 'Share'],
+        rows: byTask.map((entry) => [
+          entry.taskTitle,
+          formatDurationShort(entry.totalSeconds),
+          `${entry.percentage}%`,
+        ]),
+      },
+    }
+  }, [byTask, totalSeconds])
 
   return (
     <section className="rounded-[14px] border border-[#ececf0] bg-white px-[22px] pb-4 pt-5">
@@ -30,44 +68,12 @@ export function TimeDistributionChart({
       </div>
 
       <div role="img" aria-label={ariaLabel}>
-        <ResponsiveContainer width="100%" height={250}>
-          <PieChart>
-            <Pie
-              data={byTask}
-              dataKey="totalSeconds"
-              nameKey="taskTitle"
-              cx="50%"
-              cy="50%"
-              outerRadius={90}
-            >
-              {byTask.map((entry, index) => (
-                <Cell
-                  key={entry.taskId}
-                  fill={
-                    entry.taskTitle === 'Other'
-                      ? TIME_OTHER_COLOR
-                      : TIME_CHART_COLORS[index % TIME_CHART_COLORS.length]
-                  }
-                />
-              ))}
-            </Pie>
-            <Tooltip
-              content={({ active, payload }) => {
-                if (!active || !payload?.length) return null
-                const datum = payload[0]?.payload as ProductivityTaskBucket | undefined
-                if (!datum) return null
-                return (
-                  <div className="rounded-[9px] border border-[#ececf0] bg-white px-3 py-2 text-[13px] shadow-md">
-                    <p className="font-medium text-[#1b1b1f]">{datum.taskTitle}</p>
-                    <p className="text-[#4b4b55]">
-                      {formatDurationShort(datum.totalSeconds)} · {datum.percentage}%
-                    </p>
-                  </div>
-                )
-              }}
-            />
-          </PieChart>
-        </ResponsiveContainer>
+        <ReportChart
+          chart={normalizedChart}
+          minHeight={250}
+          hideControls={true}
+          hideSrTable={true}
+        />
       </div>
 
       {/* sr-only table for accessibility (AC 42) */}

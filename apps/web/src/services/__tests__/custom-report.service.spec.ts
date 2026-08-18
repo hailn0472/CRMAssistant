@@ -1,7 +1,6 @@
 /**
- * Story 6.3 — frontend-service tier (AC 11, 16): exact GraphQL operations,
+ * Story 6.3 & 6.4 — frontend-service tier (AC 11, 15, 16): exact GraphQL operations,
  * variables, fragments and typed unwraps for the custom-report service.
- * Mirrors the test plan's `custom-report.service.spec.ts`.
  */
 jest.mock('@/lib/graphql-client', () => ({
   graphqlRequest: jest.fn(),
@@ -9,18 +8,24 @@ jest.mock('@/lib/graphql-client', () => ({
 
 import { graphqlRequest } from '@/lib/graphql-client'
 import {
+  CUSTOM_REPORT_DEFAULT_COLORS,
   CUSTOM_REPORT_SOURCE_READ_GATE,
+  customReportDrillDown,
   getCustomReportData,
   getCustomReportFieldCatalog,
   previewCustomReport,
   saveCustomReport,
 } from '../custom-report.service'
-import type { CustomReportConfig, CustomReportResult } from '../custom-report.service'
+import type {
+  CustomReportConfig,
+  CustomReportDrillDownConnection,
+  CustomReportResult,
+} from '../custom-report.service'
 
 const mockGraphqlRequest = graphqlRequest as jest.Mock
 
 const CONFIG: CustomReportConfig = {
-  version: 1,
+  version: 2,
   dataSource: 'DEALS',
   filters: [
     {
@@ -52,6 +57,8 @@ const CONFIG: CustomReportConfig = {
     xAxisLabel: 'Month',
     yAxisLabel: 'Revenue',
     orientation: 'VERTICAL',
+    colors: [...CUSTOM_REPORT_DEFAULT_COLORS],
+    legendPosition: 'BOTTOM',
   },
   sort: [{ id: 'sort-1', targetId: 'met-2', direction: 'DESC' }],
 }
@@ -69,7 +76,7 @@ const RESULT: CustomReportResult = {
   truncated: false,
 }
 
-describe('custom-report.service (AC 11, 16)', () => {
+describe('custom-report.service (AC 11, 15, 16)', () => {
   beforeEach(() => {
     jest.clearAllMocks()
   })
@@ -117,6 +124,7 @@ describe('custom-report.service (AC 11, 16)', () => {
     expect(query).toContain('customReportPreview(config: $config, pagination: $pagination)')
     expect(query).toContain('warnings { code message }')
     expect(query).toContain('series {')
+    expect(query).toContain('dimensionLabels')
     expect(variables).toEqual({
       config: CONFIG,
       pagination: { page: 2, pageSize: 25 },
@@ -147,6 +155,79 @@ describe('custom-report.service (AC 11, 16)', () => {
     expect(result.config).toEqual(CONFIG)
   })
 
+  it('customReportDrillDown sends preview mode drill query when config is provided', async () => {
+    const mockDrillConnection: CustomReportDrillDownConnection = {
+      source: 'DEALS',
+      pointLabel: 'January 2026',
+      items: [
+        {
+          id: 'deal-1',
+          primaryLabel: 'Acme Deal',
+          secondaryLabel: 'Negotiation',
+          relatedRecordId: 'contact-1',
+        },
+      ],
+      total: 1,
+      page: 1,
+      pageSize: 20,
+      totalPages: 1,
+    }
+    mockGraphqlRequest.mockResolvedValue({
+      customReportDrillDown: mockDrillConnection,
+    })
+
+    const connection = await customReportDrillDown({
+      config: CONFIG,
+      pointKey: 'key-1',
+      metricId: 'met-1',
+      pagination: { page: 1, pageSize: 20 },
+    })
+
+    const [query, variables] = mockGraphqlRequest.mock.calls[0]
+    expect(query).toContain('query CustomReportDrillDown')
+    expect(query).toContain('customReportDrillDown(reportId: $reportId, config: $config')
+    expect(variables).toEqual({
+      reportId: null,
+      config: CONFIG,
+      pointKey: 'key-1',
+      metricId: 'met-1',
+      pagination: { page: 1, pageSize: 20 },
+    })
+    expect(connection.total).toBe(1)
+    expect(connection.items[0].primaryLabel).toBe('Acme Deal')
+  })
+
+  it('customReportDrillDown sends saved report mode drill query when reportId is provided', async () => {
+    const mockDrillConnection: CustomReportDrillDownConnection = {
+      source: 'DEALS',
+      pointLabel: 'January 2026',
+      items: [],
+      total: 0,
+      page: 1,
+      pageSize: 20,
+      totalPages: 0,
+    }
+    mockGraphqlRequest.mockResolvedValue({
+      customReportDrillDown: mockDrillConnection,
+    })
+
+    const connection = await customReportDrillDown({
+      reportId: 'rep-1',
+      pointKey: 'key-1',
+      metricId: 'met-1',
+    })
+
+    const [, variables] = mockGraphqlRequest.mock.calls[0]
+    expect(variables).toEqual({
+      reportId: 'rep-1',
+      config: null,
+      pointKey: 'key-1',
+      metricId: 'met-1',
+      pagination: null,
+    })
+    expect(connection.total).toBe(0)
+  })
+
   it('saveCustomReport without reportId sends the create mutation with null reportId/isPublic', async () => {
     mockGraphqlRequest.mockResolvedValue({
       saveCustomReport: {
@@ -168,6 +249,8 @@ describe('custom-report.service (AC 11, 16)', () => {
       'saveCustomReport(reportId: $reportId, name: $name, config: $config, isPublic: $isPublic)',
     )
     expect(query).toContain('calculatedFields {')
+    expect(query).toContain('colors')
+    expect(query).toContain('legendPosition')
     expect(variables).toEqual({
       reportId: null,
       name: 'Revenue by month',

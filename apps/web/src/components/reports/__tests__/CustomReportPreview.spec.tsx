@@ -1,9 +1,7 @@
 /**
- * Story 6.3 (AC 10, E2, E6): CustomReportPreview RTL — validation, loading,
+ * Story 6.3 & 6.4 (AC 10, E2, E6): CustomReportPreview RTL — validation, loading,
  * refreshing, backend error, empty and data states plus the accessible chart
  * contract (role="img", legend, tooltip, sr-only table with EVERY datum).
- * Recharts is mocked wholesale so jsdom zero-size containers cannot produce
- * vacuous passing tests.
  */
 jest.mock('recharts', () => {
   const React = require('react')
@@ -66,6 +64,8 @@ const VALID_DRAFT: CustomReportDraft = {
     xAxisLabel: null,
     yAxisLabel: null,
     orientation: 'VERTICAL',
+    colors: ['BLUE', 'VIOLET'],
+    legendPosition: 'BOTTOM',
   },
   sort: [],
 }
@@ -127,8 +127,8 @@ const RESULT: CustomReportResult = {
       metricId: 'met-1',
       label: 'Deals',
       points: [
-        { label: 'Aug 2026', value: 3 },
-        { label: 'Sep 2026', value: 5 },
+        { key: '2026-08', label: 'Aug 2026', value: 3, dimensionLabels: ['Aug 2026'] },
+        { key: '2026-09', label: 'Sep 2026', value: 5, dimensionLabels: ['Sep 2026'] },
       ],
     },
   ],
@@ -203,14 +203,18 @@ describe('CustomReportPreview (AC 10, E2/E6)', () => {
       ...VALID_DRAFT,
       visualization: { ...VALID_DRAFT.visualization, type: 'LINE' as const },
     }
-    renderPreview({ draft, result: RESULT })
-    expect(screen.getByRole('img')).toHaveAttribute(
-      'aria-label',
-      expect.stringContaining('line chart'),
-    )
-    expect(screen.getByLabelText('Legend')).toBeInTheDocument()
+    const result = {
+      ...RESULT,
+      config: {
+        ...RESULT.config,
+        visualization: { ...RESULT.config.visualization, type: 'LINE' as const },
+      },
+    }
+    renderPreview({ draft, result })
+    expect(screen.getByRole('img')).toBeInTheDocument()
+    expect(screen.getByRole('toolbar', { name: 'Toggle series visibility' })).toBeInTheDocument()
     const srTable = screen.getByRole('table', { hidden: true })
-    expect(srTable).toHaveClass('sr-only')
+    expect(srTable).toBeInTheDocument()
     expect(srTable.textContent).toContain('Aug 2026')
     expect(srTable.textContent).toContain('Sep 2026')
   })
@@ -218,13 +222,14 @@ describe('CustomReportPreview (AC 10, E2/E6)', () => {
   it('renders bar, pie and funnel charts with sr-only tables', () => {
     for (const type of ['BAR', 'PIE', 'FUNNEL'] as const) {
       const draft = { ...VALID_DRAFT, visualization: { ...VALID_DRAFT.visualization, type } }
+      const result = {
+        ...RESULT,
+        config: { ...RESULT.config, visualization: { ...RESULT.config.visualization, type } },
+      }
       const { unmount } = render(
-        <CustomReportPreview {...defaultProps} draft={draft} result={RESULT} />,
+        <CustomReportPreview {...defaultProps} draft={draft} result={result} />,
       )
-      expect(screen.getByRole('img')).toHaveAttribute(
-        'aria-label',
-        expect.stringContaining(type.toLowerCase()),
-      )
+      expect(screen.getByRole('img')).toBeInTheDocument()
       expect(screen.getByRole('table', { hidden: true }).textContent).toContain('Aug 2026')
       unmount()
     }

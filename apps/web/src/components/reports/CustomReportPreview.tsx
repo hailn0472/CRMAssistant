@@ -1,51 +1,18 @@
 'use client'
 
 /**
- * Story 6.3 — live preview panel (AC 9-10, D.28).
+ * Story 6.3 & 6.4 — live preview panel (AC 9-10, Contract F.31).
  *
  * Renders validation / loading / refreshing / backend error / empty / data
- * states. Uses Recharts ^3.10.1 for line/bar/pie/funnel and a semantic HTML
- * table for TABLE. Every chart carries role="img" + aria-label, an explicit
- * legend when enabled, a tooltip, text labels (never color alone) and a
- * complete sr-only data table containing every datum (SalesReportChart
- * contract, AC 73-style). The debounced/cancelled query flow lives in
- * CustomReportBuilder; this component is a pure renderer of its states.
+ * states. Consolidates with ReportChart to support all 8 chart types,
+ * zoom/pan, legend toggle, keyboard drill equivalents, and client-side PNG/SVG export.
  */
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Cell,
-  Funnel,
-  FunnelChart,
-  LabelList,
-  Legend,
-  Line,
-  LineChart,
-  Pie,
-  PieChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from 'recharts'
-
-import type { CustomReportResult, CustomReportSeries } from '@/services/custom-report.service'
+import React, { useMemo } from 'react'
+import type { CustomReportResult } from '@/services/custom-report.service'
 import type { CustomReportDraft } from '@/lib/custom-report-builder'
 import type { DraftValidation } from '@/lib/custom-report-builder'
-
-const CHART_COLORS = [
-  '#2563eb',
-  '#7c3aed',
-  '#059669',
-  '#d97706',
-  '#dc2626',
-  '#0891b2',
-  '#db2777',
-  '#65a30d',
-  '#4f46e5',
-  '#0f766e',
-]
+import { normalizeReportChart } from '@/lib/report-chart'
+import { ReportChart, type DrillDownRequest } from './charting/ReportChart'
 
 type CustomReportPreviewProps = {
   draft: CustomReportDraft
@@ -57,166 +24,13 @@ type CustomReportPreviewProps = {
   isError: boolean
   errorMessage: string | null
   onRetry: () => void
-}
-
-type TooltipPayloadItem = {
-  value?: number | string
-  name?: string
-  payload?: { label?: string; value?: number | string }
-}
-
-function ChartTooltip({
-  active,
-  payload,
-}: {
-  active?: boolean
-  payload?: TooltipPayloadItem[]
-}): React.JSX.Element | null {
-  if (!active || !payload || payload.length === 0) return null
-  const item = payload[0]
-  return (
-    <div className="rounded-lg border border-[#e6e6eb] bg-white px-3 py-2 shadow-md">
-      <p className="text-[12px] font-semibold text-[#1b1b1f]">
-        {item.payload?.label ?? item.name ?? ''}
-      </p>
-      <p className="text-[12px] text-[#4b4b55]">
-        {String(item.payload?.value ?? item.value ?? '')}
-      </p>
-    </div>
-  )
+  onDrillDown?: (req: DrillDownRequest) => void
 }
 
 function formatCellValue(value: string | number | boolean | null): string {
   if (value === null || value === undefined) return '—'
   if (typeof value === 'boolean') return value ? 'Yes' : 'No'
   return String(value)
-}
-
-function srOnlyTableForSeries(series: CustomReportSeries[], ariaLabel: string): React.JSX.Element {
-  return (
-    <table className="sr-only" aria-label={ariaLabel}>
-      <thead>
-        <tr>
-          <th scope="col">Label</th>
-          {series.map((s) => (
-            <th key={s.metricId} scope="col">
-              {s.label}
-            </th>
-          ))}
-        </tr>
-      </thead>
-      <tbody>
-        {series[0]?.points.map((point, index) => (
-          <tr key={`${point.label}-${index}`}>
-            <td>{point.label}</td>
-            {series.map((s) => (
-              <td key={s.metricId}>{s.points[index]?.value ?? '—'}</td>
-            ))}
-          </tr>
-        ))}
-      </tbody>
-    </table>
-  )
-}
-
-function SeriesChart({
-  type,
-  series,
-  ariaLabel,
-  showLegend,
-}: {
-  type: 'LINE' | 'BAR' | 'PIE' | 'FUNNEL'
-  series: CustomReportSeries[]
-  ariaLabel: string
-  showLegend: boolean
-}): React.JSX.Element {
-  const primary = series[0]
-  if (!primary)
-    return <p className="py-10 text-center text-[13px] text-[#8c8c96]">No chart data.</p>
-  const data = primary.points.map((p) => ({ label: p.label, value: p.value ?? 0 }))
-
-  return (
-    <div className="mt-3.5">
-      <div role="img" aria-label={ariaLabel} className="h-[260px] w-full">
-        <ResponsiveContainer width="100%" height="100%">
-          {type === 'LINE' ? (
-            <LineChart data={data} margin={{ top: 8, right: 8, left: 8, bottom: 8 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e6e6eb" />
-              <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#77777f' }} />
-              <YAxis tick={{ fontSize: 11, fill: '#77777f' }} width={56} />
-              <Tooltip content={<ChartTooltip />} />
-              {showLegend ? <Legend wrapperStyle={{ fontSize: 12 }} /> : null}
-              <Line
-                type="monotone"
-                dataKey="value"
-                name={primary.label}
-                stroke="#2563eb"
-                strokeWidth={2}
-                dot={{ r: 3 }}
-              />
-            </LineChart>
-          ) : type === 'BAR' ? (
-            <BarChart data={data} margin={{ top: 8, right: 8, left: 8, bottom: 8 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e6e6eb" />
-              <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#77777f' }} />
-              <YAxis tick={{ fontSize: 11, fill: '#77777f' }} width={56} />
-              <Tooltip content={<ChartTooltip />} />
-              {showLegend ? <Legend wrapperStyle={{ fontSize: 12 }} /> : null}
-              <Bar dataKey="value" name={primary.label} fill="#2563eb" radius={[4, 4, 0, 0]} />
-            </BarChart>
-          ) : type === 'PIE' ? (
-            <PieChart>
-              <Tooltip content={<ChartTooltip />} />
-              {showLegend ? <Legend wrapperStyle={{ fontSize: 12 }} /> : null}
-              <Pie
-                data={data}
-                dataKey="value"
-                nameKey="label"
-                cx="50%"
-                cy="50%"
-                outerRadius={90}
-                label={(props) => {
-                  const payload = props.payload as { label?: string } | undefined
-                  return String(payload?.label ?? '')
-                }}
-              >
-                {data.map((_, index) => (
-                  <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
-                ))}
-              </Pie>
-            </PieChart>
-          ) : (
-            <FunnelChart>
-              <Tooltip content={<ChartTooltip />} />
-              {showLegend ? <Legend wrapperStyle={{ fontSize: 12 }} /> : null}
-              <Funnel data={data} dataKey="value" nameKey="label">
-                <LabelList position="right" fill="#1b1b1f" stroke="none" dataKey="label" />
-                {data.map((_, index) => (
-                  <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
-                ))}
-              </Funnel>
-            </FunnelChart>
-          )}
-        </ResponsiveContainer>
-      </div>
-
-      {showLegend ? (
-        <div aria-label="Legend" className="mt-2.5 flex flex-wrap gap-x-4 gap-y-1.5">
-          {series.map((s) => (
-            <span
-              key={s.metricId}
-              className="inline-flex items-center gap-1.5 text-[12px] text-[#4b4b55]"
-            >
-              <span aria-hidden="true" className="h-2.5 w-2.5 rounded-sm bg-[#2563eb]" />
-              {s.label}
-            </span>
-          ))}
-        </div>
-      ) : null}
-
-      {srOnlyTableForSeries(series, ariaLabel)}
-    </div>
-  )
 }
 
 export function CustomReportPreview({
@@ -228,6 +42,7 @@ export function CustomReportPreview({
   isError,
   errorMessage,
   onRetry,
+  onDrillDown,
 }: CustomReportPreviewProps): React.JSX.Element {
   const viz = draft.visualization
   const title = viz.title || 'Report preview'
@@ -235,6 +50,28 @@ export function CustomReportPreview({
     /^(Choose a data source|Add at least one dimension|Add at least one metric)/.test(e),
   )
   const inValidationState = !validation.previewable || baseErrors.length > 0
+
+  const normalizedChart = useMemo(() => {
+    if (!result || result.rows.length === 0 || viz.type === 'TABLE') return null
+    try {
+      const { type: _discardedDraftType, ...presentationViz } = viz
+      const resultWithCurrentViz: CustomReportResult = {
+        ...result,
+        config: {
+          ...result.config,
+          visualization: {
+            ...result.config?.visualization,
+            ...presentationViz,
+            type: result.config?.visualization?.type ?? viz.type,
+          },
+        },
+      }
+      return normalizeReportChart(resultWithCurrentViz)
+    } catch (err) {
+      console.error('Failed to normalize report chart data:', err)
+      return null
+    }
+  }, [result, viz])
 
   return (
     <section
@@ -354,13 +191,14 @@ export function CustomReportPreview({
                 </tbody>
               </table>
             </div>
+          ) : normalizedChart ? (
+            <div className="mt-3">
+              <ReportChart chart={normalizedChart} onDrillDown={onDrillDown} />
+            </div>
           ) : (
-            <SeriesChart
-              type={viz.type}
-              series={result.series}
-              ariaLabel={`${viz.type.toLowerCase()} chart for ${title} with ${result.series[0]?.points.length ?? 0} data points`}
-              showLegend={viz.showLegend}
-            />
+            <div className="py-10 text-center text-sm text-slate-500">
+              Chart representation unavailable.
+            </div>
           )}
 
           <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-[#f3f3f5] pt-2.5 text-[11.5px] text-[#8c8c96]">

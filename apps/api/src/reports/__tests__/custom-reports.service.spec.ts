@@ -10,7 +10,12 @@ import {
   MAX_CUSTOM_SCOPE_ROWS,
   MAX_GROUPED_ROWS,
 } from '../custom-reports.service'
-import type { CustomReportConfig } from '../custom-report-types'
+import type { CustomReportDrillDownInput } from '../custom-reports.service'
+import type {
+  CustomReportChartType,
+  CustomReportConfig,
+  CustomReportVisualization,
+} from '../custom-report-types'
 import { CUSTOM_REPORT_CATALOGS } from '../custom-report-catalog'
 import { MAX_ACTIVE_REPORTS_PER_CREATOR } from '../report-config'
 
@@ -20,7 +25,7 @@ const NOW = new Date(Date.UTC(2026, 7, 15, 12, 0, 0))
 
 function dealsConfig(overrides: Partial<CustomReportConfig> = {}): CustomReportConfig {
   return {
-    version: 1,
+    version: 2,
     dataSource: 'DEALS',
     filters: [],
     dimensions: [{ id: 'dim-stage', fieldId: 'deal.stage', calculation: null, granularity: null }],
@@ -37,6 +42,8 @@ function dealsConfig(overrides: Partial<CustomReportConfig> = {}): CustomReportC
       xAxisLabel: null,
       yAxisLabel: null,
       orientation: null,
+      colors: [],
+      legendPosition: 'BOTTOM',
     },
     sort: [],
     ...overrides,
@@ -45,7 +52,7 @@ function dealsConfig(overrides: Partial<CustomReportConfig> = {}): CustomReportC
 
 function contactsConfig(overrides: Partial<CustomReportConfig> = {}): CustomReportConfig {
   return {
-    version: 1,
+    version: 2,
     dataSource: 'CONTACTS',
     filters: [],
     dimensions: [
@@ -61,9 +68,30 @@ function contactsConfig(overrides: Partial<CustomReportConfig> = {}): CustomRepo
       xAxisLabel: null,
       yAxisLabel: null,
       orientation: null,
+      colors: [],
+      legendPosition: 'BOTTOM',
     },
     sort: [],
     ...overrides,
+  }
+}
+
+/** Full v2 visualization builder for compact test overrides. */
+function vis(
+  type: CustomReportChartType,
+  extra: Partial<CustomReportVisualization> = {},
+): CustomReportVisualization {
+  return {
+    type,
+    title: null,
+    showLegend: false,
+    showDataLabels: false,
+    xAxisLabel: null,
+    yAxisLabel: null,
+    orientation: null,
+    colors: [],
+    legendPosition: 'BOTTOM',
+    ...extra,
   }
 }
 
@@ -1224,7 +1252,7 @@ describe('CustomReportsService', () => {
           const dimId = dimField?.key
           if (!dimId) continue
           const config = {
-            version: 1,
+            version: 2,
             dataSource,
             filters: [],
             dimensions: [
@@ -1237,7 +1265,11 @@ describe('CustomReportsService', () => {
             ],
             metrics: [{ id: 'm-1', fieldId: field.key, aggregation, alias: 'm' }],
             calculatedFields: [],
-            visualization: { type: 'TABLE' },
+            visualization: {
+              type: 'TABLE',
+              colors: [],
+              legendPosition: 'BOTTOM',
+            },
             sort: [],
           }
           countAndRows(1, sourceRowFor(dataSource))
@@ -1743,6 +1775,8 @@ describe('CustomReportsService', () => {
           xAxisLabel: null,
           yAxisLabel: null,
           orientation: null,
+          colors: [],
+          legendPosition: 'BOTTOM',
         },
       })
       const result = await service.preview('tenant-1', 'user-1', config, {})
@@ -1782,6 +1816,8 @@ describe('CustomReportsService', () => {
           xAxisLabel: null,
           yAxisLabel: null,
           orientation: null,
+          colors: [],
+          legendPosition: 'BOTTOM',
         },
       })
       const result = await service.preview('tenant-1', 'user-1', config, {})
@@ -1817,6 +1853,404 @@ describe('CustomReportsService', () => {
       const result = await service.preview('tenant-1', 'user-1', dealsConfig(), {})
       const mixed = result.warnings.filter((w) => w.code === 'MIXED_CURRENCY')
       expect(mixed).toHaveLength(1)
+    })
+  })
+
+  describe('series point keys + dimensionLabels (Contract B.7)', () => {
+    it('every series point carries a stable server-derived key', async () => {
+      countAndRows(3, [
+        dealRow({
+          id: 'd1',
+          stageId: 's-1',
+          stage: { id: 's-1', name: 'One', order: 1, isWon: false, isLost: false },
+        }),
+        dealRow({
+          id: 'd2',
+          stageId: 's-2',
+          stage: { id: 's-2', name: 'Two', order: 2, isWon: false, isLost: false },
+        }),
+        dealRow({
+          id: 'd3',
+          stageId: 's-1',
+          stage: { id: 's-1', name: 'One', order: 1, isWon: false, isLost: false },
+        }),
+      ])
+      const result = await service.preview('tenant-1', 'user-1', dealsConfig(), {})
+      const points = result.series[0].points
+      expect(points).toHaveLength(2)
+      for (const point of points) {
+        expect(typeof point.key).toBe('string')
+        expect(point.key.length).toBeGreaterThan(0)
+        expect(Array.isArray(point.dimensionLabels)).toBe(true)
+      }
+      // Keys are the internal grouped-row keys, not display labels.
+      expect(points.map((p) => p.key).sort()).toEqual(['s-1', 's-2'])
+      expect(points[0]?.dimensionLabels).toEqual(['One'])
+    })
+
+    it('dimensionLabels follow the configured dimension order', async () => {
+      countAndRows(2, [
+        dealRow({
+          id: 'd1',
+          stageId: 's-1',
+          stage: { id: 's-1', name: 'One', order: 1, isWon: false, isLost: false },
+          ownerId: 'u1',
+          owner: { id: 'u1', firstName: 'Ada', lastName: 'L', teamId: null, team: null },
+        }),
+        dealRow({
+          id: 'd2',
+          stageId: 's-1',
+          stage: { id: 's-1', name: 'One', order: 1, isWon: false, isLost: false },
+          ownerId: 'u2',
+          owner: { id: 'u2', firstName: 'Bob', lastName: 'K', teamId: null, team: null },
+        }),
+      ])
+      const config = dealsConfig({
+        dimensions: [
+          { id: 'd-1', fieldId: 'deal.stage', calculation: null, granularity: null },
+          { id: 'd-2', fieldId: 'deal.owner', calculation: null, granularity: null },
+        ],
+        metrics: [{ id: 'm', fieldId: 'deal.value', aggregation: 'SUM', alias: 'm' }],
+        visualization: vis('BAR', { orientation: 'VERTICAL' }),
+      })
+      const result = await service.preview('tenant-1', 'user-1', config, {})
+      const point = result.series[0].points[0]
+      expect(point?.dimensionLabels).toEqual([expect.any(String), expect.any(String)])
+      expect(point?.dimensionLabels[0]).toBe('One')
+      expect(point?.dimensionLabels[1]).toBe('Ada L')
+    })
+
+    it('builds chart series from ALL bounded groups while table rows stay paginated', async () => {
+      const rows = Array.from({ length: 60 }, (_, i) =>
+        dealRow({
+          id: `d${i}`,
+          stageId: `s-${i}`,
+          stage: { id: `s-${i}`, name: `S${i}`, order: i, isWon: false, isLost: false },
+        }),
+      )
+      countAndRows(rows.length, rows)
+      const config = dealsConfig({
+        metrics: [{ id: 'm', fieldId: 'deal.id', aggregation: 'COUNT', alias: 'm' }],
+      })
+      const result = await service.preview('tenant-1', 'user-1', config, { page: 1, pageSize: 50 })
+      // Table rows are the paginated slice…
+      expect(result.rows).toHaveLength(50)
+      expect(result.totalRows).toBe(60)
+      // …but chart series cover every bounded group.
+      expect(result.series[0].points).toHaveLength(60)
+      // Page 2 shows the remaining rows while the series stays complete.
+      const page2 = await service.preview('tenant-1', 'user-1', config, { page: 2, pageSize: 50 })
+      expect(page2.rows).toHaveLength(10)
+      expect(page2.series[0].points).toHaveLength(60)
+    })
+
+    it('gives the PIE Other point a server-recognizable synthetic key', async () => {
+      const rows = Array.from({ length: 12 }, (_, i) =>
+        dealRow({
+          id: `d${i}`,
+          stageId: `stage-${i}`,
+          stage: { id: `stage-${i}`, name: `S${i}`, order: i, isWon: false, isLost: false },
+          value: i + 1,
+        }),
+      )
+      countAndRows(rows.length, rows)
+      const config = dealsConfig({
+        metrics: [{ id: 'm', fieldId: 'deal.value', aggregation: 'SUM', alias: 'sum' }],
+        visualization: vis('PIE'),
+      })
+      const result = await service.preview('tenant-1', 'user-1', config, {})
+      const other = result.series[0].points.find((p) => p.label === 'Other')
+      expect(other).toBeDefined()
+      expect(other?.key).toBe('synthetic:other')
+      // The top-10 real points keep their real group keys.
+      const realKeys = result.series[0].points
+        .filter((p) => p.key !== 'synthetic:other')
+        .map((p) => p.key)
+      expect(new Set(realKeys).size).toBe(10)
+    })
+  })
+
+  describe('customReportDrillDown — service (Contract E.25-E.28)', () => {
+    it('requires exactly one of reportId or config', async () => {
+      await expect(
+        service.customReportDrillDown('tenant-1', 'user-1', {
+          pointKey: 's-1',
+          metricId: 'm',
+          pagination: {},
+        } as CustomReportDrillDownInput),
+      ).rejects.toThrow(BadRequestException)
+      await expect(
+        service.customReportDrillDown('tenant-1', 'user-1', {
+          reportId: 'r-1',
+          config: dealsConfig(),
+          pointKey: 's-1',
+          metricId: 'm',
+        }),
+      ).rejects.toThrow(BadRequestException)
+    })
+
+    it('preview mode resolves contributing rows for a normal point with stable ID ordering', async () => {
+      countAndRows(4, [
+        dealRow({
+          id: 'deal-b',
+          stageId: 's-1',
+          stage: { id: 's-1', name: 'One', order: 1, isWon: false, isLost: false },
+        }),
+        dealRow({
+          id: 'deal-a',
+          stageId: 's-1',
+          stage: { id: 's-1', name: 'One', order: 1, isWon: false, isLost: false },
+        }),
+        dealRow({
+          id: 'deal-c',
+          stageId: 's-1',
+          stage: { id: 's-1', name: 'One', order: 1, isWon: false, isLost: false },
+        }),
+        dealRow({
+          id: 'deal-x',
+          stageId: 's-2',
+          stage: { id: 's-2', name: 'Two', order: 2, isWon: false, isLost: false },
+        }),
+      ])
+      const config = dealsConfig({
+        metrics: [{ id: 'm', fieldId: 'deal.id', aggregation: 'COUNT', alias: 'm' }],
+      })
+      const connection = await service.customReportDrillDown('tenant-1', 'user-1', {
+        config,
+        pointKey: 's-1',
+        metricId: 'm',
+        pagination: {},
+      })
+      expect(connection.source).toBe('DEALS')
+      expect(connection.pointLabel).toBe('One')
+      expect(connection.total).toBe(3)
+      // Stable ID ordering, not insertion order.
+      expect(connection.items.map((i) => i.id)).toEqual(['deal-a', 'deal-b', 'deal-c'])
+      expect(connection.items[0]).toMatchObject({
+        primaryLabel: expect.any(String),
+        secondaryLabel: expect.any(String),
+        relatedRecordId: 'contact-1',
+      })
+      expect(connection.page).toBe(1)
+      expect(connection.pageSize).toBe(20)
+      expect(connection.totalPages).toBe(1)
+    })
+
+    it('clamps pageSize to 100 and paginates by stable ID ordering', async () => {
+      const rows = Array.from({ length: 120 }, (_, i) =>
+        dealRow({
+          id: `deal-${String(i).padStart(3, '0')}`,
+          stageId: 's-1',
+          stage: { id: 's-1', name: 'One', order: 1, isWon: false, isLost: false },
+        }),
+      )
+      countAndRows(rows.length, rows)
+      const config = dealsConfig({
+        metrics: [{ id: 'm', fieldId: 'deal.id', aggregation: 'COUNT', alias: 'm' }],
+      })
+      const connection = await service.customReportDrillDown('tenant-1', 'user-1', {
+        config,
+        pointKey: 's-1',
+        metricId: 'm',
+        pagination: { page: 1, pageSize: 500 },
+      })
+      expect(connection.pageSize).toBe(100)
+      expect(connection.items).toHaveLength(100)
+      expect(connection.total).toBe(120)
+      expect(connection.totalPages).toBe(2)
+      const page2 = await service.customReportDrillDown('tenant-1', 'user-1', {
+        config,
+        pointKey: 's-1',
+        metricId: 'm',
+        pagination: { page: 2, pageSize: 100 },
+      })
+      expect(page2.items).toHaveLength(20)
+      expect(page2.items[0]?.id).toBe('deal-100')
+    })
+
+    it('PIE Other resolves the remainder contributing records', async () => {
+      const rows = Array.from({ length: 12 }, (_, i) =>
+        dealRow({
+          id: `deal-${i}`,
+          stageId: `stage-${i}`,
+          stage: { id: `stage-${i}`, name: `S${i}`, order: i, isWon: false, isLost: false },
+          value: i + 1,
+        }),
+      )
+      countAndRows(rows.length, rows)
+      const config = dealsConfig({
+        metrics: [{ id: 'm', fieldId: 'deal.value', aggregation: 'SUM', alias: 'sum' }],
+        visualization: vis('PIE'),
+      })
+      const connection = await service.customReportDrillDown('tenant-1', 'user-1', {
+        config,
+        pointKey: 'synthetic:other',
+        metricId: 'm',
+        pagination: {},
+      })
+      // Top 10 of 12 by value → the two lowest-value stages remain.
+      expect(connection.total).toBe(2)
+      expect(connection.items.map((i) => i.id).sort()).toEqual(['deal-0', 'deal-1'])
+    })
+
+    it('AREA cumulative point resolves first-bucket-through-selected records', async () => {
+      countAndRows(3, [
+        dealRow({ id: 'deal-1', expectedCloseDate: new Date('2026-01-15T00:00:00Z') }),
+        dealRow({ id: 'deal-2', expectedCloseDate: new Date('2026-01-15T00:00:00Z') }),
+        dealRow({ id: 'deal-3', expectedCloseDate: new Date('2026-04-01T00:00:00Z') }),
+      ])
+      const config = dealsConfig({
+        dimensions: [
+          {
+            id: 'dim-date',
+            fieldId: 'deal.expectedCloseDate',
+            calculation: null,
+            granularity: 'MONTH',
+          },
+        ],
+        metrics: [{ id: 'm', fieldId: 'deal.value', aggregation: 'SUM', alias: 'sum' }],
+        visualization: vis('AREA'),
+      })
+      const preview = await service.preview('tenant-1', 'user-1', config, {})
+      // Server order: 2026-01 then 2026-04 (ascending date keys).
+      const secondKey = preview.series[0].points[1]?.key
+      expect(secondKey).toBe('2026-04')
+      const connection = await service.customReportDrillDown('tenant-1', 'user-1', {
+        config,
+        pointKey: secondKey as string,
+        metricId: 'm',
+        pagination: {},
+      })
+      // First bucket through the selected bucket: all 3 deals.
+      expect(connection.total).toBe(3)
+      expect(connection.items.map((i) => i.id).sort()).toEqual(['deal-1', 'deal-2', 'deal-3'])
+    })
+
+    it('saved mode loads the owned/public CUSTOM row and derives from its config', async () => {
+      countAndRows(2, [
+        dealRow({
+          id: 'deal-a',
+          stageId: 's-1',
+          stage: { id: 's-1', name: 'One', order: 1, isWon: false, isLost: false },
+        }),
+        dealRow({
+          id: 'deal-b',
+          stageId: 's-1',
+          stage: { id: 's-1', name: 'One', order: 1, isWon: false, isLost: false },
+        }),
+      ])
+      mockPrisma.report.findFirst.mockResolvedValue({ id: 'report-1', config: dealsConfig() })
+      const connection = await service.customReportDrillDown('tenant-1', 'user-1', {
+        reportId: 'report-1',
+        pointKey: 's-1',
+        metricId: 'metric-deals',
+        pagination: {},
+      })
+      expect(mockPrisma.report.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ id: 'report-1', tenantId: 'tenant-1' }),
+        }),
+      )
+      expect(connection.total).toBe(2)
+      expect(connection.source).toBe('DEALS')
+    })
+
+    it('rejects a forged point key with a user-safe not-found error', async () => {
+      countAndRows(1, [
+        dealRow({
+          id: 'deal-a',
+          stageId: 's-1',
+          stage: { id: 's-1', name: 'One', order: 1, isWon: false, isLost: false },
+        }),
+      ])
+      await expect(
+        service.customReportDrillDown('tenant-1', 'user-1', {
+          config: dealsConfig(),
+          pointKey: 'forged-key',
+          metricId: 'metric-deals',
+          pagination: {},
+        }),
+      ).rejects.toThrow(NotFoundException)
+    })
+
+    it('rejects a stale/unknown metricId with a user-safe not-found error', async () => {
+      countAndRows(1, [
+        dealRow({
+          id: 'deal-a',
+          stageId: 's-1',
+          stage: { id: 's-1', name: 'One', order: 1, isWon: false, isLost: false },
+        }),
+      ])
+      await expect(
+        service.customReportDrillDown('tenant-1', 'user-1', {
+          config: dealsConfig(),
+          pointKey: 's-1',
+          metricId: 'metric-foreign',
+          pagination: {},
+        }),
+      ).rejects.toThrow(NotFoundException)
+    })
+
+    it('validates v1 configs through the preview path (v1 → v2 normalization)', async () => {
+      countAndRows(1, [
+        dealRow({
+          id: 'deal-a',
+          stageId: 's-1',
+          stage: { id: 's-1', name: 'One', order: 1, isWon: false, isLost: false },
+        }),
+      ])
+      const v1 = {
+        version: 1,
+        dataSource: 'DEALS',
+        filters: [],
+        dimensions: [
+          { id: 'dim-stage', fieldId: 'deal.stage', calculation: null, granularity: null },
+        ],
+        metrics: [{ id: 'metric-deals', fieldId: 'deal.id', aggregation: 'COUNT', alias: 'deals' }],
+        calculatedFields: [],
+        visualization: {
+          type: 'TABLE',
+          title: null,
+          showLegend: false,
+          showDataLabels: false,
+          xAxisLabel: null,
+          yAxisLabel: null,
+          orientation: null,
+        },
+        sort: [],
+      }
+      const connection = await service.customReportDrillDown('tenant-1', 'user-1', {
+        config: v1 as unknown,
+        pointKey: 's-1',
+        metricId: 'metric-deals',
+        pagination: {},
+      })
+      expect(connection.total).toBe(1)
+    })
+
+    it('rejects invalid preview configs before any query runs', async () => {
+      await expect(
+        service.customReportDrillDown('tenant-1', 'user-1', {
+          config: { version: 3, dataSource: 'DEALS' } as unknown,
+          pointKey: 's-1',
+          metricId: 'm',
+          pagination: {},
+        }),
+      ).rejects.toThrow(BadRequestException)
+      expect(mockPrisma.deal.count).not.toHaveBeenCalled()
+    })
+
+    it('never leaks labels for a saved report another tenant owns', async () => {
+      mockPrisma.report.findFirst.mockResolvedValue(null)
+      await expect(
+        service.customReportDrillDown('tenant-1', 'user-1', {
+          reportId: 'foreign-report',
+          pointKey: 's-1',
+          metricId: 'm',
+          pagination: {},
+        }),
+      ).rejects.toThrow(NotFoundException)
+      expect(mockPrisma.deal.count).not.toHaveBeenCalled()
     })
   })
 })

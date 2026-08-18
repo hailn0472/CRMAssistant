@@ -1,3 +1,10 @@
+## Deferred from: 6-4-data-visualization-with-multiple-chart-types
+
+- **Document/Data Export (PDF, Excel, CSV, storage, history) — Story 6.6 boundary.** Story 6.4 implements purely client-side rendered PNG and SVG export of the currently visible chart figure. Background export jobs, PDF document generation, Excel/CSV table downloads, and Supabase Storage persistence remain deferred to Story 6.6.
+- **Scheduled & Email Report Delivery — Story 6.5 boundary.** No background scheduling, cron jobs, email delivery queues, or recipient mailing templates are created.
+- **Server-side Headless Chart Rendering.** All chart rasterization and rendering is browser-native via Recharts SVG and HTML5 Canvas (2× device-independent rasterization).
+- **Playwright visual regression baselines** are managed through the Stage 9a pipeline harness.
+
 ## Deferred from: 6-1-role-based-dashboard-with-customizable-widgets
 
 - No JSON GraphQL scalar — `Widget.config` is exposed as a typed `WidgetConfig` Pothos object with a closed set of optional fields, parsed and re-validated on every read. Related deferred-work entries at `:128` and `:149` remain open; a future JSON scalar is the correct universal fix.

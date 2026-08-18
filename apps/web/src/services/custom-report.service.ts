@@ -1,12 +1,12 @@
 /**
- * Story 6.3 — frontend custom-report GraphQL service.
+ * Story 6.3 & 6.4 — frontend custom-report GraphQL service.
  *
  * Singular hand-written service over graphqlRequest (no Apollo, no codegen —
  * repo convention). Mirrors the Pothos surface in
  * apps/api/src/reports/reports.graphql.ts: customReportFieldCatalog,
- * customReportPreview, customReportData and saveCustomReport. Query keys are
- * rooted at ['customReports'] by the builder; this module only returns typed
- * unwraps and actionable errors.
+ * customReportPreview, customReportData, customReportDrillDown and saveCustomReport.
+ * Query keys are rooted at ['customReports'] by the builder; this module only
+ * returns typed unwraps and actionable errors.
  */
 import { graphqlRequest } from '@/lib/graphql-client'
 
@@ -15,7 +15,55 @@ import { graphqlRequest } from '@/lib/graphql-client'
 export type CustomReportDataSource = 'CONTACTS' | 'DEALS' | 'TASKS' | 'ACTIVITIES'
 export type CustomReportAggregation = 'COUNT' | 'DISTINCT_COUNT' | 'SUM' | 'AVERAGE' | 'MIN' | 'MAX'
 export type CustomReportGranularity = 'DAY' | 'WEEK' | 'MONTH' | 'QUARTER' | 'YEAR'
-export type CustomReportChartType = 'TABLE' | 'LINE' | 'BAR' | 'PIE' | 'FUNNEL'
+export type CustomReportChartType =
+  | 'TABLE'
+  | 'LINE'
+  | 'BAR'
+  | 'PIE'
+  | 'DONUT'
+  | 'AREA'
+  | 'FUNNEL'
+  | 'SCATTER'
+  | 'HEATMAP'
+export type CustomReportLegendPosition = 'TOP' | 'RIGHT' | 'BOTTOM' | 'LEFT'
+export type CustomReportColorToken =
+  | 'BLUE'
+  | 'VIOLET'
+  | 'GREEN'
+  | 'AMBER'
+  | 'RED'
+  | 'CYAN'
+  | 'PINK'
+  | 'LIME'
+  | 'INDIGO'
+  | 'TEAL'
+
+export const CUSTOM_REPORT_COLOR_TOKEN_HEX: Record<CustomReportColorToken, string> = {
+  BLUE: '#2563eb',
+  VIOLET: '#7c3aed',
+  GREEN: '#059669',
+  AMBER: '#d97706',
+  RED: '#dc2626',
+  CYAN: '#0891b2',
+  PINK: '#db2777',
+  LIME: '#65a30d',
+  INDIGO: '#4f46e5',
+  TEAL: '#0f766e',
+}
+
+export const CUSTOM_REPORT_DEFAULT_COLORS: readonly CustomReportColorToken[] = [
+  'BLUE',
+  'VIOLET',
+  'GREEN',
+  'AMBER',
+  'RED',
+  'CYAN',
+  'PINK',
+  'LIME',
+  'INDIGO',
+  'TEAL',
+]
+
 export type CustomReportFilterOperator =
   | 'EQ'
   | 'NOT_EQ'
@@ -119,6 +167,8 @@ export type CustomReportVisualization = {
   xAxisLabel: string | null
   yAxisLabel: string | null
   orientation: CustomReportOrientation | null
+  colors?: CustomReportColorToken[]
+  legendPosition?: CustomReportLegendPosition
 }
 
 export type CustomReportSort = {
@@ -128,7 +178,7 @@ export type CustomReportSort = {
 }
 
 export type CustomReportConfig = {
-  version: 1
+  version: 2 | 1
   dataSource: CustomReportDataSource
   filters: CustomReportFilter[]
   dimensions: CustomReportDimension[]
@@ -167,8 +217,10 @@ export type CustomReportRow = {
 }
 
 export type CustomReportSeriesPoint = {
+  key: string
   label: string
   value: number | null
+  dimensionLabels: string[]
 }
 
 export type CustomReportSeries = {
@@ -223,6 +275,31 @@ export type SaveCustomReportInput = {
   isPublic?: boolean
 }
 
+export type CustomReportDrillDownItem = {
+  id: string
+  primaryLabel: string | null
+  secondaryLabel: string | null
+  relatedRecordId: string | null
+}
+
+export type CustomReportDrillDownConnection = {
+  source: CustomReportDataSource
+  pointLabel: string
+  items: CustomReportDrillDownItem[]
+  total: number
+  page: number
+  pageSize: number
+  totalPages: number
+}
+
+export type CustomReportDrillDownInput = {
+  reportId?: string
+  config?: CustomReportConfig
+  pointKey: string
+  metricId: string
+  pagination?: CustomReportPaginationInput
+}
+
 // ─── Fragments (aligned with Pothos refs) ──────────────────────────────
 
 const CUSTOM_REPORT_FILTER_FIELDS = `
@@ -274,6 +351,8 @@ const CUSTOM_REPORT_VISUALIZATION_FIELDS = `
   xAxisLabel
   yAxisLabel
   orientation
+  colors
+  legendPosition
 `
 
 const CUSTOM_REPORT_SORT_FIELDS = `
@@ -323,11 +402,31 @@ const CUSTOM_REPORT_RESULT_FIELDS = `
   series {
     metricId
     label
-    points { label value }
+    points {
+      key
+      label
+      value
+      dimensionLabels
+    }
   }
   warnings { code message }
   pagination { page pageSize totalPages }
   truncated
+`
+
+const CUSTOM_REPORT_DRILL_DOWN_CONNECTION_FIELDS = `
+  source
+  pointLabel
+  items {
+    id
+    primaryLabel
+    secondaryLabel
+    relatedRecordId
+  }
+  total
+  page
+  pageSize
+  totalPages
 `
 
 // ─── Operations (exact operations/variables asserted in spec) ──────────
@@ -386,6 +485,28 @@ export async function getCustomReportData(
     { reportId, pagination: pagination ?? null },
   )
   return data.customReportData
+}
+
+export async function customReportDrillDown(
+  input: CustomReportDrillDownInput,
+): Promise<CustomReportDrillDownConnection> {
+  const data = await graphqlRequest<{
+    customReportDrillDown: CustomReportDrillDownConnection
+  }>(
+    `query CustomReportDrillDown($reportId: ID, $config: CustomReportConfigInput, $pointKey: String!, $metricId: String!, $pagination: CustomReportPaginationInput) {
+      customReportDrillDown(reportId: $reportId, config: $config, pointKey: $pointKey, metricId: $metricId, pagination: $pagination) {
+        ${CUSTOM_REPORT_DRILL_DOWN_CONNECTION_FIELDS}
+      }
+    }`,
+    {
+      reportId: input.reportId ?? null,
+      config: input.config ?? null,
+      pointKey: input.pointKey,
+      metricId: input.metricId,
+      pagination: input.pagination ?? null,
+    },
+  )
+  return data.customReportDrillDown
 }
 
 export async function saveCustomReport(input: SaveCustomReportInput): Promise<CustomReport> {

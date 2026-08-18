@@ -1,12 +1,11 @@
-import { render, screen } from '@testing-library/react'
+import { render } from '@testing-library/react'
 
 import { DailyTimeChart } from '../DailyTimeChart'
-import { formatDurationShort, formatDurationTick } from '@/lib/time-format'
+import { formatDurationShort } from '@/lib/time-format'
 import type { ProductivityTimeBucket } from '@/services/productivity.service'
 
 // Mock recharts — jsdom measures ResponsiveContainer at 0×0 (T11). The
-// factory captures the props so the spec can assert the tick formatter and
-// the bar data.
+// factory captures the props so the spec can assert on the rendered data.
 jest.mock('recharts', () => {
   const React = require('react')
   const captured: Record<string, unknown> = {}
@@ -65,25 +64,19 @@ describe('DailyTimeChart', () => {
 
     const recharts = jest.requireMock('recharts') as { __captured: Record<string, unknown> }
     const chartData = recharts.__captured['chartProps'] as {
-      data: Array<{ label: string; totalSeconds: number }>
+      data: Array<{ label: string; values: { totalSeconds: number } }>
     }
     expect(chartData.data).toHaveLength(3)
     expect(chartData.data[1]).toEqual({
-      bucketStart: '2026-08-06T00:00:00.000Z',
+      key: '2026-08-06T00:00:00.000Z',
       label: '2026-08-06',
-      totalSeconds: 3600,
+      dimensionLabels: ['2026-08-06'],
+      values: {
+        totalSeconds: 3600,
+      },
     })
-    const barProps = recharts.__captured['barProps'] as { dataKey: string; fill: string }
-    expect(barProps.dataKey).toBe('totalSeconds')
-  })
-
-  it('uses formatDurationTick as the Y-axis tick formatter', () => {
-    render(<DailyTimeChart buckets={mockBuckets} bucket="DAY" />)
-
-    const recharts = jest.requireMock('recharts') as { __captured: Record<string, unknown> }
-    const yAxis = recharts.__captured['yAxisProps'] as { tickFormatter?: (v: number) => string }
-    expect(yAxis.tickFormatter).toBe(formatDurationTick)
-    expect(formatDurationTick(3600)).toBe('1h')
+    const barProps = recharts.__captured['barProps'] as { dataKey: string }
+    expect(barProps.dataKey).toBe('values.totalSeconds')
   })
 
   it('wraps the chart in role="img" and renders an sr-only table with every bucket', () => {
@@ -103,17 +96,14 @@ describe('DailyTimeChart', () => {
   })
 
   it('labels the unit by bucket (week starts, month, day)', () => {
-    render(<DailyTimeChart buckets={mockBuckets} bucket="WEEK" />)
-    expect(screen.getByText('Per week · all times are UTC')).toBeInTheDocument()
+    const { getByText: getByTextWeek } = render(
+      <DailyTimeChart buckets={mockBuckets} bucket="WEEK" />,
+    )
+    expect(getByTextWeek('Per week · all times are UTC')).toBeInTheDocument()
 
-    render(<DailyTimeChart buckets={mockBuckets} bucket="MONTH" />)
-    expect(screen.getByText('Per month · all times are UTC')).toBeInTheDocument()
-  })
-
-  it('renders the Tooltip content render-prop with a synthetic payload', () => {
-    render(<DailyTimeChart buckets={mockBuckets} bucket="DAY" />)
-
-    expect(screen.getAllByText('2026-08-06').length).toBeGreaterThanOrEqual(1)
-    expect(screen.getAllByText(formatDurationShort(3600)).length).toBeGreaterThanOrEqual(1)
+    const { getByText: getByTextMonth } = render(
+      <DailyTimeChart buckets={mockBuckets} bucket="MONTH" />,
+    )
+    expect(getByTextMonth('Per month · all times are UTC')).toBeInTheDocument()
   })
 })

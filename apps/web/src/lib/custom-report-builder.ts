@@ -1,19 +1,19 @@
 /**
- * Story 6.3 — pure client-side custom report builder logic.
+ * Story 6.3 & 6.4 — pure client-side custom report builder logic.
  *
  * Framework-free on purpose (unit-tested without React): closed vocabularies,
  * the local draft reducer, server-equivalent validation gating, chart
- * compatibility (Contract A.10) and a safe arithmetic expression checker for
- * calculated fields (Contract A.8). The backend remains the source of truth —
+ * compatibility (Contract A.4 / A.10) and a safe arithmetic expression checker
+ * for calculated fields. The backend remains the source of truth —
  * this module only mirrors the rules so the UI never issues preview/save
- * requests for drafts the server would reject, and so source-change clearing
- * (Contract D.25) is deterministic.
+ * requests for drafts the server would reject.
  */
 import type {
   CustomReportAggregation,
   CustomReportCatalog,
   CustomReportCalculatedField,
   CustomReportChartType,
+  CustomReportColorToken,
   CustomReportConfig,
   CustomReportDataSource,
   CustomReportDimension,
@@ -21,11 +21,17 @@ import type {
   CustomReportFilter,
   CustomReportFilterOperator,
   CustomReportGranularity,
+  CustomReportLegendPosition,
   CustomReportMetric,
+  CustomReportOrientation,
   CustomReportSort,
   CustomReportSortDirection,
   CustomReportValueType,
   CustomReportVisualization,
+} from '@/services/custom-report.service'
+import {
+  CUSTOM_REPORT_COLOR_TOKEN_HEX,
+  CUSTOM_REPORT_DEFAULT_COLORS,
 } from '@/services/custom-report.service'
 
 export type {
@@ -33,6 +39,7 @@ export type {
   CustomReportCatalog,
   CustomReportCalculatedField,
   CustomReportChartType,
+  CustomReportColorToken,
   CustomReportConfig,
   CustomReportDataSource,
   CustomReportDimension,
@@ -40,14 +47,18 @@ export type {
   CustomReportFilter,
   CustomReportFilterOperator,
   CustomReportGranularity,
+  CustomReportLegendPosition,
   CustomReportMetric,
+  CustomReportOrientation,
   CustomReportSort,
   CustomReportSortDirection,
   CustomReportValueType,
   CustomReportVisualization,
 }
 
-// ─── Limits (mirror of Contract A.4) ───────────────────────────────────
+export { CUSTOM_REPORT_COLOR_TOKEN_HEX, CUSTOM_REPORT_DEFAULT_COLORS }
+
+// ─── Limits (mirror of Contract A.4 / A.10) ───────────────────────────
 
 export const MAX_FILTERS = 10
 export const MAX_DIMENSIONS = 3
@@ -85,7 +96,31 @@ export const CUSTOM_REPORT_CHART_TYPES: readonly CustomReportChartType[] = [
   'LINE',
   'BAR',
   'PIE',
+  'DONUT',
+  'AREA',
   'FUNNEL',
+  'SCATTER',
+  'HEATMAP',
+]
+
+export const CUSTOM_REPORT_LEGEND_POSITIONS: readonly CustomReportLegendPosition[] = [
+  'TOP',
+  'RIGHT',
+  'BOTTOM',
+  'LEFT',
+]
+
+export const CUSTOM_REPORT_COLOR_TOKENS: readonly CustomReportColorToken[] = [
+  'BLUE',
+  'VIOLET',
+  'GREEN',
+  'AMBER',
+  'RED',
+  'CYAN',
+  'PINK',
+  'LIME',
+  'INDIGO',
+  'TEAL',
 ]
 
 export const CUSTOM_REPORT_SORT_DIRECTIONS: readonly CustomReportSortDirection[] = ['ASC', 'DESC']
@@ -94,8 +129,6 @@ export const CUSTOM_REPORT_ORIENTATIONS: readonly CustomReportOrientation[] = [
   'VERTICAL',
   'HORIZONTAL',
 ]
-
-export type CustomReportOrientation = 'VERTICAL' | 'HORIZONTAL'
 
 export const SOURCE_LABELS: Record<CustomReportDataSource, string> = {
   CONTACTS: 'Contacts',
@@ -118,7 +151,18 @@ export const CHART_LABELS: Record<CustomReportChartType, string> = {
   LINE: 'Line',
   BAR: 'Bar',
   PIE: 'Pie',
+  DONUT: 'Donut',
+  AREA: 'Area',
   FUNNEL: 'Funnel',
+  SCATTER: 'Scatter',
+  HEATMAP: 'Heatmap',
+}
+
+export const LEGEND_POSITION_LABELS: Record<CustomReportLegendPosition, string> = {
+  TOP: 'Top',
+  RIGHT: 'Right',
+  BOTTOM: 'Bottom',
+  LEFT: 'Left',
 }
 
 // ─── Draft state ───────────────────────────────────────────────────────
@@ -145,6 +189,8 @@ export function defaultVisualization(): CustomReportVisualization {
     // Orientation is only valid for BAR (Contract A.10); the default TABLE
     // must not carry one or the server rejects every non-BAR save.
     orientation: null,
+    colors: [...CUSTOM_REPORT_DEFAULT_COLORS],
+    legendPosition: 'BOTTOM',
   }
 }
 
@@ -204,18 +250,22 @@ function uniqueAlias(metrics: CustomReportMetric[], preferred: string): string {
 export function serializeConfig(draft: CustomReportDraft): CustomReportConfig | null {
   if (!draft.source) return null
   return {
-    version: 1,
+    version: 2,
     dataSource: draft.source,
     filters: draft.filters,
     dimensions: draft.dimensions,
     metrics: draft.metrics,
     calculatedFields: draft.calculatedFields,
-    visualization: draft.visualization,
+    visualization: {
+      ...draft.visualization,
+      colors: draft.visualization.colors ?? [...CUSTOM_REPORT_DEFAULT_COLORS],
+      legendPosition: draft.visualization.legendPosition ?? 'BOTTOM',
+    },
     sort: draft.sort,
   }
 }
 
-/** Load a saved config into an editable draft (edit mode, Contract D.23). */
+/** Load a saved config into an editable draft (edit mode, Contract D.23 / v1+v2 compat). */
 export function configToDraft(config: CustomReportConfig): CustomReportDraft {
   return {
     source: config.dataSource,
@@ -223,7 +273,11 @@ export function configToDraft(config: CustomReportConfig): CustomReportDraft {
     dimensions: config.dimensions,
     metrics: config.metrics,
     calculatedFields: config.calculatedFields,
-    visualization: config.visualization,
+    visualization: {
+      ...config.visualization,
+      colors: config.visualization.colors ?? [...CUSTOM_REPORT_DEFAULT_COLORS],
+      legendPosition: config.visualization.legendPosition ?? 'BOTTOM',
+    },
     sort: config.sort,
   }
 }
@@ -335,7 +389,7 @@ export function validateDraft(
   const saveable = errors.length === 0
   // A draft without source or without fields is not previewable at all, and a
   // chart-incompatible draft must never fire a preview request either — the
-  // backend rejects those combos with a 400 (Contract A.10 / D.27).
+  // backend rejects those combos with a 400 (Contract A.4 / A.10).
   const baseErrors = errors.filter((e) =>
     /^(Choose a data source|Add at least one dimension|Add at least one metric)/.test(e),
   )
@@ -344,7 +398,7 @@ export function validateDraft(
   return { errors, saveable, previewable }
 }
 
-// ─── Chart compatibility (Contract A.10) ───────────────────────────────
+// ─── Chart compatibility (Contract A.4) ─────────────────────────────────
 
 export function chartCompatibilityErrors(
   chartType: CustomReportChartType,
@@ -354,21 +408,24 @@ export function chartCompatibilityErrors(
   const errors: string[] = []
   const fieldByKey = new Map((catalog?.fields ?? []).map((f) => [f.key, f]))
   const firstDim = draft.dimensions[0]
-  const hasNumericMetric = draft.metrics.some((m) => {
-    const field = fieldByKey.get(m.fieldId)
-    return !!field?.isNumeric
-  })
+  const totalMetrics = draft.metrics.length + (draft.calculatedFields?.length ?? 0)
+  const hasNumericMetric =
+    draft.metrics.some((m) => {
+      const field = fieldByKey.get(m.fieldId)
+      return !!field?.isNumeric
+    }) || (draft.calculatedFields?.length ?? 0) > 0
   const stageDimension = draft.dimensions.some((d) => d.fieldId === 'deal.stage')
 
   switch (chartType) {
     case 'TABLE':
       break
     case 'LINE':
+    case 'AREA':
       if (!(firstDim && (fieldByKey.get(firstDim.fieldId ?? '')?.isDate ?? false))) {
-        errors.push('Line charts need a date dimension first.')
+        errors.push(`${CHART_LABELS[chartType]} charts need a date dimension first.`)
       }
       if (!hasNumericMetric) {
-        errors.push('Line charts need a numeric metric.')
+        errors.push(`${CHART_LABELS[chartType]} charts need a numeric metric.`)
       }
       break
     case 'BAR':
@@ -380,11 +437,12 @@ export function chartCompatibilityErrors(
       }
       break
     case 'PIE':
-      if (!(draft.dimensions.length === 1 && draft.metrics.length === 1)) {
-        errors.push('Pie charts need exactly one dimension and one metric.')
+    case 'DONUT':
+      if (!(draft.dimensions.length === 1 && totalMetrics === 1)) {
+        errors.push(`${CHART_LABELS[chartType]} charts need exactly one dimension and one metric.`)
       }
       if (!hasNumericMetric) {
-        errors.push('Pie charts need a numeric metric.')
+        errors.push(`${CHART_LABELS[chartType]} charts need a numeric metric.`)
       }
       break
     case 'FUNNEL':
@@ -394,8 +452,42 @@ export function chartCompatibilityErrors(
       if (!stageDimension) {
         errors.push('Funnel charts need a Stage dimension.')
       }
-      if (!draft.metrics.some((m) => m.aggregation === 'COUNT' || m.aggregation === 'SUM')) {
+      if (
+        totalMetrics !== 1 ||
+        (draft.metrics.length > 0 &&
+          draft.metrics[0].aggregation !== 'COUNT' &&
+          draft.metrics[0].aggregation !== 'SUM')
+      ) {
         errors.push('Funnel charts need a COUNT or SUM metric.')
+      }
+      break
+    case 'SCATTER':
+      if (draft.dimensions.length !== 1) {
+        errors.push('Scatter plots need exactly one identifying dimension.')
+      }
+      if (totalMetrics !== 2) {
+        errors.push('Scatter plots need exactly two numeric metrics.')
+      } else {
+        const metricsAreNumeric = draft.metrics.every((m) => {
+          const field = fieldByKey.get(m.fieldId)
+          return !!field?.isNumeric
+        })
+        // Note: calculatedFields are always numeric
+        if (!metricsAreNumeric) {
+          errors.push('Scatter plots need both metrics to be numeric.')
+        }
+      }
+      break
+    case 'HEATMAP':
+      if (draft.dimensions.length !== 2) {
+        errors.push('Heatmaps need exactly two dimensions.')
+      }
+      if (totalMetrics !== 1) {
+        errors.push('Heatmaps need exactly one numeric metric.')
+      } else {
+        if (!hasNumericMetric) {
+          errors.push('Heatmaps need a numeric metric.')
+        }
       }
       break
   }

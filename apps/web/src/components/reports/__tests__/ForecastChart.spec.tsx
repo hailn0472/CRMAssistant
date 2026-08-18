@@ -66,12 +66,12 @@ describe('ForecastChart', () => {
   })
 
   it('renders aria-label on the chart region', () => {
-    render(<ForecastChart buckets={mockBuckets} groupBy={GROUP_BY} currency={CURRENCY} />)
-
-    expect(screen.getByRole('img')).toHaveAttribute(
-      'aria-label',
-      'Weighted sales forecast by month',
+    const { container } = render(
+      <ForecastChart buckets={mockBuckets} groupBy={GROUP_BY} currency={CURRENCY} />,
     )
+
+    const region = container.querySelector('[aria-label="Weighted sales forecast by month"]')
+    expect(region).not.toBeNull()
   })
 
   it('renders sr-only table with bucket data', () => {
@@ -123,26 +123,29 @@ describe('ForecastChart', () => {
   })
 
   it('uses correct aria-label for QUARTER groupBy', () => {
-    render(<ForecastChart buckets={mockBuckets} groupBy="QUARTER" currency={CURRENCY} />)
-
-    expect(screen.getByRole('img')).toHaveAttribute(
-      'aria-label',
-      'Weighted sales forecast by quarter',
+    const { container } = render(
+      <ForecastChart buckets={mockBuckets} groupBy="QUARTER" currency={CURRENCY} />,
     )
+
+    const region = container.querySelector('[aria-label="Weighted sales forecast by quarter"]')
+    expect(region).not.toBeNull()
   })
 
   it('uses correct aria-label for OWNER groupBy', () => {
-    render(<ForecastChart buckets={mockBuckets} groupBy="OWNER" currency={CURRENCY} />)
-
-    expect(screen.getByRole('img')).toHaveAttribute(
-      'aria-label',
-      'Weighted sales forecast by owner',
+    const { container } = render(
+      <ForecastChart buckets={mockBuckets} groupBy="OWNER" currency={CURRENCY} />,
     )
+
+    const region = container.querySelector('[aria-label="Weighted sales forecast by owner"]')
+    expect(region).not.toBeNull()
   })
 
   it('uses correct aria-label for TEAM groupBy', () => {
-    render(<ForecastChart buckets={mockBuckets} groupBy="TEAM" currency={CURRENCY} />)
+    const { container } = render(
+      <ForecastChart buckets={mockBuckets} groupBy="TEAM" currency={CURRENCY} />,
+    )
 
-    expect(screen.getByRole('img')).toHaveAttribute('aria-label', 'Weighted sales forecast by team')
+    const region = container.querySelector('[aria-label="Weighted sales forecast by team"]')
+    expect(region).not.toBeNull()
   })
 })
