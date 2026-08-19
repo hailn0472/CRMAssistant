@@ -21,6 +21,7 @@ export type CreateNotificationInput = {
   body?: string | null
   dealId?: string | null
   taskId?: string | null
+  reportExportId?: string | null
   dedupeKey?: string | null
 }
 
@@ -50,6 +51,7 @@ export const NOTIFICATION_SELECT = {
   body: true,
   dealId: true,
   taskId: true,
+  reportExportId: true,
   dedupeKey: true,
   readAt: true,
   createdAt: true,
@@ -68,6 +70,7 @@ export interface NotificationRecord {
   body: string | null
   dealId: string | null
   taskId: string | null
+  reportExportId: string | null
   dedupeKey: string | null
   readAt: Date | null
   createdAt: Date
@@ -103,7 +106,11 @@ export class NotificationsService {
     input: CreateNotificationInput,
   ): Promise<NotificationRecord> {
     assertValidNotificationType(input.type)
-    resolveNotificationTarget({ dealId: input.dealId, taskId: input.taskId })
+    resolveNotificationTarget({
+      dealId: input.dealId,
+      taskId: input.taskId,
+      reportExportId: input.reportExportId,
+    })
     const title = normalizeNotificationTitle(input.title)
     const body = normalizeNotificationBody(input.body)
 
@@ -117,6 +124,7 @@ export class NotificationsService {
           body,
           dealId: input.dealId ?? null,
           taskId: input.taskId ?? null,
+          reportExportId: input.reportExportId ?? null,
           dedupeKey: input.dedupeKey ?? null,
           createdBy: actorUserId,
           updatedBy: actorUserId,
@@ -156,6 +164,7 @@ export class NotificationsService {
             body,
             dealId: input.dealId ?? null,
             taskId: input.taskId ?? null,
+            reportExportId: input.reportExportId ?? null,
             dedupeKey: input.dedupeKey ?? null,
             createdBy: actorUserId,
             updatedBy: actorUserId,

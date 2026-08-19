@@ -1,3 +1,13 @@
+## Resolved by: 6-6-report-export-in-multiple-formats-pdf-excel-csv
+
+- **Document Export & Storage (PDF, Excel, CSV, storage, history) — from Stories 6.2, 6.3, 6.4, 6.5.** Shipped complete in Story 6.6: user-triggered on-demand export mutation `exportReport`, `ReportExport` durable model, Supabase Storage integration with fresh 24-hour signed URLs, minute background processor for large reports (>100 rows), accessible export dropdown on saved sales and custom builder surfaces, export history & re-download page at `/reports/exports`, and safe internal notification routing.
+- **Server-side Headless Chart Rendering — from Story 6.4.** Shipped pure server SVG chart generation rasterized via direct dependency `@resvg/resvg-js` embedded directly in PDF and XLSX `Charts` sheets without Puppeteer or browser runtime.
+
+## Deferred from: 6-6-report-export-in-multiple-formats-pdf-excel-csv
+
+- **Object-retention lifecycle purge policy.** Objects are removed on explicit user export deletion or tenant cascade; automated time-based object purging in Supabase Storage is deferred to infrastructure/lifecycle policies.
+- **Streaming export.** Large exports page through custom reports (up to 50,000 rows / 50 columns / 50 MB); streaming chunked HTTP downloads or direct S3 multipart stream generation remain deferred.
+
 ## Deferred from: 6-5-scheduled-report-delivery-via-email
 
 - **Document Export & Storage (PDF, Excel, CSV, storage, history) — Story 6.6 boundary.** Story 6.5 implements an internal, reusable attachment renderer (`ReportAttachmentService`) generating memory buffers for automated email dispatch only. User-triggered on-demand export, export history rows, Supabase Storage integration, signed download URLs, and the `exportReport` public mutation remain owned by Story 6.6.

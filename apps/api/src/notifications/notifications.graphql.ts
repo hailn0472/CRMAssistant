@@ -33,6 +33,7 @@ type NotificationShape = {
   body: string | null
   dealId: string | null
   taskId: string | null
+  reportExportId: string | null
   readAt: Date | null
   createdAt: Date
 }
@@ -58,6 +59,10 @@ NotificationRef.implement({
     taskId: t.string({
       nullable: true,
       resolve: (n) => n.taskId ?? null,
+    }),
+    reportExportId: t.string({
+      nullable: true,
+      resolve: (n) => n.reportExportId ?? null,
     }),
     readAt: t.string({
       nullable: true,

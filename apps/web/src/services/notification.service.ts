@@ -7,6 +7,7 @@ export type Notification = {
   body: string | null
   dealId: string | null
   taskId: string | null
+  reportExportId?: string | null
   readAt: string | null
   createdAt: string
 }
@@ -30,6 +31,7 @@ export const NOTIFICATION_FIELDS = `
   body
   dealId
   taskId
+  reportExportId
   readAt
   createdAt
 `

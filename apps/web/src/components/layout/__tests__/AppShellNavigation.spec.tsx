@@ -94,6 +94,25 @@ describe('AppShellNavigation', () => {
     expect(schedulesLink).toHaveAttribute('href', '/reports/schedules')
   })
 
+  it('exposes the Exports entry with href /reports/exports (Story 6.6, E.34)', () => {
+    renderNav()
+
+    const nav = screen.getByRole('navigation', { name: 'CRM navigation' })
+    const exportsLink = within(nav).getByRole('link', { name: 'Exports' })
+    expect(exportsLink).toHaveAttribute('href', '/reports/exports')
+  })
+
+  it('marks the exports route as active when on /reports/exports', () => {
+    mockUsePathname.mockReturnValue('/reports/exports')
+    renderNav()
+
+    const nav = screen.getByRole('navigation', { name: 'CRM navigation' })
+    expect(within(nav).getByRole('link', { name: 'Exports' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    )
+  })
+
   it('marks the schedules route as active when on /reports/schedules', () => {
     mockUsePathname.mockReturnValue('/reports/schedules')
     renderNav()

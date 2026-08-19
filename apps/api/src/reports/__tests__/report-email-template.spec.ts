@@ -29,6 +29,15 @@ function payload(overrides: Partial<ScheduledReportPayload> = {}): ScheduledRepo
     currency: 'USD',
     mixedCurrencies: true,
     crmUrl: 'https://crm.example/reports/sales?reportId=rep-1',
+    // Story 6.6 shared-payload fields (additive; schedule output unchanged)
+    filterSummary: 'All configured data',
+    dateRangeStart: '2026-01-01',
+    dateRangeEnd: '2026-01-31',
+    visualization: null,
+    chartSeries: [],
+    calculatedFields: [],
+    metricAliases: [],
+    filterTokens: [],
     ...overrides,
   }
 }

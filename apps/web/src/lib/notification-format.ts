@@ -16,6 +16,12 @@ const DEAL_MAP = ['DEAL_REMINDER', 'DEAL_MENTION'] as const
 export function notificationHref(n: Notification): string | null {
   if (n.dealId) return `/deals/${n.dealId}`
   if (n.taskId) return `/tasks/${n.taskId}`
+  if (n.reportExportId) {
+    if (n.type === 'REPORT_EXPORT_READY') {
+      return `/reports/exports?download=${n.reportExportId}`
+    }
+    return `/reports/exports?exportId=${n.reportExportId}`
+  }
   return null
 }
 
@@ -28,6 +34,10 @@ export function notificationTypeLabel(type: string): string {
       return 'Deal reminder'
     case 'DEAL_MENTION':
       return 'Mention'
+    case 'REPORT_EXPORT_READY':
+      return 'Report export ready'
+    case 'REPORT_EXPORT_FAILED':
+      return 'Report export failed'
     default:
       return type
   }
@@ -37,6 +47,7 @@ export function notificationTypeLabel(type: string): string {
 export function notificationTypeIconName(type: string): string {
   if (DEAL_MAP.includes(type as (typeof DEAL_MAP)[number])) return 'DollarSign'
   if (type === 'TASK_ASSIGNED') return 'CheckSquare'
+  if (type === 'REPORT_EXPORT_READY' || type === 'REPORT_EXPORT_FAILED') return 'Download'
   return 'Bell'
 }
 

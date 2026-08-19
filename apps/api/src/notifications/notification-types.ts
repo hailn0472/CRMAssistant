@@ -18,6 +18,13 @@ export const NOTIFICATION_TYPES = [
   // Story 6.5 (AC 15): terminal schedule delivery failure — emitted once per
   // execution with dedupe key `report-schedule-failed:<executionId>`.
   'REPORT_SCHEDULE_FAILED',
+  // Story 6.6 (AC 9): user-triggered export ready/failed — emitted once per
+  // export with dedupe keys `report-export-ready:<exportId>` /
+  // `report-export-failed:<exportId>`. The notification carries only the
+  // export row id (never a signed URL/object path); the frontend mints a
+  // fresh signed URL on owner download.
+  'REPORT_EXPORT_READY',
+  'REPORT_EXPORT_FAILED',
 ] as const
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number]
 
@@ -39,15 +46,22 @@ export function assertValidNotificationType(value: string): void {
 export function resolveNotificationTarget(input: {
   dealId?: string | null
   taskId?: string | null
-}): { target: 'DEAL' | 'TASK' | 'NONE'; id: string | null } {
-  if (input.dealId && input.taskId) {
-    throw new Error('A notification may reference at most one of dealId or taskId')
+  reportExportId?: string | null
+}): { target: 'DEAL' | 'TASK' | 'REPORT_EXPORT' | 'NONE'; id: string | null } {
+  const targets = [input.dealId, input.taskId, input.reportExportId].filter(
+    (v): v is string => typeof v === 'string' && v.length > 0,
+  )
+  if (targets.length > 1) {
+    throw new Error('A notification may reference at most one of dealId, taskId or reportExportId')
   }
   if (input.dealId) {
     return { target: 'DEAL', id: input.dealId }
   }
   if (input.taskId) {
     return { target: 'TASK', id: input.taskId }
+  }
+  if (input.reportExportId) {
+    return { target: 'REPORT_EXPORT', id: input.reportExportId }
   }
   return { target: 'NONE', id: null }
 }

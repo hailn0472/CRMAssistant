@@ -27,7 +27,7 @@ const ReportScheduleFrequencyRef = builder.enumType('ReportScheduleFrequency', {
   values: REPORT_SCHEDULE_FREQUENCIES,
 })
 
-const ReportDeliveryFormatRef = builder.enumType('ReportDeliveryFormat', {
+export const ReportDeliveryFormatRef = builder.enumType('ReportDeliveryFormat', {
   values: REPORT_DELIVERY_FORMATS,
 })
 

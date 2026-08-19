@@ -450,6 +450,36 @@ describe('CustomReportBuilder (AC 3-4, 10-11, 15-16)', () => {
       )
       expect(screen.getByRole('button', { name: /schedule report delivery/i })).toBeEnabled()
     })
+
+    it('enables Export menu in saved mode with reportId and no runtime filter override', async () => {
+      mockSearchParams = new URLSearchParams('reportId=report-1')
+      renderBuilder()
+      await waitFor(() => expect(mockGetData).toHaveBeenCalled())
+      await waitFor(() =>
+        expect(screen.getByRole('button', { name: /save report/i })).toBeInTheDocument(),
+      )
+      const exportBtn = screen.getByRole('button', { name: /export report/i })
+      expect(exportBtn).toBeInTheDocument()
+      expect(exportBtn).not.toBeDisabled()
+    })
+
+    it('shows disabled Export menu with save-required hint in unsaved draft mode', async () => {
+      mockSearchParams = new URLSearchParams('')
+      renderBuilder()
+      const exportBtn = screen.getByRole('button', { name: /export report/i })
+      expect(exportBtn).toBeInTheDocument()
+      expect(exportBtn).toBeDisabled()
+      expect(
+        screen.getByText('Please save your report draft first before exporting.'),
+      ).toBeInTheDocument()
+    })
+
+    it('hides Export menu when user lacks REPORT:READ permission', async () => {
+      permissionGrants['REPORT:READ'] = false
+      mockSearchParams = new URLSearchParams('reportId=report-1')
+      renderBuilder()
+      expect(screen.queryByRole('button', { name: /export report/i })).not.toBeInTheDocument()
+    })
   })
 
   it('shows an error state when the saved report cannot be loaded', async () => {

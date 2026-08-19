@@ -1,7 +1,7 @@
 import { InternalServerErrorException } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 
-import { SupabaseStorageService } from '../supabase-storage.service'
+import { SupabaseStorageService, DEFAULT_REPORT_EXPORT_BUCKET } from '../supabase-storage.service'
 
 jest.mock('@supabase/supabase-js', () => ({
   createClient: jest.fn(),
@@ -137,5 +137,112 @@ describe('SupabaseStorageService', () => {
     await expect(service.remove('deals/1/2/x.pdf')).rejects.toThrow(
       new InternalServerErrorException('Document storage is unavailable'),
     )
+  })
+
+  // ─── Story 6.6 explicit-bucket variants ─────────────────────────────────
+
+  it('uploads to an explicit private bucket with upsert:false and content type', async () => {
+    const { upload, from } = makeSupabaseMock()
+    upload.mockResolvedValue({ data: { path: 'reports/t1/u1/e1/x.pdf' }, error: null })
+
+    const service = new SupabaseStorageService(makeConfig())
+    await service.uploadToBucket(
+      'report-exports',
+      'reports/t1/u1/e1/x.pdf',
+      Buffer.from('%PDF-1.7'),
+      'application/pdf',
+    )
+
+    expect(from).toHaveBeenCalledWith('report-exports')
+    expect(upload).toHaveBeenCalledWith('reports/t1/u1/e1/x.pdf', Buffer.from('%PDF-1.7'), {
+      contentType: 'application/pdf',
+      upsert: false,
+    })
+  })
+
+  it('mints signed URLs from an explicit bucket with the requested TTL', async () => {
+    const { createSignedUrl, from } = makeSupabaseMock()
+    createSignedUrl.mockResolvedValue({
+      data: { signedUrl: 'https://signed.example/x.pdf' },
+      error: null,
+    })
+
+    const service = new SupabaseStorageService(makeConfig())
+    const url = await service.createSignedUrlFromBucket(
+      'report-exports',
+      'reports/t1/u1/e1/x.pdf',
+      86_400,
+    )
+
+    expect(from).toHaveBeenCalledWith('report-exports')
+    expect(createSignedUrl).toHaveBeenCalledWith('reports/t1/u1/e1/x.pdf', 86_400)
+    expect(url).toBe('https://signed.example/x.pdf')
+  })
+
+  it('removes objects from an explicit bucket', async () => {
+    const { remove, from } = makeSupabaseMock()
+    remove.mockResolvedValue({ data: null, error: null })
+
+    const service = new SupabaseStorageService(makeConfig())
+    await service.removeFromBucket('report-exports', 'reports/t1/u1/e1/x.pdf')
+
+    expect(from).toHaveBeenCalledWith('report-exports')
+    expect(remove).toHaveBeenCalledWith(['reports/t1/u1/e1/x.pdf'])
+  })
+
+  it('defaults the report-export bucket to report-exports and honors env override', () => {
+    expect(DEFAULT_REPORT_EXPORT_BUCKET).toBe('report-exports')
+    const service = new SupabaseStorageService(makeConfig())
+    expect(service.reportExportBucket()).toBe('report-exports')
+    const overridden = new SupabaseStorageService(
+      makeConfig({ REPORT_EXPORT_STORAGE_BUCKET: 'private-exports' }),
+    )
+    expect(overridden.reportExportBucket()).toBe('private-exports')
+  })
+
+  it('preserves deal-document defaults when the export bucket is overridden', async () => {
+    const { upload, from } = makeSupabaseMock()
+    upload.mockResolvedValue({ data: { path: 'deals/1/2/x.pdf' }, error: null })
+
+    const service = new SupabaseStorageService(
+      makeConfig({ REPORT_EXPORT_STORAGE_BUCKET: 'private-exports' }),
+    )
+    await service.upload('deals/1/2/x.pdf', Buffer.from('x'), 'application/pdf')
+    expect(from).toHaveBeenCalledWith('deal-documents')
+  })
+
+  it('maps an explicit-bucket upload error to "unavailable"', async () => {
+    const { upload } = makeSupabaseMock()
+    upload.mockResolvedValue({ data: null, error: { message: 'bucket missing' } })
+
+    const service = new SupabaseStorageService(makeConfig())
+    await expect(
+      service.uploadToBucket(
+        'report-exports',
+        'reports/t1/u1/e1/x.pdf',
+        Buffer.from('%PDF-1.7'),
+        'application/pdf',
+      ),
+    ).rejects.toThrow(new InternalServerErrorException('Document storage is unavailable'))
+  })
+
+  it('maps an explicit-bucket signed-URL error to "unavailable"', async () => {
+    const { createSignedUrl } = makeSupabaseMock()
+    createSignedUrl.mockResolvedValue({ data: null, error: { message: 'nope' } })
+
+    const service = new SupabaseStorageService(makeConfig())
+    await expect(
+      service.createSignedUrlFromBucket('report-exports', 'reports/t1/u1/e1/x.pdf', 86_400),
+    ).rejects.toThrow(new InternalServerErrorException('Document storage is unavailable'))
+  })
+
+  it('maps an explicit-bucket removal error to "unavailable"', async () => {
+    const { remove } = makeSupabaseMock()
+    remove.mockResolvedValue({ data: null, error: { message: 'gone' } })
+
+    const service = new SupabaseStorageService(makeConfig())
+    await expect(
+      service.removeFromBucket('report-exports', 'reports/t1/u1/e1/x.pdf'),
+    ).rejects.toThrow(new InternalServerErrorException('Document storage is unavailable'))
   })
 })

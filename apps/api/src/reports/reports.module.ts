@@ -2,6 +2,7 @@ import { Module, OnModuleInit } from '@nestjs/common'
 
 import { registerReportsGraphql } from './reports.graphql'
 import { registerReportSchedulesGraphql } from './report-schedules.graphql'
+import { registerReportExportsGraphql } from './report-exports.graphql'
 import { ForecastService } from './forecast.service'
 import { WinLossService } from './win-loss.service'
 import { ProductivityService } from './productivity.service'
@@ -12,6 +13,9 @@ import { ReportScheduleProcessor } from './report-schedule-processor.service'
 import { ScheduledReportPayloadService } from './scheduled-report-payload.service'
 import { ReportAttachmentService } from './report-attachment.service'
 import { ReportEmailService } from './report-email.service'
+import { ReportExportPayloadService } from './report-export-payload.service'
+import { ReportExportsService } from './report-exports.service'
+import { ReportExportProcessor } from './report-export-processor.service'
 import { PrismaModule } from '../prisma/prisma.module'
 import { DealsModule } from '../deals/deals.module'
 import { ContactsModule } from '../contacts/contacts.module'
@@ -21,6 +25,7 @@ import { AuditModule } from '../audit/audit.module'
 import { TimeTrackingModule } from '../time-tracking/time-tracking.module'
 import { NotificationsModule } from '../notifications/notifications.module'
 import { PermissionsModule } from '../permissions/permissions.module'
+import { StorageModule } from '../storage/storage.module'
 
 // Story 4.5 (AC 28): ReportsModule → TimeTrackingModule is one-way (the
 // ProductivityService injects TimeEntriesService); TimeTrackingModule never
@@ -48,6 +53,7 @@ import { PermissionsModule } from '../permissions/permissions.module'
     TimeTrackingModule,
     NotificationsModule,
     PermissionsModule,
+    StorageModule,
   ],
   providers: [
     ForecastService,
@@ -60,6 +66,9 @@ import { PermissionsModule } from '../permissions/permissions.module'
     ReportAttachmentService,
     ReportEmailService,
     ReportScheduleProcessor,
+    ReportExportPayloadService,
+    ReportExportsService,
+    ReportExportProcessor,
   ],
   exports: [
     ForecastService,
@@ -72,6 +81,9 @@ import { PermissionsModule } from '../permissions/permissions.module'
     ReportAttachmentService,
     ReportEmailService,
     ReportScheduleProcessor,
+    ReportExportPayloadService,
+    ReportExportsService,
+    ReportExportProcessor,
   ],
 })
 export class ReportsModule implements OnModuleInit {
@@ -82,6 +94,7 @@ export class ReportsModule implements OnModuleInit {
     private readonly salesReportsService: SalesReportsService,
     private readonly customReportsService: CustomReportsService,
     private readonly reportSchedulesService: ReportSchedulesService,
+    private readonly reportExportsService: ReportExportsService,
   ) {}
 
   onModuleInit(): void {
@@ -93,5 +106,8 @@ export class ReportsModule implements OnModuleInit {
       this.customReportsService,
     )
     registerReportSchedulesGraphql(this.reportSchedulesService)
+    // Story 6.6: ReportsModule must stay above AppGraphqlModule so the
+    // side-effect registration runs before builder.toSchema({}).
+    registerReportExportsGraphql(this.reportExportsService)
   }
 }

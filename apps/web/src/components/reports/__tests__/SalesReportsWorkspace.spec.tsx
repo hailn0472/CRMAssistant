@@ -478,6 +478,29 @@ describe('SalesReportsWorkspace', () => {
     expect(screen.getByRole('button', { name: /schedule report delivery/i })).toBeInTheDocument()
   })
 
+  it('renders Export menu for saved sales report and passes runtime filters', async () => {
+    grantAll()
+    renderWorkspace()
+
+    await screen.findByRole('button', { name: /August Overview/ })
+    fireEvent.click(screen.getByRole('button', { name: /August Overview/ }))
+
+    // Export button should be visible when saved report selected and REPORT:READ granted
+    const exportBtn = screen.getByRole('button', { name: /export report/i })
+    expect(exportBtn).toBeInTheDocument()
+    expect(exportBtn).not.toBeDisabled()
+  })
+
+  it('hides Export menu when user lacks REPORT:READ permission', async () => {
+    grantAll()
+    permissionGrants['REPORT:READ'] = false
+    renderWorkspace()
+
+    // Without REPORT:READ, the entire workspace shows permission limited state
+    expect(screen.getByText('Reports access limited')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /export report/i })).not.toBeInTheDocument()
+  })
+
   // ─── AC 53/72: drill-down ───────────────────────────────────────────
   it('opens the drill panel from a chart datum and toggles scope', async () => {
     grantAll()
