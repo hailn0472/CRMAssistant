@@ -4,7 +4,7 @@ import * as path from 'path'
 import { INestApplication } from '@nestjs/common'
 import { Test, TestingModule } from '@nestjs/testing'
 import { JwtService } from '@nestjs/jwt'
-import { PrismaClient } from '@prisma/client'
+import { Prisma, PrismaClient } from '@prisma/client'
 import request from 'supertest'
 import { PostgreSqlContainer } from '@testcontainers/postgresql'
 
@@ -16,6 +16,25 @@ import type { Tenant } from '@prisma/client'
 import type { StartedPostgreSqlContainer } from '@testcontainers/postgresql'
 
 const CSV_HEADER = 'email,firstName,lastName,phone,company,jobTitle,tags'
+const TRUNCATE_TABLES =
+  'TRUNCATE TABLE "CustomerAnalyticsSnapshot", "ForecastSnapshot", "Notification", "Widget", "Dashboard", "ContactTag", "Tag", "Note", "Contact", "User", "UserRole", "Role", "Team", "Report", "Tenant" RESTART IDENTITY CASCADE'
+
+async function truncateWithDeadlockRetry(prisma: PrismaClient): Promise<void> {
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    try {
+      await prisma.$executeRawUnsafe(TRUNCATE_TABLES)
+      return
+    } catch (error) {
+      const isDeadlock =
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2010' &&
+        error.meta?.['code'] === '40P01'
+      if (!isDeadlock || attempt === 3) {
+        throw error
+      }
+    }
+  }
+}
 
 describe('Contact import/export endpoints (integration)', () => {
   let prisma: PrismaClient
@@ -64,9 +83,7 @@ describe('Contact import/export endpoints (integration)', () => {
   })
 
   afterEach(async () => {
-    await prisma.$executeRawUnsafe(
-      'TRUNCATE TABLE "Notification", "Widget", "Dashboard", "ContactTag", "Tag", "Note", "Contact", "User", "UserRole", "Role", "Team", "Report", "Tenant" RESTART IDENTITY CASCADE',
-    )
+    await truncateWithDeadlockRetry(prisma)
   })
 
   async function createTenant(name: string): Promise<Tenant> {

@@ -101,6 +101,13 @@ const navigationSections: NavigationSection[] = [
         permission: { resource: 'REPORT', action: 'READ' },
       },
       {
+        // Story 6.7 (Contract E37): Customer Analytics dashboard, gated on REPORT:READ.
+        label: 'Customer Analytics',
+        href: '/reports/customer-analytics',
+        icon: Users,
+        permission: { resource: 'REPORT', action: 'READ' },
+      },
+      {
         // Story 6.5 (Contract F.34): Scheduled reports list page, gated on REPORT:READ.
         label: 'Schedules',
         href: '/reports/schedules',

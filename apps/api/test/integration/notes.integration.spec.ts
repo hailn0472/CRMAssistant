@@ -94,7 +94,7 @@ describe('Notes on Contact & Deal (integration)', () => {
   // "Note" MUST be first in the spec's own TRUNCATE list — children before parents.
   afterEach(async () => {
     await prisma.$executeRawUnsafe(
-      'TRUNCATE TABLE "Notification", "Widget", "Dashboard", "Note", "Deal", "DealStage", "Contact", "User", "UserRole", "Role", "Permission", "RolePermission", "Team", "Report", "Tenant", "AuditLog" RESTART IDENTITY CASCADE',
+      'TRUNCATE TABLE "CustomerAnalyticsSnapshot", "Notification", "Widget", "Dashboard", "Note", "Deal", "DealStage", "Contact", "User", "UserRole", "Role", "Permission", "RolePermission", "Team", "Report", "Tenant", "AuditLog" RESTART IDENTITY CASCADE',
     )
   })
 

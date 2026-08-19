@@ -99,7 +99,7 @@ export class ApiTestHarness {
 
   async cleanupDatabase(): Promise<void> {
     await this.prisma.$executeRawUnsafe(
-      'TRUNCATE TABLE "ReportExport", "Contact", "User", "Tenant" RESTART IDENTITY CASCADE',
+      'TRUNCATE TABLE "CustomerAnalyticsSnapshot", "ReportExport", "Contact", "User", "Tenant" RESTART IDENTITY CASCADE',
     )
     jest.clearAllMocks()
     mockSupabaseSignOut.mockResolvedValue({ error: null })

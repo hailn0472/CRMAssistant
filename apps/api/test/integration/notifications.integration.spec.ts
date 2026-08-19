@@ -85,7 +85,7 @@ describe('Notifications (integration)', () => {
   // "Notification" MUST be first — children before parents.
   afterEach(async () => {
     await prisma.$executeRawUnsafe(
-      'TRUNCATE TABLE "Notification", "Widget", "Dashboard", "Activity", "Note", "Deal", "DealStage", "Task", "Contact", "User", "UserRole", "Role", "Permission", "RolePermission", "Team", "Report", "Tenant", "AuditLog" RESTART IDENTITY CASCADE',
+      'TRUNCATE TABLE "CustomerAnalyticsSnapshot", "Notification", "Widget", "Dashboard", "Activity", "Note", "Deal", "DealStage", "Task", "Contact", "User", "UserRole", "Role", "Permission", "RolePermission", "Team", "Report", "Tenant", "AuditLog" RESTART IDENTITY CASCADE',
     )
   })
 

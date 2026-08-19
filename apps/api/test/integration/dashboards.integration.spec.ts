@@ -101,7 +101,7 @@ describe('Dashboards (integration)', () => {
   // "Widget" MUST be first, then "Dashboard" — children before parents.
   afterEach(async () => {
     await prisma.$executeRawUnsafe(
-      'TRUNCATE TABLE "Notification", "Widget", "Dashboard", "SharingRule", "Deal", "DealStage", "Note", "Contact", "Task", "Activity", "User", "UserRole", "Role", "Permission", "RolePermission", "Team", "Report", "Tenant", "AuditLog" RESTART IDENTITY CASCADE',
+      'TRUNCATE TABLE "CustomerAnalyticsSnapshot", "Notification", "Widget", "Dashboard", "SharingRule", "Deal", "DealStage", "Note", "Contact", "Task", "Activity", "User", "UserRole", "Role", "Permission", "RolePermission", "Team", "Report", "Tenant", "AuditLog" RESTART IDENTITY CASCADE',
     )
   })
 

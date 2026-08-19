@@ -93,7 +93,7 @@ describe('Automatic activity logging (integration)', () => {
   afterEach(async () => {
     // AC 58: every table that can hold a row produced by these scenarios.
     await prisma.$executeRawUnsafe(
-      'TRUNCATE TABLE "Notification", "Widget", "Dashboard", "Activity", "UserActivityLogPreference", "Message", "Conversation", "Task", "Deal", "DealStage", "Note", "Contact", "User", "UserRole", "Role", "Permission", "RolePermission", "Team", "Report", "Tenant", "AuditLog" RESTART IDENTITY CASCADE',
+      'TRUNCATE TABLE "CustomerAnalyticsSnapshot", "Notification", "Widget", "Dashboard", "Activity", "UserActivityLogPreference", "Message", "Conversation", "Task", "Deal", "DealStage", "Note", "Contact", "User", "UserRole", "Role", "Permission", "RolePermission", "Team", "Report", "Tenant", "AuditLog" RESTART IDENTITY CASCADE',
     )
     jest.clearAllMocks()
   })

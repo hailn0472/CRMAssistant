@@ -19,6 +19,8 @@ import { NotificationsService } from '../notifications/notifications.service'
 import type { CalendarTaskInput } from '../calendar/calendar-sync.service'
 import { isTaskPriority, isTaskStatus, toUtcMidnight } from './task-due-status'
 import type { TaskPriority, TaskStatus } from './task-due-status'
+
+import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library'
 import type { Prisma } from '@prisma/client'
 
 export type CreateTaskInput = {
@@ -34,6 +36,19 @@ export type CreateTaskInput = {
   isRecurring?: boolean
   recurrencePattern?: string
   recurrenceEndDate?: string | null
+}
+
+// Story 6.7 (Contract C21): internal-only automation input. automationSource/
+// automationKey never appear in the public CreateTaskInput / GraphQL inputs.
+export type CreateAutomatedTaskInput = {
+  title: string
+  description?: string | null
+  priority?: string
+  assignedTo: string
+  contactId: string
+  dueDate: Date
+  automationSource: string
+  automationKey: string
 }
 
 export type UpdateTaskInput = {
@@ -419,6 +434,103 @@ export class TasksService {
     this.publishTaskChanged(tenantId, createdTask)
 
     return createdTask
+  }
+
+  /**
+   * Story 6.7 (Contract C21–C23): internal idempotent automation path for
+   * server-generated tasks (e.g. churn-prevention follow-ups). Reuses the
+   * public create() side-effect chain — task validation, select, audit,
+   * TASK_ASSIGNED notification/pub-sub and calendar push — but carries a
+   * deterministic automationKey that makes the same trigger idempotent:
+   * a P2002 on `@@unique([tenantId, automationKey])` returns the existing
+   * SAME-TENANT task as an idempotent success (never a cross-tenant row).
+   * automationSource/automationKey are never accepted from client inputs —
+   * they exist only on this internal path.
+   */
+  async createAutomatedTask(
+    tenantId: string,
+    input: CreateAutomatedTaskInput,
+  ): Promise<TaskListItem> {
+    const title = normalizeTitle(input.title)
+    const description = normalizeDescription(input.description)
+    const priority = normalizePriority(input.priority, 'HIGH')
+    const status: TaskStatus = 'TODO'
+
+    // Assignee must be a live user of the same tenant (C23: never reassign
+    // to a different user; an inactive owner fails task creation safely).
+    const assignee = await this.prisma.user.findFirst({
+      where: { id: input.assignedTo, tenantId, deletedAt: null, isActive: true },
+      select: { id: true },
+    })
+    if (!assignee) {
+      throw new BadRequestException('Assignee not found in this tenant')
+    }
+
+    // Contact must be active in the same tenant. There is no caller user on
+    // the automation path (background tenant-wide), so tenant scope + soft
+    // delete are the contract here — visibility is not applicable.
+    const contact = await this.prisma.contact.findFirst({
+      where: { id: input.contactId, tenantId, deletedAt: null },
+      select: { id: true },
+    })
+    if (!contact) {
+      throw new NotFoundException('Contact not found')
+    }
+
+    let task: TaskListItem
+    try {
+      const created = await this.prisma.task.create({
+        data: {
+          tenantId,
+          title,
+          description,
+          status,
+          priority,
+          assignedTo: input.assignedTo,
+          contactId: input.contactId,
+          dealId: null,
+          dueDate: input.dueDate,
+          automationSource: input.automationSource,
+          automationKey: input.automationKey,
+          createdBy: 'system',
+          updatedBy: 'system',
+        },
+        select: taskListSelect,
+      })
+      task = created
+    } catch (error) {
+      if (error instanceof PrismaClientKnownRequestError && error.code === 'P2002') {
+        const existing = await this.prisma.task.findFirst({
+          where: { tenantId, automationKey: input.automationKey },
+          select: taskListSelect,
+        })
+        if (existing) {
+          return existing
+        }
+      }
+      throw error
+    }
+
+    // Same side-effect chain as create() — the audit actor is the task's
+    // assignee (the only real same-tenant user in scope; AuditLog.userId is a
+    // required FK — no 'system' pseudo-user exists).
+    this.taskPubSub.publish(`${PUBSUB_TASK_ASSIGNED}:${tenantId}:${input.assignedTo}`, task)
+    await this.notifications.notifySafe(tenantId, 'system', {
+      recipientUserId: input.assignedTo,
+      type: 'TASK_ASSIGNED',
+      title: `Task assigned: ${task.title}`,
+      body: task.description ?? null,
+      taskId: task.id,
+      dealId: null,
+      dedupeKey: null,
+    })
+    await this.writeAudit(tenantId, input.assignedTo, 'CREATE', task.id)
+    if (task.dueDate) {
+      await this.syncCalendarSafe(task)
+    }
+    this.publishTaskChanged(tenantId, task)
+
+    return task
   }
 
   async findOne(tenantId: string, userId: string, id: string): Promise<TaskListItem> {

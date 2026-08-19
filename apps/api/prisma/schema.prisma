@@ -154,6 +154,7 @@ model Tenant {
   reportSchedules            ReportSchedule[]
   ReportScheduleExecution    ReportScheduleExecution[]
   reportExports              ReportExport[]
+  customerAnalyticsSnapshots CustomerAnalyticsSnapshot[]
 }
 
 /// Tenant-scoped user model with authentication support.
@@ -390,6 +391,15 @@ model Contact {
   language       String?
   source         String? // How the contact was acquired: Website, Referral, Event, etc.
   notes          String? // Internal notes about the contact
+  // Story 6.7 — server-owned calculated analytics fields (AC 3). Nullable so
+  // the additive migration is safe with existing rows; only the daily
+  // CustomerAnalyticsProcessor writes them. NEVER client-writable: they are
+  // absent from Create/UpdateContactInput.
+  lifetimeValue         Float? // round2(sum of active won Deal.value)
+  churnRisk             String? // 'LOW' | 'MEDIUM' | 'HIGH' via service const tuple
+  churnRiskScore        Float? // 0..100 — sort/explanation support, not the category authority
+  lastActivityDate      DateTime? // MAX(Activity.createdAt) — null = no activity yet
+  analyticsCalculatedAt DateTime? // freshness marker from the last processor run
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
   createdBy      String    @default("system")
@@ -407,12 +417,17 @@ model Contact {
   deals             Deal[]
   tasks             Task[]
   noteEntries       Note[]                   @relation("ContactNote")
+  analyticsSnapshots CustomerAnalyticsSnapshot[]
 
   @@unique([tenantId, email])
   @@index([tenantId])
   @@index([tenantId, ownerId])
   @@index([tenantId, teamId])
   @@index([tenantId, createdAt])
+  // Story 6.7 — analytics filter/sort indexes (Contract A2)
+  @@index([tenantId, churnRisk])
+  @@index([tenantId, lifetimeValue])
+  @@index([tenantId, lastActivityDate])
 }
 
 /// Immutable activity log for contact timeline (Story 5.4).
@@ -1160,6 +1175,15 @@ model Task {
   recurrenceEndDate DateTime?
   parentTaskId      String?
 
+  // Story 6.7 — internal-only automation identity (Contract A4). Written by
+  // server automation paths (e.g. churn-prevention task creation), never by
+  // client create/update inputs. The deterministic non-null automationKey is
+  // intentionally kept even when the task is soft-deleted so the same trigger
+  // cannot re-create the task; NULL keys never collide (Postgres treats NULLs
+  // as distinct in unique indexes).
+  automationSource String?
+  automationKey    String?
+
   tenant   Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   assignee User     @relation("TaskAssignee", fields: [assignedTo], references: [id], onDelete: Cascade)
   contact  Contact? @relation(fields: [contactId], references: [id], onDelete: Cascade)
@@ -1175,6 +1199,7 @@ model Task {
   calendarEvents TaskCalendarEvent[]
   timeEntries    TimeEntry[]
   notifications  Notification[]      @relation("TaskNotification")
+  churnPreventionSnapshots CustomerAnalyticsSnapshot[] @relation("ChurnPreventionTask")
 
   @@index([tenantId])
   @@index([tenantId, assignedTo])
@@ -1185,6 +1210,52 @@ model Task {
   // Story 4.6: occurrence lookup + sweep template scan (AC 4)
   @@index([tenantId, parentTaskId])
   @@index([tenantId, isRecurring])
+  // Story 6.7: same trigger (e.g. CHURN_RISK:<contactId>:<date>) can never
+  // create a second task — P2002 on this unique is an idempotent success.
+  @@unique([tenantId, automationKey])
+}
+
+/// Story 6.7: daily materialized customer analytics snapshot (AC 8, 15-16).
+/// One row per (tenant, contact, UTC day). This is the source for LTV trend
+/// and acquisition-cohort analysis — never inferred from current values.
+/// tenantId is MANDATORY on every access (no RLS backstop); visibility for
+/// API reads is ALWAYS derived through the active parent Contact, never by
+/// resolving visibility on this child row (no ownerId column).
+model CustomerAnalyticsSnapshot {
+  id                      String    @id @default(uuid())
+  tenantId                String
+  contactId               String
+  snapshotDate            DateTime // UTC midnight, one row/contact/day
+  acquisitionCohort       String // YYYY-MM derived from Contact.createdAt
+  lifetimeValue           Float
+  churnRiskScore          Float
+  churnRisk               String
+  lastActivityDate        DateTime?
+  inactivityRisk          Float
+  dealWinRate             Float
+  engagementScore         Float
+  wonDealCount            Int
+  lostDealCount           Int
+  qualifyingActivityCount Int
+  churnPreventionTaskId   String?
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
+  createdBy               String    @default("system")
+  updatedBy               String    @default("system")
+  deletedAt               DateTime?
+
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  contact Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  churnPreventionTask Task? @relation("ChurnPreventionTask", fields: [churnPreventionTaskId], references: [id], onDelete: SetNull)
+
+  // Unique (tenant, contact, day) is the idempotency backstop for daily
+  // reruns and concurrent processor instances (Contract A3).
+  @@unique([tenantId, contactId, snapshotDate])
+  @@index([tenantId, snapshotDate])
+  @@index([tenantId, acquisitionCohort, snapshotDate])
+  @@index([tenantId, churnRisk, snapshotDate])
+  @@index([tenantId, contactId, snapshotDate(sort: Desc)])
+  @@index([tenantId])
 }
 
 /// Tenant-global task template catalogue (Story 4.1).
