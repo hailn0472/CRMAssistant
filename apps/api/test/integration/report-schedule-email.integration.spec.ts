@@ -75,7 +75,7 @@ describe('Report schedule email delivery (integration)', () => {
   }
 
   const TRUNCATE_TABLES =
-    'TRUNCATE TABLE "Notification", "ReportScheduleExecution", "ReportSchedule", "Report", "SharingRule", "DealLineItem", "Product", "Deal", "DealStage", "ForecastSnapshot", "Note", "Contact", "ContactTag", "Tag", "Task", "Activity", "User", "UserRole", "Role", "Permission", "RolePermission", "Team", "Tenant", "AuditLog" RESTART IDENTITY CASCADE'
+    'TRUNCATE TABLE "CustomerAnalyticsSnapshot", "Notification", "ReportScheduleExecution", "ReportSchedule", "Report", "SharingRule", "DealLineItem", "Product", "Deal", "DealStage", "ForecastSnapshot", "Note", "Contact", "ContactTag", "Tag", "Task", "Activity", "User", "UserRole", "Role", "Permission", "RolePermission", "Team", "Tenant", "AuditLog" RESTART IDENTITY CASCADE'
 
   beforeAll(async () => {
     container = await new PostgreSqlContainer('postgres:15-alpine').start()

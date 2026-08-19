@@ -35,7 +35,12 @@ describe('Products Integration', () => {
   })
 
   afterEach(async () => {
-    await prisma.$executeRawUnsafe('TRUNCATE TABLE "Notification" CASCADE')
+    // CustomerAnalyticsSnapshot is truncated exactly ONCE here (child of
+    // Contact/Tenant, so before them); every other table list is the
+    // original products-spec cleanup (F4).
+    await prisma.$executeRawUnsafe(
+      'TRUNCATE TABLE "CustomerAnalyticsSnapshot", "Notification" CASCADE',
+    )
     await prisma.$executeRawUnsafe('TRUNCATE TABLE "Widget" CASCADE')
     await prisma.$executeRawUnsafe('TRUNCATE TABLE "Dashboard" CASCADE')
     await prisma.$executeRawUnsafe('TRUNCATE TABLE "Report" CASCADE')

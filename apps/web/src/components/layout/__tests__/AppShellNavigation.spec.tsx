@@ -94,6 +94,25 @@ describe('AppShellNavigation', () => {
     expect(schedulesLink).toHaveAttribute('href', '/reports/schedules')
   })
 
+  it('exposes the Customer Analytics entry with href /reports/customer-analytics (Story 6.7, Contract E37)', () => {
+    renderNav()
+
+    const nav = screen.getByRole('navigation', { name: 'CRM navigation' })
+    const analyticsLink = within(nav).getByRole('link', { name: 'Customer Analytics' })
+    expect(analyticsLink).toHaveAttribute('href', '/reports/customer-analytics')
+  })
+
+  it('marks the customer-analytics route as active when on /reports/customer-analytics', () => {
+    mockUsePathname.mockReturnValue('/reports/customer-analytics')
+    renderNav()
+
+    const nav = screen.getByRole('navigation', { name: 'CRM navigation' })
+    expect(within(nav).getByRole('link', { name: 'Customer Analytics' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    )
+  })
+
   it('exposes the Exports entry with href /reports/exports (Story 6.6, E.34)', () => {
     renderNav()
 

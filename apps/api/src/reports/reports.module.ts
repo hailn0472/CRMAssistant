@@ -3,11 +3,14 @@ import { Module, OnModuleInit } from '@nestjs/common'
 import { registerReportsGraphql } from './reports.graphql'
 import { registerReportSchedulesGraphql } from './report-schedules.graphql'
 import { registerReportExportsGraphql } from './report-exports.graphql'
+import { registerCustomerAnalyticsGraphql } from './customer-analytics.graphql'
 import { ForecastService } from './forecast.service'
 import { WinLossService } from './win-loss.service'
 import { ProductivityService } from './productivity.service'
 import { SalesReportsService } from './sales-reports.service'
 import { CustomReportsService } from './custom-reports.service'
+import { CustomerAnalyticsService } from './customer-analytics.service'
+import { CustomerAnalyticsProcessor } from './customer-analytics-processor.service'
 import { ReportSchedulesService } from './report-schedules.service'
 import { ReportScheduleProcessor } from './report-schedule-processor.service'
 import { ScheduledReportPayloadService } from './scheduled-report-payload.service'
@@ -61,6 +64,9 @@ import { StorageModule } from '../storage/storage.module'
     ProductivityService,
     SalesReportsService,
     CustomReportsService,
+    // Story 6.7: customer analytics query service + daily materialization processor.
+    CustomerAnalyticsService,
+    CustomerAnalyticsProcessor,
     ReportSchedulesService,
     ScheduledReportPayloadService,
     ReportAttachmentService,
@@ -76,6 +82,8 @@ import { StorageModule } from '../storage/storage.module'
     ProductivityService,
     SalesReportsService,
     CustomReportsService,
+    CustomerAnalyticsService,
+    CustomerAnalyticsProcessor,
     ReportSchedulesService,
     ScheduledReportPayloadService,
     ReportAttachmentService,
@@ -95,6 +103,7 @@ export class ReportsModule implements OnModuleInit {
     private readonly customReportsService: CustomReportsService,
     private readonly reportSchedulesService: ReportSchedulesService,
     private readonly reportExportsService: ReportExportsService,
+    private readonly customerAnalyticsService: CustomerAnalyticsService,
   ) {}
 
   onModuleInit(): void {
@@ -109,5 +118,8 @@ export class ReportsModule implements OnModuleInit {
     // Story 6.6: ReportsModule must stay above AppGraphqlModule so the
     // side-effect registration runs before builder.toSchema({}).
     registerReportExportsGraphql(this.reportExportsService)
+    // Story 6.7: customer analytics query must be registered before the
+    // schema barrel builds, or the field vanishes silently.
+    registerCustomerAnalyticsGraphql(this.customerAnalyticsService)
   }
 }

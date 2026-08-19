@@ -28,6 +28,7 @@ const SEGMENT_LABELS: Record<string, string> = {
   reports: 'Reports',
   sales: 'Sales', // Story 6.2 (AC 65)
   builder: 'Builder', // Story 6.3 (Contract D.31)
+  'customer-analytics': 'Customer Analytics', // Story 6.7 (Contract E37)
   schedules: 'Schedules', // Story 6.5 (Contract F.34)
   exports: 'Exports', // Story 6.6 (Contract E.34)
   forecast: 'Forecast',
@@ -94,7 +95,7 @@ export function Breadcrumbs({ className }: { className?: string }): React.JSX.El
         {crumbs.map((crumb, index) => {
           const isLast = index === crumbs.length - 1
           return (
-            <Fragment key={crumb.href}>
+            <Fragment key={`${index}-${crumb.href}`}>
               <BreadcrumbItem className="min-w-0">
                 {isLast ? (
                   <BreadcrumbPage className="truncate">{crumb.label}</BreadcrumbPage>

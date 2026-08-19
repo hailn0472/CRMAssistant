@@ -108,6 +108,12 @@ function makeContact(overrides: Partial<Contact> = {}): Contact {
     notes: null,
     ownerId: USER_ID,
     teamId: null,
+    // Story 6.7: server-owned calculated analytics fields (nullable).
+    lifetimeValue: null,
+    churnRisk: null,
+    churnRiskScore: null,
+    lastActivityDate: null,
+    analyticsCalculatedAt: null,
     createdAt: NOW,
     updatedAt: NOW,
     createdBy: USER_ID,

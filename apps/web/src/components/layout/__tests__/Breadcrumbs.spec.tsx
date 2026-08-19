@@ -32,13 +32,16 @@ describe('Breadcrumbs', () => {
     expect(screen.getByText('Chi tiết')).toBeInTheDocument()
   })
 
-  it('renders a single, non-linked crumb for a top-level route', () => {
+  it('renders a single, non-linked crumb for a top-level route without duplicate key console errors', () => {
+    const errorSpy = jest.spyOn(console, 'error')
     mockUsePathname.mockReturnValue('/dashboard')
 
     render(<Breadcrumbs />)
 
     expect(screen.getByRole('link', { name: 'CRM' })).toHaveAttribute('href', '/dashboard')
     expect(screen.getByText('Dashboard')).toHaveAttribute('aria-current', 'page')
+    expect(errorSpy).not.toHaveBeenCalled()
+    errorSpy.mockRestore()
   })
 
   it('renders nothing at the app root', () => {
@@ -129,6 +132,15 @@ describe('Breadcrumbs', () => {
       '/settings/calendars',
     )
     expect(screen.getByText('Connecting…')).toHaveAttribute('aria-current', 'page')
+    expect(screen.queryByText('Chi tiết')).not.toBeInTheDocument()
+  })
+
+  it('labels the customer-analytics segment (Story 6.7, Contract E37)', () => {
+    mockUsePathname.mockReturnValue('/reports/customer-analytics')
+
+    render(<Breadcrumbs />)
+    expect(screen.getByRole('link', { name: 'Reports' })).toHaveAttribute('href', '/reports')
+    expect(screen.getByText('Customer Analytics')).toHaveAttribute('aria-current', 'page')
     expect(screen.queryByText('Chi tiết')).not.toBeInTheDocument()
   })
 
