@@ -1,5 +1,5 @@
 ---
-Status: review
+Status: done
 Story Key: 6-8-activity-reports-team-productivity-metrics
 Story ID: "6.8"
 Epic: "6 — Reporting & Analytics Dashboard"
@@ -503,7 +503,7 @@ Test/helper filenames có thể tinh chỉnh, nhưng ActivityGoal model, pure me
 
 ## Story Completion Status
 
-- Status hiện tại: `review` — implementation, E2E, dogfood evidence, documentation, and regression gates are complete; awaiting PR integration.
+- Status hiện tại: `done` — implementation, E2E, dogfood evidence, documentation, and regression gates are complete; PR CI is green and the PR remains open for integration.
 - Đã preserve nguyên văn đầy đủ 18 binding acceptance statements từ Epic Story 6.8.
 - Technical arbitration đã resolve theo code hiện tại: exact Activity/Task/TimeEntry/Deal semantics, due-cohort completion rate, actualCloseDate deals-closed period, visibility/team/deal provenance, goals model + race-safe uniqueness + idempotent alerts, và source-aware **reuse toàn bộ Story 6.6 ReportExport machinery** cho PDF/Excel.
 - Đã hoàn tất Playwright flow và live dogfood ở Stage 9; screenshot evidence dùng cho PR được copy riêng dưới `docs/pr-screenshots/6-8-activity-reports-team-productivity-metrics/` và không commit các artifact gitignored.
