@@ -51,6 +51,8 @@ const SEGMENT_LABELS: Record<string, string> = {
   'win-loss': 'Win/Loss',
   // Story 4.5 (AC 45): without this label the breadcrumb renders "Chi tiết".
   productivity: 'Productivity',
+  // Story 6.8 (Contract E25): activity report segment label.
+  activity: 'Activity',
   reminders: 'Reminders',
   'activity-logging': 'Activity Logging',
   // Story 4.3 calendar settings routes.

@@ -105,6 +105,22 @@ export class NotificationsService {
     actorUserId: string,
     input: CreateNotificationInput,
   ): Promise<NotificationRecord> {
+    const { notification } = await this.createWithStatus(tenantId, actorUserId, input)
+    return notification
+  }
+
+  /**
+   * createWithStatus — like `create` but also reports whether a NEW row was
+   * actually inserted (`created: true`) or the call was deduped on an
+   * existing dedupeKey (`created: false`). Background processors use this to
+   * count real notifications only (M5: `notificationsCreated` must not
+   * over-count on dedupe).
+   */
+  private async createWithStatus(
+    tenantId: string,
+    actorUserId: string,
+    input: CreateNotificationInput,
+  ): Promise<{ notification: NotificationRecord; created: boolean }> {
     assertValidNotificationType(input.type)
     resolveNotificationTarget({
       dealId: input.dealId,
@@ -139,7 +155,7 @@ export class NotificationsService {
         notification,
       )
 
-      return notification
+      return { notification, created: true }
     } catch (error) {
       if (error instanceof PrismaClientKnownRequestError && error.code === 'P2002') {
         // dedupeKey collision — return the existing row, do not publish
@@ -152,7 +168,7 @@ export class NotificationsService {
           select: NOTIFICATION_SELECT,
         })
         if (existing) {
-          return existing as unknown as NotificationRecord
+          return { notification: existing as unknown as NotificationRecord, created: false }
         }
         // existing row was soft-deleted; fall through to create a new one
         const row = await this.prisma.notification.create({
@@ -179,7 +195,7 @@ export class NotificationsService {
           notification,
         )
 
-        return notification
+        return { notification, created: true }
       }
       throw error
     }
@@ -187,19 +203,23 @@ export class NotificationsService {
 
   /**
    * Safe notification wrapper that never throws — this is the ONLY method
-   * producers call. Logs at error level and swallows (AC 18).
+   * producers call. Logs at error level and swallows (AC 18). Resolves
+   * `true` when a NEW notification row was actually created, `false` when
+   * the call was deduped on an existing dedupeKey (P2002) or failed (M5).
    */
   async notifySafe(
     tenantId: string,
     actorUserId: string,
     input: CreateNotificationInput,
-  ): Promise<void> {
+  ): Promise<boolean> {
     try {
-      await this.create(tenantId, actorUserId, input)
+      const { created } = await this.createWithStatus(tenantId, actorUserId, input)
+      return created
     } catch (error) {
       this.logger.error(
         `Notification create failed: ${error instanceof Error ? error.message : String(error)}`,
       )
+      return false
     }
   }
 

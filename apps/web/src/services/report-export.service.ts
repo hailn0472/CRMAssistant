@@ -6,6 +6,8 @@ export type ReportDeliveryFormat = 'PDF' | 'EXCEL' | 'CSV'
 
 export type ReportExportStatus = 'PENDING' | 'PROCESSING' | 'READY' | 'FAILED'
 
+export type ReportExportSourceType = 'SAVED_REPORT' | 'ACTIVITY_REPORT'
+
 export type ReportExportReportSummary = {
   id: string
   name: string
@@ -14,6 +16,7 @@ export type ReportExportReportSummary = {
 
 export type ReportExport = {
   id: string
+  sourceType: ReportExportSourceType
   status: ReportExportStatus
   format: ReportDeliveryFormat
   filterSummary: string
@@ -43,6 +46,7 @@ export type ReportExportDownload = {
 }
 
 import type { ReportFilters } from '@/services/sales-report.service'
+import type { ActivityReportFilterInput } from '@/services/activity-report.service'
 
 export type ReportFiltersInput = ReportFilters
 
@@ -66,6 +70,7 @@ export const reportExportKeys = {
 
 export const REPORT_EXPORT_FIELDS = `
   id
+  sourceType
   status
   format
   filterSummary
@@ -89,6 +94,14 @@ export const REPORT_EXPORT_FIELDS = `
 export const EXPORT_REPORT_MUTATION = `
   mutation ExportReport($reportId: ID!, $format: ReportDeliveryFormat!, $filters: ReportFiltersInput) {
     exportReport(reportId: $reportId, format: $format, filters: $filters) {
+      ${REPORT_EXPORT_FIELDS}
+    }
+  }
+`
+
+export const EXPORT_ACTIVITY_REPORT_MUTATION = `
+  mutation ExportActivityReport($filters: ActivityReportFilterInput!, $format: ReportDeliveryFormat!) {
+    exportActivityReport(filters: $filters, format: $format) {
       ${REPORT_EXPORT_FIELDS}
     }
   }
@@ -143,6 +156,20 @@ export async function exportReport(
     filters: filters ?? undefined,
   })
   return data.exportReport
+}
+
+export async function exportActivityReport(
+  filters: ActivityReportFilterInput,
+  format: ReportDeliveryFormat,
+): Promise<ReportExport> {
+  const data = await graphqlRequest<{ exportActivityReport: ReportExport }>(
+    EXPORT_ACTIVITY_REPORT_MUTATION,
+    {
+      filters,
+      format,
+    },
+  )
+  return data.exportActivityReport
 }
 
 export async function getReportExports(

@@ -19,7 +19,9 @@ import type { GraphqlContext } from '../graphql/graphql-context'
 import type { JwtPayload } from '../auth/strategies/jwt.strategy'
 
 // GraphQL enum for ActivityType (values match Prisma ActivityType)
-const ActivityTypeEnum = builder.enumType('ActivityType', {
+// Story 6.8 (Contract C9): exported so activity-reports.graphql.ts can reuse
+// this single Pothos enum — never register a second ActivityType enum.
+export const ActivityTypeEnum = builder.enumType('ActivityType', {
   values: {
     EMAIL_SENT: { value: 'EMAIL_SENT' as const },
     CALL_MADE: { value: 'CALL_MADE' as const },

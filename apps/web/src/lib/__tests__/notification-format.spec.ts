@@ -1,5 +1,5 @@
 /**
- * Story 4.8 (AC 66, 81): unit tests for notification-format utilities.
+ * Story 4.8 (AC 66, 81), Story 6.8 (Contract D22): unit tests for notification-format utilities.
  */
 
 import {
@@ -59,6 +59,12 @@ describe('notificationHref', () => {
       ),
     ).toBe('/reports/exports?exportId=export-123')
   })
+
+  it('returns activity reports link for ACTIVITY_GOAL_AT_RISK', () => {
+    expect(notificationHref(makeNotification({ type: 'ACTIVITY_GOAL_AT_RISK' }))).toBe(
+      '/reports/activity',
+    )
+  })
 })
 
 describe('notificationTypeLabel', () => {
@@ -82,6 +88,10 @@ describe('notificationTypeLabel', () => {
     expect(notificationTypeLabel('REPORT_EXPORT_FAILED')).toBe('Report export failed')
   })
 
+  it('maps ACTIVITY_GOAL_AT_RISK to "Activity goal at risk"', () => {
+    expect(notificationTypeLabel('ACTIVITY_GOAL_AT_RISK')).toBe('Activity goal at risk')
+  })
+
   it('falls back to the raw type for unknown values', () => {
     expect(notificationTypeLabel('UNKNOWN_TYPE')).toBe('UNKNOWN_TYPE')
   })
@@ -103,6 +113,10 @@ describe('notificationTypeIconName', () => {
   it('returns Download for REPORT_EXPORT_READY and REPORT_EXPORT_FAILED', () => {
     expect(notificationTypeIconName('REPORT_EXPORT_READY')).toBe('Download')
     expect(notificationTypeIconName('REPORT_EXPORT_FAILED')).toBe('Download')
+  })
+
+  it('returns Target for ACTIVITY_GOAL_AT_RISK', () => {
+    expect(notificationTypeIconName('ACTIVITY_GOAL_AT_RISK')).toBe('Target')
   })
 
   it('returns Bell for unknown types', () => {

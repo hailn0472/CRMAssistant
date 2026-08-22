@@ -12,7 +12,7 @@ import {
 
 describe('notification-types', () => {
   describe('NOTIFICATION_TYPES', () => {
-    it('contains exactly the six shipped members', () => {
+    it('contains exactly the seven shipped members', () => {
       expect(NOTIFICATION_TYPES).toEqual([
         'TASK_ASSIGNED',
         'DEAL_REMINDER',
@@ -22,6 +22,8 @@ describe('notification-types', () => {
         // Story 6.6 (AC 9): added for user-triggered export ready/failed.
         'REPORT_EXPORT_READY',
         'REPORT_EXPORT_FAILED',
+        // Story 6.8 (AC 15): added for activity-goal falling-behind alerts.
+        'ACTIVITY_GOAL_AT_RISK',
       ])
     })
   })

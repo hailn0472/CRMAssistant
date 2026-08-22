@@ -39,11 +39,16 @@ import type { ReportFiltersInput, ReportRow } from './sales-reports.service'
 import type { ReportConfig } from './report-config'
 import type { ReportDeliveryFormat } from './report-schedule-types'
 import { SYSTEM_CLOCK, type Clock } from './report-schedule-types'
+import { ActivityReportsService } from './activity-reports.service'
+import type { ActivityReportFilterInput } from './activity-reports.service'
+import { activityFilterSummary } from './activity-report-export-payload'
 
 export const REPORT_EXPORT_SELECT = {
   id: true,
   tenantId: true,
   reportId: true,
+  // Story 6.8: source discriminator (SAVED_REPORT | ACTIVITY_REPORT).
+  sourceType: true,
   userId: true,
   format: true,
   status: true,
@@ -93,6 +98,7 @@ const EXPORT_NOT_FOUND = 'Export not found'
  */
 export type ReportExportView = {
   id: string
+  sourceType: 'SAVED_REPORT' | 'ACTIVITY_REPORT'
   status: ReportExportStatus
   format: ReportDeliveryFormat
   filterSummary: string
@@ -115,6 +121,7 @@ export function toReportExportView(
 ): ReportExportView {
   return {
     id: row.id,
+    sourceType: row.sourceType,
     status: row.status,
     format: row.format,
     filterSummary: row.filterSummary,
@@ -143,6 +150,9 @@ export class ReportExportsService {
     private readonly storageService: SupabaseStorageService,
     private readonly permissionsService: PermissionsService,
     private readonly audit: AuditService,
+    // Story 6.8: activity export validates/normalizes through the same pure
+    // validator as the query (Contract E30).
+    private readonly activityReportsService: ActivityReportsService,
     @Optional() private readonly clock: Clock = SYSTEM_CLOCK,
   ) {}
 
@@ -285,6 +295,85 @@ export class ReportExportsService {
     return updated
   }
 
+  // ─── Activity export (Story 6.8 — Contract E30) ───────────────────────────
+
+  /**
+   * Contract E30: activity reports export through the SAME durable Story 6.6
+   * machinery. CSV is rejected up-front; filters are validated/normalized
+   * with the query's pure validator and persisted as the immutable snapshot
+   * (`sourceType: ACTIVITY_REPORT`, `reportId: null`); exactly one
+   * service-level audit CREATE/REPORT_EXPORT is written; the bounded result
+   * runs inline under the request's own PROCESSING lease (reserve →
+   * probe → processClaimed), so a PENDING row is never orphaned.
+   */
+  async exportActivityReport(
+    tenantId: string,
+    userId: string,
+    filters: ActivityReportFilterInput,
+    format: ReportDeliveryFormat,
+  ): Promise<ReportExportRecord> {
+    if (format === 'CSV') {
+      throw new BadRequestException('Activity reports support PDF and EXCEL only')
+    }
+    const snapshot = this.activityReportsService.__validateForExport(filters, { tenantId, userId })
+    const filterSummary = activityFilterSummary(snapshot)
+    const now = this.clock.now()
+
+    const row = await this.prisma.reportExport.create({
+      data: {
+        tenantId,
+        sourceType: 'ACTIVITY_REPORT',
+        reportId: null,
+        userId,
+        format,
+        status: 'PENDING',
+        filters: snapshot as unknown as Prisma.InputJsonValue,
+        filterSummary,
+        createdBy: userId,
+        updatedBy: userId,
+      },
+      select: REPORT_EXPORT_SELECT,
+    })
+
+    // Exactly one service-level audit row (never result data/signed URLs).
+    await this.audit.log({
+      tenantId,
+      userId,
+      action: 'CREATE',
+      entity: 'REPORT_EXPORT',
+      entityId: row.id,
+      details: {
+        sourceType: 'ACTIVITY_REPORT',
+        format,
+        filterKeys: Object.keys(snapshot as unknown as Record<string, unknown>),
+      },
+    })
+
+    // Reserve the row before the execution probe — same lease path as
+    // exportReport (R2/R4): the minute scan can never claim it mid-probe.
+    const lease = await this.processor.reserve(row, now)
+    if (!lease) {
+      const owned = await this.findOwned(row.tenantId, row.userId, row.id)
+      if (!owned) throw new NotFoundException(EXPORT_NOT_FOUND)
+      return owned
+    }
+
+    try {
+      // Probe under the held lease; failure finalizes synchronously.
+      await this.payloadService.executeActivityFull(tenantId, userId, snapshot)
+    } catch (error) {
+      await this.processor.failInlineProbe(row, error, now, lease)
+      throw error
+    }
+
+    // Continue inline UNDER THE SAME lease — the activity result is bounded
+    // by construction (366-day range, 20k rows), so there is no queued path.
+    await this.processor.processClaimed(row, lease, now)
+    const updated = await this.findOwned(row.tenantId, row.userId, row.id)
+    if (!updated) throw new NotFoundException(EXPORT_NOT_FOUND)
+    return updated
+  }
+
   // ─── History / detail / download / delete ─────────────────────────────────
 
   async list(
@@ -318,7 +407,15 @@ export class ReportExportsService {
     tenantId: string,
     items: ReportExportRecord[],
   ): Promise<ReportExportView[]> {
-    const reportIds = [...new Set(items.map((item) => item.reportId))]
+    // Story 6.8: ACTIVITY_REPORT rows carry reportId null → excluded from the
+    // batch report lookup and rendered with the `Activity report` fallback.
+    const reportIds = [
+      ...new Set(
+        items
+          .map((item) => item.reportId)
+          .filter((id): id is string => id !== null && id.length > 0),
+      ),
+    ]
     const found =
       reportIds.length > 0
         ? await this.prisma.report.findMany({
@@ -328,7 +425,9 @@ export class ReportExportsService {
         : []
     const reports = found ?? []
     const byId = new Map(reports.map((r) => [r.id, r]))
-    return items.map((row) => toReportExportView(row, byId.get(row.reportId) ?? null))
+    return items.map((row) =>
+      toReportExportView(row, row.reportId ? byId.get(row.reportId) ?? null : null),
+    )
   }
 
   async detail(tenantId: string, userId: string, id: string): Promise<ReportExportView> {
@@ -336,7 +435,10 @@ export class ReportExportsService {
     if (!row) {
       throw new NotFoundException(EXPORT_NOT_FOUND)
     }
-    return toReportExportView(row, await this.reportSummary(row.reportId, row.tenantId))
+    return toReportExportView(
+      row,
+      row.reportId ? await this.reportSummary(row.reportId, row.tenantId) : null,
+    )
   }
 
   /**
@@ -356,11 +458,18 @@ export class ReportExportsService {
     if (!row || !row.objectPath) {
       throw new NotFoundException(EXPORT_NOT_FOUND)
     }
-    // Re-verify the related report is still active/visible AND the owner
-    // still holds the source read permission (Contract D28/M2) — mirrors the
-    // request/worker gate. Revocation, private/deleted/missing reports and
-    // missing owners all land here before any Storage call.
-    const access = await this.validateBackgroundAccess(tenantId, userId, row.reportId)
+    // Story 6.8 (Contract E30): source-aware re-verification under the owner's
+    // CURRENT identity. ACTIVITY_REPORT rows re-check the full activity gate
+    // set; SAVED_REPORT keeps the existing report visibility + source gate.
+    // Revocation, deletion and missing owners all land here before Storage.
+    let access: { ok: true } | { ok: false; code: string; message: string }
+    if (row.sourceType === 'ACTIVITY_REPORT') {
+      access = await this.validateActivityExportAccess(tenantId, userId)
+    } else {
+      // SAVED_REPORT rows always carry a reportId (DB CHECK); a corrupt
+      // empty id simply fails the indistinguishable NotFound lookup.
+      access = await this.validateBackgroundAccess(tenantId, userId, row.reportId ?? '')
+    }
     if (!access.ok) {
       throw new NotFoundException(EXPORT_NOT_FOUND)
     }
@@ -515,6 +624,50 @@ export class ReportExportsService {
     } catch {
       return { ok: false, code: 'ACCESS_REVOKED', message: 'Required read permission revoked' }
     }
+  }
+
+  /**
+   * Story 6.8 (Contract E30): background re-check for ACTIVITY_REPORT rows —
+   * active owner + ADMIN bypass + the full current activity gate set
+   * (REPORT:READ, REPORT:EXPORT, CONTACT:READ, TASK:READ, DEAL:READ).
+   * Mirrors the processor's worker-side check (same access truth).
+   */
+  async validateActivityExportAccess(
+    tenantId: string,
+    ownerId: string,
+  ): Promise<{ ok: true } | { ok: false; code: string; message: string }> {
+    const owner = await this.prisma.user.findFirst({
+      where: { id: ownerId, tenantId, isActive: true, deletedAt: null },
+      select: { id: true },
+    })
+    if (!owner) {
+      return { ok: false, code: 'ACCESS_REVOKED', message: 'Export owner is no longer active' }
+    }
+    const roles = await this.prisma.userRole.findMany({
+      where: { userId: ownerId, role: { tenantId } },
+      select: { role: { select: { name: true } } },
+    })
+    if (roles.some((r) => r.role.name === 'ADMIN')) {
+      return { ok: true }
+    }
+    const gates: { resource: string; action: string }[] = [
+      { resource: 'REPORT', action: 'READ' },
+      { resource: 'REPORT', action: 'EXPORT' },
+      { resource: 'CONTACT', action: 'READ' },
+      { resource: 'TASK', action: 'READ' },
+      { resource: 'DEAL', action: 'READ' },
+    ]
+    for (const gate of gates) {
+      const ok = await this.permissionsService.hasPermission(ownerId, gate.resource, gate.action)
+      if (!ok) {
+        return {
+          ok: false,
+          code: 'ACCESS_REVOKED',
+          message: `Required ${gate.resource}:${gate.action} permission revoked`,
+        }
+      }
+    }
+    return { ok: true }
   }
 
   async findOwned(

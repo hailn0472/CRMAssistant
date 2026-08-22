@@ -180,9 +180,15 @@ function makeService() {
     customReportData: jest.fn(),
     resolveReportDataSource: jest.fn(),
   }
+  // Story 6.8: activity source adapter deps (mocked — not exercised by the
+  // saved-report regression cases).
+  const activityReportsService = { activityReport: jest.fn(), __validateForExport: jest.fn() }
+  const activityGoalsService = { activityGoals: jest.fn() }
   const service = new ReportExportPayloadService(
     salesReportsService as any,
     customReportsService as any,
+    activityReportsService as any,
+    activityGoalsService as any,
   )
   return { service, salesReportsService, customReportsService }
 }

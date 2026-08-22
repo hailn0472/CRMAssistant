@@ -165,6 +165,7 @@ describe('ReportExportsPage', () => {
         errorMessage: null,
         createdAt: '2026-08-18T10:00:00Z',
         completedAt: '2026-08-18T10:00:05Z',
+        sourceType: 'SAVED_REPORT' as const,
         report: { id: 'rep-1', name: 'Sales Overview', type: 'SALES_OVERVIEW' },
       },
       {
@@ -182,6 +183,7 @@ describe('ReportExportsPage', () => {
         errorMessage: 'Export exceeds 50MB safety limit.',
         createdAt: '2026-08-18T09:30:00Z',
         completedAt: '2026-08-18T09:30:05Z',
+        sourceType: 'SAVED_REPORT' as const,
         report: { id: 'rep-2', name: 'Huge Report', type: 'CUSTOM' },
       },
       {
@@ -199,6 +201,7 @@ describe('ReportExportsPage', () => {
         errorMessage: null,
         createdAt: '2026-08-18T09:00:00Z',
         completedAt: null,
+        sourceType: 'ACTIVITY_REPORT' as const,
         report: null,
       },
       {
@@ -216,6 +219,7 @@ describe('ReportExportsPage', () => {
         errorMessage: null,
         createdAt: '2026-08-18T08:00:00Z',
         completedAt: null,
+        sourceType: 'ACTIVITY_REPORT' as const,
         report: null,
       },
     ]
@@ -284,6 +288,7 @@ describe('ReportExportsPage', () => {
       errorMessage: null,
       createdAt: '2026-08-18T10:00:00Z',
       completedAt: '2026-08-18T10:00:02Z',
+      sourceType: 'SAVED_REPORT' as const,
       report: { id: 'rep-3', name: 'Deals', type: 'CUSTOM' },
     }
 
@@ -333,6 +338,7 @@ describe('ReportExportsPage', () => {
       errorMessage: null,
       createdAt: '2026-08-18T10:00:00Z',
       completedAt: '2026-08-18T10:00:02Z',
+      sourceType: 'SAVED_REPORT' as const,
       report: { id: 'rep-3', name: 'Deals', type: 'CUSTOM' },
     }
 
@@ -373,6 +379,7 @@ describe('ReportExportsPage', () => {
       errorMessage: null,
       createdAt: '2026-08-18T10:00:00Z',
       completedAt: '2026-08-18T10:00:02Z',
+      sourceType: 'SAVED_REPORT' as const,
       report: { id: 'rep-3', name: 'Deals', type: 'CUSTOM' },
     }
 
@@ -423,6 +430,7 @@ describe('ReportExportsPage', () => {
       errorMessage: null,
       createdAt: '2026-08-18T10:00:00Z',
       completedAt: '2026-08-18T10:00:02Z',
+      sourceType: 'ACTIVITY_REPORT' as const,
       report: null,
     }
 
@@ -469,6 +477,7 @@ describe('ReportExportsPage', () => {
       errorMessage: null,
       createdAt: '2026-08-18T10:00:00Z',
       completedAt: '2026-08-18T10:00:02Z',
+      sourceType: 'ACTIVITY_REPORT' as const,
       report: null,
     }
 
@@ -514,6 +523,7 @@ describe('ReportExportsPage', () => {
       errorMessage: null,
       createdAt: '2026-08-18T10:00:00Z',
       completedAt: '2026-08-18T10:00:02Z',
+      sourceType: 'ACTIVITY_REPORT' as const,
       report: null,
     }
 
@@ -568,6 +578,7 @@ describe('ReportExportsPage', () => {
       errorMessage: null,
       createdAt: '2026-08-18T10:00:00Z',
       completedAt: '2026-08-18T10:00:02Z',
+      sourceType: 'ACTIVITY_REPORT' as const,
       report: null,
     }
 
@@ -631,6 +642,7 @@ describe('ReportExportsPage', () => {
       errorMessage: 'Exceeded rows',
       createdAt: '2026-08-18T10:00:00Z',
       completedAt: '2026-08-18T10:00:02Z',
+      sourceType: 'ACTIVITY_REPORT' as const,
       report: null,
     }
 
@@ -667,6 +679,7 @@ describe('ReportExportsPage', () => {
           errorMessage: null,
           createdAt: '2026-08-18T10:00:00Z',
           completedAt: '2026-08-18T10:00:02Z',
+          sourceType: 'ACTIVITY_REPORT' as const,
           report: null,
         },
       ],

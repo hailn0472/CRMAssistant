@@ -99,7 +99,9 @@ export class ApiTestHarness {
 
   async cleanupDatabase(): Promise<void> {
     await this.prisma.$executeRawUnsafe(
-      'TRUNCATE TABLE "CustomerAnalyticsSnapshot", "ReportExport", "Contact", "User", "Tenant" RESTART IDENTITY CASCADE',
+      // Story 6.8 (Contract A3): ActivityGoal is a child of Activity/Task/User
+      // via the subject userId — it must be truncated BEFORE its parents.
+      'TRUNCATE TABLE "ActivityGoal", "CustomerAnalyticsSnapshot", "ReportExport", "Contact", "User", "Tenant" RESTART IDENTITY CASCADE',
     )
     jest.clearAllMocks()
     mockSupabaseSignOut.mockResolvedValue({ error: null })

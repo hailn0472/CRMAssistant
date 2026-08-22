@@ -171,6 +171,23 @@ describe('AppShellNavigation', () => {
     expect(productivityLink).toHaveAttribute('aria-current', 'page')
   })
 
+  it('exposes the Activity entry with href /reports/activity (Story 6.8, Contract E25)', () => {
+    renderNav()
+
+    const nav = screen.getByRole('navigation', { name: 'CRM navigation' })
+    const activityLink = within(nav).getByRole('link', { name: 'Activity' })
+    expect(activityLink).toHaveAttribute('href', '/reports/activity')
+  })
+
+  it('marks the activity route as active when on /reports/activity', () => {
+    mockUsePathname.mockReturnValue('/reports/activity')
+    renderNav()
+
+    const nav = screen.getByRole('navigation', { name: 'CRM navigation' })
+    const activityLink = within(nav).getByRole('link', { name: 'Activity' })
+    expect(activityLink).toHaveAttribute('aria-current', 'page')
+  })
+
   it('hides the Productivity entry when REPORT:READ is not granted', () => {
     // The spec mocks useQuery directly — override the myPermissions branch to
     // grant everything except REPORT. The auth store mock keeps isLoading=true

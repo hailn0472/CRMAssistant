@@ -114,6 +114,9 @@ function makeService() {
   const permissionsService = { hasPermission: jest.fn() }
   const audit = { log: jest.fn() }
   const clock = { now: () => new Date('2026-02-01T00:00:00Z') }
+  // Story 6.8: activity export validator dep (mocked — saved-report cases
+  // never call it).
+  const activityReportsService = { __validateForExport: jest.fn() }
 
   const service = new ReportExportsService(
     prisma as any,
@@ -122,6 +125,7 @@ function makeService() {
     storageService as any,
     permissionsService as any,
     audit as any,
+    activityReportsService as any,
     clock,
   )
   return { service, prisma, payloadService, processor, storageService, permissionsService, audit }
@@ -218,6 +222,8 @@ function makeRealService() {
   const payloadService = new ReportExportPayloadService(
     salesReportsService as any,
     customReportsService as any,
+    { activityReport: jest.fn() } as any,
+    { activityGoals: jest.fn() } as any,
   )
   const attachmentService = { render: jest.fn() }
   const storageService = {
@@ -249,6 +255,7 @@ function makeRealService() {
     storageService as any,
     permissionsService as any,
     audit as any,
+    { __validateForExport: jest.fn() } as any,
     clock,
   )
   return {

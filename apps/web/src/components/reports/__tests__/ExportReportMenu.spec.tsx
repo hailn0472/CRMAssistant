@@ -89,6 +89,7 @@ describe('ExportReportMenu', () => {
   it('executes exportReport mutation on format select and triggers download on READY status', async () => {
     mockedExportReport.mockResolvedValueOnce({
       id: 'exp-1',
+      sourceType: 'SAVED_REPORT',
       status: 'READY',
       format: 'PDF',
       filterSummary: 'All time',
@@ -135,6 +136,7 @@ describe('ExportReportMenu', () => {
   it('handles READY download URL fetch error without router push and shows single toast', async () => {
     mockedExportReport.mockResolvedValueOnce({
       id: 'exp-1',
+      sourceType: 'SAVED_REPORT',
       status: 'READY',
       format: 'PDF',
       filterSummary: 'All time',
@@ -172,6 +174,7 @@ describe('ExportReportMenu', () => {
   it('handles blob download failure without router push and shows single toast', async () => {
     mockedExportReport.mockResolvedValueOnce({
       id: 'exp-1',
+      sourceType: 'SAVED_REPORT',
       status: 'READY',
       format: 'PDF',
       filterSummary: 'All time',
@@ -219,6 +222,7 @@ describe('ExportReportMenu', () => {
   it('shows queued toast when export returns PENDING or PROCESSING', async () => {
     mockedExportReport.mockResolvedValueOnce({
       id: 'exp-2',
+      sourceType: 'SAVED_REPORT',
       status: 'PENDING',
       format: 'EXCEL',
       filterSummary: 'All time',
@@ -248,12 +252,16 @@ describe('ExportReportMenu', () => {
         expect.stringContaining('Export queued in background'),
         expect.any(Object),
       )
+      expect(screen.queryByText('Exporting EXCEL...')).not.toBeInTheDocument()
+      expect(screen.queryByText('Excel (.xlsx)')).not.toBeInTheDocument()
+      expect(mockedGetDownloadUrl).not.toHaveBeenCalled()
     })
   })
 
   it('shows actionable error toast when export returns FAILED', async () => {
     mockedExportReport.mockResolvedValueOnce({
       id: 'exp-3',
+      sourceType: 'SAVED_REPORT',
       status: 'FAILED',
       format: 'CSV',
       filterSummary: 'All time',
@@ -283,6 +291,120 @@ describe('ExportReportMenu', () => {
         expect.stringContaining('Export exceeds 50,000 rows limit'),
         expect.any(Object),
       )
+      expect(screen.queryByText('Exporting CSV...')).not.toBeInTheDocument()
+      expect(screen.queryByText('CSV Plain')).not.toBeInTheDocument()
+      expect(mockedGetDownloadUrl).not.toHaveBeenCalled()
+    })
+  })
+
+  it('clears the direct activity export loading state before waiting for the READY download', async () => {
+    let resolveDownloadUrl: ((download: { url: string; expiresAt: string }) => void) | undefined
+    const downloadUrlPromise = new Promise<{ url: string; expiresAt: string }>((resolve) => {
+      resolveDownloadUrl = resolve
+    })
+    const mockOnExport = jest.fn().mockResolvedValue({
+      id: 'exp-act-ready',
+      sourceType: 'ACTIVITY_REPORT',
+      status: 'READY',
+      format: 'PDF',
+      filterSummary: '2026-08-01 to 2026-08-22',
+      dateRangeStart: '2026-08-01',
+      dateRangeEnd: '2026-08-22',
+      filename: 'activity_report.pdf',
+      contentType: 'application/pdf',
+      fileSizeBytes: 2048,
+      attemptCount: 1,
+      errorCode: null,
+      errorMessage: null,
+      createdAt: '2026-08-22T10:00:00Z',
+      completedAt: '2026-08-22T10:00:02Z',
+      report: null,
+    })
+    mockedGetDownloadUrl.mockReturnValueOnce(downloadUrlPromise)
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <ExportReportMenu
+          onExport={mockOnExport}
+          supportedFormats={['PDF', 'EXCEL']}
+          reportName="Activity Report"
+        />
+      </QueryClientProvider>,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: /export report/i }))
+    fireEvent.click(await screen.findByText('PDF Document'))
+
+    await waitFor(() => {
+      expect(mockOnExport).toHaveBeenCalledWith('PDF')
+      expect(screen.queryByText('Exporting PDF...')).not.toBeInTheDocument()
+      expect(screen.queryByText('PDF Document')).not.toBeInTheDocument()
+      expect(mockedDownloadFileFromUrl).not.toHaveBeenCalled()
+    })
+
+    resolveDownloadUrl?.({
+      url: 'https://storage.example.com/activity.pdf',
+      expiresAt: '2026-08-23T10:00:00Z',
+    })
+
+    await waitFor(() => {
+      expect(mockedDownloadFileFromUrl).toHaveBeenCalledWith({
+        url: 'https://storage.example.com/activity.pdf',
+        filename: 'activity_report.pdf',
+        fallbackFilename: 'Activity Report.pdf',
+      })
+      expect(toast.success).toHaveBeenCalledWith('Export ready: downloading PDF...')
+    })
+  })
+
+  it('supports custom onExport callback and supportedFormats filtering (Story 6.8)', async () => {
+    const mockOnExport = jest.fn().mockResolvedValue({
+      id: 'exp-act-1',
+      sourceType: 'ACTIVITY_REPORT',
+      status: 'READY',
+      format: 'PDF',
+      filterSummary: '2026-08-01 to 2026-08-22',
+      dateRangeStart: '2026-08-01',
+      dateRangeEnd: '2026-08-22',
+      filename: 'activity_report.pdf',
+      contentType: 'application/pdf',
+      fileSizeBytes: 2048,
+      attemptCount: 1,
+      errorCode: null,
+      errorMessage: null,
+      createdAt: '2026-08-22T10:00:00Z',
+      completedAt: '2026-08-22T10:00:02Z',
+      report: null,
+    })
+
+    mockedGetDownloadUrl.mockResolvedValueOnce({
+      url: 'https://storage.example.com/act.pdf',
+      expiresAt: '2026-08-23T10:00:00Z',
+    })
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <ExportReportMenu
+          onExport={mockOnExport}
+          supportedFormats={['PDF', 'EXCEL']}
+          reportName="Activity Report"
+        />
+      </QueryClientProvider>,
+    )
+
+    const btn = screen.getByRole('button', { name: /export report/i })
+    fireEvent.click(btn)
+
+    expect(await screen.findByText('PDF Document')).toBeInTheDocument()
+    expect(screen.getByText('Excel (.xlsx)')).toBeInTheDocument()
+    expect(screen.queryByText('CSV Plain')).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByText('PDF Document'))
+
+    await waitFor(() => {
+      expect(mockOnExport).toHaveBeenCalledWith('PDF')
+      expect(mockedGetDownloadUrl).toHaveBeenCalledWith('exp-act-1')
+      expect(mockedDownloadFileFromUrl).toHaveBeenCalled()
     })
   })
 

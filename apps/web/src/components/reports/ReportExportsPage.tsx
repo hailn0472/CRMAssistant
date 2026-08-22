@@ -437,10 +437,17 @@ export function ReportExportsPage(): React.JSX.Element {
                             <FormatIcon format={item.format} />
                             <div className="min-w-0">
                               <p className="font-medium text-[#1b1b1f] truncate max-w-[220px]">
-                                {item.filename || item.report?.name || 'Report Export'}
+                                {item.filename ||
+                                  item.report?.name ||
+                                  (item.sourceType === 'ACTIVITY_REPORT'
+                                    ? 'Activity Report'
+                                    : 'Report Export')}
                               </p>
                               <p className="text-[11px] text-[#8c8c96] truncate">
-                                {item.report?.name || 'Custom / Ad-hoc'}
+                                {item.report?.name ||
+                                  (item.sourceType === 'ACTIVITY_REPORT'
+                                    ? 'Activity report'
+                                    : 'Custom / Ad-hoc')}
                               </p>
                             </div>
                           </div>

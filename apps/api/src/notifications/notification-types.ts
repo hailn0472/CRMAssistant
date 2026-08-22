@@ -25,6 +25,11 @@ export const NOTIFICATION_TYPES = [
   // fresh signed URL on owner download.
   'REPORT_EXPORT_READY',
   'REPORT_EXPORT_FAILED',
+  // Story 6.8 (AC 15): activity-goal alert — emitted at most once per
+  // goal/period by ActivityGoalProcessor with dedupe key
+  // `activity-goal-at-risk:<goalId>:<periodStart YYYY-MM-DD>`. target NONE:
+  // the goalId only appears in title/body text, never as a Notification FK.
+  'ACTIVITY_GOAL_AT_RISK',
 ] as const
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number]
 
