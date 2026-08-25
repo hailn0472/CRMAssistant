@@ -35,6 +35,16 @@ import { buildReportDocumentPayload, type ReportDocumentPayload } from './report
 import { CUSTOM_EXPORT_PAGE_SIZE } from './report-export-types'
 import { ExportLimitError } from './report-attachment.service'
 import { customCrmUrl, salesCrmUrl } from './report-document-payload'
+import { ActivityReportsService } from './activity-reports.service'
+import type {
+  ActivityReportExportSnapshot,
+  ActivityReportFilterInput,
+} from './activity-reports.service'
+import { ActivityGoalsService } from './activity-goals.service'
+import {
+  activityCrmUrl,
+  buildActivityReportDocumentPayload,
+} from './activity-report-export-payload'
 
 export type ExportExecutionResult = {
   payload: ReportDocumentPayload
@@ -76,6 +86,11 @@ export class ReportExportPayloadService {
   constructor(
     private readonly salesReportsService: SalesReportsService,
     private readonly customReportsService: CustomReportsService,
+    // Story 6.8: the activity source adapter executes the authoritative
+    // activity report under the requester's CURRENT identity and converts
+    // it into the shared document payload (Contract E30).
+    private readonly activityReportsService: ActivityReportsService,
+    private readonly activityGoalsService: ActivityGoalsService,
   ) {}
 
   /**
@@ -236,6 +251,56 @@ export class ReportExportPayloadService {
       totalRows,
       pageCount: pages,
     }
+  }
+
+  /**
+   * Story 6.8 (Contract E30): executes the COMPLETE activity report from the
+   * immutable filter snapshot under the requester's current identity and
+   * converts it into the shared ReportDocumentPayload (trend chart series +
+   * sectioned data table + server-computed goals). Activity results are
+   * bounded by construction (range <= 366 days, ACTIVITY_REPORT_MAX_ROWS),
+   * so this is always inline-ready — one payload, one page.
+   */
+  async executeActivityFull(
+    tenantId: string,
+    userId: string,
+    snapshot: ActivityReportExportSnapshot,
+  ): Promise<ExportExecutionResult> {
+    const filters: ActivityReportFilterInput = {
+      startDate: snapshot.startDate,
+      endDate: snapshot.endDate,
+      userId: snapshot.userId ?? undefined,
+      teamId: snapshot.teamId ?? undefined,
+      comparisonTeamIds:
+        snapshot.comparisonTeamIds.length > 0 ? snapshot.comparisonTeamIds : undefined,
+      activityTypes: snapshot.activityTypes.length > 0 ? snapshot.activityTypes : undefined,
+      contactId: snapshot.contactId ?? undefined,
+      dealId: snapshot.dealId ?? undefined,
+      bucket: snapshot.bucket,
+      sortBy: snapshot.sortBy,
+    }
+    const result = await this.activityReportsService.activityReport(tenantId, userId, filters)
+    const goals = await this.activityGoalsService.activityGoals(
+      tenantId,
+      userId,
+      {},
+      { page: 1, pageSize: 100 },
+    )
+    const payload = buildActivityReportDocumentPayload({
+      result,
+      snapshot,
+      goals: goals.items.map((goal) => ({
+        name: goal.name,
+        targetCount: goal.targetCount,
+        period: goal.period,
+        progressPercent: goal.progressPercent,
+        userLabel: goal.user
+          ? `${goal.user.firstName} ${goal.user.lastName}`.trim() || goal.userId
+          : goal.userId,
+      })),
+      crmUrl: activityCrmUrl(this.baseUrl()),
+    })
+    return { payload, totalRows: payload.rows.length, pageCount: 1 }
   }
 
   /** Background custom-source resolution for the source-domain read gate. */

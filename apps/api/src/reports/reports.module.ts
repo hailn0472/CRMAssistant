@@ -4,6 +4,7 @@ import { registerReportsGraphql } from './reports.graphql'
 import { registerReportSchedulesGraphql } from './report-schedules.graphql'
 import { registerReportExportsGraphql } from './report-exports.graphql'
 import { registerCustomerAnalyticsGraphql } from './customer-analytics.graphql'
+import { registerActivityReportsGraphql } from './activity-reports.graphql'
 import { ForecastService } from './forecast.service'
 import { WinLossService } from './win-loss.service'
 import { ProductivityService } from './productivity.service'
@@ -19,6 +20,9 @@ import { ReportEmailService } from './report-email.service'
 import { ReportExportPayloadService } from './report-export-payload.service'
 import { ReportExportsService } from './report-exports.service'
 import { ReportExportProcessor } from './report-export-processor.service'
+import { ActivityReportsService } from './activity-reports.service'
+import { ActivityGoalsService } from './activity-goals.service'
+import { ActivityGoalProcessor } from './activity-goals-processor.service'
 import { PrismaModule } from '../prisma/prisma.module'
 import { DealsModule } from '../deals/deals.module'
 import { ContactsModule } from '../contacts/contacts.module'
@@ -75,6 +79,10 @@ import { StorageModule } from '../storage/storage.module'
     ReportExportPayloadService,
     ReportExportsService,
     ReportExportProcessor,
+    // Story 6.8: activity reports query + goals CRUD + daily alert processor.
+    ActivityReportsService,
+    ActivityGoalsService,
+    ActivityGoalProcessor,
   ],
   exports: [
     ForecastService,
@@ -92,6 +100,9 @@ import { StorageModule } from '../storage/storage.module'
     ReportExportPayloadService,
     ReportExportsService,
     ReportExportProcessor,
+    ActivityReportsService,
+    ActivityGoalsService,
+    ActivityGoalProcessor,
   ],
 })
 export class ReportsModule implements OnModuleInit {
@@ -104,6 +115,8 @@ export class ReportsModule implements OnModuleInit {
     private readonly reportSchedulesService: ReportSchedulesService,
     private readonly reportExportsService: ReportExportsService,
     private readonly customerAnalyticsService: CustomerAnalyticsService,
+    private readonly activityReportsService: ActivityReportsService,
+    private readonly activityGoalsService: ActivityGoalsService,
   ) {}
 
   onModuleInit(): void {
@@ -121,5 +134,8 @@ export class ReportsModule implements OnModuleInit {
     // Story 6.7: customer analytics query must be registered before the
     // schema barrel builds, or the field vanishes silently.
     registerCustomerAnalyticsGraphql(this.customerAnalyticsService)
+    // Story 6.8: activity reports + goals must be registered before the
+    // schema barrel builds (same silent-vanish rule).
+    registerActivityReportsGraphql(this.activityReportsService, this.activityGoalsService)
   }
 }

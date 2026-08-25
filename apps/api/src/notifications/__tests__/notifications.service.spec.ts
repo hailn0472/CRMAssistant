@@ -175,7 +175,7 @@ describe('NotificationsService', () => {
   })
 
   describe('notifySafe', () => {
-    it('creates a notification and returns void', async () => {
+    it('creates a notification and returns true', async () => {
       const row = notificationRow()
       mocks.prisma.notification.create.mockResolvedValue(row)
 
@@ -185,11 +185,34 @@ describe('NotificationsService', () => {
         title: 'Test',
       })
 
-      expect(result).toBeUndefined()
+      expect(result).toBe(true)
       expect(mocks.pubSub.publish).toHaveBeenCalled()
     })
 
-    it('swallows error and logs (AC 75)', async () => {
+    it('returns false when the row was deduped via P2002 (no over-count)', async () => {
+      // Same dedupeKey already exists → create rejects P2002, the existing row
+      // is returned WITHOUT a new insert → notifySafe must report not-created.
+      const existing = notificationRow()
+      mocks.prisma.notification.create.mockRejectedValue(
+        new PrismaClientKnownRequestError('Unique constraint failed', {
+          code: 'P2002',
+          clientVersion: '5.22.0',
+        }),
+      )
+      mocks.prisma.notification.findFirst.mockResolvedValue(existing)
+
+      const result = await service.notifySafe(TENANT, USER, {
+        recipientUserId: USER,
+        type: 'TASK_ASSIGNED',
+        title: 'Test',
+        dedupeKey: 'dup:1',
+      })
+
+      expect(result).toBe(false)
+      expect(mocks.pubSub.publish).not.toHaveBeenCalled()
+    })
+
+    it('swallows error, logs and returns false (AC 75)', async () => {
       // Spy on logger
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const logSpy = jest.spyOn((service as any).logger, 'error').mockImplementation()
@@ -202,13 +225,13 @@ describe('NotificationsService', () => {
           type: 'TASK_ASSIGNED',
           title: 'Test',
         }),
-      ).resolves.toBeUndefined()
+      ).resolves.toBe(false)
 
       expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('Boom'))
       logSpy.mockRestore()
     })
 
-    it('returns void (never throws)', async () => {
+    it('returns false on error (never throws)', async () => {
       mocks.prisma.notification.create.mockRejectedValue(new Error('DB down'))
 
       await expect(
@@ -217,7 +240,7 @@ describe('NotificationsService', () => {
           type: 'TASK_ASSIGNED',
           title: 'Test',
         }),
-      ).resolves.toBeUndefined()
+      ).resolves.toBe(false)
     })
   })
 

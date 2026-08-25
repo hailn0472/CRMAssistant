@@ -6,6 +6,7 @@ import { builder } from '../graphql/schema.builder'
 import { requirePermission } from '../common/guards/permission-check'
 import { ReportFiltersInputRef } from './reports.graphql'
 import { ReportDeliveryFormatRef } from './report-schedules.graphql'
+import { ActivityReportFilterInputRef } from './activity-reports.graphql'
 import type { GraphqlContext } from '../graphql/graphql-context'
 import type { JwtPayload } from '../auth/strategies/jwt.strategy'
 import {
@@ -14,12 +15,18 @@ import {
   type ReportExportView,
 } from './report-exports.service'
 import type { ReportFiltersInput } from './sales-reports.service'
+import type { ActivityReportFilterInput } from './activity-reports.service'
 import { REPORT_EXPORT_STATUSES } from './report-export-types'
 
 // ─── Enums (derive from the closed const tuples — never a second vocabulary)
 
 const ReportExportStatusRef = builder.enumType('ReportExportStatus', {
   values: REPORT_EXPORT_STATUSES,
+})
+
+// Story 6.8 (Contract A6/E30): source discriminator.
+const ReportExportSourceTypeRef = builder.enumType('ReportExportSourceType', {
+  values: ['SAVED_REPORT', 'ACTIVITY_REPORT'],
 })
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -43,6 +50,11 @@ const ReportExportRef = builder.objectRef<ReportExportView>('ReportExport')
 ReportExportRef.implement({
   fields: (t) => ({
     id: t.exposeID('id'),
+    sourceType: t.field({
+      type: ReportExportSourceTypeRef,
+      nullable: false,
+      resolve: (e) => e.sourceType,
+    }),
     status: t.field({ type: ReportExportStatusRef, resolve: (e) => e.status }),
     format: t.field({ type: ReportDeliveryFormatRef, resolve: (e) => e.format }),
     filterSummary: t.exposeString('filterSummary'),
@@ -175,7 +187,9 @@ builder.mutationFields((t) => ({
       )
       return toReportExportView(
         row,
-        await getReportExportsService().reportSummary(row.reportId, row.tenantId),
+        row.reportId
+          ? await getReportExportsService().reportSummary(row.reportId, row.tenantId)
+          : null,
       )
     },
   }),
@@ -188,6 +202,39 @@ builder.mutationFields((t) => ({
       const user = requireUser(context)
       await requirePermission(context, 'REPORT', 'READ')
       return getReportExportsService().downloadUrl(user.tenantId, user.userId, args.id)
+    },
+  }),
+  // Story 6.8 (Contract E30): activity report export through the SAME
+  // durable Story 6.6 machinery. Gate = JWT + REPORT:READ + REPORT:EXPORT +
+  // CONTACT:READ + TASK:READ + DEAL:READ; CSV is rejected in the service.
+  exportActivityReport: t.field({
+    type: ReportExportRef,
+    nullable: false,
+    args: {
+      filters: t.arg({ type: ActivityReportFilterInputRef, required: true }),
+      format: t.arg({ type: ReportDeliveryFormatRef, required: true }),
+    },
+    resolve: async (_parent, args, context) => {
+      const user = requireUser(context)
+      await requirePermission(context, 'REPORT', 'READ')
+      await requirePermission(context, 'REPORT', 'EXPORT')
+      await requirePermission(context, 'CONTACT', 'READ')
+      await requirePermission(context, 'TASK', 'READ')
+      await requirePermission(context, 'DEAL', 'READ')
+      const row = await getReportExportsService().exportActivityReport(
+        user.tenantId,
+        user.userId,
+        args.filters as ActivityReportFilterInput,
+        args.format,
+      )
+      // ACTIVITY_REPORT rows carry reportId null — the summary lookup
+      // returns null and the frontend renders the `Activity report` label.
+      return toReportExportView(
+        row,
+        row.reportId
+          ? await getReportExportsService().reportSummary(row.reportId, row.tenantId)
+          : null,
+      )
     },
   }),
   // Contract D29: owner-only soft delete + best-effort object removal. Same

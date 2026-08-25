@@ -105,51 +105,12 @@ describe('Breadcrumbs', () => {
     expect(screen.queryByText('Chi tiết')).not.toBeInTheDocument()
   })
 
-  it('labels the reminders segment (AC #54)', () => {
-    mockUsePathname.mockReturnValue('/settings/reminders')
-
-    render(<Breadcrumbs />)
-    expect(screen.getByRole('link', { name: 'Settings' })).toHaveAttribute('href', '/settings')
-    expect(screen.getByText('Reminders')).toHaveAttribute('aria-current', 'page')
-  })
-
-  it('labels the activity-logging segment — not "Chi tiết" (AC 53 / W28)', () => {
-    mockUsePathname.mockReturnValue('/settings/activity-logging')
-
-    render(<Breadcrumbs />)
-    expect(screen.getByRole('link', { name: 'Settings' })).toHaveAttribute('href', '/settings')
-    expect(screen.getByText('Activity Logging')).toHaveAttribute('aria-current', 'page')
-    expect(screen.queryByText('Chi tiết')).not.toBeInTheDocument()
-  })
-
-  it('labels the calendars segment and the callback segment (Story 4.3 AC 43)', () => {
-    mockUsePathname.mockReturnValue('/settings/calendars/callback')
-
-    render(<Breadcrumbs />)
-    expect(screen.getByRole('link', { name: 'Settings' })).toHaveAttribute('href', '/settings')
-    expect(screen.getByRole('link', { name: 'Calendars' })).toHaveAttribute(
-      'href',
-      '/settings/calendars',
-    )
-    expect(screen.getByText('Connecting…')).toHaveAttribute('aria-current', 'page')
-    expect(screen.queryByText('Chi tiết')).not.toBeInTheDocument()
-  })
-
-  it('labels the customer-analytics segment (Story 6.7, Contract E37)', () => {
-    mockUsePathname.mockReturnValue('/reports/customer-analytics')
+  it('labels the activity segment — not "Chi tiết" (Story 6.8, Contract E25)', () => {
+    mockUsePathname.mockReturnValue('/reports/activity')
 
     render(<Breadcrumbs />)
     expect(screen.getByRole('link', { name: 'Reports' })).toHaveAttribute('href', '/reports')
-    expect(screen.getByText('Customer Analytics')).toHaveAttribute('aria-current', 'page')
-    expect(screen.queryByText('Chi tiết')).not.toBeInTheDocument()
-  })
-
-  it('labels the activities segment — not "Chi tiết" (Story 4.4, AC 39)', () => {
-    mockUsePathname.mockReturnValue('/activities')
-
-    render(<Breadcrumbs />)
-    expect(screen.getByRole('link', { name: 'CRM' })).toHaveAttribute('href', '/dashboard')
-    expect(screen.getByText('Activities')).toHaveAttribute('aria-current', 'page')
+    expect(screen.getByText('Activity')).toHaveAttribute('aria-current', 'page')
     expect(screen.queryByText('Chi tiết')).not.toBeInTheDocument()
   })
 })

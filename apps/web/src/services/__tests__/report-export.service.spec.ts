@@ -1,5 +1,6 @@
 import {
   exportReport,
+  exportActivityReport,
   getReportExports,
   getReportExport,
   getReportExportDownloadUrl,
@@ -37,6 +38,7 @@ describe('report-export.service', () => {
     it('sends exportReport mutation with exact variables and unwraps result', async () => {
       const mockResult = {
         id: 'exp-1',
+        sourceType: 'SAVED_REPORT' as const,
         status: 'READY' as const,
         format: 'PDF' as const,
         filterSummary: 'All time',
@@ -71,7 +73,7 @@ describe('report-export.service', () => {
 
     it('passes undefined filters when null/omitted', async () => {
       mockedGraphqlRequest.mockResolvedValueOnce({
-        exportReport: { id: 'exp-2', status: 'PENDING' },
+        exportReport: { id: 'exp-2', sourceType: 'SAVED_REPORT', status: 'PENDING' },
       })
 
       await exportReport('rep-2', 'CSV', null)
@@ -87,12 +89,55 @@ describe('report-export.service', () => {
     })
   })
 
+  describe('exportActivityReport', () => {
+    it('sends exportActivityReport mutation with exact variables and unwraps result (Story 6.8)', async () => {
+      const mockResult = {
+        id: 'exp-act-1',
+        sourceType: 'ACTIVITY_REPORT' as const,
+        status: 'READY' as const,
+        format: 'EXCEL' as const,
+        filterSummary: '2026-08-01 to 2026-08-22',
+        dateRangeStart: '2026-08-01',
+        dateRangeEnd: '2026-08-22',
+        filename: 'activity_report.xlsx',
+        contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        fileSizeBytes: 4096,
+        attemptCount: 1,
+        errorCode: null,
+        errorMessage: null,
+        createdAt: '2026-08-22T10:00:00Z',
+        completedAt: '2026-08-22T10:00:02Z',
+        report: null,
+      }
+
+      mockedGraphqlRequest.mockResolvedValueOnce({ exportActivityReport: mockResult })
+
+      const filters = {
+        startDate: '2026-08-01',
+        endDate: '2026-08-22',
+        sortBy: 'ACTIVITIES' as const,
+      }
+
+      const res = await exportActivityReport(filters, 'EXCEL')
+
+      expect(mockedGraphqlRequest).toHaveBeenCalledWith(
+        expect.stringContaining('mutation ExportActivityReport'),
+        {
+          filters,
+          format: 'EXCEL',
+        },
+      )
+      expect(res).toEqual(mockResult)
+    })
+  })
+
   describe('getReportExports', () => {
     it('requests reportExports with pagination and returns connection', async () => {
       const mockConn = {
         items: [
           {
             id: 'exp-1',
+            sourceType: 'SAVED_REPORT' as const,
             status: 'READY' as const,
             format: 'EXCEL' as const,
             filterSummary: 'This month',
@@ -147,6 +192,7 @@ describe('report-export.service', () => {
     it('fetches a single export by id', async () => {
       const mockExport = {
         id: 'exp-1',
+        sourceType: 'SAVED_REPORT' as const,
         status: 'READY' as const,
         format: 'PDF' as const,
         filterSummary: 'All time',

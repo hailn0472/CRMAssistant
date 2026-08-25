@@ -78,6 +78,17 @@ import type { ReportRow } from './sales-reports.service'
 import type { ReportConfig } from './report-config'
 import type { CustomReportDataSource } from './custom-report-types'
 import { SYSTEM_CLOCK, type Clock } from './report-schedule-types'
+import { parseActivityExportSnapshot } from './activity-report-export-payload'
+
+/**
+ * Notification/summary label for ACTIVITY_REPORT exports (reportId is null;
+ * the fallback label is `Activity report` — Contract A7/E30).
+ */
+const ACTIVITY_REPORT_LABEL = {
+  id: '',
+  name: 'Activity report',
+  type: 'ACTIVITY_REPORT',
+} as unknown as ReportRow
 
 async function mapWithConcurrency<T, R>(
   items: T[],
@@ -271,8 +282,18 @@ export class ReportExportProcessor {
       return true
     }
 
+    // Story 6.8 (Contract E30): source-aware dispatch. ACTIVITY_REPORT rows
+    // carry reportId = null — they re-check the activity permission set and
+    // execute from the immutable filter snapshot through the activity
+    // payload adapter; SAVED_REPORT keeps the existing behavior byte-for-byte.
+    if (row.sourceType === 'ACTIVITY_REPORT') {
+      return this.processActivityExport(row, lease, now)
+    }
+
     // Re-check owner/report/permission under the requester's CURRENT identity.
-    const access = await this.validateAccess(row.tenantId, row.userId, row.reportId)
+    // (SAVED_REPORT rows always carry a reportId — DB CHECK; the empty
+    // fallback only matters for a corrupt row and fails REPORT_UNAVAILABLE.)
+    const access = await this.validateAccess(row.tenantId, row.userId, row.reportId ?? '')
     if (!access.ok) {
       await this.markFailed(row, access.code, access.message, now, undefined, lease)
       return true
@@ -280,7 +301,7 @@ export class ReportExportProcessor {
 
     let report: ReportRow
     try {
-      report = knownReport ?? (await this.loadReport(row.tenantId, row.userId, row.reportId))
+      report = knownReport ?? (await this.loadReport(row.tenantId, row.userId, row.reportId ?? ''))
     } catch {
       await this.markFailed(
         row,
@@ -354,6 +375,115 @@ export class ReportExportProcessor {
       await this.handleFailure(row, error, now, lease)
     }
     return true
+  }
+
+  /**
+   * Story 6.8 (Contract E30): full ACTIVITY_REPORT processing pipeline —
+   * current-permission re-check, immutable snapshot replay through the
+   * activity payload adapter, then the SAME render/upload/READY/notify
+   * machinery as saved reports (lease-guarded finalizers, 50 MB/row/column
+   * bounds, chart PNG, branding, page numbers, delete cleanup).
+   */
+  private async processActivityExport(
+    row: ReportExportRecord,
+    lease: Date,
+    now: Date,
+  ): Promise<boolean> {
+    const access = await this.validateActivityExportAccess(row.tenantId, row.userId)
+    if (!access.ok) {
+      await this.markFailed(row, access.code, access.message, now, undefined, lease)
+      return true
+    }
+    try {
+      const snapshot = parseActivityExportSnapshot(row.filters)
+      const { payload } = await this.payloadService.executeActivityFull(
+        row.tenantId,
+        row.userId,
+        snapshot,
+      )
+      const chartPng = await chartPngForPayload(payload)
+      const branding = await this.tenantBranding(row.tenantId)
+      const attachment = await this.attachmentService.render(payload, row.format, {
+        profile: 'USER_EXPORT',
+        branding,
+        chartPng: chartPng ?? undefined,
+      })
+      const objectPath = ['reports', row.tenantId, row.userId, row.id, attachment.filename].join(
+        '/',
+      )
+
+      if (row.attemptCount > 0) {
+        await this.removeOrphanObject(objectPath)
+      }
+
+      const bucket = this.storageService.reportExportBucket()
+      await this.storageService.uploadToBucket(
+        bucket,
+        objectPath,
+        attachment.content,
+        attachment.contentType,
+      )
+
+      const ready = await this.markReady(row, {
+        filename: attachment.filename,
+        contentType: attachment.contentType,
+        objectPath,
+        fileSizeBytes: attachment.content.length,
+        now,
+        lease,
+      })
+      if (ready) {
+        await this.notifyReady(row, ACTIVITY_REPORT_LABEL)
+      }
+    } catch (error) {
+      await this.handleFailure(row, error, now, lease)
+    }
+    return true
+  }
+
+  /**
+   * Story 6.8 (Contract E30): background re-check for ACTIVITY_REPORT rows —
+   * active owner + ADMIN bypass + the full current activity gate set
+   * (REPORT:READ, REPORT:EXPORT, CONTACT:READ, TASK:READ, DEAL:READ).
+   * Revoked permissions fail the row terminal (ACCESS_REVOKED) — never a
+   * leak of a previously-scoped artifact.
+   */
+  private async validateActivityExportAccess(
+    tenantId: string,
+    ownerId: string,
+  ): Promise<{ ok: true } | { ok: false; code: string; message: string }> {
+    const owner = await this.prisma.user.findFirst({
+      where: { id: ownerId, tenantId, isActive: true, deletedAt: null },
+      select: { id: true },
+    })
+    if (!owner) {
+      return { ok: false, code: 'ACCESS_REVOKED', message: 'Export owner is no longer active' }
+    }
+    const roles = await this.prisma.userRole.findMany({
+      where: { userId: ownerId, role: { tenantId } },
+      select: { role: { select: { name: true } } },
+    })
+    if (roles.some((r) => r.role.name === 'ADMIN')) {
+      return { ok: true }
+    }
+    const gates: { resource: string; action: string }[] = [
+      { resource: 'REPORT', action: 'READ' },
+      { resource: 'REPORT', action: 'EXPORT' },
+      { resource: 'CONTACT', action: 'READ' },
+      { resource: 'TASK', action: 'READ' },
+      { resource: 'DEAL', action: 'READ' },
+    ]
+    for (const gate of gates) {
+      const ok = await this.permissionsService.hasPermission(ownerId, gate.resource, gate.action)
+      if (!ok) {
+        return {
+          ok: false,
+          code: 'ACCESS_REVOKED',
+          message: `Required ${gate.resource}:${gate.action} permission revoked`,
+        }
+      }
+    }
+    return { ok: true }
   }
 
   /**

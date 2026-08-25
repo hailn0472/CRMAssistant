@@ -1,5 +1,5 @@
 /**
- * Pure notification formatting utilities (Story 4.8, AC 66).
+ * Pure notification formatting utilities (Story 4.8, AC 66; Story 6.8, Contract D22).
  *
  * All helpers are free of React and browser imports so they can be
  * unit-tested in isolation.
@@ -22,6 +22,9 @@ export function notificationHref(n: Notification): string | null {
     }
     return `/reports/exports?exportId=${n.reportExportId}`
   }
+  if (n.type === 'ACTIVITY_GOAL_AT_RISK') {
+    return '/reports/activity'
+  }
   return null
 }
 
@@ -38,6 +41,8 @@ export function notificationTypeLabel(type: string): string {
       return 'Report export ready'
     case 'REPORT_EXPORT_FAILED':
       return 'Report export failed'
+    case 'ACTIVITY_GOAL_AT_RISK':
+      return 'Activity goal at risk'
     default:
       return type
   }
@@ -48,6 +53,7 @@ export function notificationTypeIconName(type: string): string {
   if (DEAL_MAP.includes(type as (typeof DEAL_MAP)[number])) return 'DollarSign'
   if (type === 'TASK_ASSIGNED') return 'CheckSquare'
   if (type === 'REPORT_EXPORT_READY' || type === 'REPORT_EXPORT_FAILED') return 'Download'
+  if (type === 'ACTIVITY_GOAL_AT_RISK') return 'Target'
   return 'Bell'
 }
 

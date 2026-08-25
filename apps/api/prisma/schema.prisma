@@ -155,6 +155,7 @@ model Tenant {
   ReportScheduleExecution    ReportScheduleExecution[]
   reportExports              ReportExport[]
   customerAnalyticsSnapshots CustomerAnalyticsSnapshot[]
+  activityGoals              ActivityGoal[]
 }
 
 /// Tenant-scoped user model with authentication support.
@@ -216,6 +217,7 @@ model User {
   dashboards            Dashboard[]                @relation("DashboardOwner")
   reportSchedules       ReportSchedule[]
   reportExports         ReportExport[]
+  activityGoals         ActivityGoal[]
 
   // Email is unique per tenant, NOT globally unique
   @@unique([tenantId, email])
@@ -471,6 +473,49 @@ model Activity {
   // contact-timeline index above cannot serve a cross-contact feed; NFR11
   // targets 10M activities per tenant).
   @@index([tenantId, createdAt(sort: Desc)])
+}
+
+// =============================================================================
+// ACTIVITY GOALS (Story 6.8)
+// =============================================================================
+// Manager-set activity targets (AC 13-15). Tenant-scoped like every domain
+// model; `userId` is the goal SUBJECT (the user being tracked). activityType
+// null means TOTAL (all activity types). Two partial unique indexes
+// (tenantId, userId, period, activityType) WHERE activityType IS NOT NULL and
+// (tenantId, userId, period) WHERE activityType IS NULL, each WHERE deletedAt
+// IS NULL AND isActive = TRUE, are the race-safe backstop for "one active goal
+// per (user, period, activityType)" — expressed in the hand-written migration
+// because Prisma cannot express partial indexes (and a COALESCE(enum::text)
+// index expression is rejected by Postgres 42P17 as non-IMMUTABLE).
+enum ActivityGoalPeriod {
+  WEEKLY
+  MONTHLY
+}
+
+model ActivityGoal {
+  id           String             @id @default(uuid())
+  tenantId     String
+  name         String // e.g. "50 calls per week"
+  activityType ActivityType? // null = all activity types (TOTAL)
+  targetCount  Int // > 0, validated in the service
+  period       ActivityGoalPeriod
+  userId       String // goal subject (user being tracked)
+  startsOn     DateTime // UTC midnight — anchors the first period
+  isActive     Boolean            @default(true)
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+  createdBy    String             @default("system")
+  updatedBy    String             @default("system")
+  deletedAt    DateTime?
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([tenantId, userId])
+  @@index([tenantId, isActive])
+  @@index([tenantId, activityType])
+  @@index([tenantId, userId, isActive])
 }
 
 /// Tenant-scoped tag model for contact tagging and segmentation.
@@ -1585,6 +1630,18 @@ enum ReportDeliveryFormat {
   CSV
 }
 
+/// Durable export source discriminator (Story 6.8). `SAVED_REPORT` rows carry
+/// a non-null reportId and replay the saved sales/custom report; `ACTIVITY_REPORT`
+/// rows carry reportId NULL plus an immutable validated activity-filter snapshot
+/// in `filters` and are executed through the activity-report adapter. The DB
+/// CHECK `(sourceType='SAVED_REPORT' AND reportId IS NOT NULL) OR
+/// (sourceType='ACTIVITY_REPORT' AND reportId IS NULL)` keeps the invariant
+/// structural (hand-written migration — Prisma cannot express CHECK).
+enum ReportExportSourceType {
+  SAVED_REPORT
+  ACTIVITY_REPORT
+}
+
 /// Durable user-triggered export status (Story 6.6). PROCESSING is an
 /// internal claim state and is never presented as a completed export;
 /// READY/FAILED are terminal. READY requires filename/contentType/objectPath/
@@ -1693,13 +1750,17 @@ model ReportScheduleExecution {
 /// config, so their snapshot is null. `objectPath` is the private storage
 /// path and is never exposed by GraphQL; signed URLs are never persisted.
 model ReportExport {
-  id                  String             @id @default(uuid())
+  id                  String                 @id @default(uuid())
   tenantId            String
-  reportId            String
+  // Story 6.8: nullable + source-discriminated. SAVED_REPORT rows keep the
+  // required report FK (existing 6.6 semantics); ACTIVITY_REPORT rows are
+  // null here and carry the immutable validated activity filter snapshot.
+  reportId            String?
+  sourceType          ReportExportSourceType @default(SAVED_REPORT)
   userId              String // requester, execution identity, history owner
   format              ReportDeliveryFormat
   status              ReportExportStatus @default(PENDING)
-  filters             Json? // immutable server-normalized effective sales config snapshot
+  filters             Json? // immutable server-normalized effective sales config snapshot (SAVED_REPORT) or validated activity filters (ACTIVITY_REPORT)
   filterSummary       String // safe human-readable effective scope
   dateRangeStart      DateTime?
   dateRangeEnd        DateTime?
@@ -1721,7 +1782,7 @@ model ReportExport {
   deletedAt           DateTime?
 
   tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  report   Report @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  report   Report? @relation(fields: [reportId], references: [id], onDelete: Cascade)
   owner    User   @relation(fields: [userId], references: [id], onDelete: Cascade)
   notifications Notification[] @relation("ReportExportNotification")
 

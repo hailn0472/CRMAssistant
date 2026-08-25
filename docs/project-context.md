@@ -12,7 +12,7 @@ sections_completed:
     'framework_specific_rules',
   ]
 existing_patterns_found: 0
-last_updated: '2026-08-13T00:00:00Z'
+last_updated: '2026-08-22T00:00:00Z'
 reviewed_by: ['Winston', 'John', 'Amelia', 'Murat']
 status: 'complete'
 version: '1.1.0'
@@ -354,6 +354,39 @@ model MyDomainModel {
 6. **Tenant model itself is NOT tenant-scoped** — only domain models are.
 
 ---
+
+## Story 6.8 — Activity Reports & Team Productivity Metrics [SHIPPED]
+
+Verified against the implementation and Stage 9 evidence on 2026-08-22. This
+story adds the tenant-scoped `ActivityGoal` model with `WEEKLY`/`MONTHLY`
+periods, UTC-midnight anchors, soft-delete support, and race-safe partial
+indexes for active typed and TOTAL goals. Server metrics are authoritative:
+activities use `Activity.createdBy` and UTC buckets; completion rate uses the
+task due cohort; completed tasks use `completedAt`; overdue tasks exclude
+completed/cancelled rows as of the injectable clock; time uses completed
+`TimeEntry.durationSeconds`; meetings use `MEETING_SCHEDULED`; and closed
+deals use active won stages plus `actualCloseDate`.
+
+The typed GraphQL surfaces are `activityReport(filters)`,
+`activityUserDrillDown(userId, filters, pagination)`, and the activity-goal
+CRUD/progress queries and mutations. The API applies tenant, soft-delete,
+shared visibility, and `REPORT`/`CONTACT`/`TASK`/`DEAL` permission gates; goal
+mutations additionally use `REPORT:CREATE|UPDATE|DELETE`. The daily
+`ActivityGoalProcessor` runs at `0 0 7 * * *` (07:00 UTC), batches active
+goals, and sends at most one idempotent `ACTIVITY_GOAL_AT_RISK` in-app
+notification per goal and period through `notifySafe`.
+
+Activity exports extend the existing durable `ReportExport` machinery rather
+than forking it: `ReportExportSourceType` distinguishes `SAVED_REPORT` from
+`ACTIVITY_REPORT`, activity filters are stored as an immutable validated
+snapshot, and PDF/Excel requests reuse the existing lease/retry, renderer,
+private Storage, signed URL, history, owner checks, and notifications. The
+frontend route is `/reports/activity`, with the permission-gated `Activity`
+nav item under Reports and the matching breadcrumb segment. Evidence includes
+API unit/integration regressions, web unit/RTL coverage, the deterministic
+Playwright flow at `tests/e2e/activity-reports.spec.ts`, and live dogfood
+screenshots/report evidence; remaining low concerns are documented in the
+dogfood report rather than presented as fixed behavior.
 
 ## Project Organization & Workflow Rules
 

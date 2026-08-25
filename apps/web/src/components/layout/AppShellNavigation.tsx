@@ -136,6 +136,13 @@ const navigationSections: NavigationSection[] = [
         icon: Timer,
         permission: { resource: 'REPORT', action: 'READ' },
       },
+      {
+        // Story 6.8 (Contract E25): activity report entry under Reports, gated on REPORT:READ.
+        label: 'Activity',
+        href: '/reports/activity',
+        icon: CalendarDays,
+        permission: { resource: 'REPORT', action: 'READ' },
+      },
     ],
   },
   {
