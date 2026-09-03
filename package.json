@@ -12,7 +12,9 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "turbo run dev",
+    "dev": "node scripts/dev.js",
+    "dev:turbo": "turbo run dev",
+    "test:dev-config": "node --test scripts/__tests__/dev-ports.test.js",
     "build": "turbo run build",
     "test": "turbo run test --concurrency=1",
     "test:api": "turbo run test:api --concurrency=1",

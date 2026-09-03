@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "scripts": {
-    "dev": "infisical run --env=dev --path=/apps/web -- node scripts/dev-with-route-watch.js",
+    "dev": "infisical run --env=dev --path=/apps/web -- node scripts/dev-with-config.js",
     "dev:plain": "infisical run --env=dev --path=/apps/web -- next dev",
     "dev:ci": "next dev",
     "build": "next build",

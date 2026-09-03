@@ -18,3 +18,8 @@ coverage/
 .env
 .env.local
 .env*.local
+
+# Dev tooling scripts (plain Node.js, outside typed linting scope)
+apps/*/scripts/
+scripts/dev*.js
+scripts/__tests__/*.js

@@ -98,9 +98,13 @@ docker run -d -p 6379:6379 redis:7-alpine
 # Start all apps in development mode
 pnpm dev
 
+# `pnpm dev` chooses available API (from 4000) and web (from 3000) ports,
+# then points the web app at that API automatically. Prefer another range with:
+API_PORT=4100 WEB_PORT=3100 pnpm dev
+
 # Start specific app
-pnpm dev --filter=web   # Frontend only
-pnpm dev --filter=api   # Backend only
+pnpm --filter=web dev   # Frontend only
+pnpm --filter=api dev   # Backend only; chooses the next free port from 4000
 ```
 
 ### Build
