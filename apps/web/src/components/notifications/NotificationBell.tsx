@@ -33,13 +33,13 @@ export function NotificationBell(): React.JSX.Element {
           variant="outline"
           size="icon"
           aria-label="View notifications"
-          className="h-11 w-11 rounded-full border-slate-200 bg-white text-slate-500 shadow-none hover:bg-slate-50 hover:text-slate-950 focus-visible:ring-2 focus-visible:ring-indigo-600/40 relative"
+          className="relative h-10 w-10 rounded-[10px] border-[#e6e6eb] bg-white text-[#6b6b76] shadow-none transition-colors hover:border-[#d3d2df] hover:bg-[#f7f6ff] hover:text-[#5146c9] focus-visible:ring-2 focus-visible:ring-[#665ce0]/30"
         >
           <Bell className="h-4 w-4" />
           {unreadCount > 0 && (
             <span
               aria-hidden="true"
-              className="absolute -top-1 -right-1 flex items-center justify-center min-w-[18px] h-[18px] rounded-full bg-red-500 px-1 text-[10px] font-semibold leading-none text-white"
+              className="absolute -right-1.5 -top-1.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full border-2 border-white bg-[#665ce0] px-1 text-[9.5px] font-bold leading-none text-white shadow-sm"
             >
               {displayCount}
             </span>
@@ -49,7 +49,11 @@ export function NotificationBell(): React.JSX.Element {
       <span className="sr-only" aria-live="polite">
         {unreadCount} unread notifications
       </span>
-      <PopoverContent align="end" className="w-[380px] max-w-[calc(100vw-2rem)] p-0">
+      <PopoverContent
+        align="end"
+        sideOffset={10}
+        className="w-[400px] max-w-[calc(100vw-1.5rem)] overflow-hidden rounded-[14px] border-[#e6e6eb] p-0 shadow-[0_18px_50px_rgba(35,31,73,0.16)]"
+      >
         <NotificationPanel />
       </PopoverContent>
     </Popover>
