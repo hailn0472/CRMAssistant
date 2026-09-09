@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 
 import { ContactsTable } from '../ContactsTable'
 import { emptyContactFilters } from '../ContactFilterBar'
@@ -209,7 +209,8 @@ describe('ContactsTable', () => {
     fireEvent.click(screen.getByRole('button', { name: '2' }))
 
     // Page 2 should now be active
-    const page2Btn = await screen.findByRole('button', { name: '2' })
-    expect(page2Btn).toHaveClass('bg-[#1b1b1f]')
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: '2' })).toHaveClass('bg-[#1b1b1f]')
+    })
   })
 })
