@@ -21,6 +21,8 @@ export type HttpStatusClassLabel = '1xx' | '2xx' | '3xx' | '4xx' | '5xx' | 'othe
 export type GraphqlOperationGroup = 'read' | 'write' | 'subscription' | 'other'
 export type DatabaseModelGroup = 'user' | 'contact' | 'task' | 'message' | 'other'
 export type CacheOperationLabel = 'get' | 'set' | 'delete' | 'other'
+/** Cache outcomes stay bounded so optional Redis cannot create high-cardinality labels. */
+export type CacheOutcome = 'hit' | 'miss' | 'disabled' | 'error' | 'fallback' | 'success'
 export type CacheFallbackReason = 'redis_error' | 'redis_miss' | 'redis_unavailable' | 'other'
 export type FacebookEventGroup = 'message' | 'comment' | 'lead' | 'other'
 export type FacebookOperationGroup = 'read' | 'write' | 'webhook' | 'other'
@@ -31,6 +33,7 @@ export type BackgroundJobGroup =
   | 'import'
   | 'export'
   | 'notification'
+  | 'facebook_history_sync'
   | 'other'
 export type BuildEnvironmentLabel = 'development' | 'test' | 'staging' | 'production' | 'unknown'
 export type OutcomeLabel = 'success' | 'error' | 'rejected' | 'rate_limited' | 'unknown'
@@ -53,7 +56,7 @@ export interface DatabaseMetricLabels {
 
 export interface CacheMetricLabels {
   operation: CacheOperationLabel
-  outcome: OutcomeLabel
+  outcome: CacheOutcome
 }
 
 export interface CacheFallbackMetricLabels {
