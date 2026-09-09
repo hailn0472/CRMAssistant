@@ -1,0 +1,102 @@
+groups:
+  - name: crm-api-observability
+    interval: 1m
+    rules:
+      - alert: CrmMetricsTargetUnavailable
+        expr: (min(up{job="crm-api"}) < 1) or absent(up{job="crm-api"})
+        for: 5m
+        labels:
+          severity: warning
+          service: crm-api
+        annotations:
+          summary: CRM API metrics target is unavailable
+          description: Grafana has not received a healthy scrape from the Render API target for five minutes.
+          runbook_url: https://github.com/hailn0472/CRMAssistant/blob/main/infra/observability/runbooks.md#crmmetricstargetunavailable
+
+      - alert: CrmMetricsScrapeStale
+        expr: (time() - max(timestamp(up{job="crm-api"})) > 180) or absent(up{job="crm-api"})
+        for: 5m
+        labels:
+          severity: warning
+          service: crm-api
+        annotations:
+          summary: CRM API metrics scrape is stale
+          description: The last CRM API target sample is more than three minutes old.
+          runbook_url: https://github.com/hailn0472/CRMAssistant/blob/main/infra/observability/runbooks.md#crmmetricsscrapestale
+
+      - alert: CrmApiHigh5xxRate
+        expr: sum(increase(crm_http_requests_total{status_class="5xx"}[10m])) / clamp_min(sum(increase(crm_http_requests_total[10m])), 1) > 0.05 and sum(increase(crm_http_requests_total[10m])) >= 20
+        for: 10m
+        labels:
+          severity: warning
+          service: crm-api
+        annotations:
+          summary: CRM API 5xx rate is above 5 percent
+          description: More than five percent of at least twenty observed HTTP requests have returned a 5xx status in the rolling ten-minute window.
+          runbook_url: https://github.com/hailn0472/CRMAssistant/blob/main/infra/observability/runbooks.md#crmapihigh5xxrate
+
+      - alert: CrmApiHighP95Latency
+        expr: histogram_quantile(0.95, sum by (le) (rate(crm_http_request_duration_seconds_bucket[10m]))) > 2 and sum(increase(crm_http_requests_total[10m])) >= 20
+        for: 15m
+        labels:
+          severity: warning
+          service: crm-api
+        annotations:
+          summary: CRM API p95 latency is above two seconds
+          description: HTTP p95 latency is above the conservative initial threshold with at least twenty requests in the rolling ten-minute window.
+          runbook_url: https://github.com/hailn0472/CRMAssistant/blob/main/infra/observability/runbooks.md#crmapihighp95latency
+
+      - alert: CrmPostgresNotReady
+        expr: (crm_dependency_ready{dependency="postgres"} < 1) or absent(crm_dependency_ready{dependency="postgres"})
+        for: 5m
+        labels:
+          severity: critical
+          service: crm-api
+        annotations:
+          summary: PostgreSQL dependency is not ready
+          description: The API has reported PostgreSQL readiness below one, or has not published the PostgreSQL readiness series, for five minutes.
+          runbook_url: https://github.com/hailn0472/CRMAssistant/blob/main/infra/observability/runbooks.md#crmpostgresnotready
+
+      - alert: CrmCacheFallbackElevated
+        expr: sum(rate(crm_cache_fallback_total{reason=~"redis_error|redis_unavailable"}[10m])) > 0.05
+        for: 15m
+        labels:
+          severity: warning
+          service: crm-api
+        annotations:
+          summary: Redis cache fallback is continuously elevated
+          description: Redis error or Redis unavailable fallbacks are above three per minute for fifteen minutes; ordinary cache misses do not fire this alert.
+          runbook_url: https://github.com/hailn0472/CRMAssistant/blob/main/infra/observability/runbooks.md#crmcachefallbackelevated
+
+      - alert: CrmFacebookWebhookFailures
+        expr: sum(increase(crm_facebook_webhook_events_total{outcome=~"error|rejected"}[10m])) >= 3
+        for: 1m
+        labels:
+          severity: warning
+          service: crm-api
+        annotations:
+          summary: Facebook webhook failures are elevated
+          description: At least three Facebook webhook processing failures or rejected events occurred in the rolling ten-minute window.
+          runbook_url: https://github.com/hailn0472/CRMAssistant/blob/main/infra/observability/runbooks.md#crmfacebookwebhookfailures
+
+      - alert: CrmFacebookGraphRateLimited
+        expr: sum(increase(crm_facebook_graph_requests_total{outcome="rate_limited"}[10m])) >= 3
+        for: 1m
+        labels:
+          severity: warning
+          service: crm-api
+        annotations:
+          summary: Facebook Graph API requests are rate limited
+          description: At least three Facebook rate-limit outcomes occurred in the rolling ten-minute window; check the shared outbound budget.
+          runbook_url: https://github.com/hailn0472/CRMAssistant/blob/main/infra/observability/runbooks.md#crmfacebookgraphratelimited
+
+      - alert: CrmBackgroundJobFailures
+        expr: sum(increase(crm_background_jobs_total{outcome="error"}[10m])) >= 2
+        for: 1m
+        labels:
+          severity: warning
+          service: crm-api
+        annotations:
+          summary: Background job failures detected
+          description: At least two background job failures occurred in the rolling ten-minute window.
+          runbook_url: https://github.com/hailn0472/CRMAssistant/blob/main/infra/observability/runbooks.md#crmbackgroundjobfailures

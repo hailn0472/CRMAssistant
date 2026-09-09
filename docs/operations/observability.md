@@ -10,9 +10,16 @@ current free tiers:
 - Supabase Free for PostgreSQL and Supabase services.
 - Grafana Cloud Free for application metrics, dashboards, and alerts.
 
-Application metrics and protected health endpoints are **planned until the
-corresponding implementation and tests land**. NestJS logging and the audit
-trail are shipped; Sentry, OpenTelemetry, and platform log drains are not.
+This topology is for the current hobby/demo/staging deployment. Render states
+that Free instances should not be used for production applications; a real
+production rollout must move the API to an appropriate paid runtime before
+using this as an availability design.
+
+Application metrics and protected health endpoints are implemented in the API.
+The repository-native Grafana dashboard, alert rules, and runbooks live under
+[`infra/observability/`](../../infra/observability/). NestJS logging and the
+audit trail are shipped; Sentry, OpenTelemetry, and platform log drains are
+not.
 
 The design intentionally does not depend on Render Metrics Stream, a Render
 private service, Grafana Alloy, a self-hosted Prometheus, or Vercel/Supabase
@@ -36,7 +43,7 @@ Browser -> Vercel Hobby -> Render API -> Supabase PostgreSQL
                                           (60-second scrape)
 ```
 
-The default production integration is Grafana Cloud's no-collector Metrics
+The default free-tier integration is Grafana Cloud's no-collector Metrics
 Endpoint integration. It scrapes the Render API's public `/metrics` URL every
 60 seconds and supports Bearer authentication. Grafana documents this as a
 no-additional-infrastructure integration.
@@ -52,14 +59,96 @@ When preserving sleep or the monthly hour budget is more important than
 continuous metrics, use **sleep mode**:
 
 1. Disable the Grafana Metrics Endpoint scrape job.
-2. Keep `METRICS_ENABLED=false` in production, or enable it only during a
-   bounded diagnostic window.
+2. Keep `METRICS_ENABLED=false` in the deployed environment, or enable it only
+   during a bounded diagnostic window.
 3. Use Render's native dashboard and logs, Vercel's native dashboard, and
    Supabase Studio Reports for provider-level visibility.
 4. Expect gaps in Grafana data and cold-start latency after idle periods.
 
 No worker service, cron pinger, or keep-alive job should be added to Render
 Free solely to defeat sleeping.
+
+## Grafana Cloud setup
+
+The setup below uses Grafana Cloud's direct Metrics Endpoint integration. It
+does not require a Prometheus server, Grafana Alloy, a Render private service,
+or a log drain.
+
+1. In Grafana Cloud, open **Home > Connections > Add connection**, search for
+   **Metrics Endpoint**, and create a Prometheus scrape endpoint for the Render
+   API.
+2. Set the URL to the public Render HTTPS URL ending in `/metrics`. The direct
+   Metrics Endpoint integration scrapes every 60 seconds. Configure the request
+   as `Authorization: Bearer <token>` using the same
+   `METRICS_SCRAPE_TOKEN` stored in the API's secret manager. Never put the
+   token in the URL, dashboard JSON, Git, or a browser bundle.
+3. Set the scrape job label to `crm-api`. The dashboard and alert rules use
+   `job="crm-api"` only for standard scraper signals (`up` and scrape age).
+   Application metric queries use the bounded labels from the catalog below.
+4. In the Render service settings, set the **Health Check Path** to
+   `/health/ready`. Render's health checker must call this endpoint so the API
+   refreshes `crm_dependency_ready`; a `/metrics` scrape by itself does not
+   probe PostgreSQL or Redis.
+5. Import [`infra/observability/grafana-dashboard.json`](../../infra/observability/grafana-dashboard.json)
+   into the Grafana Cloud stack and select its Prometheus data source when
+   prompted. The dashboard refreshes every 60 seconds and has a six-hour
+   default window.
+6. Treat [`infra/observability/alert-rules.yaml`](../../infra/observability/alert-rules.yaml)
+   as the canonical Prometheus/Mimir rule file. For this small deployment,
+   open **Alerting > Alert rules**, choose **Import to Grafana-managed rules**,
+   upload the Prometheus YAML file, select the Prometheus data source and a
+   target folder, and initially import the rules paused. Review the preview
+   before confirming. For repeatable automation, install `mimirtool` 0.11.3
+   or newer and use Grafana's conversion endpoint with placeholders:
+
+   ```sh
+   MIMIR_ADDRESS="<GRAFANA_BASE_URL>/api/convert/" \\
+   MIMIR_AUTH_TOKEN="<SERVICE_ACCOUNT_TOKEN>" \\
+   MIMIR_TENANT_ID="1" \\
+   mimirtool rules load infra/observability/alert-rules.yaml \\
+     --extra-headers "X-Grafana-Alerting-Datasource-UID=<PROMETHEUS_DATASOURCE_UID>"
+   ```
+
+   The CLI service account needs Grafana Alerting rule read/write/provisioning,
+   datasource read, and folder permissions. Replace the datasource UID and
+   notification contact point in Grafana; neither value or token belongs in
+   this repository. Every rule links to
+   [`infra/observability/runbooks.md`](../../infra/observability/runbooks.md).
+   See [Grafana's rule migration guide](https://grafana.com/docs/grafana/latest/alerting/alerting-rules/alerting-migration/)
+   for the supported conversion flow.
+
+The direct endpoint integration is the continuous mode. It keeps the Render
+Free service awake and can consume nearly all 750 included instance hours per
+workspace. For sleep mode, disable the Metrics Endpoint scrape job before
+disabling metrics (or set `METRICS_ENABLED=false` for a deployment where no
+diagnostic window is needed). Grafana gaps and cold starts are expected; use
+Render native logs/health, Vercel Observability, and Supabase Studio Reports
+for provider-level checks. Do not add a ping worker to keep Render awake.
+
+### Validation checklist
+
+Run these checks in staging before enabling a production alert contact point:
+
+```sh
+# Liveness must not require a database or Redis connection.
+curl -fsS https://<render-host>/health/live
+
+# Readiness should return 200 when PostgreSQL is ready and 503 when it is not.
+curl -i https://<render-host>/health/ready
+
+# The endpoint must reject missing/invalid credentials and accept only Bearer auth.
+curl -i https://<render-host>/metrics
+curl -i -H 'Authorization: Bearer <staging-token>' https://<render-host>/metrics
+```
+
+In Grafana Explore, confirm `up{job="crm-api"}` is `1`, scrape age is below
+180 seconds, and the dashboard panels return data for
+`crm_http_requests_total`, `crm_graphql_requests_total`, and
+`crm_dependency_ready`. Trigger a staging-only error or readiness failure to
+verify alert firing and recovery. Validate that no metric label contains a
+tenant ID, customer ID, email, token, request body, query text, or arbitrary
+URL. If the service is in sleep mode, disable the target-down and freshness
+alerts while the target is intentionally stopped.
 
 ## Endpoint contract
 
@@ -144,7 +233,9 @@ Metrics Stream and private-network collection are intentionally out of scope.
 
 ## Dashboards and alerts
 
-The first Grafana dashboard should cover:
+The repository dashboard at
+[`infra/observability/grafana-dashboard.json`](../../infra/observability/grafana-dashboard.json)
+covers:
 
 - request rate, error rate, and p50/p95/p99 latency;
 - GraphQL operation groups and dependency readiness;
@@ -152,7 +243,9 @@ The first Grafana dashboard should cover:
 - Facebook webhook/Graph API outcomes and background jobs;
 - scrape freshness and target availability.
 
-Initial alerts should be conservative and reviewed after staging baselines:
+The repository rule group at
+[`infra/observability/alert-rules.yaml`](../../infra/observability/alert-rules.yaml)
+contains conservative alerts to review after staging baselines:
 
 - metrics target unavailable for 5 minutes;
 - API 5xx rate above 5% for 10 minutes;
@@ -161,8 +254,13 @@ Initial alerts should be conservative and reviewed after staging baselines:
 - Redis fallback continuously elevated;
 - Facebook webhook processing failures or repeated Graph API rate limits.
 
-Every alert must link to a runbook. Do not page on a single scrape miss or a
-single transient Redis failure.
+Every alert links to a section in
+[`infra/observability/runbooks.md`](../../infra/observability/runbooks.md).
+Do not page on a single scrape miss or a single transient Redis failure.
+
+The dashboard also uses the standard Prometheus scraper signals `up`,
+`timestamp`, and `time()` for target availability and scrape freshness. These
+are collector signals, not application labels or additional CRM metrics.
 
 ## Incident runbook
 
@@ -194,5 +292,7 @@ provider limits, and any credential rotation in the incident note.
 - Grafana can scrape `/metrics` with Bearer auth in staging.
 - No metric sample or label contains the PII/secrets listed above.
 - Dashboard and alert rules use only the catalog in this document.
-- Production rollout records either `continuous` mode (with the Render hour
-  trade-off accepted) or `sleep` mode (with expected data gaps).
+- Each deployed environment records either `continuous` mode (with the Render
+  hour trade-off accepted) or `sleep` mode (with expected data gaps). Render
+  Free remains a hobby/demo/staging target, not the production availability
+  tier.
