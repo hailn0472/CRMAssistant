@@ -5,7 +5,6 @@ import { useQuery } from '@tanstack/react-query'
 
 import { ErrorState } from '@/components/shared/ErrorState'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { QueryProvider } from '@/components/contacts/QueryProvider'
 import { getTeam } from '@/services/team.service'
 import { TeamMemberManager } from '@/components/teams/TeamMemberManager'
 
@@ -14,9 +13,7 @@ export default function TeamDetailPage(): React.JSX.Element {
 
   return (
     <main className="space-y-6 p-6 text-slate-950">
-      <QueryProvider>
-        <TeamDetailContent teamId={id} />
-      </QueryProvider>
+      <TeamDetailContent teamId={id} />
     </main>
   )
 }

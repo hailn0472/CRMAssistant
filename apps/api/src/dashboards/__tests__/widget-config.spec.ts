@@ -25,8 +25,8 @@ describe('widget-config', () => {
     })
 
     it('parses a valid source', () => {
-      const result = parseWidgetConfig({ source: 'PIPELINE_VALUE' })
-      expect(result.source).toBe('PIPELINE_VALUE')
+      const result = parseWidgetConfig({ source: 'LEAD_FUNNEL' })
+      expect(result.source).toBe('LEAD_FUNNEL')
     })
 
     it('falls back to default source for invalid source string', () => {
@@ -114,8 +114,8 @@ describe('widget-config', () => {
     })
 
     it('accepts a valid source-only object', () => {
-      const result = validateWidgetConfig({ source: 'PIPELINE_VALUE' })
-      expect(result.source).toBe('PIPELINE_VALUE')
+      const result = validateWidgetConfig({ source: 'LEAD_FUNNEL' })
+      expect(result.source).toBe('LEAD_FUNNEL')
     })
 
     it('throws on invalid dateRangeDays', () => {
@@ -132,14 +132,14 @@ describe('widget-config', () => {
 
     it('accepts a fully valid config', () => {
       const result = validateWidgetConfig({
-        source: 'PIPELINE_BY_STAGE',
+        source: 'LEAD_FUNNEL',
         dateRangeDays: 90,
         stageId: 'stage-x',
         ownerId: 'user-x',
         limit: 3,
       })
       expect(result).toEqual({
-        source: 'PIPELINE_BY_STAGE',
+        source: 'LEAD_FUNNEL',
         dateRangeDays: 90,
         stageId: 'stage-x',
         ownerId: 'user-x',

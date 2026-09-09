@@ -45,6 +45,14 @@ function initials(firstName: string, lastName: string): string {
   return `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase()
 }
 
+const LEAD_STATUS_LABELS: Record<NonNullable<Contact['leadStatus']>, string> = {
+  NEW: 'New',
+  REVIEWING: 'Reviewing',
+  NURTURING: 'Nurturing',
+  QUALIFIED_LEAD: 'Qualified lead',
+  NOT_A_LEAD: 'Not a lead',
+}
+
 // ─── Inline Edit Field ────────────────────────────────
 function InlineEditField({
   label,
@@ -315,6 +323,8 @@ function QuickInfoCard({ contact }: { contact: Contact }): React.JSX.Element {
     { label: 'Updated', value: new Date(contact.updatedAt).toLocaleDateString() },
     { label: 'Company', value: contact.company || '—' },
     { label: 'Job title', value: contact.jobTitle || '—' },
+    { label: 'Lead status', value: LEAD_STATUS_LABELS[contact.leadStatus ?? 'NEW'] },
+    { label: 'Lead score', value: contact.leadScore == null ? '—' : `${contact.leadScore}/100` },
   ]
   return (
     <section className="flex flex-col gap-3.5 rounded-[14px] border border-[#ececf0] bg-white px-[18px] py-4">

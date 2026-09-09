@@ -16,7 +16,7 @@ export function ContactMetricsCards(): React.JSX.Element {
     () => [
       { label: 'Total contacts', value: (data?.total ?? 0).toLocaleString() },
       { label: 'Added this month', value: (data?.addedThisMonth ?? 0).toLocaleString() },
-      { label: 'With open deals', value: (data?.withOpenDeals ?? 0).toLocaleString() },
+      { label: 'Qualified leads', value: (data?.qualifiedLeads ?? 0).toLocaleString() },
       { label: 'Unassigned', value: (data?.unassigned ?? 0).toLocaleString() },
     ],
     [data],

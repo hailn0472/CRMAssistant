@@ -7,7 +7,6 @@ import { useParams } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { ErrorState } from '@/components/shared/ErrorState'
 import { TableSkeleton } from '@/components/shared/LoadingSkeleton'
-import { QueryProvider } from '@/components/contacts/QueryProvider'
 import { getRole, getRoleUsers } from '@/services/role.service'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 
@@ -127,9 +126,7 @@ function RoleDetailContent(): React.JSX.Element {
 export default function RoleDetailPage(): React.JSX.Element {
   return (
     <main className="space-y-6 p-6 text-slate-950">
-      <QueryProvider>
-        <RoleDetailContent />
-      </QueryProvider>
+      <RoleDetailContent />
     </main>
   )
 }

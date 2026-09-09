@@ -15,8 +15,6 @@ import {
 
 const activityLogPreferencesSchema = z.object({
   logTaskCompleted: z.boolean(),
-  logDealCreated: z.boolean(),
-  logDealStageChanged: z.boolean(),
   logMessageSent: z.boolean(),
   logMessageReceived: z.boolean(),
   logMeetingScheduled: z.boolean(),
@@ -35,18 +33,6 @@ const TOGGLE_FIELDS: Array<{
     label: 'Task completed',
     description: 'Log a "Task Completed" event on the contact timeline when a task is completed.',
     ariaLabel: 'Log task completions',
-  },
-  {
-    key: 'logDealCreated',
-    label: 'Deal created',
-    description: 'Log a "Deal Created" event on the contact timeline when a deal is created.',
-    ariaLabel: 'Log deal creation',
-  },
-  {
-    key: 'logDealStageChanged',
-    label: 'Deal stage changed',
-    description: 'Log a "Stage Changed" event when a deal moves between pipeline stages.',
-    ariaLabel: 'Log deal stage changes',
   },
   {
     key: 'logMessageSent',
@@ -89,8 +75,6 @@ export function ActivityLogPreferencesForm(): React.JSX.Element {
     resolver: zodResolver(activityLogPreferencesSchema) as never,
     values: (prefs ?? {
       logTaskCompleted: true,
-      logDealCreated: true,
-      logDealStageChanged: true,
       logMessageSent: true,
       logMessageReceived: true,
       logMeetingScheduled: true,
@@ -106,7 +90,7 @@ export function ActivityLogPreferencesForm(): React.JSX.Element {
       toast.success(
         disabledCount === 0
           ? 'All activity logging enabled — every channel event will appear on contact timelines.'
-          : `${disabledCount} of 6 logging rules turned off — those events will no longer appear on contact timelines.`,
+          : `${disabledCount} logging rules turned off — those events will no longer appear on contact timelines.`,
       )
     },
     onError: (error) => {

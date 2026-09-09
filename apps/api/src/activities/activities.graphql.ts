@@ -27,13 +27,11 @@ export const ActivityTypeEnum = builder.enumType('ActivityType', {
     CALL_MADE: { value: 'CALL_MADE' as const },
     MEETING_SCHEDULED: { value: 'MEETING_SCHEDULED' as const },
     NOTE_ADDED: { value: 'NOTE_ADDED' as const },
-    DEAL_CREATED: { value: 'DEAL_CREATED' as const },
     CONTACT_CREATED: { value: 'CONTACT_CREATED' as const },
     CONTACT_UPDATED: { value: 'CONTACT_UPDATED' as const },
     CONTACT_OWNER_CHANGED: { value: 'CONTACT_OWNER_CHANGED' as const },
     // Story 4.2 auto-logged types (AC 36)
     TASK_COMPLETED: { value: 'TASK_COMPLETED' as const },
-    DEAL_STAGE_CHANGED: { value: 'DEAL_STAGE_CHANGED' as const },
     MESSAGE_RECEIVED: { value: 'MESSAGE_RECEIVED' as const },
     MESSAGE_SENT: { value: 'MESSAGE_SENT' as const },
   },
@@ -44,12 +42,10 @@ type ActivityTypeValue =
   | 'CALL_MADE'
   | 'MEETING_SCHEDULED'
   | 'NOTE_ADDED'
-  | 'DEAL_CREATED'
   | 'CONTACT_CREATED'
   | 'CONTACT_UPDATED'
   | 'CONTACT_OWNER_CHANGED'
   | 'TASK_COMPLETED'
-  | 'DEAL_STAGE_CHANGED'
   | 'MESSAGE_RECEIVED'
   | 'MESSAGE_SENT'
 
@@ -106,8 +102,7 @@ ActivityRef.implement({
     // deliberately NOT exposed — no JSON scalar is registered in this schema
     // (AC 5).
     source: t.exposeString('source', { nullable: true }),
-    // Story 4.4 (AC 10): `sourceId` powers the Timeline view's source links
-    // (TASK → /tasks/:id, DEAL → /deals/:id). Nullable so contactTimeline
+    // `sourceId` powers links to task records. Nullable so contactTimeline
     // payloads (which never select it) resolve to null instead of crashing.
     sourceId: t.exposeString('sourceId', { nullable: true }),
     contact: t.field({
@@ -171,8 +166,6 @@ ContactTimelineResultRef.implement({
 
 type ActivityLogPreferenceShape = {
   logTaskCompleted: boolean
-  logDealCreated: boolean
-  logDealStageChanged: boolean
   logMessageSent: boolean
   logMessageReceived: boolean
   logMeetingScheduled: boolean
@@ -184,8 +177,6 @@ const ActivityLogPreferenceRef =
 ActivityLogPreferenceRef.implement({
   fields: (t) => ({
     logTaskCompleted: t.exposeBoolean('logTaskCompleted'),
-    logDealCreated: t.exposeBoolean('logDealCreated'),
-    logDealStageChanged: t.exposeBoolean('logDealStageChanged'),
     logMessageSent: t.exposeBoolean('logMessageSent'),
     logMessageReceived: t.exposeBoolean('logMessageReceived'),
     // Story 4.3 (AC 8): MEETING_SCHEDULED preference gate.
@@ -196,8 +187,6 @@ ActivityLogPreferenceRef.implement({
 const UpdateActivityLogPreferenceInputRef = builder.inputType('UpdateActivityLogPreferenceInput', {
   fields: (t) => ({
     logTaskCompleted: t.boolean(),
-    logDealCreated: t.boolean(),
-    logDealStageChanged: t.boolean(),
     logMessageSent: t.boolean(),
     logMessageReceived: t.boolean(),
     logMeetingScheduled: t.boolean(),

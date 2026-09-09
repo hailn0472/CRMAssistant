@@ -42,8 +42,7 @@ cp .env.example .env.local
 
 # Configure required variables:
 # - DATABASE_URL=postgresql://user:password@localhost:5432/crm
-# - REDIS_HOST=localhost
-# - REDIS_PORT=6379
+# - REDIS_URL=redis://localhost:6379
 # - SUPABASE_URL=https://your-project.supabase.co
 # - SUPABASE_ANON_KEY=your-anon-key
 # - VERTEX_AI_PROJECT_ID=your-project-id
@@ -186,7 +185,7 @@ CRMAssistant/
 
 ### Redis connection fails
 
-- Check REDIS_HOST and REDIS_PORT
+- Check REDIS_URL and ensure Redis is running
 - Ensure Redis is running
 
 ## Contributing

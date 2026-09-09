@@ -1,7 +1,6 @@
 import { Suspense } from 'react'
 
 import { ActivitiesWorkspace } from '@/components/activities/ActivitiesWorkspace'
-import { QueryProvider } from '@/components/contacts/QueryProvider'
 
 /**
  * Story 4.4 (AC 20): THIN route — every line of logic lives in
@@ -11,10 +10,8 @@ import { QueryProvider } from '@/components/contacts/QueryProvider'
  */
 export default function ActivitiesPage(): React.JSX.Element {
   return (
-    <QueryProvider>
-      <Suspense>
-        <ActivitiesWorkspace />
-      </Suspense>
-    </QueryProvider>
+    <Suspense>
+      <ActivitiesWorkspace />
+    </Suspense>
   )
 }

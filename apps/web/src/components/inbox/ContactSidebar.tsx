@@ -1,9 +1,7 @@
 'use client'
 
+import { ArrowUpRight, ClipboardCheck, MessageSquareText, Plus } from 'lucide-react'
 import { useRouter } from 'next/navigation'
-import { useQuery } from '@tanstack/react-query'
-
-import { getDeals } from '@/services/deal.service'
 
 type Contact = {
   id: string
@@ -20,6 +18,8 @@ type Contact = {
 type ContactSidebarProps = {
   contact?: Contact | null
   onNewTask?: (contactId: string) => void
+  conversationStatus?: string
+  channel?: string
 }
 
 function initials(firstName?: string, lastName?: string): string {
@@ -28,33 +28,18 @@ function initials(firstName?: string, lastName?: string): string {
   return (first + last).toUpperCase() || '?'
 }
 
-function formatCurrency(value: number, currency: string): string {
-  try {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency,
-      maximumFractionDigits: 0,
-    }).format(value)
-  } catch {
-    return `${currency} ${value.toLocaleString()}`
-  }
+function formatStatus(value?: string): string {
+  if (!value) return 'Open'
+  return value.charAt(0) + value.slice(1).toLowerCase()
 }
 
-function formatCloseDate(iso: string | null | undefined): string | null {
-  if (!iso) return null
-  const date = new Date(iso)
-  if (Number.isNaN(date.getTime())) return null
-  return date.toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' })
-}
-
-export function ContactSidebar({ contact, onNewTask }: ContactSidebarProps): React.JSX.Element {
+export function ContactSidebar({
+  contact,
+  onNewTask,
+  conversationStatus,
+  channel,
+}: ContactSidebarProps): React.JSX.Element {
   const router = useRouter()
-
-  const { data: dealsData } = useQuery({
-    queryKey: ['contact-open-deal', contact?.id],
-    queryFn: () => getDeals(1, 20, { contactId: contact!.id }),
-    enabled: !!contact,
-  })
 
   if (!contact) return <div className="flex-1 bg-white" />
 
@@ -62,9 +47,6 @@ export function ContactSidebar({ contact, onNewTask }: ContactSidebarProps): Rea
   const init = initials(contact.firstName, contact.lastName)
   const location = [contact.addressCity, contact.addressCountry].filter(Boolean).join(', ')
   const roleLine = [contact.jobTitle, contact.company].filter(Boolean).join(' · ')
-
-  const openDeal =
-    dealsData?.items.find((deal) => !deal.stage?.isWon && !deal.stage?.isLost) ?? null
 
   const details: Array<{ label: string; value: string }> = [
     { label: 'Email', value: contact.email },
@@ -74,36 +56,80 @@ export function ContactSidebar({ contact, onNewTask }: ContactSidebarProps): Rea
   ]
 
   return (
-    <div className="flex flex-col h-full bg-white overflow-y-auto p-[18px] gap-5">
+    <div className="flex h-full flex-col gap-4 overflow-y-auto bg-white p-4">
       {/* Profile */}
-      <div className="flex flex-col items-center gap-[9px] text-center">
-        <div className="h-[52px] w-[52px] rounded-full bg-[#f0f0f3] flex items-center justify-center text-[15px] font-semibold text-[#4b4b55]">
+      <div className="flex flex-col items-center gap-2.5 rounded-[14px] border border-[#eeeef2] bg-[#fcfcfd] px-4 py-4 text-center">
+        <div className="flex h-[52px] w-[52px] items-center justify-center rounded-full bg-[#ebeafe] text-[15px] font-semibold text-[#5147c9]">
           {init}
         </div>
         <div className="flex flex-col gap-0.5">
           <div className="text-[14.5px] font-semibold text-[#1b1b1f]">{fullName}</div>
           {roleLine && <div className="text-[12px] text-[#8c8c96]">{roleLine}</div>}
         </div>
-        <div className="flex gap-1.5 pt-1">
+        <div className="flex w-full gap-2 pt-1">
           <button
             type="button"
             onClick={() => router.push(`/contacts/${contact.id}`)}
-            className="inline-flex h-[30px] items-center rounded-[8px] border border-[#e6e6eb] bg-white px-[11px] text-[12px] font-medium text-[#4b4b55] transition-colors hover:bg-[#f4f4f6]"
+            className="inline-flex h-8 flex-1 items-center justify-center gap-1.5 rounded-[8px] border border-[#dedee5] bg-white px-2 text-[11.5px] font-semibold text-[#3f3f49] transition-colors hover:bg-[#f5f5f8]"
           >
-            Open contact
+            <ClipboardCheck className="h-3.5 w-3.5" />
+            Review contact
           </button>
           <button
             type="button"
             onClick={() => onNewTask?.(contact.id)}
-            className="inline-flex h-[30px] items-center rounded-[8px] border border-[#e6e6eb] bg-white px-[11px] text-[12px] font-medium text-[#4b4b55] transition-colors hover:bg-[#f4f4f6]"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-[8px] border border-[#dedee5] bg-white text-[#4b4b55] transition-colors hover:bg-[#f5f5f8]"
+            aria-label="Create task for contact"
           >
-            New task
+            <Plus className="h-3.5 w-3.5" />
           </button>
         </div>
       </div>
 
+      <section className="rounded-[12px] border border-[#e9e8f6] bg-[#f8f7ff] px-3.5 py-3">
+        <div className="flex items-center gap-2 text-[#5147c9]">
+          <MessageSquareText className="h-3.5 w-3.5" />
+          <span className="text-[10.5px] font-semibold tracking-[0.08em]">
+            CONVERSATION CONTEXT
+          </span>
+        </div>
+        <div className="mt-2.5 flex items-center justify-between gap-3 text-[12px]">
+          <span className="text-[#777781]">Channel</span>
+          <span className="font-semibold text-[#33333b]">
+            {channel === 'FACEBOOK' ? 'Facebook' : channel ?? 'Internal'}
+          </span>
+        </div>
+        <div className="mt-1.5 flex items-center justify-between gap-3 text-[12px]">
+          <span className="text-[#777781]">Status</span>
+          <span className="rounded-full bg-white px-2 py-0.5 text-[11px] font-semibold text-[#4f46c5]">
+            {formatStatus(conversationStatus)}
+          </span>
+        </div>
+      </section>
+
+      <section className="rounded-[12px] border border-[#ececf0] px-3.5 py-3">
+        <div className="flex items-center justify-between gap-2">
+          <div>
+            <p className="text-[10.5px] font-semibold tracking-[0.08em] text-[#9b9ba4]">
+              NEXT STEP
+            </p>
+            <p className="mt-1 text-[12px] leading-relaxed text-[#5d5d67]">
+              Review contact context before deciding whether this is a lead.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => router.push(`/contacts/${contact.id}`)}
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#1b1b20] text-white transition-colors hover:bg-black"
+            aria-label="Review contact qualification"
+          >
+            <ArrowUpRight className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      </section>
+
       {/* Details */}
-      <div className="flex flex-col gap-[10px]">
+      <div className="flex flex-col gap-[10px] px-0.5">
         <div className="text-[11px] font-semibold tracking-[0.08em] text-[#a0a0aa]">DETAILS</div>
         {details.map((d) => (
           <div key={d.label} className="flex items-baseline justify-between gap-3 text-[12.5px]">
@@ -111,41 +137,6 @@ export function ContactSidebar({ contact, onNewTask }: ContactSidebarProps): Rea
             <span className="truncate text-right text-[#1b1b1f]">{d.value}</span>
           </div>
         ))}
-      </div>
-
-      {/* Open deal */}
-      <div className="flex flex-col gap-[10px]">
-        <div className="text-[11px] font-semibold tracking-[0.08em] text-[#a0a0aa]">OPEN DEAL</div>
-        {openDeal ? (
-          <button
-            type="button"
-            onClick={() => router.push(`/deals/${openDeal.id}/edit`)}
-            className="flex flex-col gap-[7px] rounded-[11px] border border-[#ececf0] px-[13px] py-3 text-left transition-colors hover:bg-[#fafafb]"
-          >
-            <div className="text-[13px] font-semibold text-[#1b1b1f]">{openDeal.title}</div>
-            <div className="flex items-center justify-between gap-2.5">
-              <span className="font-mono text-[12.5px] text-[#1b1b1f]">
-                {formatCurrency(openDeal.value, openDeal.currency)}
-              </span>
-              {openDeal.stage && (
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-[#f4f4f6] px-[9px] py-[3px] text-[11.5px] font-medium text-[#4b4b55]">
-                  <span
-                    className="block h-[5px] w-[5px] rounded-full"
-                    style={{ background: openDeal.stage.color }}
-                  />
-                  {openDeal.stage.name}
-                </span>
-              )}
-            </div>
-            {formatCloseDate(openDeal.expectedCloseDate) && (
-              <div className="text-[11.5px] text-[#a0a0aa]">
-                Expected close {formatCloseDate(openDeal.expectedCloseDate)}
-              </div>
-            )}
-          </button>
-        ) : (
-          <p className="text-[12.5px] text-[#a0a0aa]">No open deal for this contact.</p>
-        )}
       </div>
     </div>
   )

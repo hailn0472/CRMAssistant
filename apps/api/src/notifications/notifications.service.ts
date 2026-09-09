@@ -19,7 +19,6 @@ export type CreateNotificationInput = {
   type: string
   title: string
   body?: string | null
-  dealId?: string | null
   taskId?: string | null
   reportExportId?: string | null
   dedupeKey?: string | null
@@ -49,7 +48,6 @@ export const NOTIFICATION_SELECT = {
   type: true,
   title: true,
   body: true,
-  dealId: true,
   taskId: true,
   reportExportId: true,
   dedupeKey: true,
@@ -68,7 +66,6 @@ export interface NotificationRecord {
   type: string
   title: string
   body: string | null
-  dealId: string | null
   taskId: string | null
   reportExportId: string | null
   dedupeKey: string | null
@@ -123,7 +120,6 @@ export class NotificationsService {
   ): Promise<{ notification: NotificationRecord; created: boolean }> {
     assertValidNotificationType(input.type)
     resolveNotificationTarget({
-      dealId: input.dealId,
       taskId: input.taskId,
       reportExportId: input.reportExportId,
     })
@@ -138,7 +134,6 @@ export class NotificationsService {
           type: input.type,
           title,
           body,
-          dealId: input.dealId ?? null,
           taskId: input.taskId ?? null,
           reportExportId: input.reportExportId ?? null,
           dedupeKey: input.dedupeKey ?? null,
@@ -178,7 +173,6 @@ export class NotificationsService {
             type: input.type,
             title,
             body,
-            dealId: input.dealId ?? null,
             taskId: input.taskId ?? null,
             reportExportId: input.reportExportId ?? null,
             dedupeKey: input.dedupeKey ?? null,

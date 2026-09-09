@@ -45,8 +45,7 @@ function dayLabel(key: string, todayKey: string, yesterdayKey: string): string {
  * collapsible sections (default: today + yesterday expanded, older collapsed),
  * rows rendered by the existing TimelineCard in place, infinite scroll via
  * IntersectionObserver with the mountedRef guard (ContactTimeline pattern),
- * and source links: TASK → /tasks/:sourceId, DEAL → /deals/:sourceId, else
- * the contact.
+ * and source links: TASK → /tasks/:sourceId, otherwise the contact.
  */
 export function ActivityTimelineView({ filters }: { filters: ActivityFilters }): React.JSX.Element {
   const canReadActivities = usePermission('CONTACT', 'READ')
@@ -261,8 +260,8 @@ export function ActivityTimelineView({ filters }: { filters: ActivityFilters }):
 }
 
 /**
- * Wraps a TimelineCard in its source link (AC 34): TASK → /tasks/:sourceId,
- * DEAL → /deals/:sourceId, anything else → the contact page.
+ * Wraps a TimelineCard in its source link: TASK → /tasks/:sourceId,
+ * anything else → the contact page.
  */
 function SourceLink({
   activity,
@@ -275,16 +274,6 @@ function SourceLink({
     return (
       <Link
         href={`/tasks/${activity.sourceId}`}
-        className="block rounded-[8px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600"
-      >
-        {children}
-      </Link>
-    )
-  }
-  if (activity.source === 'DEAL' && activity.sourceId) {
-    return (
-      <Link
-        href={`/deals/${activity.sourceId}`}
         className="block rounded-[8px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600"
       >
         {children}

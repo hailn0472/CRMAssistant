@@ -43,6 +43,7 @@
     "csv-parse": "^7.0.1",
     "exceljs": "^4.4.0",
     "graphql": "^16.14.0",
+    "ioredis": "^5.8.2",
     "nodemailer": "^9.0.5",
     "otplib": "^13.4.1",
     "passport": "^0.7.0",

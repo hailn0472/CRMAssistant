@@ -126,7 +126,7 @@ describe('tasks.graphql', () => {
     expect(sdl).toContain('onTaskAssigned: Task')
   })
 
-  it('exposes every Task ref field and the three nested refs (AC 42)', () => {
+  it('exposes every Task ref field and its contact/assignee refs', () => {
     const sdl = printSchema(schema)
     for (const field of [
       'id',
@@ -137,7 +137,6 @@ describe('tasks.graphql', () => {
       'dueDate',
       'assignedTo',
       'contactId',
-      'dealId',
       'completedAt',
       'createdBy',
       'createdAt',
@@ -147,7 +146,6 @@ describe('tasks.graphql', () => {
     }
     expect(sdl).toContain('type TaskAssignee')
     expect(sdl).toContain('type TaskContact')
-    expect(sdl).toContain('type TaskDeal')
   })
 
   it('declares every input type with optional fields lacking required (AC 46)', () => {

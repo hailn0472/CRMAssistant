@@ -3,7 +3,11 @@ import { UnauthorizedException } from '@nestjs/common'
 import { builder } from '../graphql/schema.builder'
 import { requirePermission } from '../common/guards/permission-check'
 import { resolveSharedRecordIds } from '../common/guards/sharing-check'
-import type { ContactListItemWithSharing, ContactsService } from './contacts.service'
+import {
+  LEAD_STATUSES,
+  type ContactListItemWithSharing,
+  type ContactsService,
+} from './contacts.service'
 import type { GraphqlContext } from '../graphql/graphql-context'
 import type { JwtPayload } from '../auth/strategies/jwt.strategy'
 
@@ -12,6 +16,10 @@ type ContactGraphqlShape =
   | ContactListItemWithSharing
 
 const ContactRef = builder.objectRef<ContactGraphqlShape>('Contact')
+
+const LeadStatusRef = builder.enumType('LeadStatus', {
+  values: LEAD_STATUSES,
+})
 
 const UserRef = builder.objectRef<{
   id: string
@@ -107,6 +115,29 @@ ContactRef.implement({
     notes: t.string({
       nullable: true,
       resolve: (contact) => ((contact as Record<string, unknown>).notes as string | null) ?? null,
+    }),
+    leadStatus: t.field({
+      type: LeadStatusRef,
+      resolve: (contact) => (contact as { leadStatus: (typeof LEAD_STATUSES)[number] }).leadStatus,
+    }),
+    leadScore: t.float({
+      nullable: true,
+      resolve: (contact) => (contact as { leadScore: number | null }).leadScore,
+    }),
+    qualificationReason: t.string({
+      nullable: true,
+      resolve: (contact) => (contact as { qualificationReason: string | null }).qualificationReason,
+    }),
+    qualifiedAt: t.string({
+      nullable: true,
+      resolve: (contact) => {
+        const qualifiedAt = (contact as { qualifiedAt: Date | null }).qualifiedAt
+        return qualifiedAt?.toISOString() ?? null
+      },
+    }),
+    qualifiedBy: t.string({
+      nullable: true,
+      resolve: (contact) => (contact as { qualifiedBy: string | null }).qualifiedBy,
     }),
     ownerId: t.exposeString('ownerId'),
     teamId: t.string({
@@ -210,6 +241,9 @@ const UpdateContactInputRef = builder.inputType('UpdateContactInput', {
     language: t.string(),
     source: t.string(),
     notes: t.string(),
+    leadStatus: t.field({ type: LeadStatusRef }),
+    leadScore: t.float(),
+    qualificationReason: t.string(),
   }),
 })
 
@@ -220,6 +254,7 @@ const ContactFilterInputRef = builder.inputType('ContactFilterInput', {
     jobTitle: t.string(),
     ownerId: t.string(),
     tags: t.stringList(),
+    leadStatuses: t.field({ type: [LeadStatusRef] }),
     createdAtFrom: t.string(),
     createdAtTo: t.string(),
   }),
@@ -238,7 +273,7 @@ const ContactStatsRef = builder
     fields: (t) => ({
       total: t.exposeInt('total'),
       addedThisMonth: t.exposeInt('addedThisMonth'),
-      withOpenDeals: t.exposeInt('withOpenDeals'),
+      qualifiedLeads: t.exposeInt('qualifiedLeads'),
       unassigned: t.exposeInt('unassigned'),
     }),
   })
@@ -323,6 +358,7 @@ builder.queryFields((t) => ({
           jobTitle: args.filter?.jobTitle ?? undefined,
           ownerId: args.filter?.ownerId ?? undefined,
           tags: args.filter?.tags ?? undefined,
+          leadStatuses: args.filter?.leadStatuses ?? undefined,
           createdAtFrom: args.filter?.createdAtFrom ?? undefined,
           createdAtTo: args.filter?.createdAtTo ?? undefined,
         },
@@ -391,6 +427,13 @@ builder.mutationFields((t) => ({
           : undefined,
         jobTitle: Object.prototype.hasOwnProperty.call(args.input, 'jobTitle')
           ? args.input.jobTitle
+          : undefined,
+        leadStatus: args.input.leadStatus ?? undefined,
+        leadScore: Object.prototype.hasOwnProperty.call(args.input, 'leadScore')
+          ? args.input.leadScore
+          : undefined,
+        qualificationReason: Object.prototype.hasOwnProperty.call(args.input, 'qualificationReason')
+          ? args.input.qualificationReason
           : undefined,
         ...enrichmentPatch(args.input),
       })

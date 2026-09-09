@@ -111,19 +111,10 @@ export function CommandDialog({
 
   const showDashboard = matches('open dashboard', 'command center', 'overview')
   const showContacts = matches('open contacts', 'crm contacts', 'customer records')
-  const showDeals = matches('open deals', 'pipeline opportunities')
   const showCreateContact = matches('create contact', 'quick-create workflow')
-  const showCreateDeal = matches('create deal', 'pipeline creation flow')
   const showAskAi = matches('ask ai', 'ai query', 'natural-language crm query')
   const showSettings = matches('open settings', 'workspace preferences')
-  const hasResults =
-    showDashboard ||
-    showContacts ||
-    showDeals ||
-    showCreateContact ||
-    showCreateDeal ||
-    showAskAi ||
-    showSettings
+  const hasResults = showDashboard || showContacts || showCreateContact || showAskAi || showSettings
 
   const handleNavigate = useCallback(
     (href: string) => {
@@ -161,7 +152,7 @@ export function CommandDialog({
             </div>
           ) : null}
 
-          {showDashboard || showContacts || showDeals ? (
+          {showDashboard || showContacts ? (
             <CommandGroup heading="Navigate">
               {showDashboard ? (
                 <CommandItem onSelect={() => handleNavigate('/dashboard')}>
@@ -189,23 +180,10 @@ export function CommandDialog({
                   </span>
                 </CommandItem>
               ) : null}
-              {showDeals ? (
-                <CommandItem onSelect={() => handleNavigate('/deals')}>
-                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue-50 text-sm font-semibold text-blue-600">
-                    D
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block font-medium text-slate-950">Open Deals</span>
-                    <span className="block text-xs leading-5 text-slate-500">
-                      Review pipeline opportunities
-                    </span>
-                  </span>
-                </CommandItem>
-              ) : null}
             </CommandGroup>
           ) : null}
 
-          {showCreateContact || showCreateDeal ? (
+          {showCreateContact ? (
             <CommandGroup heading="Create">
               {showCreateContact ? (
                 <CommandItem disabled value="create-contact">
@@ -216,20 +194,6 @@ export function CommandDialog({
                     <span className="block font-medium text-slate-700">Create Contact</span>
                     <span className="block text-xs leading-5 text-slate-400">
                       Planned quick-create workflow
-                    </span>
-                  </span>
-                  <span className="text-xs text-slate-400">(planned)</span>
-                </CommandItem>
-              ) : null}
-              {showCreateDeal ? (
-                <CommandItem disabled value="create-deal">
-                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-100 text-sm font-semibold text-slate-400">
-                    +
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block font-medium text-slate-700">Create Deal</span>
-                    <span className="block text-xs leading-5 text-slate-400">
-                      Planned pipeline creation flow
                     </span>
                   </span>
                   <span className="text-xs text-slate-400">(planned)</span>

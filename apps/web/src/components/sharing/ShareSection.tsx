@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { ShareDialog } from '@/components/sharing/ShareDialog'
 
 type ShareSectionProps = {
-  resourceType: 'CONTACT' | 'DEAL' | 'TASK'
+  resourceType: 'CONTACT' | 'TASK'
   resourceId: string
 }
 

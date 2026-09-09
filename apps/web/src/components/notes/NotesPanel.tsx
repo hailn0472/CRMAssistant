@@ -28,9 +28,7 @@ import {
 import { getNotes, createNote, updateNote, deleteNote } from '@/services/note.service'
 import type { Note, NoteConnection } from '@/services/note.service'
 
-// Story 4.7: NotesPanel — one component, two mount points (contactId or dealId).
-// Add/edit/delete follow the house optimistic recipe (TimeEntryList).
-// Permission gating reuses the parent's resource; row actions gated by authorship.
+// Notes belong to a contact. Row actions are gated by authorship.
 
 const MAX_NOTE_BODY_LENGTH = 5000
 
@@ -44,21 +42,21 @@ const noteSchema = z.object({
 
 type NoteFormData = z.infer<typeof noteSchema>
 
-type NotesPanelProps = { contactId: string; dealId?: never } | { dealId: string; contactId?: never }
+type NotesPanelProps = { contactId: string }
 
 export function NotesPanel(props: NotesPanelProps) {
-  const parentType = props.contactId ? 'CONTACT' : 'DEAL'
-  const filter = props.contactId ? { contactId: props.contactId } : { dealId: props.dealId! }
+  const parentType = 'CONTACT'
+  const contactId = props.contactId
 
   const canWrite = usePermission(parentType, 'UPDATE')
   const queryClient = useQueryClient()
   const [editingNote, setEditingNote] = useState<Note | null>(null)
 
-  const queryKey = ['notes', filter] as const
+  const queryKey = ['notes', contactId] as const
 
   const { data, isLoading, isError, error, refetch } = useQuery<NoteConnection>({
     queryKey,
-    queryFn: () => getNotes(filter),
+    queryFn: () => getNotes(contactId),
   })
 
   // ── optimistic mutations ─────────────────────────────────
@@ -74,7 +72,7 @@ export function NotesPanel(props: NotesPanelProps) {
   }
 
   const addMutation = useMutation({
-    mutationFn: (body: string) => createNote({ ...filter, body }),
+    mutationFn: (body: string) => createNote({ contactId, body }),
     onMutate: async () => {
       await queryClient.cancelQueries({ queryKey: ['notes'] })
       return { snapshot: snapshotNotes() }

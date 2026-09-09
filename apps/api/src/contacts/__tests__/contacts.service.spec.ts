@@ -30,6 +30,11 @@ type MockActivityService = {
   countByContact: jest.Mock
 }
 
+type MockCacheService = {
+  getOrSetTenantJson: jest.Mock
+  invalidateTenant: jest.Mock
+}
+
 type MockContactDelegate = {
   create: jest.Mock
   findFirst: jest.Mock
@@ -106,14 +111,13 @@ function makeContact(overrides: Partial<Contact> = {}): Contact {
     language: null,
     source: null,
     notes: null,
+    leadStatus: 'NEW',
+    leadScore: null,
+    qualificationReason: null,
+    qualifiedAt: null,
+    qualifiedBy: null,
     ownerId: USER_ID,
     teamId: null,
-    // Story 6.7: server-owned calculated analytics fields (nullable).
-    lifetimeValue: null,
-    churnRisk: null,
-    churnRiskScore: null,
-    lastActivityDate: null,
-    analyticsCalculatedAt: null,
     createdAt: NOW,
     updatedAt: NOW,
     createdBy: USER_ID,
@@ -175,18 +179,31 @@ function makeActivityService(): MockActivityService {
   }
 }
 
+function makeCacheService(): MockCacheService {
+  return {
+    getOrSetTenantJson: jest.fn(
+      async <T>(_: string, __: string, ___: string, ____: number, loader: () => Promise<T>) =>
+        loader(),
+    ),
+    invalidateTenant: jest.fn(),
+  }
+}
+
 describe('ContactsService', () => {
   let service: ContactsService
   let prisma: MockPrisma
   let activityService: MockActivityService
+  let cache: MockCacheService
 
   beforeEach(() => {
     prisma = makePrisma()
     activityService = makeActivityService()
+    cache = makeCacheService()
     ;(activityService.detectChangedFields as jest.Mock).mockReturnValue([])
     service = new ContactsService(
       prisma as unknown as ConstructorParameters<typeof ContactsService>[0],
       activityService as unknown as ConstructorParameters<typeof ContactsService>[1],
+      cache as unknown as ConstructorParameters<typeof ContactsService>[2],
     )
     ;(resolveVisibilityFilter as jest.Mock).mockResolvedValue(undefined)
     ;(resolveSharedRecordIds as jest.Mock).mockResolvedValue([])
@@ -537,6 +554,11 @@ describe('ContactsService', () => {
           language: true,
           source: true,
           notes: true,
+          leadStatus: true,
+          leadScore: true,
+          qualificationReason: true,
+          qualifiedAt: true,
+          qualifiedBy: true,
           ownerId: true,
           owner: {
             select: { id: true, firstName: true, lastName: true, email: true, avatar: true },
@@ -794,7 +816,7 @@ describe('ContactsService', () => {
       expect(result).toEqual({
         total: 237,
         addedThisMonth: 18,
-        withOpenDeals: 64,
+        qualifiedLeads: 64,
         unassigned: 9,
       })
       expect(prisma.contact.count).toHaveBeenCalledTimes(4)
@@ -818,14 +840,12 @@ describe('ContactsService', () => {
       expect(createdAtFilter.gte.getMonth()).toBe(new Date().getMonth())
     })
 
-    it('counts open deals as those in neither a won nor a lost stage', async () => {
+    it('counts qualified leads from the contact lifecycle', async () => {
       prisma.contact.count.mockResolvedValue(0)
 
       await service.getStats(TENANT_ID, USER_ID)
 
-      expect(prisma.contact.count.mock.calls[2][0].where.deals).toEqual({
-        some: { deletedAt: null, stage: { isWon: false, isLost: false } },
-      })
+      expect(prisma.contact.count.mock.calls[2][0].where.leadStatus).toBe('QUALIFIED_LEAD')
     })
 
     it('counts contacts owned by the system sentinel or an inactive user as unassigned', async () => {
@@ -868,6 +888,35 @@ describe('ContactsService', () => {
       expect(prisma.contact.updateMany).toHaveBeenCalledWith({
         where: { id: CONTACT_ID, tenantId: TENANT_ID, deletedAt: null },
         data: { company: 'Acme', updatedBy: USER_ID },
+      })
+    })
+
+    it('records qualification attribution when a contact becomes a qualified lead', async () => {
+      const before = makeContact()
+      const after = makeContact({
+        leadStatus: 'QUALIFIED_LEAD',
+        qualifiedAt: NOW,
+        qualifiedBy: USER_ID,
+      })
+      prisma.contact.findFirst.mockResolvedValueOnce(before).mockResolvedValueOnce(after)
+      prisma.contact.updateMany.mockResolvedValue({ count: 1 })
+
+      await service.update(TENANT_ID, USER_ID, CONTACT_ID, {
+        leadStatus: 'QUALIFIED_LEAD',
+        leadScore: 82.5,
+        qualificationReason: 'Asked for a consultation after reviewing the offer.',
+      })
+
+      expect(prisma.contact.updateMany).toHaveBeenCalledWith({
+        where: { id: CONTACT_ID, tenantId: TENANT_ID, deletedAt: null },
+        data: expect.objectContaining({
+          leadStatus: 'QUALIFIED_LEAD',
+          leadScore: 82.5,
+          qualificationReason: 'Asked for a consultation after reviewing the offer.',
+          qualifiedAt: expect.any(Date),
+          qualifiedBy: USER_ID,
+          updatedBy: USER_ID,
+        }),
       })
     })
 
@@ -1079,6 +1128,7 @@ describe('ContactsService — Ownership', () => {
   let service: ContactsService
   let prisma: MockPrisma
   let activityService: MockActivityService
+  let cache: MockCacheService
 
   const NEW_OWNER_ID = 'new-owner-1'
   const TEAM_ID = 'team-1'
@@ -1108,10 +1158,12 @@ describe('ContactsService — Ownership', () => {
   beforeEach(() => {
     prisma = makePrisma()
     activityService = makeActivityService()
+    cache = makeCacheService()
     ;(activityService.detectChangedFields as jest.Mock).mockReturnValue([])
     service = new ContactsService(
       prisma as unknown as ConstructorParameters<typeof ContactsService>[0],
       activityService as unknown as ConstructorParameters<typeof ContactsService>[1],
+      cache as unknown as ConstructorParameters<typeof ContactsService>[2],
     )
     ;(resolveVisibilityFilter as jest.Mock).mockResolvedValue(undefined)
     ;(resolveSharedRecordIds as jest.Mock).mockResolvedValue([])

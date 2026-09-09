@@ -102,7 +102,7 @@ function normalizeDefaultDueInDays(value: number | null | undefined): number | n
 
 /**
  * Tenant-global task template catalogue (AC 37). Templates have no owner column,
- * so — exactly like ProductsService — the read methods take no `userId` and
+ * so the read methods take no `userId` and
  * `resolveVisibilityFilter` is never called on them.
  */
 @Injectable()

@@ -18,7 +18,7 @@ import type { SharingRule } from '@/services/sharing.service'
 type ShareDialogProps = {
   open: boolean
   onOpenChange: (open: boolean) => void
-  resourceType: 'CONTACT' | 'DEAL' | 'TASK'
+  resourceType: 'CONTACT' | 'TASK'
   resourceId: string
 }
 

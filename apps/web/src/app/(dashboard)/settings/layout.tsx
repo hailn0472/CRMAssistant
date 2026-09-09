@@ -34,7 +34,6 @@ const settingsNav: SettingsNavItem[] = [
   { label: 'Audit Logs', href: '/settings/audit-logs', roles: ['ADMIN'] },
   { label: 'API Keys', href: '/settings/api-keys', roles: ['ADMIN'] },
   // No roles and no permission — every user manages their own preferences.
-  { label: 'Reminders', href: '/settings/reminders' },
   { label: 'Activity Logging', href: '/settings/activity-logging' },
   // Story 4.3: per-user calendar connections — no roles, no permission
   // (per-user preference precedent; AC 32).

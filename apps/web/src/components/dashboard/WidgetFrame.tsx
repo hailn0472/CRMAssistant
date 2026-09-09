@@ -101,10 +101,10 @@ export function WidgetFrame({
 
   return (
     <Card
-      className="rounded-lg border border-slate-200 bg-white shadow-sm"
+      className="h-full rounded-[14px] border border-[#e7e7ec] bg-white shadow-[0_1px_2px_rgba(15,15,20,0.03)]"
       aria-labelledby={`widget-title-${widget.id}`}
     >
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 px-5 pb-2 pt-4">
         <div className="flex items-center gap-2">
           {isEditing &&
             (dragHandleProps ? (
@@ -123,7 +123,10 @@ export function WidgetFrame({
                 aria-hidden="true"
               />
             ))}
-          <CardTitle id={`widget-title-${widget.id}`} className="text-sm font-medium">
+          <CardTitle
+            id={`widget-title-${widget.id}`}
+            className="text-[13px] font-semibold tracking-[-0.01em] text-[#2a2a31]"
+          >
             {widget.title}
           </CardTitle>
         </div>
@@ -226,7 +229,7 @@ export function WidgetFrame({
           )}
         </div>
       </CardHeader>
-      <CardContent className="pt-0">{children ?? null}</CardContent>
+      <CardContent className="px-5 pb-5 pt-1">{children ?? null}</CardContent>
     </Card>
   )
 }

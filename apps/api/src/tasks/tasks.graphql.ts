@@ -81,20 +81,6 @@ ContactRef.implement({
   }),
 })
 
-type DealShape = {
-  id: string
-  title: string
-}
-
-const DealRef = builder.objectRef<DealShape>('TaskDeal')
-
-DealRef.implement({
-  fields: (t) => ({
-    id: t.exposeID('id'),
-    title: t.exposeString('title'),
-  }),
-})
-
 // ─── Task Type ────────────────────────────────────────────
 
 export type TaskGraphqlShape = {
@@ -106,7 +92,6 @@ export type TaskGraphqlShape = {
   dueDate: Date | null
   assignedTo: string
   contactId: string | null
-  dealId: string | null
   completedAt: Date | null
   createdAt: Date
   updatedAt: Date
@@ -118,7 +103,6 @@ export type TaskGraphqlShape = {
   parentTaskId: string | null
   assignee?: AssigneeShape | null
   contact?: ContactShape | null
-  deal?: DealShape | null
 }
 
 export const TaskRef = builder.objectRef<TaskGraphqlShape>('Task')
@@ -142,10 +126,6 @@ TaskRef.implement({
       nullable: true,
       resolve: (task) => task.contactId ?? null,
     }),
-    dealId: t.string({
-      nullable: true,
-      resolve: (task) => task.dealId ?? null,
-    }),
     completedAt: t.string({
       nullable: true,
       resolve: (task) => task.completedAt?.toISOString() ?? null,
@@ -164,11 +144,6 @@ TaskRef.implement({
       nullable: true,
       resolve: (task) =>
         'contact' in task && task.contact ? (task.contact as unknown as ContactShape) : null,
-    }),
-    deal: t.field({
-      type: DealRef,
-      nullable: true,
-      resolve: (task) => ('deal' in task && task.deal ? (task.deal as unknown as DealShape) : null),
     }),
     // Story 4.6 (AC 44): recurrence fields on Task ref
     isRecurring: t.boolean({
@@ -356,7 +331,6 @@ const CreateTaskInputRef = builder.inputType('CreateTaskInput', {
     dueDate: t.string(),
     assignedTo: t.string(),
     contactId: t.string(),
-    dealId: t.string(),
     // Story 4.6 (AC 43): recurrence fields
     isRecurring: t.boolean(),
     recurrencePattern: t.field({ type: RecurrencePatternRef }),
@@ -373,7 +347,6 @@ const UpdateTaskInputRef = builder.inputType('UpdateTaskInput', {
     dueDate: t.string(),
     assignedTo: t.string(),
     contactId: t.string(),
-    dealId: t.string(),
     // Story 4.6 (AC 43): recurrence fields
     isRecurring: t.boolean(),
     recurrencePattern: t.field({ type: RecurrencePatternRef }),
@@ -388,7 +361,6 @@ const TaskFilterInputRef = builder.inputType('TaskFilterInput', {
     priority: t.field({ type: TaskPriorityRef }),
     assignedTo: t.string(),
     contactId: t.string(),
-    dealId: t.string(),
     dueDateFrom: t.string(),
     dueDateTo: t.string(),
     overdueOnly: t.boolean(),
@@ -435,7 +407,6 @@ const CreateTaskFromTemplateInputRef = builder.inputType('CreateTaskFromTemplate
     templateId: t.string({ required: true }),
     assignedTo: t.string(),
     contactId: t.string(),
-    dealId: t.string(),
     dueDate: t.string(),
     title: t.string(),
   }),
@@ -538,7 +509,6 @@ builder.queryFields((t) => ({
           priority: args.filter?.priority ?? undefined,
           assignedTo: args.filter?.assignedTo ?? undefined,
           contactId: args.filter?.contactId ?? undefined,
-          dealId: args.filter?.dealId ?? undefined,
           dueDateFrom: args.filter?.dueDateFrom ?? undefined,
           dueDateTo: args.filter?.dueDateTo ?? undefined,
           overdueOnly: args.filter?.overdueOnly ?? undefined,
@@ -577,7 +547,6 @@ builder.queryFields((t) => ({
           priority: args.filter?.priority ?? undefined,
           assignedTo: user.userId,
           contactId: args.filter?.contactId ?? undefined,
-          dealId: args.filter?.dealId ?? undefined,
           dueDateFrom: args.filter?.dueDateFrom ?? undefined,
           dueDateTo: args.filter?.dueDateTo ?? undefined,
           overdueOnly: args.filter?.overdueOnly ?? undefined,
@@ -670,7 +639,6 @@ builder.mutationFields((t) => ({
         dueDate: args.input.dueDate ?? undefined,
         assignedTo: args.input.assignedTo ?? undefined,
         contactId: args.input.contactId ?? undefined,
-        dealId: args.input.dealId ?? undefined,
         // Story 4.6 (AC 43): recurrence fields
         isRecurring: args.input.isRecurring ?? undefined,
         recurrencePattern: args.input.recurrencePattern ?? undefined,
@@ -695,7 +663,6 @@ builder.mutationFields((t) => ({
         dueDate: args.input.dueDate ?? undefined,
         assignedTo: args.input.assignedTo ?? undefined,
         contactId: args.input.contactId ?? undefined,
-        dealId: args.input.dealId ?? undefined,
         // Story 4.6 (AC 43): recurrence fields
         isRecurring: args.input.isRecurring ?? undefined,
         recurrencePattern: args.input.recurrencePattern ?? undefined,
@@ -800,7 +767,6 @@ builder.mutationFields((t) => ({
         {
           assignedTo: args.input.assignedTo ?? undefined,
           contactId: args.input.contactId ?? undefined,
-          dealId: args.input.dealId ?? undefined,
           dueDate: args.input.dueDate ?? undefined,
           title: args.input.title ?? undefined,
         },

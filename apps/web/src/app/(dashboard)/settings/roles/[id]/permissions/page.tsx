@@ -4,7 +4,6 @@ import { useParams, useRouter } from 'next/navigation'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 
 import { ErrorState } from '@/components/shared/ErrorState'
-import { QueryProvider } from '@/components/contacts/QueryProvider'
 import { PermissionMatrix, PermissionMatrixSkeleton } from '@/components/roles/PermissionMatrix'
 import { getRole, getRoleUsers } from '@/services/role.service'
 import {
@@ -112,9 +111,7 @@ function PermissionMatrixContent(): React.JSX.Element {
 export default function PermissionMatrixPage(): React.JSX.Element {
   return (
     <main className="space-y-6 p-6 text-slate-950">
-      <QueryProvider>
-        <PermissionMatrixContent />
-      </QueryProvider>
+      <PermissionMatrixContent />
     </main>
   )
 }

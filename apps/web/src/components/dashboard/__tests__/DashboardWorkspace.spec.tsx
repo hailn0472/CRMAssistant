@@ -11,8 +11,8 @@ const mockWidgets = [
   {
     id: 'w-1',
     type: 'METRIC_CARD',
-    title: 'Pipeline Value',
-    config: { source: 'PIPELINE_VALUE', dateRangeDays: 30, stageId: null, ownerId: null, limit: 5 },
+    title: 'Contact Count',
+    config: { source: 'CONTACT_COUNT', dateRangeDays: 30, stageId: null, ownerId: null, limit: 5 },
     position: 0,
     size: '1x1',
     createdAt: '2026-01-01T00:00:00Z',
@@ -20,10 +20,10 @@ const mockWidgets = [
   },
   {
     id: 'w-2',
-    type: 'BAR_CHART',
-    title: 'Pipeline by Stage',
+    type: 'FUNNEL',
+    title: 'Lead Funnel',
     config: {
-      source: 'PIPELINE_BY_STAGE',
+      source: 'LEAD_FUNNEL',
       dateRangeDays: 30,
       stageId: null,
       ownerId: null,
@@ -36,9 +36,15 @@ const mockWidgets = [
   },
   {
     id: 'w-3',
-    type: 'TABLE',
-    title: 'At-Risk Deals',
-    config: { source: 'AT_RISK_DEALS', dateRangeDays: 30, stageId: null, ownerId: null, limit: 5 },
+    type: 'ACTIVITY_FEED',
+    title: 'Recent Activity',
+    config: {
+      source: 'RECENT_ACTIVITY',
+      dateRangeDays: 30,
+      stageId: null,
+      ownerId: null,
+      limit: 5,
+    },
     position: 2,
     size: '3x2',
     createdAt: '2026-01-01T00:00:00Z',
@@ -392,7 +398,7 @@ describe('DashboardWorkspace', () => {
       onDragStart({ active: { id: 'w-1' } })
     })
     const overlay = screen.getByTestId('drag-overlay')
-    expect(within(overlay).getByText('Pipeline Value')).toBeDefined()
+    expect(within(overlay).getByText('Contact Count')).toBeDefined()
   })
 
   it('reorders widgets on drag end', () => {

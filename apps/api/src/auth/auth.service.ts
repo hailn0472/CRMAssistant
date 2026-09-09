@@ -15,7 +15,6 @@ import type { WebSocketLikeConstructor } from '@supabase/realtime-js'
 import { PrismaService } from '../prisma/prisma.service'
 import { TokenRevocationService } from './token-revocation.service'
 import { DEFAULT_ROLE_PERMISSIONS } from '../permissions/default-role-permissions'
-import { DEFAULT_DEAL_STAGES } from '../deals/default-deal-stages'
 import { TwoFactorService } from './two-factor.service'
 import type { LoginDto } from './dto/login.dto'
 import type { OAuthTokenDto } from './dto/oauth-token.dto'
@@ -167,23 +166,6 @@ export class AuthService {
 
         // Assign default permissions to system roles
         await this.assignDefaultPermissionsForRoles(tx, createdRoles)
-
-        // Seed default deal stages for the new tenant
-        for (const stage of DEFAULT_DEAL_STAGES) {
-          await tx.dealStage.create({
-            data: {
-              tenantId: tenant.id,
-              name: stage.name,
-              order: stage.order,
-              probability: stage.probability,
-              isWon: stage.isWon,
-              isLost: stage.isLost,
-              color: stage.color,
-              createdBy: 'system',
-              updatedBy: 'system',
-            },
-          })
-        }
 
         const user = await tx.user.create({
           data: {
@@ -566,23 +548,6 @@ export class AuthService {
         }
 
         await this.assignDefaultPermissionsForRoles(tx, createdRoles)
-
-        // Seed default deal stages for the new tenant
-        for (const stage of DEFAULT_DEAL_STAGES) {
-          await tx.dealStage.create({
-            data: {
-              tenantId: tenant.id,
-              name: stage.name,
-              order: stage.order,
-              probability: stage.probability,
-              isWon: stage.isWon,
-              isLost: stage.isLost,
-              color: stage.color,
-              createdBy: 'system',
-              updatedBy: 'system',
-            },
-          })
-        }
 
         const newUserSsoData: Record<string, unknown> = {}
         if (ssoProviderName && ssoId) {

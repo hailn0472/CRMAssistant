@@ -353,7 +353,7 @@ export class TimeEntriesService {
   }
 
   /**
-   * AC 11-12: public so ProductivityService composes it instead of
+   * Public for use by other internal aggregates instead of
    * re-deriving the scope — a second implementation of "which entries may I
    * see" is a guaranteed divergence (finding 3.7-F4 was exactly this class).
    * Unknown/empty filter values are ignored, never rejected.

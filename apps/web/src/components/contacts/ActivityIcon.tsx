@@ -5,12 +5,10 @@ import {
   Phone,
   Calendar,
   FileText,
-  Briefcase,
   Sparkles,
   RefreshCw,
   UserCog,
   CheckCircle2,
-  ArrowRightLeft,
   MessageSquare,
   Send,
   type LucideIcon,
@@ -49,12 +47,6 @@ const ICON_CONFIGS: Record<ActivityTypeValue, IconConfig> = {
     bgColor: 'bg-yellow-100',
     label: 'Note Added',
   },
-  DEAL_CREATED: {
-    icon: Briefcase,
-    color: 'text-orange-600',
-    bgColor: 'bg-orange-100',
-    label: 'Deal Created',
-  },
   CONTACT_CREATED: {
     icon: Sparkles,
     color: 'text-slate-500',
@@ -79,12 +71,6 @@ const ICON_CONFIGS: Record<ActivityTypeValue, IconConfig> = {
     color: 'text-emerald-600',
     bgColor: 'bg-emerald-100',
     label: 'Task Completed',
-  },
-  DEAL_STAGE_CHANGED: {
-    icon: ArrowRightLeft,
-    color: 'text-orange-600',
-    bgColor: 'bg-orange-100',
-    label: 'Stage Changed',
   },
   MESSAGE_RECEIVED: {
     icon: MessageSquare,

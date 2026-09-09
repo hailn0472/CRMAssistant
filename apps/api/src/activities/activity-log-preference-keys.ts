@@ -6,8 +6,6 @@
  */
 export const ACTIVITY_LOG_PREFERENCE_KEYS = [
   'logTaskCompleted',
-  'logDealCreated',
-  'logDealStageChanged',
   'logMessageSent',
   'logMessageReceived',
   'logMeetingScheduled',
@@ -17,8 +15,6 @@ export type ActivityLogPreferenceKey = (typeof ACTIVITY_LOG_PREFERENCE_KEYS)[num
 
 export const DEFAULT_ACTIVITY_LOG_PREFERENCES: Record<ActivityLogPreferenceKey, boolean> = {
   logTaskCompleted: true,
-  logDealCreated: true,
-  logDealStageChanged: true,
   logMessageSent: true,
   logMessageReceived: true,
   logMeetingScheduled: true,

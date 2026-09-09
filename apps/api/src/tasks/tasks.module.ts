@@ -8,7 +8,6 @@ import { TaskDependenciesService } from './task-dependencies.service'
 import { TaskRecurrenceService } from './task-recurrence.service'
 import { PrismaModule } from '../prisma/prisma.module'
 import { ContactsModule } from '../contacts/contacts.module'
-import { DealsModule } from '../deals/deals.module'
 import { AuditModule } from '../audit/audit.module'
 import { ActivitiesModule } from '../activities/activities.module'
 import { CalendarModule } from '../calendar/calendar.module'
@@ -18,7 +17,6 @@ import { NotificationsModule } from '../notifications/notifications.module'
   imports: [
     PrismaModule,
     ContactsModule,
-    DealsModule,
     AuditModule,
     ActivitiesModule,
     // Story 4.3: CalendarSyncService for the best-effort push hooks (AC 23).

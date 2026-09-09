@@ -42,7 +42,6 @@ export type CalendarTaskInput = {
   dueDate: Date | null
   assignedTo: string
   contactId: string | null
-  dealId: string | null
 }
 
 export type TaskCalendarSyncResult = {
@@ -373,8 +372,7 @@ export class CalendarSyncService {
 
   /**
    * MEETING_SCHEDULED producer (AC 28), on the first successful push of a
-   * task that resolves to a contact (Task.contactId → else Task.dealId →
-   * Deal.contactId → else skip silently). `Activity.contactId` is NOT NULL
+   * task that has a Contact. `Activity.contactId` is NOT NULL
    * while `Task.contactId` is nullable — the orphan case skips silently and
    * the sync must still succeed (T3).
    */
@@ -394,16 +392,9 @@ export class CalendarSyncService {
         return
       }
 
-      let contactId = task.contactId
-      if (!contactId && task.dealId) {
-        const deal = await this.prisma.deal.findFirst({
-          where: { id: task.dealId, tenantId: task.tenantId, deletedAt: null },
-          select: { contactId: true },
-        })
-        contactId = deal?.contactId ?? null
-      }
+      const contactId = task.contactId
       if (!contactId) {
-        // Task attached to neither a contact nor a deal — nothing to log.
+        // Task without a Contact has nowhere to log.
         return
       }
 

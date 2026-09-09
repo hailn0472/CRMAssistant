@@ -23,7 +23,6 @@ interface PermissionMatrixProps {
 
 const RESOURCE_LABELS: Record<string, string> = {
   CONTACT: 'Contacts',
-  DEAL: 'Deals',
   TASK: 'Tasks',
   TICKET: 'Tickets',
   REPORT: 'Reports',
@@ -43,7 +42,7 @@ const ACTION_LABELS: Record<string, string> = {
 }
 
 const ACTION_ORDER = ['CREATE', 'READ', 'UPDATE', 'DELETE', 'EXPORT', 'IMPORT', 'ASSIGN']
-const RESOURCE_ORDER = ['CONTACT', 'DEAL', 'TASK', 'TICKET', 'REPORT', 'USER', 'ROLE', 'SETTINGS']
+const RESOURCE_ORDER = ['CONTACT', 'TASK', 'TICKET', 'REPORT', 'USER', 'ROLE', 'SETTINGS']
 
 function groupByResource(permissions: PermissionData[]): Map<string, PermissionData[]> {
   const map = new Map<string, PermissionData[]>()

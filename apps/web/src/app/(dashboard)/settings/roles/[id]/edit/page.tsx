@@ -12,7 +12,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { ErrorState } from '@/components/shared/ErrorState'
 import { TableSkeleton } from '@/components/shared/LoadingSkeleton'
-import { QueryProvider } from '@/components/contacts/QueryProvider'
 import { getRole, updateRole } from '@/services/role.service'
 
 const editRoleSchema = z.object({
@@ -146,9 +145,7 @@ function EditRoleForm(): React.JSX.Element {
 export default function EditRolePage(): React.JSX.Element {
   return (
     <main className="space-y-6 p-6 text-slate-950">
-      <QueryProvider>
-        <EditRoleForm />
-      </QueryProvider>
+      <EditRoleForm />
     </main>
   )
 }

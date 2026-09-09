@@ -17,7 +17,7 @@ export type CreateActivityInput = {
   description?: string | null
   createdBy: string
   // Story 4.2 auto-logging fields. `source` is the producing domain
-  // ('TASK' | 'DEAL' | 'MESSAGE'); null means manual entry (addContactNote).
+  // ('TASK' | 'MESSAGE'); null means manual entry (addContactNote).
   // `sourceId` is the originating row id; `dedupeKey` is the deterministic
   // per-event key (caller-produced, AC 15); `metadata` is persisted but never
   // exposed over GraphQL (AC 5).

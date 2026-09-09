@@ -325,17 +325,7 @@ export function TasksTable(): React.JSX.Element {
                             {task.contact.firstName} {task.contact.lastName}
                           </Link>
                         ) : null}
-                        {task.contact && task.deal ? ' · ' : null}
-                        {task.deal ? (
-                          <Link
-                            href={`/deals/${task.deal.id}`}
-                            className="truncate text-indigo-600 hover:underline"
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            {task.deal.title}
-                          </Link>
-                        ) : null}
-                        {!task.contact && !task.deal ? (
+                        {!task.contact ? (
                           <span className="italic text-[#c0c0c8]">&mdash;</span>
                         ) : null}
                       </td>

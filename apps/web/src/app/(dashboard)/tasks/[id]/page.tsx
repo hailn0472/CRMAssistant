@@ -3,7 +3,6 @@ import { notFound, redirect } from 'next/navigation'
 
 import type { Task } from '@/services/task.service'
 import { TaskDetailClient } from '@/components/tasks/TaskDetailClient'
-import { QueryProvider } from '@/components/contacts/QueryProvider'
 
 const API_URL = process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:4000'
 const AUTH_COOKIE = 'auth-token'
@@ -40,7 +39,6 @@ async function loadTask(id: string): Promise<Task> {
           dueDate
           assignedTo
           contactId
-          dealId
           completedAt
           createdBy
           createdAt
@@ -51,7 +49,6 @@ async function loadTask(id: string): Promise<Task> {
           parentTaskId
           assignee { id firstName lastName email avatar }
           contact { id firstName lastName email }
-          deal { id title }
         }
       }`,
       variables: { id },
@@ -83,9 +80,5 @@ export default async function TaskDetailPage({
 }: TaskPageProps): Promise<React.JSX.Element> {
   const task = await loadTask(params.id)
 
-  return (
-    <QueryProvider>
-      <TaskDetailClient task={task} />
-    </QueryProvider>
-  )
+  return <TaskDetailClient task={task} />
 }

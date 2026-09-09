@@ -38,17 +38,11 @@ describe('DEFAULT_ROLE_PERMISSIONS (AC 19)', () => {
     expect(has('REPORT', 'DELETE', grants)).toBe(false)
   })
 
-  it('preserves existing SALES_MANAGER grants (CONTACT/DEAL/TASK/PRODUCT/COMPETITOR/USER/INBOX)', () => {
+  it('grants SALES_MANAGER the remaining CRM resources', () => {
     const grants = DEFAULT_ROLE_PERMISSIONS['SALES_MANAGER']
     expect(has('CONTACT', 'READ', grants)).toBe(true)
     expect(has('CONTACT', 'DELETE', grants)).toBe(true)
-    expect(has('DEAL', 'READ', grants)).toBe(true)
-    expect(has('DEAL', 'CREATE', grants)).toBe(true)
-    // DEAL has no DELETE grant historically.
-    expect(has('DEAL', 'DELETE', grants)).toBe(false)
     expect(has('TASK', 'READ', grants)).toBe(true)
-    expect(has('PRODUCT', 'CREATE', grants)).toBe(true)
-    expect(has('COMPETITOR', 'READ', grants)).toBe(true)
     expect(has('USER', 'READ', grants)).toBe(true)
     expect(has('INBOX', 'WRITE', grants)).toBe(true)
   })

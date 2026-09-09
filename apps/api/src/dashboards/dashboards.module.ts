@@ -3,12 +3,9 @@ import { PrismaModule } from '../prisma/prisma.module'
 import { AuditModule } from '../audit/audit.module'
 import { SharingModule } from '../sharing/sharing.module'
 import { SharingService } from '../sharing/sharing.service'
-import { DealsModule } from '../deals/deals.module'
-import { DealHealthModule } from '../deal-health/deal-health.module'
 import { TasksModule } from '../tasks/tasks.module'
 import { ActivitiesModule } from '../activities/activities.module'
 import { ContactsModule } from '../contacts/contacts.module'
-import { ReportsModule } from '../reports/reports.module'
 import { DashboardsService } from './dashboards.service'
 import { WidgetDataService } from './widget-data.service'
 import { registerDashboardsGraphql } from './dashboards.graphql'
@@ -18,12 +15,9 @@ import { registerDashboardsGraphql } from './dashboards.graphql'
     PrismaModule,
     AuditModule,
     SharingModule,
-    DealsModule,
-    DealHealthModule,
     TasksModule,
     ActivitiesModule,
     ContactsModule,
-    ReportsModule,
   ],
   providers: [DashboardsService, WidgetDataService],
   exports: [DashboardsService, WidgetDataService],

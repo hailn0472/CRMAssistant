@@ -8,8 +8,7 @@ export type NoteAuthor = {
 
 export type Note = {
   id: string
-  contactId: string | null
-  dealId: string | null
+  contactId: string
   userId: string
   body: string
   createdAt: string
@@ -36,7 +35,6 @@ export type NoteFormData = {
 export const NOTE_FIELDS = `
   id
   contactId
-  dealId
   userId
   body
   createdAt
@@ -45,12 +43,12 @@ export const NOTE_FIELDS = `
 `
 
 export async function getNotes(
-  filter: { contactId?: string; dealId?: string },
+  contactId: string,
   pagination: { page?: number; pageSize?: number } = {},
 ): Promise<NoteConnection> {
   const data = await graphqlRequest<{ notes: NoteConnection }>(
-    `query Notes($filter: NoteFilterInput!, $pagination: NotePaginationInput) {
-      notes(filter: $filter, pagination: $pagination) {
+    `query Notes($contactId: ID!, $pagination: NotePaginationInput) {
+      notes(contactId: $contactId, pagination: $pagination) {
         total
         page
         pageSize
@@ -58,10 +56,7 @@ export async function getNotes(
       }
     }`,
     {
-      filter: {
-        contactId: filter.contactId ?? undefined,
-        dealId: filter.dealId ?? undefined,
-      },
+      contactId,
       pagination: {
         page: pagination.page ?? undefined,
         pageSize: pagination.pageSize ?? undefined,
@@ -71,19 +66,14 @@ export async function getNotes(
   return data.notes
 }
 
-export async function createNote(input: {
-  contactId?: string
-  dealId?: string
-  body: string
-}): Promise<Note> {
+export async function createNote(input: { contactId: string; body: string }): Promise<Note> {
   const data = await graphqlRequest<{ createNote: Note }>(
     `mutation CreateNote($input: CreateNoteInput!) {
       createNote(input: $input) { ${NOTE_FIELDS} }
     }`,
     {
       input: {
-        contactId: input.contactId ?? undefined,
-        dealId: input.dealId ?? undefined,
+        contactId: input.contactId,
         body: input.body,
       },
     },

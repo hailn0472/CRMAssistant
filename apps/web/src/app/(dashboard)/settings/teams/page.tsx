@@ -9,17 +9,12 @@ import { EmptyState } from '@/components/shared/EmptyState'
 import { ErrorState } from '@/components/shared/ErrorState'
 import { TableSkeleton } from '@/components/shared/LoadingSkeleton'
 import { ResponsiveTableWrapper } from '@/components/shared/ResponsiveTableWrapper'
-import { QueryProvider } from '@/components/contacts/QueryProvider'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { getTeams, deleteTeam } from '@/services/team.service'
 import { TeamFormDialog } from '@/components/teams/TeamFormDialog'
 
 export default function TeamsPage(): React.JSX.Element {
-  return (
-    <QueryProvider>
-      <TeamsPageContent />
-    </QueryProvider>
-  )
+  return <TeamsPageContent />
 }
 
 function TeamsPageContent(): React.JSX.Element {

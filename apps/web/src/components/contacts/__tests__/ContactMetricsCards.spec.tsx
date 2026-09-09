@@ -26,7 +26,7 @@ describe('ContactMetricsCards', () => {
     ;(getContactStats as jest.Mock).mockResolvedValue({
       total: 237,
       addedThisMonth: 18,
-      withOpenDeals: 64,
+      qualifiedLeads: 64,
       unassigned: 9,
     })
 
@@ -37,7 +37,7 @@ describe('ContactMetricsCards', () => {
     expect(screen.getByText('18')).toBeInTheDocument()
     expect(screen.getByText('Added this month')).toBeInTheDocument()
     expect(screen.getByText('64')).toBeInTheDocument()
-    expect(screen.getByText('With open deals')).toBeInTheDocument()
+    expect(screen.getByText('Qualified leads')).toBeInTheDocument()
     expect(screen.getByText('9')).toBeInTheDocument()
     expect(screen.getByText('Unassigned')).toBeInTheDocument()
   })

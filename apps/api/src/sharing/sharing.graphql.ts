@@ -6,14 +6,14 @@ import type { SharingService } from './sharing.service'
 import type { GraphqlContext } from '../graphql/graphql-context'
 import type { JwtPayload } from '../auth/strategies/jwt.strategy'
 
-const VALID_RESOURCE_TYPES = ['CONTACT', 'DEAL', 'TASK'] as const
+const VALID_RESOURCE_TYPES = ['CONTACT', 'TASK'] as const
 const VALID_ACCESS_LEVELS = ['READ', 'EDIT', 'FULL'] as const
 
-function validateResourceType(value: string): 'CONTACT' | 'DEAL' | 'TASK' {
+function validateResourceType(value: string): 'CONTACT' | 'TASK' {
   if (!VALID_RESOURCE_TYPES.includes(value as (typeof VALID_RESOURCE_TYPES)[number])) {
     throw new BadRequestException(`Invalid resource type: ${value}`)
   }
-  return value as 'CONTACT' | 'DEAL' | 'TASK'
+  return value as 'CONTACT' | 'TASK'
 }
 
 function validateAccessLevel(value: string): 'READ' | 'EDIT' | 'FULL' {
@@ -78,7 +78,7 @@ builder.queryFields((t) => ({
       return getSharingService().getSharingRules(
         user.tenantId,
         user.userId,
-        args.resourceType as 'CONTACT' | 'DEAL' | 'TASK',
+        args.resourceType as 'CONTACT' | 'TASK',
         String(args.resourceId),
       )
     },
@@ -93,7 +93,7 @@ builder.queryFields((t) => ({
       return getSharingService().getSharedWithMe(
         user.tenantId,
         user.userId,
-        args.resourceType ? (args.resourceType as 'CONTACT' | 'DEAL' | 'TASK') : undefined,
+        args.resourceType ? (args.resourceType as 'CONTACT' | 'TASK') : undefined,
       )
     },
   }),

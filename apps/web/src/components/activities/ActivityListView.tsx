@@ -382,18 +382,7 @@ function TaskRow({ task }: { task: Task }): React.JSX.Element {
             {task.contact.firstName} {task.contact.lastName}
           </Link>
         ) : null}
-        {task.contact && task.deal ? ' · ' : null}
-        {task.deal ? (
-          <Link
-            href={`/deals/${task.deal.id}`}
-            className="truncate text-indigo-600 hover:underline"
-          >
-            {task.deal.title}
-          </Link>
-        ) : null}
-        {!task.contact && !task.deal ? (
-          <span className="italic text-[#c0c0c8]">&mdash;</span>
-        ) : null}
+        {!task.contact ? <span className="italic text-[#c0c0c8]">&mdash;</span> : null}
       </td>
     </tr>
   )

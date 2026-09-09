@@ -26,7 +26,7 @@ export type SharingRuleWithDetails = SharingRule
 
 /**
  * Resolves the owner of a given resource by type.
- * Supports CONTACT and DASHBOARD; DEAL and TASK are future scope.
+ * Supports CONTACT and DASHBOARD; TASK sharing is future scope.
  */
 async function getResourceOwner(
   prisma: PrismaService,
@@ -52,7 +52,6 @@ async function getResourceOwner(
       if (!dashboard) throw new NotFoundException('Dashboard not found')
       return { ownerId: dashboard.userId }
     }
-    case 'DEAL':
     case 'TASK':
       throw new BadRequestException(`${resourceType} sharing is not yet implemented`)
     default:
@@ -105,7 +104,7 @@ export class SharingService {
       throw new BadRequestException('Cannot share with both user and team simultaneously')
     }
 
-    // Check permission: CONTACT:UPDATE (or DEAL/TASK equivalent)
+    // Owner check is sufficient because only an owner may create a share.
     // Owner check is sufficient for sharing since only owner can share
     const canManage = await this.canManageSharing(
       tenantId,

@@ -1,3 +1,13 @@
+export const LEAD_STATUSES = [
+  'NEW',
+  'REVIEWING',
+  'NURTURING',
+  'QUALIFIED_LEAD',
+  'NOT_A_LEAD',
+] as const
+
+export type LeadStatus = (typeof LEAD_STATUSES)[number]
+
 export type Contact = {
   id: string
   email: string
@@ -17,6 +27,13 @@ export type Contact = {
   language?: string | null
   source?: string | null
   notes?: string | null
+  // Optional client-side only for a rolling deployment while old API responses
+  // or cached records can still omit this newly added server-defaulted field.
+  leadStatus?: LeadStatus
+  leadScore?: number | null
+  qualificationReason?: string | null
+  qualifiedAt?: string | null
+  qualifiedBy?: string | null
   ownerId: string
   owner?: {
     id: string
@@ -42,7 +59,7 @@ export type ContactConnection = {
 export type ContactStats = {
   total: number
   addedThisMonth: number
-  withOpenDeals: number
+  qualifiedLeads: number
   unassigned: number
 }
 
@@ -66,6 +83,9 @@ export type ContactFormData = {
   language?: string | null
   source?: string | null
   notes?: string | null
+  leadStatus?: LeadStatus
+  leadScore?: number | null
+  qualificationReason?: string | null
 }
 
 import { graphqlRequest } from '@/lib/graphql-client'
@@ -88,6 +108,11 @@ const CONTACT_FIELDS = `
   language
   source
   notes
+  leadStatus
+  leadScore
+  qualificationReason
+  qualifiedAt
+  qualifiedBy
   ownerId
   owner { id firstName lastName email avatar }
   teamId
@@ -106,6 +131,7 @@ export async function getContacts(
     jobTitle?: string
     ownerId?: string
     tags?: string[]
+    leadStatuses?: LeadStatus[]
     createdAtFrom?: string
     createdAtTo?: string
   },
@@ -116,6 +142,7 @@ export async function getContacts(
       filter?.jobTitle ||
       filter?.ownerId ||
       (filter?.tags && filter.tags.length > 0) ||
+      (filter?.leadStatuses && filter.leadStatuses.length > 0) ||
       filter?.createdAtFrom ||
       filter?.createdAtTo,
   )
@@ -140,7 +167,7 @@ export async function getContacts(
 export async function getContactStats(): Promise<ContactStats> {
   const data = await graphqlRequest<{ contactStats: ContactStats }>(
     `query ContactStats {
-      contactStats { total addedThisMonth withOpenDeals unassigned }
+      contactStats { total addedThisMonth qualifiedLeads unassigned }
     }`,
     {},
   )

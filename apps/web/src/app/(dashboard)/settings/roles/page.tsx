@@ -8,16 +8,13 @@ import { EmptyState } from '@/components/shared/EmptyState'
 import { ErrorState } from '@/components/shared/ErrorState'
 import { TableSkeleton } from '@/components/shared/LoadingSkeleton'
 import { ResponsiveTableWrapper } from '@/components/shared/ResponsiveTableWrapper'
-import { QueryProvider } from '@/components/contacts/QueryProvider'
 import { getRoles, deleteRole } from '@/services/role.service'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 
 export default function RolesPage(): React.JSX.Element {
   return (
     <main className="space-y-6 p-6 text-slate-950">
-      <QueryProvider>
-        <RolesTable />
-      </QueryProvider>
+      <RolesTable />
     </main>
   )
 }

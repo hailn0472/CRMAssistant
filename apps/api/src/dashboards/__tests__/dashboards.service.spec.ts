@@ -433,7 +433,7 @@ describe('DashboardsService', () => {
       })
       const result = await service.addWidget('t-1', 'u-1', 'd-1', {
         type: 'METRIC_CARD',
-        source: 'PIPELINE_VALUE',
+        source: 'CONTACT_COUNT',
       })
       expect(result.id).toBe('w-1')
     })
@@ -442,14 +442,14 @@ describe('DashboardsService', () => {
       mockPrisma.dashboard.findFirst.mockResolvedValue({ id: 'd-1' })
       mockPrisma.widget.count.mockResolvedValue(12)
       await expect(
-        service.addWidget('t-1', 'u-1', 'd-1', { type: 'METRIC_CARD', source: 'PIPELINE_VALUE' }),
+        service.addWidget('t-1', 'u-1', 'd-1', { type: 'METRIC_CARD', source: 'CONTACT_COUNT' }),
       ).rejects.toThrow(BadRequestException)
     })
 
     it('rejects non-owner', async () => {
       mockPrisma.dashboard.findFirst.mockResolvedValue(null)
       await expect(
-        service.addWidget('t-1', 'u-2', 'd-1', { type: 'METRIC_CARD', source: 'PIPELINE_VALUE' }),
+        service.addWidget('t-1', 'u-2', 'd-1', { type: 'METRIC_CARD', source: 'CONTACT_COUNT' }),
       ).rejects.toThrow(NotFoundException)
     })
   })
@@ -529,7 +529,7 @@ describe('DashboardsService', () => {
       mockPrisma.widget.create.mockResolvedValue({ id: 'w-1' })
       await service.addWidget('t-1', 'u-1', 'd-1', {
         type: 'METRIC_CARD',
-        source: 'PIPELINE_VALUE',
+        source: 'CONTACT_COUNT',
       })
       expect(mockAudit.log).not.toHaveBeenCalled()
     })

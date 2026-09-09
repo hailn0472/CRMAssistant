@@ -90,7 +90,7 @@ export default function InboxPage(): React.JSX.Element {
         {/* List — hidden on mobile when detail is shown */}
         <div
           className={cn(
-            'flex min-h-0 w-full flex-col bg-white border-r border-[#ececf0] lg:w-[320px] shrink-0 z-10',
+            'z-10 flex min-h-0 w-full shrink-0 flex-col border-r border-[#ececf0] bg-white lg:w-[336px]',
             showDetail && 'hidden lg:flex',
           )}
         >
@@ -152,10 +152,15 @@ export default function InboxPage(): React.JSX.Element {
         {selectedConv && (
           <div
             className={cn(
-              'hidden lg:flex min-h-0 w-[300px] flex-col bg-white border-l border-[#ececf0] shrink-0 overflow-hidden',
+              'hidden min-h-0 w-[300px] shrink-0 flex-col overflow-hidden border-l border-[#ececf0] bg-white lg:flex',
             )}
           >
-            <ContactSidebar contact={selectedConv.contact} onNewTask={setNewTaskContactId} />
+            <ContactSidebar
+              contact={selectedConv.contact}
+              conversationStatus={selectedConv.status}
+              channel={selectedConv.channel}
+              onNewTask={setNewTaskContactId}
+            />
           </div>
         )}
       </WorkspacePanel>

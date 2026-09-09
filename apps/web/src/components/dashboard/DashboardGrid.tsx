@@ -40,7 +40,7 @@ export function DashboardGrid({
 
   return (
     <section
-      className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 auto-rows-[minmax(160px,auto)] gap-4 p-4"
+      className="grid grid-cols-1 gap-4 p-4 sm:grid-cols-2 sm:p-5 xl:grid-cols-4 xl:p-6"
       aria-label="Dashboard widgets"
     >
       {spans.map(({ widget, span }) =>

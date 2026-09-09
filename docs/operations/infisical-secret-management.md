@@ -68,6 +68,7 @@ Use environments for lifecycle separation and paths for app/consumer boundaries.
 | -------------------------------- | ------------ | ------------------------ | ------------------------------------------- | ------------------ | -------------------------- | ------------------------------------------------ | --------------------------------------------------------------------------- |
 | `PORT`                           | API          | dev, staging, production | `/apps/api`                                 | internal           | App config                 | Local API dev, Render backend                    | Change only with service port change                                        |
 | `DATABASE_URL`                   | API/platform | dev, staging, production | `/apps/api`                                 | critical           | Supabase/PostgreSQL        | Render backend, migration jobs, local API dev    | Rotate after migration and on incident; never expose to frontend            |
+| `REDIS_URL`                      | API/platform | dev, staging, production | `/apps/api`                                 | internal           | Managed Redis/local Redis  | Render backend, local API dev                    | Use a `redis://` or `rediss://` URL; rotate credentials with the provider   |
 | `SUPABASE_URL`                   | API/platform | dev, staging, production | `/apps/api`                                 | internal           | Supabase                   | Render backend, local API dev                    | Rotate/update when Supabase project changes                                 |
 | `SUPABASE_ANON_KEY`              | API/platform | dev, staging, production | `/apps/api`                                 | internal           | Supabase                   | Render backend if needed, local API dev          | Rotate when Supabase anon key changes                                       |
 | `SUPABASE_SERVICE_ROLE_KEY`      | API/platform | dev, staging, production | `/apps/api`                                 | critical           | Supabase                   | Render backend only                              | Rotate after migration and on incident; backend-only                        |
@@ -188,6 +189,7 @@ Use an Infisical Render sync from `/apps/api` to the Render backend service envi
 
 - `PORT`
 - `DATABASE_URL`
+- `REDIS_URL`
 - `SUPABASE_URL`
 - `SUPABASE_ANON_KEY`
 - `SUPABASE_SERVICE_ROLE_KEY`

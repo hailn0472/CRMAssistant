@@ -5,7 +5,6 @@ export type Notification = {
   type: string
   title: string
   body: string | null
-  dealId: string | null
   taskId: string | null
   reportExportId?: string | null
   readAt: string | null
@@ -29,7 +28,6 @@ export const NOTIFICATION_FIELDS = `
   type
   title
   body
-  dealId
   taskId
   reportExportId
   readAt

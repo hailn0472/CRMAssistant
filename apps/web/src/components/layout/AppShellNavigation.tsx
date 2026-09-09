@@ -8,15 +8,10 @@ import {
   LayoutDashboard,
   Users,
   MessageSquare,
-  Briefcase,
   CheckSquare,
   CalendarDays,
-  CalendarClock,
-  Timer,
   UserCog,
   Settings,
-  BarChart3,
-  SlidersHorizontal,
   LogOut,
   type LucideIcon,
 } from 'lucide-react'
@@ -68,7 +63,6 @@ const navigationSections: NavigationSection[] = [
         permission: { resource: 'INBOX', action: 'READ' },
         badge: 4,
       },
-      { label: 'Deals', href: '/deals', icon: Briefcase },
       {
         label: 'Tasks',
         href: '/tasks',
@@ -83,65 +77,6 @@ const navigationSections: NavigationSection[] = [
         href: '/activities',
         icon: CalendarDays,
         permission: { resource: 'TASK', action: 'READ' },
-      },
-      {
-        // Story 6.2 (AC 65): primary Reports entry now points at the sales
-        // reports workspace; Win/Loss and Productivity entries stay separate.
-        label: 'Reports',
-        href: '/reports/sales',
-        icon: BarChart3,
-        permission: { resource: 'REPORT', action: 'READ' },
-      },
-      {
-        // Story 6.3 (Contract D.31): the custom report builder is a
-        // first-class report destination, gated on REPORT:READ.
-        label: 'Builder',
-        href: '/reports/builder',
-        icon: SlidersHorizontal,
-        permission: { resource: 'REPORT', action: 'READ' },
-      },
-      {
-        // Story 6.7 (Contract E37): Customer Analytics dashboard, gated on REPORT:READ.
-        label: 'Customer Analytics',
-        href: '/reports/customer-analytics',
-        icon: Users,
-        permission: { resource: 'REPORT', action: 'READ' },
-      },
-      {
-        // Story 6.5 (Contract F.34): Scheduled reports list page, gated on REPORT:READ.
-        label: 'Schedules',
-        href: '/reports/schedules',
-        icon: CalendarClock,
-        permission: { resource: 'REPORT', action: 'READ' },
-      },
-      {
-        // Story 6.6 (Contract E.34): Export history list page, gated on REPORT:READ.
-        label: 'Exports',
-        href: '/reports/exports',
-        icon: BarChart3,
-        permission: { resource: 'REPORT', action: 'READ' },
-      },
-      {
-        label: 'Win/Loss',
-        href: '/reports/win-loss',
-        icon: BarChart3,
-        permission: { resource: 'REPORT', action: 'READ' },
-      },
-      {
-        // Story 4.5 (AC 44): productivity report entry, immediately after
-        // Win/Loss. Gated on the existing REPORT:READ — no new permission
-        // resource (AC 27).
-        label: 'Productivity',
-        href: '/reports/productivity',
-        icon: Timer,
-        permission: { resource: 'REPORT', action: 'READ' },
-      },
-      {
-        // Story 6.8 (Contract E25): activity report entry under Reports, gated on REPORT:READ.
-        label: 'Activity',
-        href: '/reports/activity',
-        icon: CalendarDays,
-        permission: { resource: 'REPORT', action: 'READ' },
       },
     ],
   },

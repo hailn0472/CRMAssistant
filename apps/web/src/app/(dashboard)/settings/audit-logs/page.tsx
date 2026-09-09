@@ -7,7 +7,6 @@ import { Button } from '@/components/ui/button'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { ErrorState } from '@/components/shared/ErrorState'
 import { TableSkeleton } from '@/components/shared/LoadingSkeleton'
-import { QueryProvider } from '@/components/contacts/QueryProvider'
 import { Input } from '@/components/ui/input'
 import { getAuditLogs, auditLogsToCsv } from '@/services/audit.service'
 import type { AuditLogEntry } from '@/services/audit.service'
@@ -88,11 +87,7 @@ function DetailPanel({ log }: { log: AuditLogEntry }): React.JSX.Element {
 }
 
 export default function AuditLogsPage(): React.JSX.Element {
-  return (
-    <QueryProvider>
-      <AuditLogsContent />
-    </QueryProvider>
-  )
+  return <AuditLogsContent />
 }
 
 function AuditLogsContent(): React.JSX.Element {

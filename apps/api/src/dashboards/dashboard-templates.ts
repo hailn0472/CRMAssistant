@@ -32,26 +32,21 @@ export type TemplateRole = 'ADMIN' | 'SALES_MANAGER' | 'SALES_REP' | 'DEFAULT'
 
 export const DASHBOARD_TEMPLATES: Record<TemplateRole, DashboardTemplate> = {
   SALES_REP: {
-    name: 'Sales Dashboard',
+    name: 'Lead Operations Dashboard',
     widgets: [
       { type: 'METRIC_CARD', source: 'TASK_STATS', size: '1x1', title: 'Task Stats' },
-      { type: 'METRIC_CARD', source: 'PIPELINE_VALUE', size: '1x1', title: 'Pipeline Value' },
       { type: 'METRIC_CARD', source: 'CONTACT_COUNT', size: '1x1', title: 'Contact Count' },
-      { type: 'TABLE', source: 'AT_RISK_DEALS', size: '2x2', title: 'At-Risk Deals' },
       { type: 'TASK_LIST', source: 'MY_TASKS', size: '2x2', title: 'My Tasks' },
-      { type: 'FUNNEL', source: 'PIPELINE_BY_STAGE', size: '2x2', title: 'Sales Funnel' },
+      { type: 'FUNNEL', source: 'LEAD_FUNNEL', size: '2x2', title: 'Lead Funnel' },
       { type: 'ACTIVITY_FEED', source: 'RECENT_ACTIVITY', size: '2x2', title: 'Recent Activity' },
     ],
   },
   SALES_MANAGER: {
-    name: 'Sales Manager Dashboard',
+    name: 'Lead Manager Dashboard',
     widgets: [
-      { type: 'METRIC_CARD', source: 'PIPELINE_VALUE', size: '1x1', title: 'Pipeline Value' },
       { type: 'METRIC_CARD', source: 'TASK_STATS', size: '1x1', title: 'Task Stats' },
-      { type: 'METRIC_CARD', source: 'WIN_LOSS', size: '1x1', title: 'Win/Loss Ratio' },
       { type: 'METRIC_CARD', source: 'CONTACT_COUNT', size: '1x1', title: 'Contact Count' },
-      { type: 'LINE_CHART', source: 'SALES_FORECAST', size: '3x2', title: 'Sales Forecast' },
-      { type: 'TABLE', source: 'AT_RISK_DEALS', size: '2x2', title: 'At-Risk Deals' },
+      { type: 'FUNNEL', source: 'LEAD_FUNNEL', size: '3x2', title: 'Lead Funnel' },
       { type: 'ACTIVITY_FEED', source: 'RECENT_ACTIVITY', size: '2x2', title: 'Recent Activity' },
     ],
   },
@@ -60,8 +55,7 @@ export const DASHBOARD_TEMPLATES: Record<TemplateRole, DashboardTemplate> = {
     widgets: [
       { type: 'METRIC_CARD', source: 'CONTACT_COUNT', size: '1x1', title: 'Contact Count' },
       { type: 'METRIC_CARD', source: 'TASK_STATS', size: '1x1', title: 'Task Stats' },
-      { type: 'METRIC_CARD', source: 'PIPELINE_VALUE', size: '1x1', title: 'Pipeline Value' },
-      { type: 'BAR_CHART', source: 'TIME_TRACKED', size: '3x2', title: 'Time Tracked' },
+      { type: 'FUNNEL', source: 'LEAD_FUNNEL', size: '3x2', title: 'Lead Funnel' },
       { type: 'ACTIVITY_FEED', source: 'RECENT_ACTIVITY', size: '2x2', title: 'Recent Activity' },
     ],
   },

@@ -89,7 +89,7 @@ export function TaskTemplateForm({
   // Local handleClose resets the form before closing — passing the parent
   // callback straight through lets an ESC/overlay close skip the reset and
   // leak the previous values into the next open (Story 3.5 findings I1/I2;
-  // CompetitorForm.tsx:99 is the correct shape).
+  // The form shape uses the same controlled-input pattern.
   const handleClose = (): void => {
     reset()
     onOpenChange(false)

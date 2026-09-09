@@ -7,7 +7,6 @@ import { Button } from '@/components/ui/button'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { ErrorState } from '@/components/shared/ErrorState'
 import { TableSkeleton } from '@/components/shared/LoadingSkeleton'
-import { QueryProvider } from '@/components/contacts/QueryProvider'
 import { getApiKeys, revokeApiKey, rotateApiKey } from '@/services/api-key.service'
 import { CreateApiKeyDialog } from '@/components/settings/CreateApiKeyDialog'
 import type { ApiKey } from '@/services/api-key.service'
@@ -20,11 +19,7 @@ function getStatusInfo(key: ApiKey): { label: string; className: string } {
 }
 
 export default function ApiKeysPage(): React.JSX.Element {
-  return (
-    <QueryProvider>
-      <ApiKeysContent />
-    </QueryProvider>
-  )
+  return <ApiKeysContent />
 }
 
 function ApiKeysContent(): React.JSX.Element {

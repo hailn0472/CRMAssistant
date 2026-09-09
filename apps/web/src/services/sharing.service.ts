@@ -1,6 +1,6 @@
 export type SharingRule = {
   id: string
-  resourceType: 'CONTACT' | 'DEAL' | 'TASK'
+  resourceType: 'CONTACT' | 'TASK'
   resourceId: string
   sharedWithUserId: string | null
   sharedWithTeamId: string | null

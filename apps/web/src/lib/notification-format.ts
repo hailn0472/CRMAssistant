@@ -7,14 +7,11 @@
 
 import type { Notification } from '@/services/notification.service'
 
-const DEAL_MAP = ['DEAL_REMINDER', 'DEAL_MENTION'] as const
-
 /**
  * Resolve the href for a notification's target. Returns null when there is
  * no navigable target (neither non-null).
  */
 export function notificationHref(n: Notification): string | null {
-  if (n.dealId) return `/deals/${n.dealId}`
   if (n.taskId) return `/tasks/${n.taskId}`
   if (n.reportExportId) {
     if (n.type === 'REPORT_EXPORT_READY') {
@@ -33,10 +30,6 @@ export function notificationTypeLabel(type: string): string {
   switch (type) {
     case 'TASK_ASSIGNED':
       return 'Task assigned'
-    case 'DEAL_REMINDER':
-      return 'Deal reminder'
-    case 'DEAL_MENTION':
-      return 'Mention'
     case 'REPORT_EXPORT_READY':
       return 'Report export ready'
     case 'REPORT_EXPORT_FAILED':
@@ -50,7 +43,6 @@ export function notificationTypeLabel(type: string): string {
 
 /** Icon name from lucide-react matching each notification category. */
 export function notificationTypeIconName(type: string): string {
-  if (DEAL_MAP.includes(type as (typeof DEAL_MAP)[number])) return 'DollarSign'
   if (type === 'TASK_ASSIGNED') return 'CheckSquare'
   if (type === 'REPORT_EXPORT_READY' || type === 'REPORT_EXPORT_FAILED') return 'Download'
   if (type === 'ACTIVITY_GOAL_AT_RISK') return 'Target'

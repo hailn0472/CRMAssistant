@@ -28,46 +28,31 @@ export const WIDGET_SIZES: Record<string, string> = {
 }
 
 export const WIDGET_SOURCES: Record<string, string> = {
-  PIPELINE_BY_STAGE: 'Pipeline by Stage',
-  PIPELINE_VALUE: 'Pipeline Value',
-  SALES_FORECAST: 'Sales Forecast',
-  WIN_LOSS: 'Win/Loss Analysis',
-  AT_RISK_DEALS: 'At-Risk Deals',
   MY_TASKS: 'My Tasks',
   TASK_STATS: 'Task Stats',
   RECENT_ACTIVITY: 'Recent Activity',
-  TIME_TRACKED: 'Time Tracked',
   CONTACT_COUNT: 'Contact Count',
+  LEAD_FUNNEL: 'Lead Funnel',
 }
 
 // Mirrors apps/api/src/dashboards/widget-types.ts WIDGET_SOURCES permission map
 // (AC 13). The library dialog hides sources the caller lacks permission for.
 export const WIDGET_SOURCE_PERMISSIONS: Record<string, { resource: string; action: string }> = {
-  PIPELINE_BY_STAGE: { resource: 'DEAL', action: 'READ' },
-  PIPELINE_VALUE: { resource: 'DEAL', action: 'READ' },
-  SALES_FORECAST: { resource: 'REPORT', action: 'READ' },
-  WIN_LOSS: { resource: 'REPORT', action: 'READ' },
-  AT_RISK_DEALS: { resource: 'DEAL', action: 'READ' },
   MY_TASKS: { resource: 'TASK', action: 'READ' },
   TASK_STATS: { resource: 'TASK', action: 'READ' },
   RECENT_ACTIVITY: { resource: 'TASK', action: 'READ' },
-  TIME_TRACKED: { resource: 'REPORT', action: 'READ' },
   CONTACT_COUNT: { resource: 'CONTACT', action: 'READ' },
+  LEAD_FUNNEL: { resource: 'CONTACT', action: 'READ' },
 }
 
 // Short human description per source (AC 79 — the picker shows a static
 // illustrative preview + description, never live data).
 export const WIDGET_SOURCE_DESCRIPTIONS: Record<string, string> = {
-  PIPELINE_BY_STAGE: 'Deal totals broken down by pipeline stage.',
-  PIPELINE_VALUE: 'Total value of your open pipeline.',
-  SALES_FORECAST: 'Weighted sales forecast over the selected period.',
-  WIN_LOSS: 'Won vs. lost deals and win rate.',
-  AT_RISK_DEALS: 'Deals flagged as at-risk by the health sweep.',
   MY_TASKS: 'Your open tasks ordered by due date.',
   TASK_STATS: 'Open, due-today and overdue task counts.',
   RECENT_ACTIVITY: 'Latest activity across your records.',
-  TIME_TRACKED: 'Hours logged per day over the selected period.',
   CONTACT_COUNT: 'Total contacts in your workspace.',
+  LEAD_FUNNEL: 'Contacts grouped by qualification status.',
 }
 
 // Reuse TIME_CHART_COLORS from @/lib/time-format rather than inventing a second

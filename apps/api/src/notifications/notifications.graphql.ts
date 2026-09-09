@@ -13,7 +13,7 @@ import type { JwtPayload } from '../auth/strategies/jwt.strategy'
 // ─── Audit comment ─────────────────────────────────────────
 // No MUTATION_AUDIT_MAP entries and no AuditService calls in this file
 // (Story 4.8 arbitration). Every notification is derived from an
-// already-audited mutation (assignTask, addDealComment, the sweep's
+// already-audited mutation (assignTask or a report-export processor).
 // audit.log), so no audit row is written for the notification itself —
 // the Activity derived-record carve-out applies.
 
@@ -31,7 +31,6 @@ type NotificationShape = {
   type: string
   title: string
   body: string | null
-  dealId: string | null
   taskId: string | null
   reportExportId: string | null
   readAt: Date | null
@@ -51,10 +50,6 @@ NotificationRef.implement({
     body: t.string({
       nullable: true,
       resolve: (n) => n.body ?? null,
-    }),
-    dealId: t.string({
-      nullable: true,
-      resolve: (n) => n.dealId ?? null,
     }),
     taskId: t.string({
       nullable: true,
@@ -194,7 +189,7 @@ builder.subscriptionField('onNotificationReceived', (t) =>
           // resolveVisibilityFilter is applied and none is needed — a subscriber can
           // only ever reach their own channel, and every payload is by construction a
           // notification addressed to them. Recipient-scoping is strictly stronger
-          // than visibility-scoping: a notification about a deal the user can no
+          // than visibility-scoping: a notification may remain after the
           // longer see is still a notification they were sent.
           // (architecture.md:955 constraint 2 mandates resolveVisibilityFilter inside
           // subscribe; this is the documented exception, mirroring onTaskAssigned.)

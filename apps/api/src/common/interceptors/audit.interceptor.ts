@@ -44,35 +44,6 @@ export const MUTATION_AUDIT_MAP: Record<string, { action: string; entity: string
   revokeApiKey: { action: 'API_KEY_REVOKED', entity: 'API_KEY' },
   rotateApiKey: { action: 'API_KEY_ROTATED', entity: 'API_KEY' },
 
-  // Product mutations
-  createProduct: { action: 'CREATE', entity: 'PRODUCT' },
-  updateProduct: { action: 'UPDATE', entity: 'PRODUCT' },
-
-  // Line-item mutations
-  addLineItemToDeal: { action: 'UPDATE', entity: 'DEAL' },
-  updateLineItem: { action: 'UPDATE', entity: 'DEAL' },
-  removeLineItem: { action: 'UPDATE', entity: 'DEAL' },
-
-  // Competitor mutations
-  createCompetitor: { action: 'CREATE', entity: 'COMPETITOR' },
-  updateCompetitor: { action: 'UPDATE', entity: 'COMPETITOR' },
-  deleteCompetitor: { action: 'DELETE', entity: 'COMPETITOR' },
-
-  // Deal-competitor / win-loss mutations (deal edits, not catalog management)
-  addCompetitorToDeal: { action: 'UPDATE', entity: 'DEAL' },
-  removeCompetitorFromDeal: { action: 'UPDATE', entity: 'DEAL' },
-  recordWinLoss: { action: 'UPDATE', entity: 'DEAL' },
-
-  // Deal document / comment mutations (Story 3.6)
-  deleteDealDocument: { action: 'DELETE', entity: 'DEAL' },
-  addDealComment: { action: 'UPDATE', entity: 'DEAL' },
-  deleteDealComment: { action: 'DELETE', entity: 'DEAL' },
-
-  // Deal health / reminder mutations (Story 3.7)
-  snoozeDealReminder: { action: 'UPDATE', entity: 'DEAL' },
-  unsnoozeDealReminder: { action: 'UPDATE', entity: 'DEAL' },
-  updateReminderPreferences: { action: 'UPDATE', entity: 'USER' },
-
   // Task mutations (Story 4.1)
   createTask: { action: 'CREATE', entity: 'TASK' },
   createTaskFromTemplate: { action: 'CREATE', entity: 'TASK' },

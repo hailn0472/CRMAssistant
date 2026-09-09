@@ -19,19 +19,11 @@ import { cn } from '@/lib/utils'
 const SEGMENT_LABELS: Record<string, string> = {
   dashboard: 'Dashboard',
   contacts: 'Contacts',
-  deals: 'Deals',
   tasks: 'Tasks',
   // Story 4.4 (AC 39): without this label the breadcrumb renders "Chi tiết".
   activities: 'Activities',
   templates: 'Templates',
   inbox: 'Inbox',
-  reports: 'Reports',
-  sales: 'Sales', // Story 6.2 (AC 65)
-  builder: 'Builder', // Story 6.3 (Contract D.31)
-  'customer-analytics': 'Customer Analytics', // Story 6.7 (Contract E37)
-  schedules: 'Schedules', // Story 6.5 (Contract F.34)
-  exports: 'Exports', // Story 6.6 (Contract E.34)
-  forecast: 'Forecast',
   users: 'Users',
   settings: 'Settings',
   teams: 'Teams',
@@ -44,16 +36,6 @@ const SEGMENT_LABELS: Record<string, string> = {
   edit: 'Chỉnh sửa',
   permissions: 'Phân quyền',
   tags: 'Nhãn',
-  'pipeline-settings': 'Pipeline Settings',
-  pipeline: 'Pipeline',
-  products: 'Products',
-  competitors: 'Competitors',
-  'win-loss': 'Win/Loss',
-  // Story 4.5 (AC 45): without this label the breadcrumb renders "Chi tiết".
-  productivity: 'Productivity',
-  // Story 6.8 (Contract E25): activity report segment label.
-  activity: 'Activity',
-  reminders: 'Reminders',
   'activity-logging': 'Activity Logging',
   // Story 4.3 calendar settings routes.
   calendars: 'Calendars',

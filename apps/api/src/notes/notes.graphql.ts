@@ -1,24 +1,21 @@
 import { NotFoundException, UnauthorizedException } from '@nestjs/common'
 
-/* eslint-disable @typescript-eslint/explicit-function-return-type, @typescript-eslint/explicit-module-boundary-types */
-
 import { builder } from '../graphql/schema.builder'
 import { requirePermission } from '../common/guards/permission-check'
-import type { NotesService } from './notes.service'
 import type { GraphqlContext } from '../graphql/graphql-context'
-import type { JwtPayload } from '../auth/strategies/jwt.strategy'
+import type { NotesService } from './notes.service'
 
-// ─── NoteAuthor Type ──────────────────────────────────────
-
-type NoteAuthorShape = {
+type NoteShape = {
   id: string
-  firstName: string
-  lastName: string
+  contactId: string
+  userId: string
+  body: string
+  createdAt: Date
+  updatedAt: Date
+  author: { id: string; firstName: string; lastName: string }
 }
 
-const NoteAuthorRef = builder.objectRef<NoteAuthorShape>('NoteAuthor')
-
-NoteAuthorRef.implement({
+const NoteAuthorRef = builder.objectRef<NoteShape['author']>('NoteAuthor').implement({
   fields: (t) => ({
     id: t.exposeID('id'),
     firstName: t.exposeString('firstName'),
@@ -26,44 +23,17 @@ NoteAuthorRef.implement({
   }),
 })
 
-// ─── Note Type ────────────────────────────────────────────
-
-type NoteShape = {
-  id: string
-  contactId: string | null
-  dealId: string | null
-  userId: string
-  body: string
-  createdAt: Date
-  updatedAt: Date
-  author: NoteAuthorShape
-}
-
-const NoteRef = builder.objectRef<NoteShape>('Note')
-
-NoteRef.implement({
+const NoteRef = builder.objectRef<NoteShape>('Note').implement({
   fields: (t) => ({
     id: t.exposeID('id'),
-    contactId: t.string({
-      nullable: true,
-      resolve: (n) => n.contactId ?? null,
-    }),
-    dealId: t.string({
-      nullable: true,
-      resolve: (n) => n.dealId ?? null,
-    }),
+    contactId: t.exposeID('contactId'),
     userId: t.exposeID('userId'),
     body: t.exposeString('body'),
-    author: t.field({
-      type: NoteAuthorRef,
-      resolve: (n) => n.author,
-    }),
-    createdAt: t.string({ resolve: (n) => n.createdAt.toISOString() }),
-    updatedAt: t.string({ resolve: (n) => n.updatedAt.toISOString() }),
+    author: t.field({ type: NoteAuthorRef, resolve: (note) => note.author }),
+    createdAt: t.string({ resolve: (note) => note.createdAt.toISOString() }),
+    updatedAt: t.string({ resolve: (note) => note.updatedAt.toISOString() }),
   }),
 })
-
-// ─── NoteConnection Type ──────────────────────────────────
 
 const NoteConnectionRef = builder
   .objectRef<{
@@ -74,146 +44,90 @@ const NoteConnectionRef = builder
   }>('NoteConnection')
   .implement({
     fields: (t) => ({
-      items: t.field({ type: [NoteRef], resolve: (c) => c.items }),
+      items: t.field({ type: [NoteRef], resolve: (value) => value.items }),
       total: t.exposeInt('total'),
       page: t.exposeInt('page'),
       pageSize: t.exposeInt('pageSize'),
     }),
   })
 
-// ─── Input Types ──────────────────────────────────────────
-
-const CreateNoteInputRef = builder.inputType('CreateNoteInput', {
-  fields: (t) => ({
-    contactId: t.string(),
-    dealId: t.string(),
-    body: t.string({ required: true }),
-  }),
-})
-
-const UpdateNoteInputRef = builder.inputType('UpdateNoteInput', {
-  fields: (t) => ({
-    body: t.string({ required: true }),
-  }),
-})
-
-const NoteFilterInputRef = builder.inputType('NoteFilterInput', {
-  fields: (t) => ({
-    contactId: t.string(),
-    dealId: t.string(),
-  }),
-})
-
 const NotePaginationInputRef = builder.inputType('NotePaginationInput', {
-  fields: (t) => ({
-    page: t.int(),
-    pageSize: t.int(),
-  }),
+  fields: (t) => ({ page: t.int(), pageSize: t.int() }),
 })
-
-// ─── Service Singletons ────────────────────────────────────
+const CreateNoteInputRef = builder.inputType('CreateNoteInput', {
+  fields: (t) => ({ contactId: t.id({ required: true }), body: t.string({ required: true }) }),
+})
+const UpdateNoteInputRef = builder.inputType('UpdateNoteInput', {
+  fields: (t) => ({ body: t.string({ required: true }) }),
+})
 
 let notesService: NotesService | undefined
-
-function getNotesService(): NotesService {
+function service(): NotesService {
   if (!notesService) throw new Error('NotesService is not initialized')
   return notesService
 }
-
-function requireUser(context: GraphqlContext): JwtPayload {
-  if (!context.user) {
-    throw new UnauthorizedException('Authentication required')
-  }
+function user(context: GraphqlContext): NonNullable<GraphqlContext['user']> {
+  if (!context.user) throw new UnauthorizedException('Authentication required')
   return context.user
 }
-
-// ─── Query Fields ──────────────────────────────────────────
 
 builder.queryFields((t) => ({
   notes: t.field({
     type: NoteConnectionRef,
     args: {
-      filter: t.arg({ type: NoteFilterInputRef, required: true }),
+      contactId: t.arg.id({ required: true }),
       pagination: t.arg({ type: NotePaginationInputRef }),
     },
-    resolve: async (_parent, args, context: GraphqlContext) => {
-      const user = requireUser(context)
-      const filter = args.filter as { contactId?: string; dealId?: string }
-      await requirePermission(context, filter.dealId ? 'DEAL' : 'CONTACT', 'READ')
-      const result = await getNotesService().findManyForParent(
-        user.tenantId,
-        user.userId,
-        filter,
-        (args.pagination ?? {}) as Parameters<NotesService['findManyForParent']>[3],
-      )
-      return result
+    resolve: async (_parent, args, context) => {
+      const actor = user(context)
+      await requirePermission(context, 'CONTACT', 'READ')
+      return service().findManyForContact(actor.tenantId, actor.userId, String(args.contactId), {
+        page: args.pagination?.page ?? undefined,
+        pageSize: args.pagination?.pageSize ?? undefined,
+      })
     },
   }),
 }))
-
-// ─── Mutation Fields ──────────────────────────────────────
 
 builder.mutationFields((t) => ({
   createNote: t.field({
     type: NoteRef,
-    args: {
-      input: t.arg({ type: CreateNoteInputRef, required: true }),
-    },
-    resolve: async (_parent, args, context: GraphqlContext) => {
-      const user = requireUser(context)
-      const input = args.input as { contactId?: string; dealId?: string; body: string }
-      await requirePermission(context, input.dealId ? 'DEAL' : 'CONTACT', 'UPDATE')
-      const result = await getNotesService().create(
-        user.tenantId,
-        user.userId,
-        input as Parameters<NotesService['create']>[2],
-      )
-      return result as NoteShape
+    args: { input: t.arg({ type: CreateNoteInputRef, required: true }) },
+    resolve: async (_parent, args, context) => {
+      const actor = user(context)
+      await requirePermission(context, 'CONTACT', 'UPDATE')
+      return service().create(actor.tenantId, actor.userId, {
+        contactId: String(args.input.contactId),
+        body: args.input.body,
+      })
     },
   }),
-
   updateNote: t.field({
     type: NoteRef,
     args: {
-      id: t.arg.string({ required: true }),
+      id: t.arg.id({ required: true }),
       input: t.arg({ type: UpdateNoteInputRef, required: true }),
     },
-    resolve: async (_parent, args, context: GraphqlContext) => {
-      const user = requireUser(context)
-      // Load the note first to learn its parent, then gate on that resource
-      const svc = getNotesService()
-      const note = await svc.findOneForGate(user.tenantId, args.id)
-      if (!note) {
-        throw new NotFoundException('Note not found')
-      }
-      await requirePermission(context, note.dealId ? 'DEAL' : 'CONTACT', 'UPDATE')
-      const result = await svc.update(user.tenantId, user.userId, args.id, args.input)
-      return result as NoteShape
+    resolve: async (_parent, args, context) => {
+      const actor = user(context)
+      const note = await service().findOneForGate(actor.tenantId, String(args.id))
+      if (!note) throw new NotFoundException('Note not found')
+      await requirePermission(context, 'CONTACT', 'UPDATE')
+      return service().update(actor.tenantId, actor.userId, String(args.id), args.input)
     },
   }),
-
-  deleteNote: t.field({
-    type: 'Boolean',
-    args: {
-      id: t.arg.string({ required: true }),
-    },
-    resolve: async (_parent, args, context: GraphqlContext) => {
-      const user = requireUser(context)
-      // Load the note first to learn its parent, then gate on that resource
-      const svc = getNotesService()
-      const note = await svc.findOneForGate(user.tenantId, args.id)
-      if (!note) {
-        throw new NotFoundException('Note not found')
-      }
-      await requirePermission(context, note.dealId ? 'DEAL' : 'CONTACT', 'UPDATE')
-      // Pass user.roles through so NotesService.delete can apply ADMIN carve-out
-      return svc.delete(user.tenantId, user.userId, args.id, user.roles)
+  deleteNote: t.boolean({
+    args: { id: t.arg.id({ required: true }) },
+    resolve: async (_parent, args, context) => {
+      const actor = user(context)
+      const note = await service().findOneForGate(actor.tenantId, String(args.id))
+      if (!note) throw new NotFoundException('Note not found')
+      await requirePermission(context, 'CONTACT', 'UPDATE')
+      return service().delete(actor.tenantId, actor.userId, String(args.id), actor.roles)
     },
   }),
 }))
 
-// ─── Module Registration ──────────────────────────────────
-
-export function registerNotesGraphql(svc: NotesService): void {
-  notesService = svc
+export function registerNotesGraphql(value: NotesService): void {
+  notesService = value
 }

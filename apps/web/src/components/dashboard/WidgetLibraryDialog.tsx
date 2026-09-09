@@ -37,16 +37,11 @@ interface WidgetLibraryDialogProps {
  * Mirrors apps/api/src/dashboards/widget-types.ts WIDGET_SOURCES.
  */
 const SOURCE_ALLOWED_TYPES: Record<string, string[]> = {
-  PIPELINE_BY_STAGE: ['BAR_CHART', 'FUNNEL', 'TABLE'],
-  PIPELINE_VALUE: ['METRIC_CARD'],
-  SALES_FORECAST: ['LINE_CHART', 'METRIC_CARD'],
-  WIN_LOSS: ['PIE_CHART', 'METRIC_CARD'],
-  AT_RISK_DEALS: ['TABLE'],
   MY_TASKS: ['TASK_LIST'],
   TASK_STATS: ['METRIC_CARD'],
   RECENT_ACTIVITY: ['ACTIVITY_FEED'],
-  TIME_TRACKED: ['BAR_CHART', 'METRIC_CARD'],
   CONTACT_COUNT: ['METRIC_CARD'],
+  LEAD_FUNNEL: ['BAR_CHART', 'PIE_CHART', 'FUNNEL'],
 }
 
 const TYPE_ICON: Record<string, React.ComponentType<{ className?: string }>> = {
@@ -65,23 +60,12 @@ const TYPE_ICON: Record<string, React.ComponentType<{ className?: string }>> = {
 const PREVIEW_BARS = ['h-6', 'h-10', 'h-4', 'h-8', 'h-5']
 
 function SourcePreview({ source }: { source: string }): React.JSX.Element {
-  if (source === 'PIPELINE_BY_STAGE' || source === 'TIME_TRACKED' || source === 'SALES_FORECAST') {
+  if (source === 'LEAD_FUNNEL') {
     return (
       <div className="flex h-12 items-end gap-1" aria-hidden="true">
         {PREVIEW_BARS.map((h, i) => (
           <span key={i} className={`w-3 rounded-sm bg-indigo-200 ${h}`} />
         ))}
-      </div>
-    )
-  }
-  if (source === 'WIN_LOSS') {
-    return (
-      <div className="flex h-12 items-center gap-2" aria-hidden="true">
-        <span className="h-10 w-10 rounded-full border-4 border-indigo-200 border-r-amber-200" />
-        <span className="flex flex-col gap-1">
-          <span className="h-1.5 w-16 rounded bg-indigo-200" />
-          <span className="h-1.5 w-10 rounded bg-amber-200" />
-        </span>
       </div>
     )
   }

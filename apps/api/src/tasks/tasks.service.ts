@@ -11,7 +11,6 @@ import { ActivityService } from '../activities/activities.service'
 import { ActivityLogPreferenceService } from '../activities/activity-log-preference.service'
 import { resolveVisibilityFilter } from '../common/guards/visibility-check'
 import { ContactsService } from '../contacts/contacts.service'
-import { DealsService } from '../deals/deals.service'
 import { TaskTemplatesService } from './task-templates.service'
 import { TaskPubSubService, PUBSUB_TASK_ASSIGNED, PUBSUB_TASK_CHANGED } from './task-pubsub.service'
 import { CalendarSyncService } from '../calendar/calendar-sync.service'
@@ -31,7 +30,6 @@ export type CreateTaskInput = {
   dueDate?: string | null
   assignedTo?: string
   contactId?: string
-  dealId?: string
   // Story 4.6: recurrence fields (AC 41-43)
   isRecurring?: boolean
   recurrencePattern?: string
@@ -59,7 +57,6 @@ export type UpdateTaskInput = {
   dueDate?: string | null
   assignedTo?: string
   contactId?: string | null
-  dealId?: string | null
   // Story 4.6: recurrence fields (AC 41-43)
   isRecurring?: boolean
   recurrencePattern?: string | null
@@ -73,7 +70,6 @@ export type TaskFilterInput = {
   priority?: string
   assignedTo?: string
   contactId?: string
-  dealId?: string
   dueDateFrom?: string
   dueDateTo?: string
   overdueOnly?: boolean
@@ -94,7 +90,6 @@ export type TaskConnection = {
 export type CreateTaskFromTemplateOverrides = {
   assignedTo?: string
   contactId?: string
-  dealId?: string
   dueDate?: string
   title?: string
 }
@@ -144,7 +139,6 @@ const taskListSelect = {
   dueDate: true,
   assignedTo: true,
   contactId: true,
-  dealId: true,
   completedAt: true,
   createdAt: true,
   updatedAt: true,
@@ -159,9 +153,6 @@ const taskListSelect = {
   },
   contact: {
     select: { id: true, firstName: true, lastName: true, email: true },
-  },
-  deal: {
-    select: { id: true, title: true },
   },
 } as const
 
@@ -276,7 +267,6 @@ export class TasksService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly contacts: ContactsService,
-    private readonly deals: DealsService,
     private readonly taskTemplates: TaskTemplatesService,
     private readonly taskPubSub: TaskPubSubService,
     private readonly audit: AuditService,
@@ -370,9 +360,6 @@ export class TasksService {
     if (input.contactId) {
       await this.contacts.findOne(tenantId, userId, input.contactId)
     }
-    if (input.dealId) {
-      await this.deals.findOne(tenantId, userId, input.dealId)
-    }
 
     // Story 4.6: recurrence fields (AC 41-43) — pass through to prisma
     const isRecurring = input.isRecurring ?? false
@@ -393,7 +380,6 @@ export class TasksService {
         dueDate,
         assignedTo,
         contactId: input.contactId ?? null,
-        dealId: input.dealId ?? null,
         createdBy: userId,
         updatedBy: userId,
         isRecurring,
@@ -414,7 +400,6 @@ export class TasksService {
         title: `Task assigned: ${createdTask.title}`,
         body: createdTask.description ?? null,
         taskId: createdTask.id,
-        dealId: null,
         dedupeKey: null,
       })
     }
@@ -488,7 +473,6 @@ export class TasksService {
           priority,
           assignedTo: input.assignedTo,
           contactId: input.contactId,
-          dealId: null,
           dueDate: input.dueDate,
           automationSource: input.automationSource,
           automationKey: input.automationKey,
@@ -521,7 +505,6 @@ export class TasksService {
       title: `Task assigned: ${task.title}`,
       body: task.description ?? null,
       taskId: task.id,
-      dealId: null,
       dedupeKey: null,
     })
     await this.writeAudit(tenantId, input.assignedTo, 'CREATE', task.id)
@@ -650,8 +633,7 @@ export class TasksService {
     const andConditions: Prisma.TaskWhereInput[] = []
 
     // Apply visibility filter — resolveVisibilityFilter returns
-    // Prisma.ContactWhereInput['ownerId'] but is resource-agnostic; cast at the
-    // call site exactly as deals.service.ts casts to DealWhereInput['ownerId'].
+    // Prisma.ContactWhereInput['ownerId'] but is resource-agnostic.
     if (visibilityFilter !== undefined) {
       andConditions.push({
         assignedTo: visibilityFilter as Prisma.TaskWhereInput['assignedTo'],
@@ -682,10 +664,6 @@ export class TasksService {
 
     if (filter.contactId) {
       andConditions.push({ contactId: filter.contactId })
-    }
-
-    if (filter.dealId) {
-      andConditions.push({ dealId: filter.dealId })
     }
 
     if (filter.dueDateFrom || filter.dueDateTo) {
@@ -777,13 +755,6 @@ export class TasksService {
       data.contactId = input.contactId
     }
 
-    if (input.dealId !== undefined) {
-      if (input.dealId !== null) {
-        await this.deals.findOne(tenantId, userId, input.dealId)
-      }
-      data.dealId = input.dealId
-    }
-
     // Story 4.6 (AC 37): recurrence fields — reject setting isRecurring on an occurrence
     if (
       input.isRecurring !== undefined ||
@@ -836,7 +807,6 @@ export class TasksService {
           title: `Task assigned: ${updatedTask.title}`,
           body: updatedTask.description ?? null,
           taskId: updatedTask.id,
-          dealId: null,
           dedupeKey: null,
         })
       }
@@ -917,7 +887,6 @@ export class TasksService {
           title: `Task assigned: ${updatedTask.title}`,
           body: updatedTask.description ?? null,
           taskId: updatedTask.id,
-          dealId: null,
           dedupeKey: null,
         })
       }
@@ -1055,8 +1024,8 @@ export class TasksService {
 
   /**
    * Auto-log TASK_COMPLETED (AC 19-22). Contact resolution, in order:
-   * Task.contactId → Task.dealId → Deal.contactId → skip silently, log
-   * nothing (AC 21 — a task attached to neither has nowhere to log and the
+   * Task.contactId → skip silently, log nothing (a task attached to neither
+   * has nowhere to log and the
    * task mutation must still succeed). Suppressed when the acting user's
    * `logTaskCompleted` preference is off (AC 22).
    */
@@ -1069,20 +1038,10 @@ export class TasksService {
       return
     }
 
-    let contactId = task.contactId
-    if (!contactId && task.dealId) {
-      try {
-        const deal = await this.deals.findOne(tenantId, userId, task.dealId)
-        contactId = deal?.contactId ?? null
-      } catch {
-        // Deal gone or no longer visible — nothing to log; the task mutation
-        // must still succeed (AC 21).
-        return
-      }
-    }
+    const contactId = task.contactId
 
     if (!contactId) {
-      // Task attached to neither a contact nor a deal has nowhere to log.
+      // Task without a contact has nowhere to log.
       return
     }
 
@@ -1150,7 +1109,6 @@ export class TasksService {
       dueDate: overrides.dueDate ?? (dueDate ? dueDate.toISOString() : null),
       assignedTo: overrides.assignedTo,
       contactId: overrides.contactId,
-      dealId: overrides.dealId,
     })
   }
 }

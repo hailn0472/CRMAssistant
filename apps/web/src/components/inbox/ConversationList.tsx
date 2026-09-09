@@ -1,10 +1,11 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { Search, MessageCircle, Hash, Facebook } from 'lucide-react'
 
 import { cn } from '@/lib/utils'
-import type { Conversation, ConversationFilter } from '@/services/inbox.service'
+import type { ConversationFilter } from '@/services/inbox.service'
 import { getConversations } from '@/services/inbox.service'
 import { InboxSkeleton } from './InboxSkeleton'
 
@@ -72,61 +73,47 @@ export function ConversationList({
   refreshKey = 0,
   onStartInternalChat,
 }: ConversationListProps): React.JSX.Element {
-  const [conversations, setConversations] = useState<Conversation[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-
   const [statusFilter, setStatusFilter] = useState('')
   const [channelFilter] = useState('')
   const [unreadOnly, setUnreadOnly] = useState(false)
   const [assigneeFilter] = useState('')
 
   const [page, setPage] = useState(1)
-  const [total, setTotal] = useState(0)
   const [searchQuery, setSearchQuery] = useState('')
 
   const PAGE_SIZE = 20
-  const initialized = useRef(false)
+  const filter = useMemo<ConversationFilter>(() => {
+    const nextFilter: ConversationFilter = {}
+    if (statusFilter) nextFilter.status = statusFilter
+    if (channelFilter) nextFilter.channel = channelFilter
+    if (unreadOnly) nextFilter.unreadOnly = true
+    if (assigneeFilter) nextFilter.assignedTo = assigneeFilter
+    return nextFilter
+  }, [statusFilter, channelFilter, unreadOnly, assigneeFilter])
 
-  const fetchConversations = useCallback(
-    async (showLoading = true) => {
-      if (showLoading) setLoading(true)
-      if (showLoading) setError(null)
-      try {
-        const filter: ConversationFilter = {}
-        if (statusFilter) filter.status = statusFilter
-        if (channelFilter) filter.channel = channelFilter
-        if (unreadOnly) filter.unreadOnly = true
-        if (assigneeFilter) filter.assignedTo = assigneeFilter
+  // The list remains in the dashboard QueryClient when the user changes
+  // sections. Polling and subscriptions refresh the same cache entry rather
+  // than replacing it with component-local state.
+  const { data, error, isLoading, isError, refetch } = useQuery({
+    queryKey: ['conversations', page, filter],
+    queryFn: () => getConversations({ page, pageSize: PAGE_SIZE }, filter),
+    staleTime: 10_000,
+    refetchInterval: LIST_POLL_INTERVAL_MS,
+    refetchIntervalInBackground: false,
+  })
 
-        const result = await getConversations({ page, pageSize: PAGE_SIZE }, filter)
-        let items = result.items
-        if (searchQuery) {
-          items = items.filter((c) => {
-            const name = `${c.contact?.firstName || ''} ${c.contact?.lastName || ''}`.toLowerCase()
-            return name.includes(searchQuery.toLowerCase())
-          })
-        }
-        setConversations(items)
-        setTotal(result.total)
-      } catch {
-        // Background refreshes (polling / real-time) fail silently — only
-        // surface an error state for the user-visible initial/filtered load.
-        if (showLoading) setError('Failed to load conversations')
-      } finally {
-        if (showLoading) setLoading(false)
-      }
-    },
-    [statusFilter, channelFilter, unreadOnly, assigneeFilter, page, searchQuery],
-  )
+  const conversations = useMemo(() => {
+    const items = data?.items ?? []
+    const normalizedSearch = searchQuery.trim().toLowerCase()
+    if (!normalizedSearch) return items
 
-  // Initial load + reload when filters/page/search change (shows loading state)
-  useEffect(() => {
-    if (!initialized.current) {
-      initialized.current = true
-    }
-    fetchConversations(true)
-  }, [fetchConversations])
+    return items.filter((conversation) => {
+      const name = `${conversation.contact?.firstName ?? ''} ${conversation.contact?.lastName ?? ''}`
+      return name.toLowerCase().includes(normalizedSearch)
+    })
+  }, [data?.items, searchQuery])
+
+  const total = data?.total ?? 0
 
   // Real-time refresh trigger (from onConversationUpdated subscription) —
   // silent, no loading skeleton, so an update doesn't flash the whole list.
@@ -136,17 +123,8 @@ export function ConversationList({
       skipNextRefreshKey.current = false
       return
     }
-    fetchConversations(false)
-  }, [refreshKey, fetchConversations])
-
-  // Polling for real-time list updates (fallback/reconciliation — silent)
-  useEffect(() => {
-    const timer = setInterval(() => {
-      fetchConversations(false)
-    }, LIST_POLL_INTERVAL_MS)
-
-    return () => clearInterval(timer)
-  }, [fetchConversations])
+    void refetch()
+  }, [refreshKey, refetch])
 
   useEffect(() => {
     setPage(1)
@@ -222,20 +200,22 @@ export function ConversationList({
 
       {/* Content */}
       <div className="min-h-0 flex-1 overflow-y-auto">
-        {loading ? (
+        {isLoading ? (
           <div className="p-4">
             <InboxSkeleton />
           </div>
-        ) : error ? (
+        ) : isError && !data ? (
           <div className="flex flex-col items-center justify-center gap-3 px-4 py-16 text-center">
             <div className="rounded-full bg-[#fdeceb] p-3 text-[#b91c1c]">
               <MessageCircle className="h-6 w-6" />
             </div>
             <p className="text-sm font-medium text-[#1b1b1f]">Oops, something went wrong</p>
-            <p className="text-xs text-[#8c8c96]">{error}</p>
+            <p className="text-xs text-[#8c8c96]">
+              {error instanceof Error ? error.message : 'Failed to load conversations'}
+            </p>
             <button
               type="button"
-              onClick={() => fetchConversations(true)}
+              onClick={() => void refetch()}
               className="mt-2 rounded-[9px] border border-[#1b1b1f] bg-[#1b1b1f] px-5 py-2 text-xs font-medium text-white transition-colors hover:bg-black"
             >
               Try Again
@@ -272,11 +252,13 @@ export function ConversationList({
                     onClick={() => onSelect(conv.id)}
                     className={cn(
                       'group flex w-full items-start gap-3.5 p-4 text-left transition-colors relative',
-                      isSelected ? 'bg-[#fafafb]' : 'hover:bg-[#fafafb]',
+                      isSelected
+                        ? 'bg-[#f6f5ff] shadow-[inset_0_0_0_1px_#dedbff]'
+                        : 'hover:bg-[#fafafb]',
                     )}
                   >
                     {isSelected && (
-                      <div className="absolute left-0 top-0 bottom-0 w-[2px] bg-[#1b1b1f]" />
+                      <div className="absolute bottom-0 left-0 top-0 w-[3px] bg-[#5b50d6]" />
                     )}
 
                     <div className="relative mt-0.5">

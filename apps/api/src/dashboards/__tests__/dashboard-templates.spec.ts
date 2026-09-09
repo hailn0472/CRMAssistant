@@ -85,20 +85,20 @@ describe('dashboard-templates', () => {
       expect(charts[0].type).toBe('FUNNEL')
     })
 
-    it('Sales Manager has exactly LINE_CHART as its sole chart', () => {
+    it('Sales Manager has exactly FUNNEL as its sole chart', () => {
       const template = DASHBOARD_TEMPLATES.SALES_MANAGER
       const chartTypes = ['LINE_CHART', 'BAR_CHART', 'PIE_CHART', 'FUNNEL'] as const
       const charts = template.widgets.filter((w) => chartTypes.includes(w.type as never))
       expect(charts).toHaveLength(1)
-      expect(charts[0].type).toBe('LINE_CHART')
+      expect(charts[0].type).toBe('FUNNEL')
     })
 
-    it('Admin has exactly BAR_CHART as its sole chart', () => {
+    it('Admin has exactly FUNNEL as its sole chart', () => {
       const template = DASHBOARD_TEMPLATES.ADMIN
       const chartTypes = ['LINE_CHART', 'BAR_CHART', 'PIE_CHART', 'FUNNEL'] as const
       const charts = template.widgets.filter((w) => chartTypes.includes(w.type as never))
       expect(charts).toHaveLength(1)
-      expect(charts[0].type).toBe('BAR_CHART')
+      expect(charts[0].type).toBe('FUNNEL')
     })
 
     it('Default has 0 charts', () => {
@@ -108,22 +108,22 @@ describe('dashboard-templates', () => {
       expect(charts).toHaveLength(0)
     })
 
-    it('Sales Rep has 3 metric cards', () => {
+    it('Sales Rep has 2 metric cards', () => {
       const template = DASHBOARD_TEMPLATES.SALES_REP
       const metricCards = template.widgets.filter((w) => w.type === 'METRIC_CARD')
-      expect(metricCards).toHaveLength(3)
+      expect(metricCards).toHaveLength(2)
     })
 
-    it('Sales Manager has 4 metric cards', () => {
+    it('Sales Manager has 2 metric cards', () => {
       const template = DASHBOARD_TEMPLATES.SALES_MANAGER
       const metricCards = template.widgets.filter((w) => w.type === 'METRIC_CARD')
-      expect(metricCards).toHaveLength(4)
+      expect(metricCards).toHaveLength(2)
     })
 
-    it('Admin has 3 metric cards', () => {
+    it('Admin has 2 metric cards', () => {
       const template = DASHBOARD_TEMPLATES.ADMIN
       const metricCards = template.widgets.filter((w) => w.type === 'METRIC_CARD')
-      expect(metricCards).toHaveLength(3)
+      expect(metricCards).toHaveLength(2)
     })
 
     it('Default has 2 metric cards', () => {

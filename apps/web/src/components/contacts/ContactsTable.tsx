@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useState, useMemo } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { ChevronLeft, ChevronRight, User } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
@@ -21,6 +21,14 @@ import { assignContactOwnerBulk } from '@/services/owner.service'
 import { cn } from '@/lib/utils'
 
 const PAGE_SIZE = 10
+
+const LEAD_STATUS_LABELS = {
+  NEW: 'New',
+  REVIEWING: 'Reviewing',
+  NURTURING: 'Nurturing',
+  QUALIFIED_LEAD: 'Qualified lead',
+  NOT_A_LEAD: 'Not a lead',
+} as const
 
 // ─── Pagination ────────────────────────────────────────
 function Pagination({
@@ -155,6 +163,9 @@ export function ContactsTable({ filters, onFiltersChange }: ContactsTableProps):
         createdAtFrom: filters.createdAtFrom || undefined,
         createdAtTo: filters.createdAtTo || undefined,
       }),
+    // Keep the previous page visible while the next page/filter result is
+    // loading; this avoids a full skeleton flash during normal navigation.
+    placeholderData: keepPreviousData,
   })
 
   function handleFiltersChange(next: ContactFilters): void {
@@ -162,7 +173,7 @@ export function ContactsTable({ filters, onFiltersChange }: ContactsTableProps):
     setPage(1)
   }
 
-  if (isLoading) return <TableSkeleton rows={5} columns={6} />
+  if (isLoading) return <TableSkeleton rows={5} columns={8} />
 
   if (error) {
     return (
@@ -233,7 +244,7 @@ export function ContactsTable({ filters, onFiltersChange }: ContactsTableProps):
         />
 
         <ResponsiveTableWrapper>
-          <table className="w-full min-w-[1050px] text-left text-[13.5px]">
+          <table className="w-full min-w-[1150px] text-left text-[13.5px]">
             <thead>
               <tr className="h-[40px] border-b border-[#f2f2f5] bg-[#fafafb] text-[11px] font-semibold uppercase tracking-[0.06em] text-[#8c8c96]">
                 <th className="w-9 py-2.5 pl-[18px] pr-2">
@@ -255,6 +266,7 @@ export function ContactsTable({ filters, onFiltersChange }: ContactsTableProps):
                 <th className="py-2.5 pr-4">Email</th>
                 <th className="py-2.5 pr-4">Company</th>
                 <th className="py-2.5 pr-4">Job title</th>
+                <th className="py-2.5 pr-4">Lead status</th>
                 <th className="py-2.5 pr-4">Owner</th>
                 <th className="py-2.5 pr-[18px]">Tags</th>
               </tr>
@@ -305,6 +317,9 @@ export function ContactsTable({ filters, onFiltersChange }: ContactsTableProps):
                   <td className="max-w-[160px] truncate py-3 pr-4 text-[12.5px] text-[#8c8c96]">
                     {contact.jobTitle ?? <span className="italic text-[#b4b4bd]">&mdash;</span>}
                   </td>
+                  <td className="py-3 pr-4 text-[12.5px] font-medium text-[#4b4b55]">
+                    {LEAD_STATUS_LABELS[contact.leadStatus ?? 'NEW']}
+                  </td>
                   <td className="py-3 pr-4 text-[12.5px] text-[#4b4b55]">
                     <OwnerCell ownerId={contact.ownerId} owner={contact.owner} />
                   </td>
@@ -322,7 +337,7 @@ export function ContactsTable({ filters, onFiltersChange }: ContactsTableProps):
               {items.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={7}
+                    colSpan={8}
                     className="px-[18px] py-10 text-center text-[13px] text-slate-500"
                   >
                     No contacts match these filters.

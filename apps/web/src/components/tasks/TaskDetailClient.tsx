@@ -344,16 +344,6 @@ export function TaskDetailClient({ task }: TaskDetailClientProps): React.JSX.Ele
             ) : (
               <EmptyRelated label="No contact linked" />
             )}
-            {task.deal ? (
-              <RelatedRow
-                initials={task.deal.title.slice(0, 2).toUpperCase()}
-                href={`/deals/${task.deal.id}`}
-                name={task.deal.title}
-                caption="Deal"
-              />
-            ) : (
-              <EmptyRelated label="No deal linked" actionLink="#" actionText="Link a deal" />
-            )}
           </section>
 
           <section className="flex flex-col gap-[10px] rounded-[14px] border border-[#ececf0] bg-white px-[18px] py-4">

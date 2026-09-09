@@ -9,9 +9,18 @@ import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library'
 
 import { PrismaService } from '../prisma/prisma.service'
 import { ActivityService } from '../activities/activities.service'
+import { CacheService } from '../cache/cache.service'
 import { resolveVisibilityFilter } from '../common/guards/visibility-check'
 import { resolveSharedRecordIds } from '../common/guards/sharing-check'
-import type { Contact, Prisma } from '@prisma/client'
+import type { Contact, LeadStatus, Prisma } from '@prisma/client'
+
+export const LEAD_STATUSES = [
+  'NEW',
+  'REVIEWING',
+  'NURTURING',
+  'QUALIFIED_LEAD',
+  'NOT_A_LEAD',
+] as const satisfies readonly LeadStatus[]
 
 export type CreateContactInput = {
   email: string
@@ -53,6 +62,9 @@ export type UpdateContactInput = {
   language?: string | null
   source?: string | null
   notes?: string | null
+  leadStatus?: LeadStatus
+  leadScore?: number | null
+  qualificationReason?: string | null
 }
 
 /** Visibility/sharing scope resolved once per list and reused across queries. */
@@ -67,6 +79,7 @@ export type ContactFilterInput = {
   jobTitle?: string
   ownerId?: string
   tags?: string[]
+  leadStatuses?: LeadStatus[]
   createdAtFrom?: string
   createdAtTo?: string
 }
@@ -106,6 +119,11 @@ const contactListSelect = {
   language: true,
   source: true,
   notes: true,
+  leadStatus: true,
+  leadScore: true,
+  qualificationReason: true,
+  qualifiedAt: true,
+  qualifiedBy: true,
   createdAt: true,
   updatedAt: true,
 } as const
@@ -130,7 +148,7 @@ export type BulkAssignResult = {
 export type ContactStats = {
   total: number
   addedThisMonth: number
-  withOpenDeals: number
+  qualifiedLeads: number
   unassigned: number
 }
 
@@ -139,6 +157,7 @@ const UNASSIGNED_OWNER_ID = 'system'
 
 const MAX_REQUIRED_FIELD_LENGTH = 100
 const MAX_OPTIONAL_FIELD_LENGTH = 200
+const MAX_QUALIFICATION_REASON_LENGTH = 2000
 
 function normalizeRequiredString(value: string, fieldName: string): string {
   const normalizedValue = value.trim()
@@ -182,6 +201,32 @@ function normalizeEmail(email: string): string {
     throw new BadRequestException('Email must be valid')
   }
   return normalizedEmail
+}
+
+function normalizeLeadScore(value: number | null | undefined): number | null | undefined {
+  if (value === null || value === undefined) {
+    return value
+  }
+  if (!Number.isFinite(value) || value < 0 || value > 100) {
+    throw new BadRequestException('Lead score must be a number between 0 and 100')
+  }
+  return value
+}
+
+function normalizeQualificationReason(value: string | null | undefined): string | null | undefined {
+  if (value === null || value === undefined) {
+    return value
+  }
+  const normalizedValue = value.trim()
+  if (!normalizedValue) {
+    return null
+  }
+  if (normalizedValue.length > MAX_QUALIFICATION_REASON_LENGTH) {
+    throw new BadRequestException(
+      `Qualification reason must be at most ${MAX_QUALIFICATION_REASON_LENGTH} characters`,
+    )
+  }
+  return normalizedValue
 }
 
 function normalizeCreateInput(input: CreateContactInput): CreateContactInput {
@@ -230,6 +275,9 @@ function normalizeUpdateInput(input: UpdateContactInput): UpdateContactInput {
     language: normalizeOptionalString(input.language, 'Language'),
     source: normalizeOptionalString(input.source, 'Source'),
     notes: normalizeOptionalString(input.notes, 'Notes'),
+    leadStatus: input.leadStatus,
+    leadScore: normalizeLeadScore(input.leadScore),
+    qualificationReason: normalizeQualificationReason(input.qualificationReason),
   }
 }
 
@@ -238,6 +286,7 @@ export class ContactsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly activityService: ActivityService,
+    private readonly cache: CacheService,
   ) {}
 
   async create(tenantId: string, userId: string, input: CreateContactInput): Promise<Contact> {
@@ -289,6 +338,8 @@ export class ContactsService {
         description: `${contact.firstName} ${contact.lastName} (${contact.email})`,
         createdBy: userId,
       })
+
+      await this.invalidateContactCaches(tenantId)
 
       return contact
     } catch (error) {
@@ -410,35 +461,32 @@ export class ContactsService {
   /// Scoped with the same visibility/sharing rules as findMany so the totals
   /// always match what the user can actually list.
   async getStats(tenantId: string, userId: string): Promise<ContactStats> {
-    // Story 6.3: the shared predicate drives the stats too — totals always
-    // match what the user can actually list (findMany uses the same builder).
-    const scope = await this.buildContactWhere(tenantId, userId)
+    return this.cache.getOrSetTenantJson('contact-stats', tenantId, userId, 30, async () => {
+      // Story 6.3: the shared predicate drives the stats too — totals always
+      // match what the user can actually list (findMany uses the same builder).
+      const scope = await this.buildContactWhere(tenantId, userId)
 
-    const monthStart = new Date()
-    monthStart.setDate(1)
-    monthStart.setHours(0, 0, 0, 0)
+      const monthStart = new Date()
+      monthStart.setDate(1)
+      monthStart.setHours(0, 0, 0, 0)
 
-    const [total, addedThisMonth, withOpenDeals, unassigned] = await Promise.all([
-      this.prisma.contact.count({ where: scope }),
-      this.prisma.contact.count({ where: { ...scope, createdAt: { gte: monthStart } } }),
-      this.prisma.contact.count({
-        where: {
-          ...scope,
-          deals: { some: { deletedAt: null, stage: { isWon: false, isLost: false } } },
-        },
-      }),
-      this.prisma.contact.count({
-        where: {
-          ...scope,
-          OR: [
-            { ownerId: UNASSIGNED_OWNER_ID },
-            { owner: { OR: [{ deletedAt: { not: null } }, { isActive: false }] } },
-          ],
-        },
-      }),
-    ])
+      const [total, addedThisMonth, qualifiedLeads, unassigned] = await Promise.all([
+        this.prisma.contact.count({ where: scope }),
+        this.prisma.contact.count({ where: { ...scope, createdAt: { gte: monthStart } } }),
+        this.prisma.contact.count({ where: { ...scope, leadStatus: 'QUALIFIED_LEAD' } }),
+        this.prisma.contact.count({
+          where: {
+            ...scope,
+            OR: [
+              { ownerId: UNASSIGNED_OWNER_ID },
+              { owner: { OR: [{ deletedAt: { not: null } }, { isActive: false }] } },
+            ],
+          },
+        }),
+      ])
 
-    return { total, addedThisMonth, withOpenDeals, unassigned }
+      return { total, addedThisMonth, qualifiedLeads, unassigned }
+    })
   }
 
   /**
@@ -477,6 +525,10 @@ export class ContactsService {
     const ownerId = filter.ownerId?.trim()
     if (ownerId) {
       andConditions.push({ ownerId })
+    }
+
+    if (filter.leadStatuses && filter.leadStatuses.length > 0) {
+      andConditions.push({ leadStatus: { in: filter.leadStatuses } })
     }
 
     if (filter.createdAtFrom || filter.createdAtTo) {
@@ -576,9 +628,27 @@ export class ContactsService {
     const normalizedInput = normalizeUpdateInput(input)
 
     try {
+      const data: Prisma.ContactUpdateManyMutationInput = {
+        ...normalizedInput,
+        updatedBy: userId,
+      }
+
+      if (normalizedInput.leadStatus !== undefined) {
+        if (normalizedInput.leadStatus === 'QUALIFIED_LEAD') {
+          // Keep the initial qualification attribution when the record is
+          // edited again, rather than rewriting the decision history.
+          data.qualifiedAt = contact.qualifiedAt ?? new Date()
+          data.qualifiedBy = contact.qualifiedBy ?? userId
+        } else {
+          // A later non-qualified state revokes the current qualification.
+          data.qualifiedAt = null
+          data.qualifiedBy = null
+        }
+      }
+
       const result = await this.prisma.contact.updateMany({
         where: { id, tenantId, deletedAt: null },
-        data: { ...normalizedInput, updatedBy: userId },
+        data,
       })
 
       if (result.count === 0) {
@@ -603,6 +673,8 @@ export class ContactsService {
           createdBy: userId,
         })
       }
+
+      await this.invalidateContactCaches(tenantId)
 
       return updatedContact
     } catch (error) {
@@ -633,6 +705,8 @@ export class ContactsService {
     if (result.count === 0) {
       throw new NotFoundException('Contact not found')
     }
+
+    await this.invalidateContactCaches(tenantId)
 
     return true
   }
@@ -669,7 +743,7 @@ export class ContactsService {
 
     const contactWithOwner = contact as { owner?: { firstName: string; lastName: string } }
 
-    return this.prisma.$transaction(async (tx) => {
+    const updatedContact = await this.prisma.$transaction(async (tx) => {
       const updatedContact = await tx.contact.update({
         where: { id: contactId, tenantId, deletedAt: null },
         data: { ownerId: newOwnerId, updatedBy: userId },
@@ -697,6 +771,9 @@ export class ContactsService {
 
       return updatedContact
     })
+
+    await this.invalidateContactCaches(tenantId)
+    return updatedContact
   }
 
   /**
@@ -833,6 +910,17 @@ export class ContactsService {
       }
     }
 
+    if (result.successCount > 0) {
+      await this.invalidateContactCaches(tenantId)
+    }
+
     return result
+  }
+
+  private async invalidateContactCaches(tenantId: string): Promise<void> {
+    await Promise.all([
+      this.cache.invalidateTenant('contact-stats', tenantId),
+      this.cache.invalidateTenant('dashboard-widget', tenantId),
+    ])
   }
 }

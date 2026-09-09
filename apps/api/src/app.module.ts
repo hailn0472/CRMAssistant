@@ -6,12 +6,6 @@ import { ScheduleModule } from '@nestjs/schedule'
 import { AuditModule } from './audit/audit.module'
 import { AuthModule } from './auth/auth.module'
 import { ContactsModule } from './contacts/contacts.module'
-import { DealsModule } from './deals/deals.module'
-import { ProductsModule } from './products/products.module'
-import { CompetitorsModule } from './competitors/competitors.module'
-import { StorageModule } from './storage/storage.module'
-import { DealCollaborationModule } from './deal-collaboration/deal-collaboration.module'
-import { DealHealthModule } from './deal-health/deal-health.module'
 import { NotesModule } from './notes/notes.module'
 import { NotificationsModule } from './notifications/notifications.module'
 import { TasksModule } from './tasks/tasks.module'
@@ -33,9 +27,9 @@ import { InboxModule } from './inbox/inbox.module'
 import { FacebookModule } from './facebook/facebook.module'
 import { ChannelDispatcherBindingModule } from './facebook/channel-dispatcher-binding.module'
 import { ImportExportModule } from './import-export/import-export.module'
-import { ReportsModule } from './reports/reports.module'
 import { TimeTrackingModule } from './time-tracking/time-tracking.module'
 import { DashboardsModule } from './dashboards/dashboards.module'
+import { CacheModule } from './cache/cache.module'
 
 @Module({
   imports: [
@@ -43,14 +37,10 @@ import { DashboardsModule } from './dashboards/dashboards.module'
       isGlobal: true,
       envFilePath: ['.env.local', '.env'],
     }),
+    CacheModule,
     PrismaModule,
     HealthModule,
     AuthModule,
-    ProductsModule,
-    CompetitorsModule,
-    StorageModule,
-    DealCollaborationModule,
-    DealHealthModule,
     TasksModule,
     CalendarModule,
     CalendarTaskBindingModule,
@@ -70,7 +60,6 @@ import { DashboardsModule } from './dashboards/dashboards.module'
     DashboardsModule,
     AppGraphqlModule,
     ContactsModule,
-    DealsModule,
     TagsModule,
     SegmentsModule,
     UsersModule,
@@ -83,14 +72,7 @@ import { DashboardsModule } from './dashboards/dashboards.module'
     FacebookModule,
     ChannelDispatcherBindingModule,
     ImportExportModule,
-    // Story 6.5 (AC 9): the Nest scheduler wakes the report processor — the
-    // cron is only a trigger; PostgreSQL execution rows are the durable source
-    // of truth. Registered once at the root.
     ScheduleModule.forRoot(),
-    // ReportsModule must sit ABOVE AppGraphqlModule so the barrel (which
-    // builds the SDL) sees the schedule refs at import time. Registration
-    // order is load-bearing (docs/project-context.md:84).
-    ReportsModule,
   ],
   providers: [
     {

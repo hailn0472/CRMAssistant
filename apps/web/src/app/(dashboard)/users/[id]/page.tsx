@@ -3,7 +3,6 @@ import { notFound, redirect } from 'next/navigation'
 
 import { WorkspacePanel } from '@/components/layout/AppShell'
 import { UserRoleAssignment } from '@/components/users/UserRoleAssignment'
-import { QueryProvider } from '@/components/contacts/QueryProvider'
 import type { User } from '@/services/user.service'
 
 const API_URL = process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:4000'
@@ -101,9 +100,7 @@ export default async function UserDetailPage({
 
       <WorkspacePanel className="p-6">
         <p className="text-sm font-semibold text-slate-700 mb-4">Role Assignment</p>
-        <QueryProvider>
-          <UserRoleAssignment userId={user.id} />
-        </QueryProvider>
+        <UserRoleAssignment userId={user.id} />
       </WorkspacePanel>
     </main>
   )

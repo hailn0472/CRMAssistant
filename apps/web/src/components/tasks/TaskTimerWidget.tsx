@@ -14,7 +14,6 @@ import {
 } from '@/services/time-entry.service'
 import { usePermission } from '@/hooks/usePermission'
 import { elapsedSeconds, formatDurationShort, formatElapsed } from '@/lib/time-format'
-import { formatDateInput, todayUtc } from '@/lib/win-loss-format'
 
 // Story 4.5 task-detail timer widget (AC 33-37). Self-contained: owns its
 // queries and mutations, returns null while loading — the exact shape of
@@ -44,7 +43,7 @@ export function TaskTimerWidget({ taskId }: { taskId: string }): React.JSX.Eleme
 
   // Today's total on this task — stopped entries only; the running one (if
   // any) contributes its live elapsed below.
-  const today = formatDateInput(todayUtc())
+  const today = new Date().toISOString().slice(0, 10)
   const { data: todayEntries } = useQuery({
     queryKey: ['timeEntries', { taskId, startFrom: today, startTo: today }],
     queryFn: () => getTimeEntries({ taskId, startFrom: today, startTo: today }, { pageSize: 100 }),

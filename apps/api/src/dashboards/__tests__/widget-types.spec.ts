@@ -44,8 +44,8 @@ describe('widget-types', () => {
 
   // ─── AC 13 ──────────────────────────────────────────────────────
   describe('WIDGET_SOURCES', () => {
-    it('has ten entries', () => {
-      expect(Object.keys(WIDGET_SOURCES)).toHaveLength(10)
+    it('has five lead-management entries', () => {
+      expect(Object.keys(WIDGET_SOURCES)).toHaveLength(5)
     })
 
     it('each entry carries permission, allowedTypes, defaultTitle', () => {

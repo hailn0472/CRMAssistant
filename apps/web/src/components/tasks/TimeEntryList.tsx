@@ -28,7 +28,6 @@ import {
 import type { TimeEntry, TimeEntryConnection } from '@/services/time-entry.service'
 import { usePermission } from '@/hooks/usePermission'
 import { formatDurationShort } from '@/lib/time-format'
-import { formatDateInput, todayUtc } from '@/lib/win-loss-format'
 
 // Story 4.5 task-detail time entries (AC 38). Add/edit/delete via the
 // project's custom context-based Dialog (NOT Radix), React Hook Form + Zod v4
@@ -52,7 +51,7 @@ const timeEntrySchema = z.object({
 type TimeEntryFormValues = z.infer<typeof timeEntrySchema>
 
 function toDateInput(date: Date): string {
-  return formatDateInput(date)
+  return date.toISOString().slice(0, 10)
 }
 
 export function TimeEntryList({ taskId }: { taskId: string }): React.JSX.Element {
@@ -302,7 +301,7 @@ function TimeEntryForm({
     resolver: zodResolver(timeEntrySchema) as any,
     defaultValues: {
       durationMinutes: entry ? Math.max(1, Math.round(entry.durationSeconds / 60)) : 30,
-      date: entry ? toDateInput(new Date(entry.startTime)) : toDateInput(todayUtc()),
+      date: entry ? toDateInput(new Date(entry.startTime)) : toDateInput(new Date()),
       description: entry?.description ?? '',
     },
   })

@@ -16,6 +16,15 @@ import type { Contact, ContactFormData } from '@/services/contact.service'
 
 type TagShape = { id: string; name: string; color: string }
 
+// Kept local so the form remains isolated when the request service is mocked.
+const LEAD_STATUS_VALUES = [
+  'NEW',
+  'REVIEWING',
+  'NURTURING',
+  'QUALIFIED_LEAD',
+  'NOT_A_LEAD',
+] as const
+
 const contactSchema = z.object({
   email: z.string().trim().email('Enter a valid email'),
   firstName: z.string().trim().min(1, 'First name is required'),
@@ -25,6 +34,21 @@ const contactSchema = z.object({
   jobTitle: z.string().trim().optional(),
   ownerId: z.string().trim().optional(),
   notes: z.string().trim().optional(),
+  leadStatus: z.enum(LEAD_STATUS_VALUES).optional(),
+  leadScore: z
+    .string()
+    .trim()
+    .optional()
+    .refine(
+      (value) =>
+        !value || (Number.isFinite(Number(value)) && Number(value) >= 0 && Number(value) <= 100),
+      'Lead score must be between 0 and 100',
+    ),
+  qualificationReason: z
+    .string()
+    .trim()
+    .max(2000, 'Keep the reason under 2,000 characters')
+    .optional(),
 })
 
 function optionalString(value: string | undefined): string | null | undefined {
@@ -73,6 +97,9 @@ export function ContactForm({ contact, onSaved, onCancel }: ContactFormProps): R
       jobTitle: contact?.jobTitle ?? '',
       ownerId: contact?.ownerId ?? '',
       notes: contact?.notes ?? '',
+      leadStatus: contact?.leadStatus ?? 'NEW',
+      leadScore: contact?.leadScore?.toString() ?? '',
+      qualificationReason: contact?.qualificationReason ?? '',
     },
   })
 
@@ -91,6 +118,11 @@ export function ContactForm({ contact, onSaved, onCancel }: ContactFormProps): R
       // through the dedicated owner picker on the detail page.
       if (!contact && values.ownerId) {
         payload.ownerId = values.ownerId
+      }
+      if (contact) {
+        payload.leadStatus = values.leadStatus
+        payload.leadScore = values.leadScore?.trim() ? Number(values.leadScore) : null
+        payload.qualificationReason = optionalString(values.qualificationReason)
       }
       const savedContact = contact
         ? await updateContact(contact.id, payload)
@@ -201,6 +233,45 @@ export function ContactForm({ contact, onSaved, onCancel }: ContactFormProps): R
             }}
           />
         </Section>
+
+        {contact ? (
+          <Section
+            title="Lead qualification"
+            hint="Use this to assess the contact independently from deals."
+          >
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label="Status" error={errors.leadStatus?.message}>
+                <select className={cn(inputClass, 'cursor-pointer')} {...register('leadStatus')}>
+                  <option value="NEW">New</option>
+                  <option value="REVIEWING">Reviewing</option>
+                  <option value="NURTURING">Nurturing</option>
+                  <option value="QUALIFIED_LEAD">Qualified lead</option>
+                  <option value="NOT_A_LEAD">Not a lead</option>
+                </select>
+              </Field>
+              <Field label="Lead score (0–100)" error={errors.leadScore?.message}>
+                <input
+                  className={inputClass}
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="0.1"
+                  placeholder="e.g. 75"
+                  {...register('leadScore')}
+                  aria-invalid={Boolean(errors.leadScore)}
+                />
+              </Field>
+            </div>
+            <Field label="Decision rationale" error={errors.qualificationReason?.message}>
+              <textarea
+                rows={3}
+                placeholder="Why this contact is or is not a qualified lead…"
+                className="w-full resize-y rounded-[9px] border border-[#e6e6eb] bg-[#fafafb] px-3 py-2.5 text-[13.5px] text-[#1b1b1f] outline-none transition-colors placeholder:text-[#9b9ba3] focus:border-[#1b1b1f] focus:bg-white"
+                {...register('qualificationReason')}
+              />
+            </Field>
+          </Section>
+        ) : null}
 
         <Field label="Note" error={errors.notes?.message}>
           <textarea

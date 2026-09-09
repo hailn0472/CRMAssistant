@@ -96,8 +96,6 @@ export async function addContactNote(
 
 export type ActivityLogPreference = {
   logTaskCompleted: boolean
-  logDealCreated: boolean
-  logDealStageChanged: boolean
   logMessageSent: boolean
   logMessageReceived: boolean
   logMeetingScheduled: boolean
@@ -107,8 +105,6 @@ export type UpdateActivityLogPreferenceInput = Partial<ActivityLogPreference>
 
 const ACTIVITY_LOG_PREFERENCE_FIELDS = `
   logTaskCompleted
-  logDealCreated
-  logDealStageChanged
   logMessageSent
   logMessageReceived
   logMeetingScheduled

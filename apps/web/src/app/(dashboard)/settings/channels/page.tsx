@@ -8,7 +8,6 @@ import { Button } from '@/components/ui/button'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { ErrorState } from '@/components/shared/ErrorState'
 import { TableSkeleton } from '@/components/shared/LoadingSkeleton'
-import { QueryProvider } from '@/components/contacts/QueryProvider'
 import { getFacebookPages, disconnectFacebookPage } from '@/services/facebook.service'
 import { ConnectFacebookPageDialog } from '@/components/settings/ConnectFacebookPageDialog'
 import type { FacebookPageConnection } from '@/services/facebook.service'
@@ -21,11 +20,7 @@ function getStatusInfo(page: FacebookPageConnection): { label: string; className
 }
 
 export default function ChannelsPage(): React.JSX.Element {
-  return (
-    <QueryProvider>
-      <ChannelsContent />
-    </QueryProvider>
-  )
+  return <ChannelsContent />
 }
 
 function ChannelsContent(): React.JSX.Element {

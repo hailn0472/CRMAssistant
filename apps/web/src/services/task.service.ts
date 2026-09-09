@@ -18,11 +18,6 @@ export type TaskContact = {
   email: string
 }
 
-export type TaskDeal = {
-  id: string
-  title: string
-}
-
 export type Task = {
   id: string
   title: string
@@ -32,7 +27,6 @@ export type Task = {
   dueDate: string | null
   assignedTo: string
   contactId: string | null
-  dealId: string | null
   completedAt: string | null
   createdBy: string
   createdAt: string
@@ -44,7 +38,6 @@ export type Task = {
   parentTaskId: string | null
   assignee: TaskAssignee | null
   contact: TaskContact | null
-  deal: TaskDeal | null
 }
 
 // Story 4.6: dependency types (AC 49)
@@ -99,7 +92,6 @@ export type TaskFormData = {
   dueDate?: string | null
   assignedTo?: string
   contactId?: string
-  dealId?: string
   // Story 4.6: recurrence fields
   isRecurring?: boolean
   recurrencePattern?: string
@@ -112,7 +104,6 @@ export type TaskFilter = {
   priority?: TaskPriority
   assignedTo?: string
   contactId?: string
-  dealId?: string
   dueDateFrom?: string
   dueDateTo?: string
   overdueOnly?: boolean
@@ -146,7 +137,6 @@ export const TASK_FIELDS = `
   dueDate
   assignedTo
   contactId
-  dealId
   completedAt
   createdBy
   createdAt
@@ -157,7 +147,6 @@ export const TASK_FIELDS = `
   parentTaskId
   assignee { id firstName lastName email avatar }
   contact { id firstName lastName email }
-  deal { id title }
 `
 
 export async function getTasks(
@@ -348,7 +337,6 @@ export async function createTaskFromTemplate(
   overrides: {
     assignedTo?: string
     contactId?: string
-    dealId?: string
     dueDate?: string
     title?: string
   },

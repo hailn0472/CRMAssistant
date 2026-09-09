@@ -95,11 +95,9 @@ describe('ActivityLogPreferenceService', () => {
     })
 
     it('returns true when the preference row has that key set to true', async () => {
-      prisma.userActivityLogPreference.findFirst.mockResolvedValue({
-        logDealCreated: true,
-      })
+      prisma.userActivityLogPreference.findFirst.mockResolvedValue({ logMessageSent: true })
 
-      const result = await service.isEnabled(TENANT_ID, USER_ID, 'logDealCreated')
+      const result = await service.isEnabled(TENANT_ID, USER_ID, 'logMessageSent')
 
       expect(result).toBe(true)
     })
@@ -211,7 +209,7 @@ describe('ActivityLogPreferenceService', () => {
     it('writes an audit row for the preference update (AC 41)', async () => {
       prisma.userActivityLogPreference.upsert.mockResolvedValue(makePrefRow())
 
-      await service.updateMine(TENANT_ID, USER_ID, { logDealStageChanged: false })
+      await service.updateMine(TENANT_ID, USER_ID, { logMessageSent: false })
 
       expect(audit.log).toHaveBeenCalledWith({
         tenantId: TENANT_ID,
@@ -228,8 +226,6 @@ describe('ActivityLogPreferenceService', () => {
     it('exactly matches the six UserActivityLogPreference boolean columns', () => {
       expect(ACTIVITY_LOG_PREFERENCE_KEYS).toEqual([
         'logTaskCompleted',
-        'logDealCreated',
-        'logDealStageChanged',
         'logMessageSent',
         'logMessageReceived',
         // Story 4.3 (AC 8): MEETING_SCHEDULED preference gate.

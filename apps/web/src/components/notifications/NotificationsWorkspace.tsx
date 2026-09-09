@@ -18,13 +18,11 @@ import {
   notificationTypeLabel,
   formatRelativeTime,
 } from '@/lib/notification-format'
-import { CheckSquare, DollarSign, Bell as BellIcon } from 'lucide-react'
+import { CheckSquare, Bell as BellIcon } from 'lucide-react'
 import Link from 'next/link'
 
 function NotificationTypeIcon({ type }: { type: string }): React.JSX.Element {
   if (type === 'TASK_ASSIGNED') return <CheckSquare className="h-4 w-4 text-blue-500" />
-  if (type === 'DEAL_REMINDER' || type === 'DEAL_MENTION')
-    return <DollarSign className="h-4 w-4 text-emerald-500" />
   return <BellIcon className="h-4 w-4 text-slate-400" />
 }
 

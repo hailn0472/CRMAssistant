@@ -14,7 +14,7 @@ import {
 } from '@dnd-kit/core'
 import { SortableContext, rectSortingStrategy } from '@dnd-kit/sortable'
 import type { DragStartEvent, DragEndEvent } from '@dnd-kit/core'
-import { PenLine, Check, Plus, Share2 } from 'lucide-react'
+import { PenLine, Check, Plus, Share2, Target } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 import {
@@ -36,6 +36,22 @@ import { resolveWidgetReorder } from '@/lib/widget-format'
 import { DashboardSkeleton, ErrorState, EmptyState } from '@/components/shared'
 import { Badge } from '@/components/ui/badge'
 import { useAuthStore } from '@/stores/auth.store'
+
+const LEAD_WORKSPACE_SOURCES = new Set([
+  'CONTACT_COUNT',
+  'LEAD_FUNNEL',
+  'TASK_STATS',
+  'MY_TASKS',
+  'RECENT_ACTIVITY',
+])
+
+const LEAD_WORKSPACE_TITLES: Record<string, string> = {
+  CONTACT_COUNT: 'Contact Count',
+  LEAD_FUNNEL: 'Lead Funnel',
+  TASK_STATS: 'Task Stats',
+  MY_TASKS: 'My Tasks',
+  RECENT_ACTIVITY: 'Recent Activity',
+}
 
 /**
  * DashboardWorkspace — main dashboard shell with DnD editing.
@@ -87,7 +103,25 @@ export function DashboardWorkspace(): React.JSX.Element {
   const effectiveEditing = isEditing && !isReadOnly
 
   const widgets: WidgetData[] = (dashboard?.widgets as WidgetData[] | undefined) ?? []
-  const sorted = [...widgets].sort((a, b) => a.position - b.position)
+  // Dashboards created before the Deal/Product scope was removed can still
+  // contain old titles or duplicate widgets pointing to the same source.
+  // Keep one current widget per source and hide the stale copies so a user
+  // never sees a sales label paired with unrelated fallback data.
+  const leadWidgetBySource = new Map<string, WidgetData>()
+  for (const widget of [...widgets].sort((a, b) => a.position - b.position)) {
+    if (!LEAD_WORKSPACE_SOURCES.has(widget.config.source)) continue
+    const current = leadWidgetBySource.get(widget.config.source)
+    const canonicalTitle = LEAD_WORKSPACE_TITLES[widget.config.source]
+    if (!current || (widget.title === canonicalTitle && current.title !== canonicalTitle)) {
+      leadWidgetBySource.set(widget.config.source, widget)
+    }
+  }
+  const leadWidgets = Array.from(leadWidgetBySource.values()).map((widget) => ({
+    ...widget,
+    title: LEAD_WORKSPACE_TITLES[widget.config.source] ?? widget.title,
+  }))
+  const hiddenWidgetCount = widgets.length - leadWidgets.length
+  const sorted = [...leadWidgets].sort((a, b) => a.position - b.position)
   const widgetIds = sorted.map((w) => w.id)
 
   // Reorder mutation (optimistic)
@@ -224,15 +258,17 @@ export function DashboardWorkspace(): React.JSX.Element {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-screen bg-[#f7f7f8]">
       {/* Header */}
-      <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/80">
-        <div className="flex items-center justify-between px-4 py-3 sm:px-6">
+      <header className="sticky top-0 z-40 border-b border-[#e8e8ed] bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/80">
+        <div className="flex items-center justify-between gap-4 px-4 py-3 sm:px-6">
           <div className="flex min-w-0 items-center gap-3">
             <DashboardSwitcher currentDashboardId={dashboard.id} onShareDashboard={openShareFor} />
             <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <h1 className="truncate text-lg font-semibold text-slate-950">{dashboard.name}</h1>
+                <h1 className="truncate text-lg font-semibold tracking-[-0.02em] text-[#17171c]">
+                  {dashboard.name}
+                </h1>
                 {isReadOnly && (
                   <Badge variant="neutral" className="text-xs">
                     {ownerName ? `Shared by ${ownerName} · Read only` : 'Shared · Read only'}
@@ -240,7 +276,7 @@ export function DashboardWorkspace(): React.JSX.Element {
                 )}
               </div>
               {dashList && (
-                <p className="text-xs text-slate-500">
+                <p className="text-xs text-[#797984]">
                   {dashList.owned.length + dashList.sharedWithMe.length} dashboard
                   {dashList.owned.length + dashList.sharedWithMe.length !== 1 ? 's' : ''} available
                 </p>
@@ -253,7 +289,7 @@ export function DashboardWorkspace(): React.JSX.Element {
                 <button
                   type="button"
                   onClick={() => setLibraryOpen(true)}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                  className="inline-flex items-center gap-1.5 rounded-[9px] border border-[#dedee5] bg-white px-3 py-1.5 text-xs font-semibold text-[#363640] transition-colors hover:bg-[#f5f5f7]"
                   aria-label="Add widget"
                 >
                   <Plus className="h-3.5 w-3.5" />
@@ -262,7 +298,7 @@ export function DashboardWorkspace(): React.JSX.Element {
                 <button
                   type="button"
                   onClick={() => openShareFor(dashboard.id)}
-                  className="hidden items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 sm:inline-flex"
+                  className="hidden items-center gap-1.5 rounded-[9px] border border-[#dedee5] bg-white px-3 py-1.5 text-xs font-semibold text-[#363640] transition-colors hover:bg-[#f5f5f7] sm:inline-flex"
                   aria-label="Share dashboard"
                 >
                   <Share2 className="h-3.5 w-3.5" />
@@ -273,7 +309,7 @@ export function DashboardWorkspace(): React.JSX.Element {
                 <button
                   type="button"
                   onClick={() => setIsEditing((prev) => !prev)}
-                  className="hidden items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 sm:inline-flex"
+                  className="hidden items-center gap-1.5 rounded-[9px] border border-[#dedee5] bg-white px-3 py-1.5 text-xs font-semibold text-[#363640] transition-colors hover:bg-[#f5f5f7] sm:inline-flex"
                   aria-label={isEditing ? 'Done editing' : 'Edit dashboard'}
                 >
                   {isEditing ? (
@@ -293,6 +329,48 @@ export function DashboardWorkspace(): React.JSX.Element {
           </div>
         </div>
       </header>
+
+      <section
+        className="border-b border-[#ececf0] bg-[#fbfbfc] px-4 py-4 sm:px-6"
+        aria-label="Lead workspace summary"
+      >
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="flex items-start gap-3">
+            <span className="flex h-9 w-9 items-center justify-center rounded-[11px] bg-[#e9e8ff] text-[#5147c9]">
+              <Target className="h-4 w-4" aria-hidden="true" />
+            </span>
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-[#797984]">
+                Lead workspace
+              </p>
+              <p className="mt-0.5 text-[13px] text-[#4e4e58]">
+                Follow incoming contacts, qualification progress, and the next action for your team.
+              </p>
+            </div>
+          </div>
+          <span className="rounded-full border border-[#dedee5] bg-white px-3 py-1 text-[11.5px] font-medium text-[#60606a]">
+            Scope: Contact → Lead
+          </span>
+        </div>
+      </section>
+
+      {hiddenWidgetCount > 0 ? (
+        <div className="mx-4 mt-4 flex flex-wrap items-center justify-between gap-3 rounded-[12px] border border-[#e7e3c9] bg-[#fffdf5] px-4 py-3 text-[12.5px] text-[#635f47] sm:mx-6">
+          <span>
+            {hiddenWidgetCount} outdated or duplicate widget{hiddenWidgetCount === 1 ? '' : 's'}{' '}
+            hidden to keep this workspace focused on lead qualification.
+          </span>
+          {!isReadOnly ? (
+            <button
+              type="button"
+              onClick={() => setLibraryOpen(true)}
+              className="font-semibold text-[#4f46c5] hover:text-[#3730a3]"
+            >
+              Add Lead widget
+            </button>
+          ) : null}
+        </div>
+      ) : null}
 
       {/* DnD Grid */}
       <DndContext

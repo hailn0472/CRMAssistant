@@ -13,8 +13,6 @@
 
 export const NOTIFICATION_TYPES = [
   'TASK_ASSIGNED',
-  'DEAL_REMINDER',
-  'DEAL_MENTION',
   // Story 6.5 (AC 15): terminal schedule delivery failure — emitted once per
   // execution with dedupe key `report-schedule-failed:<executionId>`.
   'REPORT_SCHEDULE_FAILED',
@@ -49,18 +47,14 @@ export function assertValidNotificationType(value: string): void {
 }
 
 export function resolveNotificationTarget(input: {
-  dealId?: string | null
   taskId?: string | null
   reportExportId?: string | null
-}): { target: 'DEAL' | 'TASK' | 'REPORT_EXPORT' | 'NONE'; id: string | null } {
-  const targets = [input.dealId, input.taskId, input.reportExportId].filter(
+}): { target: 'TASK' | 'REPORT_EXPORT' | 'NONE'; id: string | null } {
+  const targets = [input.taskId, input.reportExportId].filter(
     (v): v is string => typeof v === 'string' && v.length > 0,
   )
   if (targets.length > 1) {
-    throw new Error('A notification may reference at most one of dealId, taskId or reportExportId')
-  }
-  if (input.dealId) {
-    return { target: 'DEAL', id: input.dealId }
+    throw new Error('A notification may reference at most one of taskId or reportExportId')
   }
   if (input.taskId) {
     return { target: 'TASK', id: input.taskId }
@@ -69,16 +63,6 @@ export function resolveNotificationTarget(input: {
     return { target: 'REPORT_EXPORT', id: input.reportExportId }
   }
   return { target: 'NONE', id: null }
-}
-
-/**
- * Deals service REASON_LABELS mirror for producer P2 (AC 28).
- * Maps DealReminder.reason to a human-readable notification title.
- */
-export const DEAL_REMINDER_REASON_LABELS: Record<string, string> = {
-  NO_ACTIVITY_7D: 'No activity for 7 days',
-  CLOSING_SOON_3D: 'Closing soon',
-  AT_RISK: 'Deal at risk',
 }
 
 /**

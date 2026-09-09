@@ -17,7 +17,7 @@ enum ActivityType {
   CONTACT_UPDATED
   CONTACT_OWNER_CHANGED
   // Auto-logged activity types (Story 4.2) — written by the producers in
-  // TasksService / DealsService / MessagesService via ActivityService.logSafe().
+  // TasksService / MessagesService via ActivityService.logSafe().
   TASK_COMPLETED
   DEAL_STAGE_CHANGED
   MESSAGE_RECEIVED
@@ -48,6 +48,17 @@ enum AccessLevel {
   READ
   EDIT
   FULL
+}
+
+// Qualification lifecycle for B2C contacts. The decision lives on the
+// customer record itself; it is independent from the retired product catalog
+// and from post-qualification sales processes.
+enum LeadStatus {
+  NEW
+  REVIEWING
+  NURTURING
+  QUALIFIED_LEAD
+  NOT_A_LEAD
 }
 
 enum ResourceType {
@@ -126,20 +137,7 @@ model Tenant {
   channelConnections         ChannelConnection[]
   contactChannelIdentities   ContactChannelIdentity[]
   activities                 Activity[]
-  deals                      Deal[]
-  dealStages                 DealStage[]
-  forecastSnapshots          ForecastSnapshot[]
-  products                   Product[]
-  dealLineItems              DealLineItem[]
-  competitors                Competitor[]
-  dealCompetitors            DealCompetitor[]
-  dealDocuments              DealDocument[]
-  dealComments               DealComment[]
-  dealCommentMentions        DealCommentMention[]
   notes                      Note[]
-  dealReminders              DealReminder[]
-  dealReminderSnoozes        DealReminderSnooze[]
-  userReminderPreferences    UserReminderPreference[]
   userActivityLogPreferences UserActivityLogPreference[]
   tasks                      Task[]
   taskTemplates              TaskTemplate[]
@@ -154,7 +152,6 @@ model Tenant {
   reportSchedules            ReportSchedule[]
   ReportScheduleExecution    ReportScheduleExecution[]
   reportExports              ReportExport[]
-  customerAnalyticsSnapshots CustomerAnalyticsSnapshot[]
   activityGoals              ActivityGoal[]
 }
 
@@ -201,13 +198,6 @@ model User {
   assignedConversations Conversation[]             @relation("ConversationAssignee")
   sharedWithRules       SharingRule[]              @relation("SharedWithUser")
   MessageReadReceipt    MessageReadReceipt[]
-  deals                 Deal[]                     @relation("DealOwner")
-  uploadedDealDocuments DealDocument[]             @relation("DealDocumentUploader")
-  dealComments          DealComment[]              @relation("DealCommentAuthor")
-  dealCommentMentions   DealCommentMention[]       @relation("DealCommentMentionedUser")
-  dealReminders         DealReminder[]             @relation("DealReminderRecipient")
-  dealReminderSnoozes   DealReminderSnooze[]       @relation("DealReminderSnoozeUser")
-  reminderPreference    UserReminderPreference?    @relation("UserReminderPreference")
   activityLogPreference UserActivityLogPreference? @relation("UserActivityLogPreference")
   assignedTasks         Task[]                     @relation("TaskAssignee")
   calendarConnections   CalendarConnection[]       @relation("UserCalendarConnection")
@@ -372,41 +362,39 @@ model RolePermission {
 /// Tenant-scoped contact model for CRM contact management.
 /// Extended in Story 2.4: added ownerId + owner relation for data visibility.
 model Contact {
-  id             String    @id @default(uuid())
-  tenantId       String
-  email          String
-  firstName      String
-  lastName       String
-  phone          String?
-  company        String?
-  jobTitle       String?
-  ownerId        String    @default("system")
-  teamId         String?
+  id                  String     @id @default(uuid())
+  tenantId            String
+  email               String
+  firstName           String
+  lastName            String
+  phone               String?
+  company             String?
+  jobTitle            String?
+  ownerId             String     @default("system")
+  teamId              String?
   // Enrichment fields — optional data collected to build a 360° contact profile
-  linkedin       String?
-  twitter        String?
-  addressStreet  String?
-  addressCity    String?
-  addressCountry String?
-  department     String?
-  timezone       String?
-  language       String?
-  source         String? // How the contact was acquired: Website, Referral, Event, etc.
-  notes          String? // Internal notes about the contact
-  // Story 6.7 — server-owned calculated analytics fields (AC 3). Nullable so
-  // the additive migration is safe with existing rows; only the daily
-  // CustomerAnalyticsProcessor writes them. NEVER client-writable: they are
-  // absent from Create/UpdateContactInput.
-  lifetimeValue         Float? // round2(sum of active won Deal.value)
-  churnRisk             String? // 'LOW' | 'MEDIUM' | 'HIGH' via service const tuple
-  churnRiskScore        Float? // 0..100 — sort/explanation support, not the category authority
-  lastActivityDate      DateTime? // MAX(Activity.createdAt) — null = no activity yet
-  analyticsCalculatedAt DateTime? // freshness marker from the last processor run
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
-  createdBy      String    @default("system")
-  updatedBy      String    @default("system")
-  deletedAt      DateTime?
+  linkedin            String?
+  twitter             String?
+  addressStreet       String?
+  addressCity         String?
+  addressCountry      String?
+  department          String?
+  timezone            String?
+  language            String?
+  source              String? // How the contact was acquired: Website, Referral, Event, etc.
+  notes               String? // Internal notes about the contact
+  // B2C lead qualification lifecycle. Score/reason are reviewer-entered;
+  // qualifiedAt/qualifiedBy are server-owned audit metadata.
+  leadStatus          LeadStatus @default(NEW)
+  leadScore           Float? // manual 0..100 prioritisation score
+  qualificationReason String?
+  qualifiedAt         DateTime?
+  qualifiedBy         String?
+  createdAt           DateTime   @default(now())
+  updatedAt           DateTime   @updatedAt
+  createdBy           String     @default("system")
+  updatedBy           String     @default("system")
+  deletedAt           DateTime?
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   owner  User   @relation("ContactOwner", fields: [ownerId], references: [id], onDelete: Cascade)
@@ -416,20 +404,16 @@ model Contact {
   conversations     Conversation[]
   channelIdentities ContactChannelIdentity[]
   activities        Activity[]
-  deals             Deal[]
   tasks             Task[]
-  noteEntries       Note[]                   @relation("ContactNote")
-  analyticsSnapshots CustomerAnalyticsSnapshot[]
+  noteEntries       Note[]
 
   @@unique([tenantId, email])
   @@index([tenantId])
   @@index([tenantId, ownerId])
   @@index([tenantId, teamId])
   @@index([tenantId, createdAt])
-  // Story 6.7 — analytics filter/sort indexes (Contract A2)
-  @@index([tenantId, churnRisk])
-  @@index([tenantId, lifetimeValue])
-  @@index([tenantId, lastActivityDate])
+  @@index([tenantId, leadStatus])
+  @@index([tenantId, leadScore])
 }
 
 /// Immutable activity log for contact timeline (Story 5.4).
@@ -437,9 +421,9 @@ model Contact {
 /// deliberate, not a multi-tenancy-pattern violation: activities are derived
 /// facts, and a timeline that could be rewritten would not be a timeline.
 /// Extended in Story 4.2 (auto logging): `source` is the producing domain
-/// ('TASK' | 'DEAL' | 'MESSAGE'); `source IS NULL` means the row was created
+/// ('TASK' | 'MESSAGE'); `source IS NULL` means the row was created
 /// manually (addContactNote). `sourceId` carries the originating row id
-/// (Task.id / Deal.id / Message.id) for traceability. `dedupeKey` is the
+/// (Task.id / Message.id) for traceability. `dedupeKey` is the
 /// deterministic per-event key — Postgres treats NULLs as distinct in unique
 /// indexes, so manual activities (dedupeKey = NULL) never collide. `metadata`
 /// carries the subject/body-preview/participants payload and is persisted but
@@ -452,8 +436,8 @@ model Activity {
   type        ActivityType
   title       String
   description String?
-  source      String? // 'TASK' | 'DEAL' | 'MESSAGE' — NULL = manual entry (AC 3)
-  sourceId    String? // originating row id — Task.id / Deal.id / Message.id (AC 4)
+  source      String? // 'TASK' | 'MESSAGE' — NULL = manual entry (AC 3)
+  sourceId    String? // originating row id — Task.id / Message.id (AC 4)
   dedupeKey   String? // deterministic per-event key; NULL = manual entry (AC 15)
   metadata    Json? // persisted, not exposed over GraphQL (AC 5)
   createdAt   DateTime     @default(now())
@@ -544,6 +528,29 @@ model ContactTag {
 
   @@id([contactId, tagId])
   @@index([tagId])
+}
+
+/// User-authored note attached to a Contact. Notes deliberately have a single
+/// parent now that the CRM lifecycle ends at lead qualification.
+model Note {
+  id        String    @id @default(uuid())
+  tenantId  String
+  contactId String
+  userId    String
+  body      String
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  createdBy String    @default("system")
+  updatedBy String    @default("system")
+  deletedAt DateTime?
+
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  contact Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  author  User    @relation("NoteAuthor", fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId])
+  @@index([tenantId, contactId])
+  @@index([contactId, deletedAt, createdAt])
 }
 
 /// Saved dynamic segments for reusable contact filtering.
@@ -679,380 +686,6 @@ model Message {
   @@index([conversationId, createdAt])
 }
 
-// =============================================================================
-// DEAL MODELS (Story 3.1)
-// =============================================================================
-
-/// Tenant-scoped pipeline stage model for customizable sales pipeline.
-/// Stages are ordered and can be customized by ADMIN users.
-model DealStage {
-  id          String    @id @default(uuid())
-  tenantId    String
-  name        String
-  order       Int       @default(0)
-  probability Int       @default(0)
-  isWon       Boolean   @default(false)
-  isLost      Boolean   @default(false)
-  color       String    @default("#3B82F6")
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  createdBy   String    @default("system")
-  updatedBy   String    @default("system")
-  deletedAt   DateTime?
-
-  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  deals  Deal[]
-
-  @@unique([tenantId, name])
-  @@index([tenantId])
-  @@index([tenantId, order])
-}
-
-/// Tenant-scoped deal model for tracking opportunities through the sales pipeline.
-/// Links to a Contact (not Account — Account entity is deferred indefinitely).
-/// No activity logging — Activity.contactId is required and no dealId column exists.
-model Deal {
-  id                String    @id @default(uuid())
-  tenantId          String
-  title             String
-  value             Float     @default(0)
-  currency          String    @default("USD")
-  probability       Int       @default(0)
-  stageId           String
-  contactId         String
-  ownerId           String
-  expectedCloseDate DateTime?
-  actualCloseDate   DateTime?
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
-  createdBy         String    @default("system")
-  updatedBy         String    @default("system")
-  deletedAt         DateTime?
-
-  tenant          Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  stage           DealStage            @relation(fields: [stageId], references: [id])
-  contact         Contact              @relation(fields: [contactId], references: [id], onDelete: Cascade)
-  owner           User                 @relation("DealOwner", fields: [ownerId], references: [id], onDelete: Cascade)
-  lineItems       DealLineItem[]
-  competitors     DealCompetitor[]
-  documents       DealDocument[]
-  comments        DealComment[]
-  notes           Note[]               @relation("DealNote")
-  reminders       DealReminder[]
-  reminderSnoozes DealReminderSnooze[]
-  tasks           Task[]
-  notifications   Notification[]       @relation("DealNotification")
-  competitor      Competitor?          @relation("DealWinLossCompetitor", fields: [competitorId], references: [id], onDelete: Restrict)
-  winLossReason   String?
-  winLossNote     String?
-  competitorId    String?
-
-  @@index([tenantId])
-  @@index([tenantId, stageId])
-  @@index([tenantId, contactId])
-  @@index([tenantId, ownerId])
-  @@index([tenantId, expectedCloseDate])
-  @@index([tenantId, winLossReason])
-}
-
-/// Tenant-scoped product model for tracking sellable items.
-model Product {
-  id          String    @id @default(uuid())
-  tenantId    String
-  name        String
-  description String?
-  price       Float     @default(0)
-  currency    String    @default("USD")
-  isActive    Boolean   @default(true)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  createdBy   String    @default("system")
-  updatedBy   String    @default("system")
-  deletedAt   DateTime?
-
-  tenant    Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  lineItems DealLineItem[]
-
-  @@index([tenantId])
-  @@index([tenantId, isActive])
-}
-
-/// Tenant-scoped line item model linking products to deals.
-/// unitPrice is a snapshot from Product.price at the time of addition.
-/// total is computed server-side only: round2(quantity * unitPrice * (1 - discount / 100)).
-/// onDelete: Restrict on productId — prevents accidental hard DELETE of referenced products.
-model DealLineItem {
-  id        String    @id @default(uuid())
-  tenantId  String
-  dealId    String
-  productId String
-  quantity  Float     @default(1)
-  unitPrice Float
-  discount  Float     @default(0)
-  total     Float     @default(0)
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  createdBy String    @default("system")
-  updatedBy String    @default("system")
-  deletedAt DateTime?
-
-  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  deal    Deal    @relation(fields: [dealId], references: [id], onDelete: Cascade)
-  product Product @relation(fields: [productId], references: [id], onDelete: Restrict)
-
-  @@index([tenantId])
-  @@index([tenantId, dealId])
-  @@index([dealId, deletedAt])
-  @@index([tenantId, productId])
-}
-
-/// Tenant-scoped competitor model for tracking rivals in win/loss analysis.
-/// No DB unique constraint on name — duplicates are rejected in the service
-/// over active rows only, so a soft-deleted competitor's name can be reused.
-model Competitor {
-  id         String    @id @default(uuid())
-  tenantId   String
-  name       String
-  website    String?
-  strengths  String?
-  weaknesses String?
-  isActive   Boolean   @default(true)
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
-  createdBy  String    @default("system")
-  updatedBy  String    @default("system")
-  deletedAt  DateTime?
-
-  tenant       Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  wonLostDeals Deal[]           @relation("DealWinLossCompetitor")
-  dealLinks    DealCompetitor[]
-
-  @@index([tenantId])
-  @@index([tenantId, isActive])
-}
-
-/// Tenant-scoped junction model linking competitors to deals.
-/// No DB unique on [dealId, competitorId] — duplicates are rejected in the
-/// service over active rows only, so a removed-and-re-added link is allowed.
-/// onDelete: Restrict on competitorId — prevents accidental hard DELETE of
-/// referenced competitors.
-model DealCompetitor {
-  id           String    @id @default(uuid())
-  tenantId     String
-  dealId       String
-  competitorId String
-  note         String?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
-  createdBy    String    @default("system")
-  updatedBy    String    @default("system")
-  deletedAt    DateTime?
-
-  tenant     Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  deal       Deal       @relation(fields: [dealId], references: [id], onDelete: Cascade)
-  competitor Competitor @relation(fields: [competitorId], references: [id], onDelete: Restrict)
-
-  @@index([tenantId])
-  @@index([tenantId, dealId])
-  @@index([dealId, deletedAt])
-  @@index([tenantId, competitorId])
-}
-
-/// Tenant-scoped document attachment for a deal (Story 3.6).
-/// Files live in Supabase Storage at deals/{tenantId}/{dealId}/{documentId}-{sanitizedFileName};
-/// the row stores the object path, never a URL (signed URLs expire, so a persisted
-/// fileUrl would be wrong five minutes after it was written).
-/// onDelete: Restrict on uploadedBy — an uploader must not be hard-deletable out
-/// from under an attributed document.
-model DealDocument {
-  id          String    @id @default(uuid())
-  tenantId    String
-  dealId      String
-  fileName    String
-  storagePath String
-  fileSize    Int
-  mimeType    String
-  uploadedBy  String
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  createdBy   String    @default("system")
-  updatedBy   String    @default("system")
-  deletedAt   DateTime?
-
-  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  deal     Deal   @relation(fields: [dealId], references: [id], onDelete: Cascade)
-  uploader User   @relation("DealDocumentUploader", fields: [uploadedBy], references: [id], onDelete: Restrict)
-
-  @@index([tenantId])
-  @@index([tenantId, dealId])
-  @@index([dealId, deletedAt])
-}
-
-/// Tenant-scoped comment on a deal (Story 3.6).
-/// Comment text is stored verbatim and never rendered as HTML on the client.
-/// onDelete: Restrict on userId — an author must not be hard-deletable out from
-/// under an attributed comment.
-model DealComment {
-  id        String    @id @default(uuid())
-  tenantId  String
-  dealId    String
-  userId    String
-  comment   String
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  createdBy String    @default("system")
-  updatedBy String    @default("system")
-  deletedAt DateTime?
-
-  tenant   Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  deal     Deal                 @relation(fields: [dealId], references: [id], onDelete: Cascade)
-  author   User                 @relation("DealCommentAuthor", fields: [userId], references: [id], onDelete: Restrict)
-  mentions DealCommentMention[]
-
-  @@index([tenantId])
-  @@index([tenantId, dealId])
-  @@index([dealId, deletedAt, createdAt])
-}
-
-/// Junction row recording that a DealComment mentions a tenant user (Story 3.6).
-/// Story 4-8 (Notification Center) reads this table to turn mentions into bells;
-/// this story only persists the row. Explicit junction, not a String[] scalar
-/// list — there is not one array column in the schema today.
-model DealCommentMention {
-  id              String   @id @default(uuid())
-  tenantId        String
-  commentId       String
-  mentionedUserId String
-  createdAt       DateTime @default(now())
-
-  tenant        Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  comment       DealComment @relation(fields: [commentId], references: [id], onDelete: Cascade)
-  mentionedUser User        @relation("DealCommentMentionedUser", fields: [mentionedUserId], references: [id], onDelete: Cascade)
-
-  @@index([tenantId])
-  @@index([commentId])
-  @@index([tenantId, mentionedUserId])
-}
-
-/// Story 4.7 (FR64): user-authored prose attached to exactly ONE parent —
-/// a Contact or a Deal. Association is two nullable FK columns, NOT a
-/// polymorphic entityType/entityId pair (architecture.md:938-942). The
-/// "exactly one non-null" rule is enforced in NotesService; Prisma cannot
-/// express an XOR check constraint. There is deliberately NO accountId —
-/// the Account entity is deferred (architecture.md:922-929).
-model Note {
-  id        String    @id @default(uuid())
-  tenantId  String
-  contactId String?
-  dealId    String?
-  userId    String
-  body      String
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  createdBy String    @default("system")
-  updatedBy String    @default("system")
-  deletedAt DateTime?
-
-  tenant  Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  contact Contact? @relation("ContactNote", fields: [contactId], references: [id], onDelete: Cascade)
-  deal    Deal?    @relation("DealNote", fields: [dealId], references: [id], onDelete: Cascade)
-  author  User     @relation("NoteAuthor", fields: [userId], references: [id], onDelete: Restrict)
-
-  @@index([tenantId])
-  @@index([tenantId, contactId])
-  @@index([tenantId, dealId])
-  @@index([contactId, deletedAt, createdAt])
-  @@index([dealId, deletedAt, createdAt])
-}
-
-/// Tenant-scoped reminder row produced by the daily deal-health sweep (Story 3.7).
-/// The sweep persists the delivery *intent* and stops — no email transport
-/// exists in this codebase. `deliveredAt` stays null until Story 4-8 (the
-/// Notification Center) stamps delivery without a migration.
-/// The @@unique([tenantId, dealId, reason, sweepDate]) constraint is the
-/// idempotency key: running the sweep five times in one UTC day produces
-/// exactly one row per (deal, reason) — what makes a lazily-triggered sweep
-/// safe. `reason` and `healthStatus` are String, not Prisma enums —
-/// Deal.winLossReason set the precedent of validating a fixed vocabulary in
-/// the service rather than in the DB.
-model DealReminder {
-  id           String    @id @default(uuid())
-  tenantId     String
-  dealId       String
-  userId       String // the recipient — the deal owner at sweep time
-  reason       String // NO_ACTIVITY_7D | CLOSING_SOON_3D | AT_RISK
-  healthStatus String // HEALTHY | AT_RISK | STALE
-  healthScore  Int
-  sweepDate    DateTime // UTC midnight of the day the sweep ran
-  deliveredAt  DateTime? // always null in this story; Story 4-8 stamps it
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
-  createdBy    String    @default("system")
-  updatedBy    String    @default("system")
-  deletedAt    DateTime?
-
-  tenant    Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  deal      Deal   @relation(fields: [dealId], references: [id], onDelete: Cascade)
-  recipient User   @relation("DealReminderRecipient", fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([tenantId, dealId, reason, sweepDate])
-  @@index([tenantId])
-  @@index([tenantId, userId, sweepDate])
-  @@index([tenantId, dealId])
-}
-
-/// Per-user snooze of deal health reminders (Story 3.7).
-/// A separate table, never a column on Deal — Deal.updatedAt is @updatedAt,
-/// so writing a snooze onto the deal row would bump updatedAt, which AC 20
-/// uses as an activity signal: snoozing a stale deal would silently reset its
-/// staleness clock and make it look healthy. Snooze is per user, not per deal.
-model DealReminderSnooze {
-  id           String    @id @default(uuid())
-  tenantId     String
-  dealId       String
-  userId       String
-  snoozedUntil DateTime
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
-  createdBy    String    @default("system")
-  updatedBy    String    @default("system")
-  deletedAt    DateTime?
-
-  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  deal   Deal   @relation(fields: [dealId], references: [id], onDelete: Cascade)
-  user   User   @relation("DealReminderSnoozeUser", fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([tenantId, dealId, userId])
-  @@index([tenantId])
-  @@index([tenantId, userId])
-}
-
-/// Per-user reminder delivery preferences (Story 3.7).
-/// emailFrequency is a String validated in the service against the
-/// EMAIL_FREQUENCIES tuple (DAILY | WEEKLY | OFF). A user with no row is
-/// treated as all-defaults (DAILY, all toggles true) — reads must not create
-/// rows as a side effect.
-model UserReminderPreference {
-  id                String    @id @default(uuid())
-  tenantId          String
-  userId            String    @unique // 1:1 with User — user IDs are globally unique UUIDs
-  emailFrequency    String    @default("DAILY")
-  notifyNoActivity  Boolean   @default(true)
-  notifyClosingSoon Boolean   @default(true)
-  notifyAtRisk      Boolean   @default(true)
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
-  createdBy         String    @default("system")
-  updatedBy         String    @default("system")
-  deletedAt         DateTime?
-
-  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  user   User   @relation("UserReminderPreference", fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([tenantId, userId])
-  @@index([tenantId])
-}
-
 /// Per-user activity auto-logging preferences (Story 4.2).
 /// Shape and defaults copied from UserReminderPreference. A user with no row
 /// is treated as all-defaults (all toggles true) — reads must not create rows
@@ -1064,8 +697,6 @@ model UserActivityLogPreference {
   tenantId            String
   userId              String    @unique // 1:1 with User — user IDs are globally unique UUIDs
   logTaskCompleted    Boolean   @default(true)
-  logDealCreated      Boolean   @default(true)
-  logDealStageChanged Boolean   @default(true)
   logMessageSent      Boolean   @default(true)
   logMessageReceived  Boolean   @default(true)
   logMeetingScheduled Boolean   @default(true)
@@ -1080,34 +711,6 @@ model UserActivityLogPreference {
 
   @@unique([tenantId, userId])
   @@index([tenantId])
-}
-
-/// Point-in-time snapshot of the tenant-wide weighted forecast for one period.
-/// Written through on every salesForecast query (no cron in this codebase).
-/// Enables forecast-vs-actual accuracy, which cannot be reconstructed after the
-/// fact because closing a deal overwrites Deal.probability with 100/0.
-model ForecastSnapshot {
-  id            String    @id @default(uuid())
-  tenantId      String
-  periodStart   DateTime
-  periodEnd     DateTime
-  snapshotDate  DateTime // normalized to UTC midnight — one row per tenant/period/day
-  forecastValue Float     @default(0)
-  commitValue   Float     @default(0)
-  bestCaseValue Float     @default(0)
-  pipelineValue Float     @default(0)
-  dealCount     Int       @default(0)
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  createdBy     String    @default("system")
-  updatedBy     String    @default("system")
-  deletedAt     DateTime?
-
-  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-
-  @@unique([tenantId, periodStart, snapshotDate])
-  @@index([tenantId])
-  @@index([tenantId, periodStart])
 }
 
 model MessageReadReceipt {
@@ -1206,7 +809,6 @@ model Task {
   dueDate     DateTime?
   assignedTo  String
   contactId   String?
-  dealId      String?
   completedAt DateTime?
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
@@ -1232,7 +834,6 @@ model Task {
   tenant   Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   assignee User     @relation("TaskAssignee", fields: [assignedTo], references: [id], onDelete: Cascade)
   contact  Contact? @relation(fields: [contactId], references: [id], onDelete: Cascade)
-  deal     Deal?    @relation(fields: [dealId], references: [id], onDelete: Cascade)
 
   // Story 4.6: self-relations (AC 5) — three distinct relation names.
   parentTask  Task?  @relation("TaskRecurrence", fields: [parentTaskId], references: [id], onDelete: SetNull)
@@ -1244,69 +845,22 @@ model Task {
   calendarEvents TaskCalendarEvent[]
   timeEntries    TimeEntry[]
   notifications  Notification[]      @relation("TaskNotification")
-  churnPreventionSnapshots CustomerAnalyticsSnapshot[] @relation("ChurnPreventionTask")
 
+  @@unique([tenantId, automationKey])
   @@index([tenantId])
   @@index([tenantId, assignedTo])
   @@index([tenantId, status])
   @@index([tenantId, dueDate])
   @@index([tenantId, contactId])
-  @@index([tenantId, dealId])
   // Story 4.6: occurrence lookup + sweep template scan (AC 4)
   @@index([tenantId, parentTaskId])
   @@index([tenantId, isRecurring])
-  // Story 6.7: same trigger (e.g. CHURN_RISK:<contactId>:<date>) can never
-  // create a second task — P2002 on this unique is an idempotent success.
-  @@unique([tenantId, automationKey])
-}
-
-/// Story 6.7: daily materialized customer analytics snapshot (AC 8, 15-16).
-/// One row per (tenant, contact, UTC day). This is the source for LTV trend
-/// and acquisition-cohort analysis — never inferred from current values.
-/// tenantId is MANDATORY on every access (no RLS backstop); visibility for
-/// API reads is ALWAYS derived through the active parent Contact, never by
-/// resolving visibility on this child row (no ownerId column).
-model CustomerAnalyticsSnapshot {
-  id                      String    @id @default(uuid())
-  tenantId                String
-  contactId               String
-  snapshotDate            DateTime // UTC midnight, one row/contact/day
-  acquisitionCohort       String // YYYY-MM derived from Contact.createdAt
-  lifetimeValue           Float
-  churnRiskScore          Float
-  churnRisk               String
-  lastActivityDate        DateTime?
-  inactivityRisk          Float
-  dealWinRate             Float
-  engagementScore         Float
-  wonDealCount            Int
-  lostDealCount           Int
-  qualifyingActivityCount Int
-  churnPreventionTaskId   String?
-  createdAt               DateTime  @default(now())
-  updatedAt               DateTime  @updatedAt
-  createdBy               String    @default("system")
-  updatedBy               String    @default("system")
-  deletedAt               DateTime?
-
-  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  contact Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
-  churnPreventionTask Task? @relation("ChurnPreventionTask", fields: [churnPreventionTaskId], references: [id], onDelete: SetNull)
-
-  // Unique (tenant, contact, day) is the idempotency backstop for daily
-  // reruns and concurrent processor instances (Contract A3).
-  @@unique([tenantId, contactId, snapshotDate])
-  @@index([tenantId, snapshotDate])
-  @@index([tenantId, acquisitionCohort, snapshotDate])
-  @@index([tenantId, churnRisk, snapshotDate])
-  @@index([tenantId, contactId, snapshotDate(sort: Desc)])
-  @@index([tenantId])
 }
 
 /// Tenant-global task template catalogue (Story 4.1).
 /// name is the picker label (e.g. "Discovery call follow-up"), title is the
 /// title stamped onto the created task. No @@unique([tenantId, name]) — soft
-/// delete + unique is a documented trap (DealStage); uniqueness is enforced
+/// delete + unique is a documented trap; uniqueness is enforced
 /// case-insensitively in TaskTemplatesService over deletedAt: null rows.
 model TaskTemplate {
   id               String       @id @default(uuid())
@@ -1332,7 +886,7 @@ model TaskTemplate {
 /// Like TaskCalendarEvent and Activity, this is a derived link row: it is
 /// created and hard-deleted, never updated, so it deliberately carries NO
 /// `deletedAt`, `updatedAt` or `updatedBy`. That is what makes the @@unique
-/// below safe — the DealStage soft-delete + @@unique trap only bites a
+/// below safe — a soft-delete + @@unique trap only bites a
 /// soft-deleting model.
 model TaskDependency {
   id              String   @id @default(uuid())
@@ -1432,7 +986,7 @@ model CalendarConnection {
 
 /// Per-task-per-connection link and sync-state row (Story 4.3, AC 6-7).
 /// NO deletedAt — this row is hard-deleted. Soft delete plus @@unique is a
-/// documented trap in this repo (DealStage): a deleted row's key stays
+/// documented trap in this repo: a deleted row's key stays
 /// reserved forever and re-creating it fails with an opaque P2002. A link row
 /// is a derived record; when the task is unlinked, deleted, or the connection
 /// is removed, delete the row. This exemption is deliberate, not a
@@ -1474,15 +1028,14 @@ model TaskCalendarEvent {
 
 /// In-app notification row persisted in Postgres so unread state survives
 /// reload (architecture.md:944-946). type is a String validated against a
-/// const tuple in the service rather than in the DB — Deal.winLossReason set
-/// the precedent of validating a fixed vocabulary in the service.
+/// const tuple in the service rather than in the DB.
 /// Recipient-scoped (userId), not visibility-scoped — no NEW resource is
 /// created and no requirePermission is ever called on the notification
 /// surface. dedupeKey is unique-when-set; NULL dedupeKeys never collide
 /// because Postgres treats NULLs as distinct in unique indexes (the same
 /// mechanism Activity relies on at schema.prisma:432-434).
 ///
-/// Association: two nullable FK columns (dealId / taskId), at most one
+/// Association: one nullable task FK.
 /// non-null, onDelete: Cascade on all four relations. Cascade on recipient
 /// (not Restrict as Note.author uses) is deliberate: a notification is
 /// worthless without its recipient, unlike an authored note which is a
@@ -1492,28 +1045,26 @@ model TaskCalendarEvent {
 /// row is derived from an already-audited mutation, so no AuditLog rows are
 /// written for notifications (the Activity derived-record carve-out applies).
 model Notification {
-  id        String    @id @default(uuid())
-  tenantId  String
-  userId    String // the recipient
-  type      String // TASK_ASSIGNED | DEAL_REMINDER | DEAL_MENTION
-  title     String
-  body      String?
-  dealId    String?
-  taskId    String?
+  id             String    @id @default(uuid())
+  tenantId       String
+  userId         String // the recipient
+  type           String // TASK_ASSIGNED | DEAL_REMINDER | DEAL_MENTION
+  title          String
+  body           String?
+  taskId         String?
   reportExportId String? // Story 6.6 — third mutually-exclusive target
-  dedupeKey String?
-  readAt    DateTime?
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  createdBy String    @default("system")
-  updatedBy String    @default("system")
-  deletedAt DateTime?
+  dedupeKey      String?
+  readAt         DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  createdBy      String    @default("system")
+  updatedBy      String    @default("system")
+  deletedAt      DateTime?
 
-  tenant    Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  recipient User   @relation("NotificationRecipient", fields: [userId], references: [id], onDelete: Cascade)
-  deal      Deal?  @relation("DealNotification", fields: [dealId], references: [id], onDelete: Cascade)
-  task      Task?  @relation("TaskNotification", fields: [taskId], references: [id], onDelete: Cascade)
-  // Story 6.6: third mutually-exclusive notification target (deal/task/
+  tenant       Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  recipient    User          @relation("NotificationRecipient", fields: [userId], references: [id], onDelete: Cascade)
+  task         Task?         @relation("TaskNotification", fields: [taskId], references: [id], onDelete: Cascade)
+  // Story 6.6: report export is an optional second notification target
   // report-export exactly one). Never carries the signed URL — only the
   // export row id; the frontend mints a fresh URL on owner download.
   reportExport ReportExport? @relation("ReportExportNotification", fields: [reportExportId], references: [id], onDelete: Cascade)
@@ -1759,7 +1310,7 @@ model ReportExport {
   sourceType          ReportExportSourceType @default(SAVED_REPORT)
   userId              String // requester, execution identity, history owner
   format              ReportDeliveryFormat
-  status              ReportExportStatus @default(PENDING)
+  status              ReportExportStatus     @default(PENDING)
   filters             Json? // immutable server-normalized effective sales config snapshot (SAVED_REPORT) or validated activity filters (ACTIVITY_REPORT)
   filterSummary       String // safe human-readable effective scope
   dateRangeStart      DateTime?
@@ -1769,21 +1320,21 @@ model ReportExport {
   objectPath          String? // private; never exposed by GraphQL
   fileSizeBytes       Int?
   expectedTotalRows   Int? // request-time authoritative CUSTOM total (Contract C14); null for sales
-  attemptCount        Int                @default(0)
+  attemptCount        Int                    @default(0)
   nextRetryAt         DateTime?
   processingStartedAt DateTime?
   completedAt         DateTime?
   errorCode           String?
   errorMessage        String? // sanitized/truncated; no data/storage URL
-  createdAt           DateTime           @default(now())
-  updatedAt           DateTime           @updatedAt
+  createdAt           DateTime               @default(now())
+  updatedAt           DateTime               @updatedAt
   createdBy           String
   updatedBy           String
   deletedAt           DateTime?
 
-  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  report   Report? @relation(fields: [reportId], references: [id], onDelete: Cascade)
-  owner    User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tenant        Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  report        Report?        @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  owner         User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   notifications Notification[] @relation("ReportExportNotification")
 
   // Owner history listing — newest first

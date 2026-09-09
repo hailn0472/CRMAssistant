@@ -3,11 +3,10 @@
 import { lazy, Suspense } from 'react'
 
 import { CardSkeleton } from '@/components/shared'
-import { AtRiskDealsWidget } from './AtRiskDealsWidget'
 import type { WidgetData, WidgetResultData } from '@/services/dashboard.service'
 
 // React.lazy + Suspense keeps recharts out of the initial bundle
-// when a dashboard may have only metric cards (ProductivityReport.tsx pattern).
+// when a dashboard may have only metric cards.
 const MetricCardWidget = lazy(() =>
   import('./widgets/MetricCardWidget').then((m) => ({ default: m.MetricCardWidget })),
 )
@@ -44,13 +43,6 @@ interface WidgetRendererProps {
  */
 export function WidgetRenderer({ widget, data }: WidgetRendererProps): React.JSX.Element {
   const fallback = <CardSkeleton />
-
-  // AC 78 — AT_RISK_DEALS keeps the 3.7 widget (AtRiskDealsWidget) mounted
-  // inside the frame, not the generic TableWidget. It fetches its own data via
-  // getAtRiskDeals, so it ignores the normalized WidgetData envelope.
-  if (data.source === 'AT_RISK_DEALS') {
-    return <AtRiskDealsWidget />
-  }
 
   switch (widget.type) {
     case 'METRIC_CARD':

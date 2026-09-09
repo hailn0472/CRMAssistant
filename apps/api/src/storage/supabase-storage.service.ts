@@ -15,7 +15,7 @@ export const DEFAULT_REPORT_EXPORT_BUCKET = 'report-exports'
  * auth-scoped client. The client is created lazily on first use: constructing
  * must never throw, or the whole API fails to boot in any environment that has
  * not yet been given the service-role key. Object paths are tenant-first
- * (`deals/{tenantId}/{dealId}/{documentId}-{sanitizedFileName}`), matching the
+ * (tenant-scoped object paths), matching the
  * `avatars/{tenantId}/{userId}.{ext}` convention from Story 2.1.
  *
  * Every Supabase `{ error }` result maps to a 500 — the API registers no global

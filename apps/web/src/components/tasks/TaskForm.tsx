@@ -14,7 +14,6 @@ import {
   getTaskTemplates,
 } from '@/services/task.service'
 import { getContact, getContacts } from '@/services/contact.service'
-import { getDeals } from '@/services/deal.service'
 import { searchUsers } from '@/services/owner.service'
 import {
   TASK_PRIORITIES,
@@ -36,7 +35,6 @@ const taskSchema = z
     dueDate: z.string().optional(),
     assignedTo: z.string().optional(),
     contactId: z.string().optional(),
-    dealId: z.string().optional(),
     // Story 4.6 (AC 64-67): recurrence fields
     isRecurring: z.boolean().optional().default(false),
     recurrencePattern: z.string().optional(),
@@ -89,8 +87,6 @@ export function TaskForm({
 
   const [contactSearch, setContactSearch] = useState('')
   const [showContactDropdown, setShowContactDropdown] = useState(false)
-  const [dealSearch, setDealSearch] = useState('')
-  const [showDealDropdown, setShowDealDropdown] = useState(false)
   const [assigneeSearch, setAssigneeSearch] = useState('')
   const [showAssigneeDropdown, setShowAssigneeDropdown] = useState(false)
   const [templateId, setTemplateId] = useState('')
@@ -105,12 +101,6 @@ export function TaskForm({
     queryKey: ['contacts', 'search', contactSearch],
     queryFn: () => getContacts(1, 20, { search: contactSearch || undefined }),
     enabled: showContactDropdown,
-  })
-
-  const { data: dealsData } = useQuery({
-    queryKey: ['deals', 'search', dealSearch],
-    queryFn: () => getDeals(1, 20, { search: dealSearch || undefined }),
-    enabled: showDealDropdown,
   })
 
   const { data: assigneeResults } = useQuery({
@@ -142,7 +132,6 @@ export function TaskForm({
       dueDate: task?.dueDate ? new Date(task.dueDate).toISOString().split('T')[0] : '',
       assignedTo: task?.assignedTo ?? '',
       contactId: task?.contactId ?? prefillContactId ?? '',
-      dealId: task?.dealId ?? '',
       // Story 4.6 (AC 64-67): recurrence defaults
       isRecurring: task?.isRecurring ?? false,
       recurrencePattern: task?.recurrencePattern ?? '',
@@ -159,7 +148,6 @@ export function TaskForm({
   }, [prefillContact])
 
   const selectedContactId = watch('contactId')
-  const selectedDealId = watch('dealId')
   const selectedAssigneeId = watch('assignedTo')
   const isRecurring = watch('isRecurring')
 
@@ -173,7 +161,6 @@ export function TaskForm({
         dueDate: values.dueDate || undefined,
         assignedTo: values.assignedTo || undefined,
         contactId: values.contactId || undefined,
-        dealId: values.dealId || undefined,
         // Story 4.6 (AC 64-67): recurrence payload
         isRecurring: values.isRecurring || undefined,
         recurrencePattern: values.isRecurring ? values.recurrencePattern || undefined : undefined,
@@ -414,50 +401,6 @@ export function TaskForm({
               ) : null}
             </div>
             <input type="hidden" {...register('contactId')} />
-          </Field>
-
-          <Field label="Deal" error={errors.dealId?.message}>
-            <div className="relative">
-              <input
-                className={inputClass}
-                placeholder="Search deals..."
-                value={dealSearch}
-                onChange={(e) => {
-                  setDealSearch(e.target.value)
-                  setShowDealDropdown(true)
-                }}
-                onFocus={() => setShowDealDropdown(true)}
-                aria-label="Search deals"
-              />
-              {showDealDropdown && dealsData ? (
-                <div className="absolute z-10 mt-1 max-h-48 w-full overflow-y-auto rounded-[9px] border border-[#e6e6eb] bg-white shadow-lg">
-                  {dealsData.items.length === 0 ? (
-                    <div className="px-3 py-2 text-[13px] text-[#8c8c96]">No deals found</div>
-                  ) : (
-                    dealsData.items.map((deal) => (
-                      <button
-                        key={deal.id}
-                        type="button"
-                        className={cn(
-                          'block w-full px-3 py-2 text-left text-[13px] hover:bg-[#f4f4f6]',
-                          selectedDealId === deal.id
-                            ? 'bg-[#f4f4f6] font-medium text-[#1b1b1f]'
-                            : 'text-[#4b4b55]',
-                        )}
-                        onClick={() => {
-                          setValue('dealId', deal.id, { shouldValidate: true })
-                          setDealSearch(deal.title)
-                          setShowDealDropdown(false)
-                        }}
-                      >
-                        {deal.title}
-                      </button>
-                    ))
-                  )}
-                </div>
-              ) : null}
-            </div>
-            <input type="hidden" {...register('dealId')} />
           </Field>
         </Section>
 

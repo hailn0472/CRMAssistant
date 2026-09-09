@@ -38,16 +38,11 @@ export const MAX_CHART_POINTS = 24
 // ─── Widget sources ─────────────────────────────────────────────────────────
 
 export type WidgetSource =
-  | 'PIPELINE_BY_STAGE'
-  | 'PIPELINE_VALUE'
-  | 'SALES_FORECAST'
-  | 'WIN_LOSS'
-  | 'AT_RISK_DEALS'
   | 'MY_TASKS'
   | 'TASK_STATS'
   | 'RECENT_ACTIVITY'
-  | 'TIME_TRACKED'
   | 'CONTACT_COUNT'
+  | 'LEAD_FUNNEL'
 
 export const WIDGET_SOURCES: Record<
   WidgetSource,
@@ -57,31 +52,6 @@ export const WIDGET_SOURCES: Record<
     defaultTitle: string
   }
 > = {
-  PIPELINE_BY_STAGE: {
-    permission: { resource: 'DEAL', action: 'READ' },
-    allowedTypes: ['BAR_CHART', 'FUNNEL', 'TABLE'] as const,
-    defaultTitle: 'Pipeline by Stage',
-  },
-  PIPELINE_VALUE: {
-    permission: { resource: 'DEAL', action: 'READ' },
-    allowedTypes: ['METRIC_CARD'] as const,
-    defaultTitle: 'Pipeline Value',
-  },
-  SALES_FORECAST: {
-    permission: { resource: 'REPORT', action: 'READ' },
-    allowedTypes: ['LINE_CHART', 'METRIC_CARD'] as const,
-    defaultTitle: 'Sales Forecast',
-  },
-  WIN_LOSS: {
-    permission: { resource: 'REPORT', action: 'READ' },
-    allowedTypes: ['PIE_CHART', 'METRIC_CARD'] as const,
-    defaultTitle: 'Win/Loss Analysis',
-  },
-  AT_RISK_DEALS: {
-    permission: { resource: 'DEAL', action: 'READ' },
-    allowedTypes: ['TABLE'] as const,
-    defaultTitle: 'At-Risk Deals',
-  },
   MY_TASKS: {
     permission: { resource: 'TASK', action: 'READ' },
     allowedTypes: ['TASK_LIST'] as const,
@@ -97,15 +67,15 @@ export const WIDGET_SOURCES: Record<
     allowedTypes: ['ACTIVITY_FEED'] as const,
     defaultTitle: 'Recent Activity',
   },
-  TIME_TRACKED: {
-    permission: { resource: 'REPORT', action: 'READ' },
-    allowedTypes: ['BAR_CHART', 'METRIC_CARD'] as const,
-    defaultTitle: 'Time Tracked',
-  },
   CONTACT_COUNT: {
     permission: { resource: 'CONTACT', action: 'READ' },
     allowedTypes: ['METRIC_CARD'] as const,
     defaultTitle: 'Contact Count',
+  },
+  LEAD_FUNNEL: {
+    permission: { resource: 'CONTACT', action: 'READ' },
+    allowedTypes: ['BAR_CHART', 'PIE_CHART', 'FUNNEL'] as const,
+    defaultTitle: 'Lead Funnel',
   },
 }
 

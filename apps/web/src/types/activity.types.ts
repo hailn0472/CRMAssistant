@@ -3,13 +3,11 @@ export type ActivityTypeValue =
   | 'CALL_MADE'
   | 'MEETING_SCHEDULED'
   | 'NOTE_ADDED'
-  | 'DEAL_CREATED'
   | 'CONTACT_CREATED'
   | 'CONTACT_UPDATED'
   | 'CONTACT_OWNER_CHANGED'
   // Story 4.2 auto-logged types
   | 'TASK_COMPLETED'
-  | 'DEAL_STAGE_CHANGED'
   | 'MESSAGE_RECEIVED'
   | 'MESSAGE_SENT'
 
@@ -21,7 +19,7 @@ export type Activity = {
   description: string | null
   createdAt: string
   createdBy: string
-  // Story 4.2: 'TASK' | 'DEAL' | 'MESSAGE' when auto-logged, null for manual notes.
+  // TASK or MESSAGE when auto-logged, null for manual notes.
   source: string | null
 }
 
@@ -57,8 +55,6 @@ export const SYSTEM_TYPES: ActivityTypeValue[] = [
   'CONTACT_CREATED',
   'CONTACT_UPDATED',
   'CONTACT_OWNER_CHANGED',
-  'DEAL_CREATED',
-  'DEAL_STAGE_CHANGED',
 ]
 
 export const ACTIVITY_TYPE_LABELS: Record<ActivityTypeValue, string> = {
@@ -66,12 +62,10 @@ export const ACTIVITY_TYPE_LABELS: Record<ActivityTypeValue, string> = {
   CALL_MADE: 'Call Made',
   MEETING_SCHEDULED: 'Meeting Scheduled',
   NOTE_ADDED: 'Note Added',
-  DEAL_CREATED: 'Deal Created',
   CONTACT_CREATED: 'Contact Created',
   CONTACT_UPDATED: 'Contact Updated',
   CONTACT_OWNER_CHANGED: 'Owner Changed',
   TASK_COMPLETED: 'Task Completed',
-  DEAL_STAGE_CHANGED: 'Stage Changed',
   MESSAGE_RECEIVED: 'Message Received',
   MESSAGE_SENT: 'Message Sent',
 }
