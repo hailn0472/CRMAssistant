@@ -3,6 +3,7 @@ import { DuplicateDetectionService } from './duplicate-detection.service'
 import { ImportProgressStore } from './import-progress.store'
 import { ImportService } from './import.service'
 import type { CsvRow, DuplicateCheckResult, ParsedCsv } from './dto/import-result.dto'
+import type { BackgroundMetricsPort } from '../observability/metrics.types'
 
 type MockPrisma = {
   contact: {
@@ -614,6 +615,80 @@ describe('ImportService', () => {
       const started = service.startImport(TENANT_ID, USER_ID, parsed([row('a@example.com')]))
 
       expect(service.getStatus(started.importId, 'other-tenant')).toBeNull()
+    })
+  })
+
+  describe('background metrics', () => {
+    function serviceWithMetrics(metrics: BackgroundMetricsPort): ImportService {
+      return new ImportService(
+        prisma as unknown as ConstructorParameters<typeof ImportService>[0],
+        duplicateDetection,
+        progressStore,
+        auditService as unknown as AuditService,
+        metrics,
+      )
+    }
+
+    it('records success and duration for a completed import', async () => {
+      const metrics: BackgroundMetricsPort = {
+        recordJob: jest.fn(),
+        observeJobDuration: jest.fn(),
+      }
+      prisma.contact.createMany.mockResolvedValue({ count: 1 })
+      const instrumented = serviceWithMetrics(metrics)
+
+      await expect(
+        instrumented.executeImport(TENANT_ID, USER_ID, parsed([row('a@example.com')])),
+      ).resolves.toEqual(expect.objectContaining({ imported: 1 }))
+
+      expect(metrics.recordJob).toHaveBeenCalledWith({ jobGroup: 'import', outcome: 'success' })
+      expect(metrics.observeJobDuration).toHaveBeenCalledWith(
+        { jobGroup: 'import', outcome: 'success' },
+        expect.any(Number),
+      )
+    })
+
+    it('records error when every background batch fails and progress is failed', async () => {
+      const metrics: BackgroundMetricsPort = {
+        recordJob: jest.fn(),
+        observeJobDuration: jest.fn(),
+      }
+      const importId = 'import-fatal'
+      progressStore.start(importId, TENANT_ID, 1, 1)
+      prisma.$transaction.mockRejectedValueOnce(new Error('batch unavailable'))
+      const instrumented = serviceWithMetrics(metrics)
+
+      await instrumented.executeImport(
+        TENANT_ID,
+        USER_ID,
+        parsed([row('a@example.com')]),
+        'skip',
+        importId,
+      )
+
+      expect(progressStore.get(importId, TENANT_ID)).toMatchObject({ status: 'failed' })
+      expect(metrics.recordJob).toHaveBeenCalledWith({ jobGroup: 'import', outcome: 'error' })
+      expect(metrics.observeJobDuration).toHaveBeenCalledWith(
+        { jobGroup: 'import', outcome: 'error' },
+        expect.any(Number),
+      )
+    })
+
+    it('keeps partial invalid-row results successful and ignores metric failures', async () => {
+      const metrics: BackgroundMetricsPort = {
+        recordJob: jest.fn(() => {
+          throw new Error('metrics unavailable')
+        }),
+        observeJobDuration: jest.fn(() => {
+          throw new Error('metrics unavailable')
+        }),
+      }
+      const instrumented = serviceWithMetrics(metrics)
+      prisma.contact.createMany.mockResolvedValue({ count: 1 })
+
+      await expect(
+        instrumented.executeImport(TENANT_ID, USER_ID, parsed([row('a@example.com'), row('')])),
+      ).resolves.toEqual(expect.objectContaining({ imported: 1, failed: 1 }))
     })
   })
 })

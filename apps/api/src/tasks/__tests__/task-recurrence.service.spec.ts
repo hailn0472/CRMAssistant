@@ -1,6 +1,7 @@
 import { TaskRecurrenceService } from '../task-recurrence.service'
 import type { PrismaService } from '../../prisma/prisma.service'
 import type { TaskPubSubService } from '../task-pubsub.service'
+import type { BackgroundMetricsPort } from '../../observability/metrics.types'
 
 const TENANT = 'tenant-1'
 const USER = 'user-1'
@@ -40,11 +41,15 @@ interface MockServiceBundle {
   pubsub: { publish: jest.Mock }
 }
 
-function makeService(prisma: MockPrisma): MockServiceBundle {
+function makeService(
+  prisma: MockPrisma,
+  backgroundMetrics?: BackgroundMetricsPort,
+): MockServiceBundle {
   const pubsub = { publish: jest.fn() }
   const service = new TaskRecurrenceService(
     prisma as unknown as PrismaService,
     pubsub as unknown as TaskPubSubService,
+    backgroundMetrics,
   )
   return { service, pubsub }
 }
@@ -69,6 +74,65 @@ describe('TaskRecurrenceService', () => {
       )
 
       expect(result).toEqual({ generated: 0, templatesScanned: 0 })
+    })
+
+    it('records bounded success labels and duration without affecting the result', async () => {
+      const metrics: BackgroundMetricsPort = {
+        recordJob: jest.fn(),
+        observeJobDuration: jest.fn(),
+      }
+      const { service } = makeService(prisma, metrics)
+
+      await expect(
+        service.runRecurringTaskGeneration(TENANT, USER, new Date('2026-08-08T00:00:00.000Z')),
+      ).resolves.toEqual({ generated: 0, templatesScanned: 0 })
+
+      expect(metrics.recordJob).toHaveBeenCalledWith({
+        jobGroup: 'task_recurrence',
+        outcome: 'success',
+      })
+      expect(metrics.observeJobDuration).toHaveBeenCalledWith(
+        { jobGroup: 'task_recurrence', outcome: 'success' },
+        expect.any(Number),
+      )
+    })
+
+    it('keeps recurrence behavior when metrics throw', async () => {
+      const metrics: BackgroundMetricsPort = {
+        recordJob: jest.fn(() => {
+          throw new Error('metrics unavailable')
+        }),
+        observeJobDuration: jest.fn(() => {
+          throw new Error('metrics unavailable')
+        }),
+      }
+      const { service } = makeService(prisma, metrics)
+
+      await expect(
+        service.runRecurringTaskGeneration(TENANT, USER, new Date('2026-08-08T00:00:00.000Z')),
+      ).resolves.toEqual({ generated: 0, templatesScanned: 0 })
+    })
+
+    it('records error labels when the recurrence query fails', async () => {
+      const metrics: BackgroundMetricsPort = {
+        recordJob: jest.fn(),
+        observeJobDuration: jest.fn(),
+      }
+      prisma.task.findMany.mockRejectedValueOnce(new Error('database unavailable'))
+      const { service } = makeService(prisma, metrics)
+
+      await expect(
+        service.runRecurringTaskGeneration(TENANT, USER, new Date('2026-08-08T00:00:00.000Z')),
+      ).rejects.toThrow('database unavailable')
+
+      expect(metrics.recordJob).toHaveBeenCalledWith({
+        jobGroup: 'task_recurrence',
+        outcome: 'error',
+      })
+      expect(metrics.observeJobDuration).toHaveBeenCalledWith(
+        { jobGroup: 'task_recurrence', outcome: 'error' },
+        expect.any(Number),
+      )
     })
 
     it('generates occurrences for a daily template', async () => {

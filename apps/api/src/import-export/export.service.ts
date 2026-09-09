@@ -1,9 +1,11 @@
-import { Injectable } from '@nestjs/common'
+import { Inject, Injectable, Optional } from '@nestjs/common'
 import { Readable } from 'stream'
+import { performance } from 'node:perf_hooks'
 
 import { resolveSharedRecordIds } from '../common/guards/sharing-check'
 import { resolveVisibilityFilter } from '../common/guards/visibility-check'
 import { PrismaService } from '../prisma/prisma.service'
+import { BACKGROUND_METRICS_PORT, type BackgroundMetricsPort } from '../observability/metrics.types'
 import type { Prisma } from '@prisma/client'
 
 export type ExportFilters = {
@@ -49,7 +51,12 @@ type ExportedContact = {
 
 @Injectable()
 export class ExportService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional()
+    @Inject(BACKGROUND_METRICS_PORT)
+    private readonly backgroundMetrics?: BackgroundMetricsPort,
+  ) {}
 
   /**
    * Export contacts as a CSV stream, scoped to the caller's tenant *and* their
@@ -64,8 +71,14 @@ export class ExportService {
     userId: string,
     filters?: ExportFilters,
   ): Promise<Readable> {
-    const where = await this.buildWhere(tenantId, userId, filters)
-    return Readable.from(this.generateCsvChunks(where))
+    const startedAt = performance.now()
+    try {
+      const where = await this.buildWhere(tenantId, userId, filters)
+      return Readable.from(this.measureExport(this.generateCsvChunks(where), startedAt))
+    } catch (error) {
+      this.recordBackgroundJob('error', performance.now() - startedAt)
+      throw error
+    }
   }
 
   private async buildWhere(
@@ -173,6 +186,33 @@ export class ExportService {
 
       if (contacts.length < CHUNK_SIZE) return
       cursor = contacts[contacts.length - 1]!.id
+    }
+  }
+
+  private async *measureExport(
+    source: AsyncIterable<string>,
+    startedAt: number,
+  ): AsyncGenerator<string> {
+    let completed = false
+    try {
+      for await (const chunk of source) yield chunk
+      completed = true
+    } finally {
+      this.recordBackgroundJob(completed ? 'success' : 'error', performance.now() - startedAt)
+    }
+  }
+
+  private recordBackgroundJob(outcome: 'success' | 'error', durationMilliseconds: number): void {
+    const labels = { jobGroup: 'export' as const, outcome }
+    try {
+      this.backgroundMetrics?.recordJob(labels)
+    } catch {
+      // Observability must never change export business behavior.
+    }
+    try {
+      this.backgroundMetrics?.observeJobDuration(labels, Math.max(0, durationMilliseconds) / 1_000)
+    } catch {
+      // Observability must never change export business behavior.
     }
   }
 

@@ -1,5 +1,6 @@
 import { resolveSharedRecordIds } from '../common/guards/sharing-check'
 import { resolveVisibilityFilter } from '../common/guards/visibility-check'
+import type { BackgroundMetricsPort } from '../observability/metrics.types'
 import { ExportService } from './export.service'
 import type { Prisma } from '@prisma/client'
 
@@ -68,6 +69,7 @@ function andConditions(where: Prisma.ContactWhereInput): Prisma.ContactWhereInpu
 describe('ExportService', () => {
   let service: ExportService
   let prisma: MockPrisma
+  let backgroundMetrics: BackgroundMetricsPort | undefined
 
   const TENANT_ID = 'tenant-1'
   const USER_ID = 'user-1'
@@ -76,10 +78,14 @@ describe('ExportService', () => {
   beforeEach(() => {
     jest.clearAllMocks()
     prisma = makePrisma()
+    backgroundMetrics = undefined
     // Default: an unrestricted user (ADMIN / VIEW_ALL_DATA bypass)
     mockResolveVisibilityFilter.mockResolvedValue(undefined)
     mockResolveSharedRecordIds.mockResolvedValue([])
-    service = new ExportService(prisma as unknown as ConstructorParameters<typeof ExportService>[0])
+    service = new ExportService(
+      prisma as unknown as ConstructorParameters<typeof ExportService>[0],
+      backgroundMetrics,
+    )
   })
 
   async function exportCsv(
@@ -92,6 +98,14 @@ describe('ExportService', () => {
   function lastWhere(): Prisma.ContactWhereInput {
     const calls = prisma.contact.findMany.mock.calls
     return calls[calls.length - 1]![0].where as Prisma.ContactWhereInput
+  }
+
+  function withMetrics(metrics: BackgroundMetricsPort): void {
+    backgroundMetrics = metrics
+    service = new ExportService(
+      prisma as unknown as ConstructorParameters<typeof ExportService>[0],
+      backgroundMetrics,
+    )
   }
 
   describe('CSV generation', () => {
@@ -330,6 +344,54 @@ describe('ExportService', () => {
         { createdAt: 'desc' },
         { id: 'asc' },
       ])
+    })
+  })
+
+  describe('background metrics', () => {
+    it('records success and full stream duration', async () => {
+      const metrics: BackgroundMetricsPort = {
+        recordJob: jest.fn(),
+        observeJobDuration: jest.fn(),
+      }
+      withMetrics(metrics)
+
+      await exportCsv()
+
+      expect(metrics.recordJob).toHaveBeenCalledWith({ jobGroup: 'export', outcome: 'success' })
+      expect(metrics.observeJobDuration).toHaveBeenCalledWith(
+        { jobGroup: 'export', outcome: 'success' },
+        expect.any(Number),
+      )
+    })
+
+    it('records an error when stream generation fails', async () => {
+      const metrics: BackgroundMetricsPort = {
+        recordJob: jest.fn(),
+        observeJobDuration: jest.fn(),
+      }
+      withMetrics(metrics)
+      prisma.contact.findMany.mockRejectedValueOnce(new Error('database unavailable'))
+
+      await expect(exportCsv()).rejects.toThrow('database unavailable')
+      expect(metrics.recordJob).toHaveBeenCalledWith({ jobGroup: 'export', outcome: 'error' })
+      expect(metrics.observeJobDuration).toHaveBeenCalledWith(
+        { jobGroup: 'export', outcome: 'error' },
+        expect.any(Number),
+      )
+    })
+
+    it('keeps export behavior when metric recording throws', async () => {
+      const metrics: BackgroundMetricsPort = {
+        recordJob: jest.fn(() => {
+          throw new Error('metrics unavailable')
+        }),
+        observeJobDuration: jest.fn(() => {
+          throw new Error('metrics unavailable')
+        }),
+      }
+      withMetrics(metrics)
+
+      await expect(exportCsv()).resolves.toContain(HEADER)
     })
   })
 })

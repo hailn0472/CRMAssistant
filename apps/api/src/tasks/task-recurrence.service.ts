@@ -1,6 +1,8 @@
-import { Injectable, Logger } from '@nestjs/common'
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common'
+import { performance } from 'node:perf_hooks'
 
 import { PrismaService } from '../prisma/prisma.service'
+import { BACKGROUND_METRICS_PORT, type BackgroundMetricsPort } from '../observability/metrics.types'
 import { TaskPubSubService, PUBSUB_TASK_CHANGED } from './task-pubsub.service'
 import { computeDueOccurrences } from './task-recurrence'
 import { toUtcMidnight } from './task-due-status'
@@ -17,6 +19,9 @@ export class TaskRecurrenceService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly taskPubSub: TaskPubSubService,
+    @Optional()
+    @Inject(BACKGROUND_METRICS_PORT)
+    private readonly backgroundMetrics?: BackgroundMetricsPort,
   ) {}
 
   /**
@@ -26,6 +31,22 @@ export class TaskRecurrenceService {
    * Returns { generated, templatesScanned } for the ADMIN mutation result.
    */
   async runRecurringTaskGeneration(
+    tenantId: string,
+    actingUserId: string,
+    now: Date,
+  ): Promise<{ generated: number; templatesScanned: number }> {
+    const startedAt = performance.now()
+    try {
+      const result = await this.runRecurringTaskGenerationInternal(tenantId, actingUserId, now)
+      this.recordBackgroundJob('success', performance.now() - startedAt)
+      return result
+    } catch (error) {
+      this.recordBackgroundJob('error', performance.now() - startedAt)
+      throw error
+    }
+  }
+
+  private async runRecurringTaskGenerationInternal(
     tenantId: string,
     actingUserId: string,
     now: Date,
@@ -207,6 +228,20 @@ export class TaskRecurrenceService {
     } catch (error) {
       // AC 32: failures are caught and logged — the at-risk query must never 500
       this.logger.error('Lazy recurrence sweep failed', error)
+    }
+  }
+
+  private recordBackgroundJob(outcome: 'success' | 'error', durationMilliseconds: number): void {
+    const labels = { jobGroup: 'task_recurrence' as const, outcome }
+    try {
+      this.backgroundMetrics?.recordJob(labels)
+    } catch {
+      // Observability must never change recurrence generation behavior.
+    }
+    try {
+      this.backgroundMetrics?.observeJobDuration(labels, Math.max(0, durationMilliseconds) / 1_000)
+    } catch {
+      // Observability must never change recurrence generation behavior.
     }
   }
 }

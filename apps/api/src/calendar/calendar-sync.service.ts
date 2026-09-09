@@ -1,5 +1,6 @@
-import { Inject, Injectable, Logger } from '@nestjs/common'
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common'
 import type { CalendarProvider, Prisma } from '@prisma/client'
+import { performance } from 'node:perf_hooks'
 
 import { PrismaService } from '../prisma/prisma.service'
 import { AuditService } from '../audit/audit.service'
@@ -11,6 +12,12 @@ import type { CalendarProviderRegistry } from './calendar-providers.token'
 import type { CalendarProviderContext, CalendarRemoteEvent } from './calendar-provider.types'
 import { findCalendarConflict } from './calendar-conflict'
 import { mapTaskToCalendarEvent } from './calendar-event-mapper'
+import {
+  BACKGROUND_METRICS_PORT,
+  type BackgroundJobGroup,
+  type BackgroundMetricsPort,
+  type OutcomeLabel,
+} from '../observability/metrics.types'
 
 /**
  * Calendar sync engine (Story 4.3, AC 22-28).
@@ -80,6 +87,9 @@ export class CalendarSyncService {
     private readonly oauth: CalendarOAuthService,
     @Inject(CALENDAR_PROVIDERS)
     private readonly providers: CalendarProviderRegistry,
+    @Optional()
+    @Inject(BACKGROUND_METRICS_PORT)
+    private readonly backgroundMetrics?: BackgroundMetricsPort,
   ) {}
 
   // ── Push (CRM → calendar) ──────────────────────────────────────────────
@@ -93,7 +103,7 @@ export class CalendarSyncService {
    */
   async syncTaskSafe(task: CalendarTaskInput, now: Date = new Date()): Promise<void> {
     try {
-      await this.pushTaskToAssigneeCalendars(task, now)
+      await this.measureBackgroundJob('calendar', () => this.pushTaskToAssigneeCalendars(task, now))
     } catch (error) {
       this.logger.warn(
         `Calendar sync failed for task ${task.id}: ${error instanceof Error ? error.message : String(error)}`,
@@ -104,7 +114,7 @@ export class CalendarSyncService {
   /** Best-effort remote removal + link cleanup (AC 23 complete/delete/assign). */
   async removeTaskFromCalendarSafe(task: CalendarTaskInput, now: Date = new Date()): Promise<void> {
     try {
-      await this.removeTaskFromCalendar(task, now)
+      await this.measureBackgroundJob('calendar', () => this.removeTaskFromCalendar(task, now))
     } catch (error) {
       this.logger.warn(
         `Calendar removal failed for task ${task.id}: ${error instanceof Error ? error.message : String(error)}`,
@@ -205,20 +215,23 @@ export class CalendarSyncService {
    * startup or abort syncing the others (AC 26; facebook-history-sync pattern).
    */
   async syncAllConnections(): Promise<void> {
-    const connections = await this.prisma.calendarConnection.findMany({
-      where: { status: 'ACTIVE', deletedAt: null },
-    })
-    for (const connection of connections) {
-      try {
-        // eslint-disable-next-line no-await-in-loop
-        await this.syncConnection(connection.id)
-      } catch (error) {
-        this.logger.error(
-          `Calendar sync failed for connection ${connection.id}`,
-          error instanceof Error ? error.stack : String(error),
-        )
+    await this.measureCalendarSweep(async (markFailed) => {
+      const connections = await this.prisma.calendarConnection.findMany({
+        where: { status: 'ACTIVE', deletedAt: null },
+      })
+      for (const connection of connections) {
+        try {
+          // eslint-disable-next-line no-await-in-loop
+          await this.syncConnection(connection.id)
+        } catch (error) {
+          markFailed()
+          this.logger.error(
+            `Calendar sync failed for connection ${connection.id}`,
+            error instanceof Error ? error.stack : String(error),
+          )
+        }
       }
-    }
+    })
   }
 
   /**
@@ -228,25 +241,81 @@ export class CalendarSyncService {
    * never awaited, and this method never throws.
    */
   async syncMine(tenantId: string, userId: string, now: Date = new Date()): Promise<void> {
-    const connections = await this.prisma.calendarConnection.findMany({
-      where: { tenantId, userId, status: 'ACTIVE', deletedAt: null },
+    await this.measureCalendarSweep(async (markFailed) => {
+      const connections = await this.prisma.calendarConnection.findMany({
+        where: { tenantId, userId, status: 'ACTIVE', deletedAt: null },
+      })
+      for (const connection of connections) {
+        if (
+          connection.lastSyncedAt &&
+          now.getTime() - connection.lastSyncedAt.getTime() < LAZY_SWEEP_THROTTLE_MS
+        ) {
+          continue
+        }
+        try {
+          // eslint-disable-next-line no-await-in-loop
+          await this.syncConnection(connection.id, now)
+        } catch (error) {
+          markFailed()
+          this.logger.error(
+            `Calendar sync failed for connection ${connection.id}`,
+            error instanceof Error ? error.stack : String(error),
+          )
+        }
+      }
     })
-    for (const connection of connections) {
-      if (
-        connection.lastSyncedAt &&
-        now.getTime() - connection.lastSyncedAt.getTime() < LAZY_SWEEP_THROTTLE_MS
-      ) {
-        continue
-      }
-      try {
-        // eslint-disable-next-line no-await-in-loop
-        await this.syncConnection(connection.id, now)
-      } catch (error) {
-        this.logger.error(
-          `Calendar sync failed for connection ${connection.id}`,
-          error instanceof Error ? error.stack : String(error),
-        )
-      }
+  }
+
+  /** Records one aggregate sample per sweep while preserving isolated failures. */
+  private async measureCalendarSweep(
+    operation: (markFailed: () => void) => Promise<void>,
+  ): Promise<void> {
+    const startedAt = performance.now()
+    let outcome: 'success' | 'error' = 'success'
+    const markFailed = (): void => {
+      outcome = 'error'
+    }
+
+    try {
+      await operation(markFailed)
+    } catch (error) {
+      outcome = 'error'
+      throw error
+    } finally {
+      this.recordBackgroundJob('calendar', outcome, performance.now() - startedAt)
+    }
+  }
+
+  private async measureBackgroundJob<T>(
+    jobGroup: BackgroundJobGroup,
+    operation: () => Promise<T>,
+  ): Promise<T> {
+    const startedAt = performance.now()
+    try {
+      const result = await operation()
+      this.recordBackgroundJob(jobGroup, 'success', performance.now() - startedAt)
+      return result
+    } catch (error) {
+      this.recordBackgroundJob(jobGroup, 'error', performance.now() - startedAt)
+      throw error
+    }
+  }
+
+  private recordBackgroundJob(
+    jobGroup: BackgroundJobGroup,
+    outcome: OutcomeLabel,
+    durationMilliseconds: number,
+  ): void {
+    const labels = { jobGroup, outcome }
+    try {
+      this.backgroundMetrics?.recordJob(labels)
+    } catch {
+      // Observability must never change calendar business behavior.
+    }
+    try {
+      this.backgroundMetrics?.observeJobDuration(labels, Math.max(0, durationMilliseconds) / 1_000)
+    } catch {
+      // Observability must never change calendar business behavior.
     }
   }
 

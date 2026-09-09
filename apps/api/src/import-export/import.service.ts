@@ -1,10 +1,12 @@
-import { Injectable, Logger } from '@nestjs/common'
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common'
 import { randomUUID } from 'crypto'
+import { performance } from 'node:perf_hooks'
 
 import { AuditService } from '../audit/audit.service'
 import { PrismaService } from '../prisma/prisma.service'
 import { DuplicateDetectionService } from './duplicate-detection.service'
 import { ImportProgressStore } from './import-progress.store'
+import { BACKGROUND_METRICS_PORT, type BackgroundMetricsPort } from '../observability/metrics.types'
 import type {
   CsvRow,
   ImportPreviewResponse,
@@ -54,6 +56,9 @@ export class ImportService {
     private readonly duplicateDetectionService: DuplicateDetectionService,
     private readonly progressStore: ImportProgressStore,
     private readonly auditService: AuditService,
+    @Optional()
+    @Inject(BACKGROUND_METRICS_PORT)
+    private readonly backgroundMetrics?: BackgroundMetricsPort,
   ) {}
 
   async previewImport(
@@ -150,6 +155,30 @@ export class ImportService {
     strategy: ImportStrategy = 'skip',
     importId?: string,
   ): Promise<ImportResultResponse> {
+    const startedAt = performance.now()
+    try {
+      const execution = await this.executeImportInternal(
+        tenantId,
+        userId,
+        parsed,
+        strategy,
+        importId,
+      )
+      this.recordBackgroundJob(execution.fatal ? 'error' : 'success', performance.now() - startedAt)
+      return execution.result
+    } catch (error) {
+      this.recordBackgroundJob('error', performance.now() - startedAt)
+      throw error
+    }
+  }
+
+  private async executeImportInternal(
+    tenantId: string,
+    userId: string,
+    parsed: ParsedCsv,
+    strategy: ImportStrategy = 'skip',
+    importId?: string,
+  ): Promise<{ result: ImportResultResponse; fatal: boolean }> {
     const startTime = Date.now()
     const totalRows = parsed.rows.length
 
@@ -226,8 +255,8 @@ export class ImportService {
 
     await this.recordAudit(tenantId, userId, strategy, result)
 
+    const hadFatalBatch = imported + updated + skipped === 0 && errors.length > 0
     if (importId) {
-      const hadFatalBatch = imported + updated + skipped === 0 && errors.length > 0
       if (hadFatalBatch) {
         this.progressStore.fail(importId, errors[0]?.reason ?? 'Import failed', result)
       } else {
@@ -235,7 +264,7 @@ export class ImportService {
       }
     }
 
-    return result
+    return { result, fatal: hadFatalBatch }
   }
 
   /** Keeps the last occurrence of each email, mirroring spreadsheet expectations. */
@@ -532,6 +561,20 @@ export class ImportService {
       this.logger.warn(
         `Failed to write import audit log: ${error instanceof Error ? error.message : String(error)}`,
       )
+    }
+  }
+
+  private recordBackgroundJob(outcome: 'success' | 'error', durationMilliseconds: number): void {
+    const labels = { jobGroup: 'import' as const, outcome }
+    try {
+      this.backgroundMetrics?.recordJob(labels)
+    } catch {
+      // Observability must never change import business behavior.
+    }
+    try {
+      this.backgroundMetrics?.observeJobDuration(labels, Math.max(0, durationMilliseconds) / 1_000)
+    } catch {
+      // Observability must never change import business behavior.
     }
   }
 }

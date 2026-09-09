@@ -1,8 +1,10 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common'
+import { Inject, Injectable, Logger, NotFoundException, Optional } from '@nestjs/common'
+import { performance } from 'node:perf_hooks'
 
 import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library'
 
 import { PrismaService } from '../prisma/prisma.service'
+import { BACKGROUND_METRICS_PORT, type BackgroundMetricsPort } from '../observability/metrics.types'
 import {
   NotificationPubSubService,
   PUBSUB_NOTIFICATION_CREATED,
@@ -91,6 +93,9 @@ export class NotificationsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly notificationPubSub: NotificationPubSubService,
+    @Optional()
+    @Inject(BACKGROUND_METRICS_PORT)
+    private readonly backgroundMetrics?: BackgroundMetricsPort,
   ) {}
 
   /**
@@ -206,14 +211,31 @@ export class NotificationsService {
     actorUserId: string,
     input: CreateNotificationInput,
   ): Promise<boolean> {
+    const startedAt = performance.now()
     try {
       const { created } = await this.createWithStatus(tenantId, actorUserId, input)
+      this.recordBackgroundJob('success', performance.now() - startedAt)
       return created
     } catch (error) {
+      this.recordBackgroundJob('error', performance.now() - startedAt)
       this.logger.error(
         `Notification create failed: ${error instanceof Error ? error.message : String(error)}`,
       )
       return false
+    }
+  }
+
+  private recordBackgroundJob(outcome: 'success' | 'error', durationMilliseconds: number): void {
+    const labels = { jobGroup: 'notification' as const, outcome }
+    try {
+      this.backgroundMetrics?.recordJob(labels)
+    } catch {
+      // Observability must never change notification business behavior.
+    }
+    try {
+      this.backgroundMetrics?.observeJobDuration(labels, Math.max(0, durationMilliseconds) / 1_000)
+    } catch {
+      // Observability must never change notification business behavior.
     }
   }
 
