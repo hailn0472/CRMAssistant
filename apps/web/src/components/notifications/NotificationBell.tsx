@@ -33,7 +33,7 @@ export function NotificationBell(): React.JSX.Element {
           variant="outline"
           size="icon"
           aria-label="View notifications"
-          className="relative h-10 w-10 rounded-[10px] border-[#e6e6eb] bg-white text-[#6b6b76] shadow-none transition-colors hover:border-[#d3d2df] hover:bg-[#f7f6ff] hover:text-[#5146c9] focus-visible:ring-2 focus-visible:ring-[#665ce0]/30"
+          className="relative h-11 w-11 rounded-[10px] border-[#e6e6eb] bg-white text-[#6b6b76] shadow-none transition-colors hover:border-[#d3d2df] hover:bg-[#f7f6ff] hover:text-[#5146c9] focus-visible:ring-2 focus-visible:ring-[#665ce0]/30"
         >
           <Bell className="h-4 w-4" />
           {unreadCount > 0 && (
