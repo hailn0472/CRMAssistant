@@ -11,6 +11,7 @@ const config: Config = {
     '<rootDir>/test/integration/**/*.spec.ts',
     '<rootDir>/src/**/__tests__/**/*.integration.spec.ts',
   ],
+  modulePathIgnorePatterns: ['<rootDir>/dist/'],
   transform: {
     // tsconfig.spec.json sets isolatedModules -> transpile-only, no per-worker TS program
     '^.+\\.(t|j)s$': ['ts-jest', { tsconfig: '<rootDir>/tsconfig.spec.json' }],
