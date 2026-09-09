@@ -96,8 +96,9 @@ When this file and the code disagree, **the code wins** — and fix this file in
 - **Primary Database**: PostgreSQL 15+ (Supabase) **[SHIPPED]**
 - **Database Client**: Prisma Client **[SHIPPED]**
 - **Database Tools**: DBeaver for local development/debugging
-- **Caching**: **[PLANNED]** — Redis 7.0+ / `ioredis` are **not installed**. `ioredis` appears only in TODO comments (`import-progress.store.ts`, `facebook-graph.client.ts`) marking in-memory stores that should become Redis-backed. Those stores are **single-process**; anything relying on them breaks under multi-instance deployment.
-  - **Server-side caching today: none.** Client-side caching is TanStack Query only (`staleTime` per query key + explicit `invalidateQueries`). There is no Apollo cache — see the GraphQL Client note above.
+- **Caching**: **[SHIPPED]** optional Redis cache-aside via `CacheService` and `ioredis ^5.8.2`. It backs tenant-scoped contact statistics and dashboard widget data when `REDIS_URL` is configured; a Redis outage or unset URL falls back to PostgreSQL and must not make the API unavailable.
+  - **Server-side caching today:** the shipped Redis adapter is used only for the cache-aside paths above. Client-side caching remains TanStack Query (`staleTime` per query key + explicit `invalidateQueries`). There is no Apollo cache — see the GraphQL Client note above.
+  - Import progress, rate-limit counters, and in-process GraphQL pub/sub remain memory-backed and single-instance. Redis-backed queues/pub-sub for multi-instance deployment are still planned; do not describe those as shipped.
   - Semantic caching for Text-to-SQL (cache key `hash(normalized_question + tenant_id + date)`, TTL 5–15 min, event-based invalidation) remains the design of record for Epic 10 — see Architecture Decisions below.
 - **Supabase Features actually used**: **Auth / OAuth only** — `apps/api/src/auth/auth.service.ts` and `apps/web/src/lib/supabase.ts` + the OAuth callback route.
   - ⚠️ **Row-Level Security is [PLANNED], not shipped.** There are **zero** `CREATE POLICY` / `ROW LEVEL SECURITY` statements across every migration in `apps/api/prisma/migrations/`. All data access goes through Prisma with the service role.
@@ -174,6 +175,10 @@ When this file and the code disagree, **the code wins** — and fix this file in
 - **Logging [SHIPPED]**: NestJS's built-in `Logger` (`new Logger(ContextName)`). **Winston and Pino are [PLANNED]/not installed** — do not import them.
 - **Audit Trail [SHIPPED]**: `apps/api/src/audit/audit.service.ts` + a global `AuditInterceptor` registered as `APP_INTERCEPTOR` in `app.module.ts`. Mutations are audited by adding an entry to `MUTATION_AUDIT_MAP` in `apps/api/src/common/interceptors/audit.interceptor.ts`; `AuditService.log` takes an action from the `AuditAction` union.
   - **Any new create/update/delete mutation must be added to that map** — NFR9 requires all CUD operations be logged.
+- **Application metrics [PLANNED]**: Prometheus-compatible `/metrics`, `/health/live`, and `/health/ready` are the agreed contract but are not shipped until their implementation/tests land. The free-tier integration is Grafana Cloud Metrics Endpoint scraping the public Render URL every 60 seconds with a Bearer token; no Render Metrics Stream, Alloy service, or self-hosted Prometheus is assumed.
+  - `METRICS_ENABLED=false` must be a safe no-op for startup. `METRICS_SCRAPE_TOKEN` is backend-only and must never appear in Vercel/browser variables.
+  - The catalog uses bounded route/operation/dependency labels and excludes tenant IDs, user/contact/message IDs, PII, SQL/GraphQL text, tokens, and arbitrary URLs. See [`operations/observability.md`](./operations/observability.md) for the complete contract, free-tier sleep mode, dashboards, alerts, and runbooks.
+- **Provider monitoring:** Vercel Hobby, Render Free CPU/memory/logs, and Supabase Free Reports remain on their native dashboards unless an active plan explicitly supports an export. Supabase Metrics API availability must be feature-detected; `401`/`403` falls back to Supabase Studio Reports.
 - **Error Tracking**: **[PLANNED]** — `@sentry/nextjs` / `@sentry/nestjs` not installed.
 - **Tracing**: **[PLANNED]** — OpenTelemetry not installed.
 - **Performance Monitoring**: **[PLANNED]**.
@@ -272,7 +277,7 @@ Every item below is **[PLANNED]**. Do not import them and do not add one as a si
 
 ### Semantic Caching for Text-to-SQL
 
-> **[PLANNED]** — Redis is not installed and Epic 10 has not started. Design of record only.
+> **[PLANNED]** — Text-to-SQL and its semantic cache have not started. The Redis client is shipped for bounded application cache-aside use, but this separate semantic-cache design is not implemented.
 
 **Decision**: Custom Redis caching layer instead of relying on GraphQL caching
 

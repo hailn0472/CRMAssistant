@@ -99,8 +99,17 @@ Use environments for lifecycle separation and paths for app/consumer boundaries.
 | `MICROSOFT_CALENDAR_TENANT_ID`   | API          | dev, staging, production | `/apps/api`                                 | internal           | Azure AD tenant            | Render backend, local API dev                    | Defaults to `common` (any Microsoft account) when unset                     |
 | `CALENDAR_OAUTH_REDIRECT_URI`    | API          | dev, staging, production | `/apps/api`                                 | internal           | App config                 | Render backend, local API dev                    | Must match the exact redirect URI registered in both provider apps          |
 | `CALENDAR_SYNC_ON_STARTUP`       | API          | dev, staging, production | `/apps/api`                                 | internal           | App config                 | Render backend                                 | Set to `false` to opt out of the bootstrap sweep (mirrors `FACEBOOK_HISTORY_SYNC_ON_STARTUP`) |
+| `METRICS_ENABLED`                | API/platform | dev, staging, production | `/apps/api`                                 | internal           | App config                 | Render backend                                 | Set `false` for Render sleep mode; keep disabled until the metrics endpoint implementation is deployed |
+| `METRICS_SCRAPE_TOKEN`           | API/security | staging, production      | `/apps/api`                                 | critical           | Generated secret           | Render backend and Grafana Cloud Metrics Endpoint | Rotate immediately if exposed; update Grafana's Bearer credential atomically |
 
 High-risk variables are `DATABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `JWT_SECRET`, `VERCEL_TOKEN`, `RENDER_DEPLOY_HOOK_URL`, `RENDER_DEPLOY_HOOK_URL_STAGING`, and Render API keys or deploy hooks used for platform connections. Treat Infisical machine identity secrets as high-risk bootstrap secrets.
+
+`METRICS_SCRAPE_TOKEN` is also a high-risk operational credential. It grants
+read access to the protected Prometheus endpoint and must never be placed in a
+frontend path, a `NEXT_PUBLIC_*` variable, a repository file, a URL, or a
+dashboard query. Grafana Cloud stores the token in its scrape-job credential
+configuration; the API receives the matching value only through the Render
+backend environment.
 
 When adding a new environment variable, update the relevant `.env.example` file and this inventory in the same PR.
 
@@ -200,8 +209,25 @@ Use an Infisical Render sync from `/apps/api` to the Render backend service envi
 - `FACEBOOK_APP_SECRET`
 - `FACEBOOK_VERIFY_TOKEN`
 - `FACEBOOK_GRAPH_API_VERSION`
+- `METRICS_ENABLED`
+- `METRICS_SCRAPE_TOKEN`
 
 `SUPABASE_SERVICE_ROLE_KEY`, `DATABASE_URL`, and backend `JWT_SECRET` are backend-only and must never be synced to frontend public env.
+
+For the free-tier observability path, Grafana Cloud's Metrics Endpoint
+integration scrapes the Render API's public HTTPS `/metrics` endpoint every 60
+seconds using `METRICS_SCRAPE_TOKEN` as a Bearer credential. This keeps a Free
+Render service awake and can consume nearly all of the 750 monthly instance
+hours. If preserving sleep is required, set `METRICS_ENABLED=false` and disable
+the Grafana scrape job; use Render, Vercel, and Supabase native dashboards for
+provider-level monitoring. Do not deploy an Alloy/Prometheus worker on Render
+Free solely for metrics collection.
+
+Supabase Metrics API availability must be feature-detected because the current
+API documentation and plan matrix have not always agreed. Test it with a
+least-privilege credential; on `401`, `403`, or unsupported-plan responses,
+fall back to [Supabase Studio Reports](https://supabase.com/docs/guides/observability/reports).
+Never put `SUPABASE_SERVICE_ROLE_KEY` into Grafana or the frontend.
 
 ### Supabase-derived values
 
