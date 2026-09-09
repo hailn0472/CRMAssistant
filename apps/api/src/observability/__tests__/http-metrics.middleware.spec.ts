@@ -75,4 +75,21 @@ describe('HttpMetricsMiddleware', () => {
     expect(observeRequestDuration).toHaveBeenCalledTimes(1)
     expect(observeRequestDuration.mock.calls[0]?.[1]).toEqual(expect.any(Number))
   })
+
+  it('does not let a metrics adapter failure escape response events', () => {
+    const metrics: HttpMetricsPort = {
+      recordRequest: jest.fn(() => {
+        throw new Error('counter unavailable')
+      }),
+      observeRequestDuration: jest.fn(() => {
+        throw new Error('histogram unavailable')
+      }),
+    }
+    const middleware = new HttpMetricsMiddleware(metrics)
+    const response = makeResponse(200)
+
+    middleware.use(makeRequest(), response, jest.fn())
+
+    expect(() => response.emit('finish')).not.toThrow()
+  })
 })

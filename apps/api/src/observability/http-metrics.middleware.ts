@@ -91,8 +91,16 @@ export class HttpMetricsMiddleware implements NestMiddleware {
 
       const durationSeconds = Number(process.hrtime.bigint() - startedAt) / 1_000_000_000
       const labels = buildHttpMetricLabels(request, response)
-      this.metrics.recordRequest(labels)
-      this.metrics.observeRequestDuration(labels, durationSeconds)
+      try {
+        this.metrics.recordRequest(labels)
+      } catch {
+        // Telemetry is best-effort and must never interfere with response completion.
+      }
+      try {
+        this.metrics.observeRequestDuration(labels, durationSeconds)
+      } catch {
+        // Keep counter and histogram failures isolated from one another.
+      }
     }
 
     // A response can emit both `finish` and `close` (especially on aborted

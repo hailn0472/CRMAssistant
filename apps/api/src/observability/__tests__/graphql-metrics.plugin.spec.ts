@@ -107,4 +107,23 @@ describe('createGraphqlMetricsPlugin', () => {
       statusClass: '5xx',
     })
   })
+
+  it('does not let metrics adapter failures alter response delivery', async () => {
+    const metrics: GraphqlMetricsPort = {
+      recordOperation: jest.fn(() => {
+        throw new Error('counter unavailable')
+      }),
+      observeOperationDuration: jest.fn(() => {
+        throw new Error('histogram unavailable')
+      }),
+    }
+    const listener = await createGraphqlMetricsPlugin(metrics).requestDidStart?.({} as never)
+    if (!listener?.willSendResponse) throw new Error('metrics plugin lifecycle is incomplete')
+
+    await expect(
+      listener.willSendResponse({
+        response: { body: { kind: 'single', singleResult: { data: { ok: true } } } },
+      } as never),
+    ).resolves.toBeUndefined()
+  })
 })

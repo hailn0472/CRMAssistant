@@ -68,8 +68,16 @@ export function createGraphqlMetricsPlugin(metrics: GraphqlMetricsPort): ApolloS
           statusClass: normalizeGraphqlStatusClass(errors),
         }
         const durationSeconds = Number(process.hrtime.bigint() - startedAt) / 1_000_000_000
-        metrics.recordOperation(labels)
-        metrics.observeOperationDuration(labels, durationSeconds)
+        try {
+          metrics.recordOperation(labels)
+        } catch {
+          // Telemetry must never replace a GraphQL response with an instrumentation error.
+        }
+        try {
+          metrics.observeOperationDuration(labels, durationSeconds)
+        } catch {
+          // Keep counter and histogram failures isolated from one another.
+        }
       }
 
       return {
