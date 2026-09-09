@@ -20,6 +20,7 @@ type GraphqlRequest = Request & { user?: JwtPayload }
     ConfigModule,
     ObservabilityModule,
     GraphQLModule.forRootAsync<ApolloDriverConfig>({
+      driver: ApolloDriver,
       imports: [ObservabilityModule],
       inject: [GRAPHQL_METRICS_PORT],
       useFactory: (metrics: GraphqlMetricsPort): ApolloDriverConfig => ({
