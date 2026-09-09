@@ -27,6 +27,12 @@ export type ApiTestUser = {
 }
 
 const TEST_JWT_SECRET = 'api-test-secret-that-is-long-enough-for-validation'
+export const TEST_METRICS_TOKEN = 'api-test-metrics-token-that-is-at-least-32-chars'
+
+export type ApiTestHarnessOptions = {
+  metricsEnabled?: boolean
+  metricsToken?: string
+}
 
 const mockSupabaseSignUp = jest.fn()
 const mockSupabaseSignIn = jest.fn()
@@ -62,14 +68,14 @@ export class ApiTestHarness {
     this.jwtService = jwtService
   }
 
-  static async start(): Promise<ApiTestHarness> {
+  static async start(options: ApiTestHarnessOptions = {}): Promise<ApiTestHarness> {
     const container = await new PostgreSqlContainer('postgres:15-alpine').start()
     const databaseUrl = container.getConnectionUri()
     let app: INestApplication | undefined
     let prisma: PrismaClient | undefined
 
     try {
-      ApiTestHarness.setTestEnvironment(databaseUrl)
+      ApiTestHarness.setTestEnvironment(databaseUrl, options)
       ApiTestHarness.applyMigrations(databaseUrl)
 
       const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile()
@@ -99,9 +105,11 @@ export class ApiTestHarness {
 
   async cleanupDatabase(): Promise<void> {
     await this.prisma.$executeRawUnsafe(
-      // Story 6.8 (Contract A3): ActivityGoal is a child of Activity/Task/User
-      // via the subject userId — it must be truncated BEFORE its parents.
-      'TRUNCATE TABLE "ActivityGoal", "CustomerAnalyticsSnapshot", "ReportExport", "Contact", "User", "Tenant" RESTART IDENTITY CASCADE',
+      // ActivityGoal is a child of Activity/Task/User via the subject userId —
+      // it must be truncated BEFORE its parents. CustomerAnalyticsSnapshot
+      // was retired by the deal-management removal migration and must not be
+      // referenced by the test cleanup query.
+      'TRUNCATE TABLE "ActivityGoal", "ReportExport", "Contact", "User", "Tenant" RESTART IDENTITY CASCADE',
     )
     jest.clearAllMocks()
     mockSupabaseSignOut.mockResolvedValue({ error: null })
@@ -138,7 +146,7 @@ export class ApiTestHarness {
     mockSupabaseSignIn.mockResolvedValue({ data: { user: null }, error: { message } })
   }
 
-  private static setTestEnvironment(databaseUrl: string): void {
+  private static setTestEnvironment(databaseUrl: string, options: ApiTestHarnessOptions): void {
     process.env['NODE_ENV'] = 'test'
     process.env['DATABASE_URL'] = databaseUrl
     process.env['JWT_SECRET'] = TEST_JWT_SECRET
@@ -146,6 +154,12 @@ export class ApiTestHarness {
     process.env['SUPABASE_ANON_KEY'] = 'test-anon-key'
     process.env['SUPABASE_SERVICE_ROLE_KEY'] = 'test-service-role-key'
     process.env['FRONTEND_URL'] = 'http://localhost:3000'
+    process.env['METRICS_ENABLED'] = options.metricsEnabled ? 'true' : 'false'
+    if (options.metricsEnabled) {
+      process.env['METRICS_SCRAPE_TOKEN'] = options.metricsToken ?? TEST_METRICS_TOKEN
+    } else {
+      delete process.env['METRICS_SCRAPE_TOKEN']
+    }
   }
 
   private static applyMigrations(databaseUrl: string): void {

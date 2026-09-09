@@ -1,18 +1,5 @@
 import { ApiTestHarness, type GraphqlRequestPayload } from './api-test-harness'
 
-/** Walk NON_NULL/LIST wrappers to the underlying named introspection type. */
-function unwrapNamedType(
-  type: {
-    name: string | null
-    kind: string
-    ofType?: { name: string | null; kind: string; ofType?: unknown } | null
-  } | null,
-): string | null {
-  if (!type) return null
-  if (type.name) return type.name
-  return unwrapNamedType((type.ofType as typeof type | null) ?? null)
-}
-
 describe('GraphQL API harness', () => {
   let harness: ApiTestHarness
 
@@ -289,7 +276,7 @@ describe('GraphQL API harness', () => {
     )
   })
 
-  it('exposes the exact Story 6.6 report-export SDL surface (enums, mutation args, download type)', async () => {
+  it('does not expose retired report-export SDL after the CRM scope moved to leads', async () => {
     const payload: GraphqlRequestPayload = {
       query: `
         query {
@@ -305,78 +292,24 @@ describe('GraphQL API harness', () => {
     expect(response.body.errors).toBeUndefined()
     const schema = response.body.data.__schema
 
-    const mutations = schema.mutationType.fields
-    const exportMutation = mutations.find((f: { name: string }) => f.name === 'exportReport')
-    expect(exportMutation).toBeDefined()
-    const argNames = exportMutation.args.map((a: { name: string }) => a.name)
-    expect(argNames.sort()).toEqual(['filters', 'format', 'reportId'])
-    const formatArg = exportMutation.args.find((a: { name: string }) => a.name === 'format')
-    expect(formatArg.type.kind).toBe('NON_NULL')
-    expect(unwrapNamedType(formatArg.type)).toBe('ReportDeliveryFormat')
-    const filtersArg = exportMutation.args.find((a: { name: string }) => a.name === 'filters')
-    expect(filtersArg.type.name).toBe('ReportFiltersInput')
-    expect(filtersArg.type.kind).toBe('INPUT_OBJECT')
-    const reportIdArg = exportMutation.args.find((a: { name: string }) => a.name === 'reportId')
-    expect(reportIdArg.type.kind).toBe('NON_NULL')
-    expect(unwrapNamedType(reportIdArg.type)).toBe('ID')
-    // Contract B7 non-nullability: exportReport → ReportExport!
-    expect(exportMutation.type.kind).toBe('NON_NULL')
-    expect(unwrapNamedType(exportMutation.type)).toBe('ReportExport')
-
-    const downloadMutation = mutations.find(
-      (f: { name: string }) => f.name === 'reportExportDownloadUrl',
+    const mutationNames = schema.mutationType.fields.map((f: { name: string }) => f.name)
+    expect(mutationNames).not.toEqual(
+      expect.arrayContaining(['exportReport', 'reportExportDownloadUrl', 'deleteReportExport']),
     )
-    expect(downloadMutation).toBeDefined()
-    expect(downloadMutation.type.kind).toBe('NON_NULL')
-    expect(unwrapNamedType(downloadMutation.type)).toBe('ReportExportDownload')
-    const deleteMutation = mutations.find((f: { name: string }) => f.name === 'deleteReportExport')
-    expect(deleteMutation).toBeDefined()
-    expect(deleteMutation.type.kind).toBe('NON_NULL')
-    expect(unwrapNamedType(deleteMutation.type)).toBe('Boolean')
 
-    const queries = schema.queryType.fields
-    const reportExportsQuery = queries.find((f: { name: string }) => f.name === 'reportExports')
-    expect(reportExportsQuery).toBeDefined()
-    expect(reportExportsQuery.type.kind).toBe('NON_NULL')
-    expect(unwrapNamedType(reportExportsQuery.type)).toBe('ReportExportConnection')
-    const reportExportQuery = queries.find((f: { name: string }) => f.name === 'reportExport')
-    expect(reportExportQuery).toBeDefined()
-    expect(reportExportQuery.type.kind).toBe('NON_NULL')
-    expect(unwrapNamedType(reportExportQuery.type)).toBe('ReportExport')
+    const queryNames = schema.queryType.fields.map((f: { name: string }) => f.name)
+    expect(queryNames).not.toEqual(expect.arrayContaining(['reportExports', 'reportExport']))
 
     const typeNames = schema.types.map((t: { name: string }) => t.name)
-    expect(typeNames).toContain('ReportExport')
-    expect(typeNames).toContain('ReportExportConnection')
-    expect(typeNames).toContain('ReportExportDownload')
-    expect(typeNames).toContain('ReportExportStatus')
-    expect(typeNames).toContain('ReportDeliveryFormat')
-    // Contract B7: single shared enum — the duplicate ReportExportFormat must not exist.
-    expect(typeNames).not.toContain('ReportExportFormat')
-    expect(typeNames).toContain('PaginationInput')
-
-    // Contract B7 field secrecy: no filters/objectPath/storage internals leak.
-    const exportType = schema.types.find((t: { name: string }) => t.name === 'ReportExport')
-    const exportFieldNames = exportType.fields.map((f: { name: string }) => f.name)
-    expect(exportFieldNames).toEqual(
+    expect(typeNames).not.toEqual(
       expect.arrayContaining([
-        'id',
-        'status',
-        'format',
-        'filterSummary',
-        'dateRangeStart',
-        'dateRangeEnd',
-        'filename',
-        'contentType',
-        'fileSizeBytes',
-        'attemptCount',
-        'errorCode',
-        'errorMessage',
-        'createdAt',
-        'completedAt',
-        'report',
+        'ReportExport',
+        'ReportExportConnection',
+        'ReportExportDownload',
+        'ReportExportStatus',
+        'ReportDeliveryFormat',
+        'ReportFiltersInput',
       ]),
     )
-    expect(exportFieldNames).not.toContain('filters')
-    expect(exportFieldNames).not.toContain('objectPath')
   })
 })

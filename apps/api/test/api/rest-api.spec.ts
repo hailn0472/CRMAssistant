@@ -25,6 +25,24 @@ describe('REST API harness', () => {
     expect(response.body).toEqual({ status: 'ok' })
   })
 
+  it('serves liveness without dependency details and reports readiness separately', async () => {
+    const liveness = await request(harness.app.getHttpServer()).get('/health/live').expect(200)
+    expect(liveness.body).toEqual({ status: 'ok' })
+
+    const readiness = await request(harness.app.getHttpServer()).get('/health/ready').expect(200)
+    expect(readiness.body).toEqual({
+      status: 'degraded',
+      dependencies: { postgres: 'ready', redis: 'disabled' },
+    })
+  })
+
+  it('hides the metrics route completely when observability is disabled', async () => {
+    const response = await request(harness.app.getHttpServer()).get('/metrics')
+
+    expect(response.status).toBe(404)
+    expect(response.text).not.toContain('crm_')
+  })
+
   it('calls /auth/login without live Supabase services', async () => {
     const tenant = await harness.createTenant('API Auth Tenant')
     await harness.prisma.user.create({

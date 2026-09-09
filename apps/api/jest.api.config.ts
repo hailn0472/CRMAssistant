@@ -4,6 +4,7 @@ const config: Config = {
   moduleFileExtensions: ['js', 'json', 'ts'],
   rootDir: '.',
   testMatch: ['**/test/api/**/*.spec.ts'],
+  modulePathIgnorePatterns: ['<rootDir>/dist/'],
   transform: {
     // tsconfig.spec.json sets isolatedModules -> transpile-only, no per-worker TS program
     '^.+\\.(t|j)s$': ['ts-jest', { tsconfig: '<rootDir>/tsconfig.spec.json' }],
