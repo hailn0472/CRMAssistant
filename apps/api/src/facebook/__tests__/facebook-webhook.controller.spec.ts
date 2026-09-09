@@ -4,6 +4,7 @@ import { createHmac } from 'node:crypto'
 import { UnauthorizedException } from '@nestjs/common'
 
 import { FacebookWebhookController } from '../facebook-webhook.controller'
+import type { FacebookMetricsPort } from '../../observability/metrics.types'
 
 const APP_SECRET = 'super-secret-app-secret'
 const VERIFY_TOKEN = 'my-verify-token'
@@ -25,6 +26,7 @@ describe('FacebookWebhookController', () => {
   let controller: FacebookWebhookController
   let facebookService: { handleInboundMessagingEvent: jest.Mock }
   let configService: { get: jest.Mock }
+  let metrics: jest.Mocked<FacebookMetricsPort>
 
   beforeEach(() => {
     facebookService = { handleInboundMessagingEvent: jest.fn().mockResolvedValue(undefined) }
@@ -35,7 +37,12 @@ describe('FacebookWebhookController', () => {
         return undefined
       }),
     }
-    controller = new FacebookWebhookController(facebookService as any, configService as any)
+    metrics = { recordWebhookEvent: jest.fn(), recordGraphRequest: jest.fn() }
+    controller = new FacebookWebhookController(
+      facebookService as any,
+      configService as any,
+      metrics,
+    )
   })
 
   describe('GET (verification handshake)', () => {
@@ -69,6 +76,10 @@ describe('FacebookWebhookController', () => {
 
       await expect(controller.receive(req)).rejects.toThrow(UnauthorizedException)
       expect(facebookService.handleInboundMessagingEvent).not.toHaveBeenCalled()
+      expect(metrics.recordWebhookEvent).toHaveBeenCalledWith({
+        eventGroup: 'other',
+        outcome: 'rejected',
+      })
     })
 
     it('rejects requests with an invalid signature (401, no side effects)', async () => {
@@ -77,6 +88,10 @@ describe('FacebookWebhookController', () => {
 
       await expect(controller.receive(req)).rejects.toThrow(UnauthorizedException)
       expect(facebookService.handleInboundMessagingEvent).not.toHaveBeenCalled()
+      expect(metrics.recordWebhookEvent).toHaveBeenCalledWith({
+        eventGroup: 'other',
+        outcome: 'rejected',
+      })
     })
 
     it('accepts a correctly-signed request and dispatches each messaging event', async () => {
@@ -98,6 +113,40 @@ describe('FacebookWebhookController', () => {
       expect(facebookService.handleInboundMessagingEvent).toHaveBeenCalledWith('page-1', {
         sender: { id: 'psid-1' },
         message: { text: 'hi' },
+      })
+      expect(metrics.recordWebhookEvent).toHaveBeenCalledWith({
+        eventGroup: 'message',
+        outcome: 'success',
+      })
+    })
+
+    it('records each message and non-message event independently while preserving HTTP 200', async () => {
+      const body = {
+        object: 'page',
+        entry: [
+          {
+            id: 'page-1',
+            messaging: [
+              { sender: { id: 'psid-1' }, message: { text: 'ok' } },
+              { sender: { id: 'psid-2' }, delivery: { mids: ['mid-1'] } },
+            ],
+          },
+        ],
+      }
+      const raw = Buffer.from(JSON.stringify(body))
+      const req = { headers: { 'x-hub-signature-256': sign(raw.toString()) }, rawBody: raw, body }
+      facebookService.handleInboundMessagingEvent
+        .mockResolvedValueOnce(undefined)
+        .mockRejectedValueOnce(new Error('processing failed'))
+
+      await expect(controller.receive(req as any)).resolves.toEqual({ received: true })
+      expect(metrics.recordWebhookEvent).toHaveBeenNthCalledWith(1, {
+        eventGroup: 'message',
+        outcome: 'success',
+      })
+      expect(metrics.recordWebhookEvent).toHaveBeenNthCalledWith(2, {
+        eventGroup: 'other',
+        outcome: 'error',
       })
     })
 

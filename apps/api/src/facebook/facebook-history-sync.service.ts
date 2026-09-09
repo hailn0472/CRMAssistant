@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common'
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common'
 import type { ChannelConnection, ConversationStatus } from '@prisma/client'
 
 import { PrismaService } from '../prisma/prisma.service'
@@ -13,6 +13,7 @@ import {
 import { FacebookService } from './facebook.service'
 import { mapInboundFacebookMessage } from './facebook-message-mapper'
 import type { FacebookConversation, FacebookHistoryMessage } from './facebook-message.types'
+import { BACKGROUND_METRICS_PORT, type BackgroundMetricsPort } from '../observability/metrics.types'
 
 const FACEBOOK_CHANNEL = 'FACEBOOK' as const
 const SYSTEM_ACTOR = 'system'
@@ -51,6 +52,7 @@ export class FacebookHistorySyncService {
     private readonly facebookService: FacebookService,
     private readonly conversationsService: ConversationsService,
     private readonly messagesService: MessagesService,
+    @Optional() @Inject(BACKGROUND_METRICS_PORT) private readonly metrics?: BackgroundMetricsPort,
   ) {}
 
   /** Syncs every ACTIVE Facebook connection across all tenants. Never throws
@@ -82,6 +84,35 @@ export class FacebookHistorySyncService {
    * Facebook, or not ACTIVE. Each conversation carries its own watermark, so a
    * failed thread never advances past another thread's unsynced messages. */
   async syncConnection(connectionId: string): Promise<void> {
+    const startedAt = process.hrtime.bigint()
+    let outcome: 'success' | 'error' = 'success'
+
+    try {
+      await this.syncConnectionInternal(connectionId)
+    } catch (error) {
+      outcome = 'error'
+      throw error
+    } finally {
+      const durationSeconds = Number(process.hrtime.bigint() - startedAt) / 1_000_000_000
+      this.recordSyncMetrics(outcome, durationSeconds)
+    }
+  }
+
+  private recordSyncMetrics(outcome: 'success' | 'error', durationSeconds: number): void {
+    const labels = { jobGroup: 'facebook_history_sync' as const, outcome }
+    try {
+      this.metrics?.recordJob(labels)
+    } catch {
+      // Telemetry must never alter a sync result.
+    }
+    try {
+      this.metrics?.observeJobDuration(labels, durationSeconds)
+    } catch {
+      // Keep the counter and histogram independently best-effort.
+    }
+  }
+
+  private async syncConnectionInternal(connectionId: string): Promise<void> {
     const connection = await this.prisma.channelConnection.findUnique({
       where: { id: connectionId },
     })

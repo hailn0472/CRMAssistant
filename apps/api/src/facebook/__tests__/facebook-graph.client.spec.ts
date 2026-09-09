@@ -3,7 +3,16 @@ import {
   FacebookCircuitOpenError,
   FacebookGraphClient,
   FacebookRateLimitError,
+  OutboundRateLimiter,
 } from '../facebook-graph.client'
+import type { FacebookMetricsPort } from '../../observability/metrics.types'
+
+function makeMetrics(): jest.Mocked<FacebookMetricsPort> {
+  return {
+    recordWebhookEvent: jest.fn(),
+    recordGraphRequest: jest.fn(),
+  }
+}
 
 function jsonResponse(body: unknown, ok = true, status = 200): Response {
   return {
@@ -68,6 +77,37 @@ describe('FacebookGraphClient', () => {
       expect(fetchMock).toHaveBeenCalledTimes(3)
     })
 
+    it('records one logical success after transient retries, not one metric per attempt', async () => {
+      const metrics = makeMetrics()
+      const meteredClient = new FacebookGraphClient({}, metrics)
+      fetchMock
+        .mockResolvedValueOnce(jsonResponse({}, false, 500))
+        .mockResolvedValueOnce(jsonResponse({}, false, 500))
+        .mockResolvedValueOnce(jsonResponse({ message_id: 'mid.ok' }))
+
+      await meteredClient.sendMessage('token', 'psid-1', { text: 'Retry' })
+
+      expect(metrics.recordGraphRequest).toHaveBeenCalledTimes(1)
+      expect(metrics.recordGraphRequest).toHaveBeenCalledWith({
+        operationGroup: 'write',
+        outcome: 'success',
+      })
+    })
+
+    it('does not retry a successful provider write when metrics recording fails', async () => {
+      const metrics = makeMetrics()
+      metrics.recordGraphRequest.mockImplementation(() => {
+        throw new Error('metrics unavailable')
+      })
+      const meteredClient = new FacebookGraphClient({}, metrics)
+      fetchMock.mockResolvedValue(jsonResponse({ message_id: 'mid.ok' }))
+
+      await expect(
+        meteredClient.sendMessage('token', 'psid-1', { text: 'Deliver once' }),
+      ).resolves.toEqual({ message_id: 'mid.ok' })
+      expect(fetchMock).toHaveBeenCalledTimes(1)
+    })
+
     it('throws after exhausting retry attempts', async () => {
       fetchMock.mockResolvedValue(jsonResponse({ error: 'boom' }, false, 500))
 
@@ -84,6 +124,39 @@ describe('FacebookGraphClient', () => {
         /Facebook Graph API error \(401\)/,
       )
       expect(fetchMock).toHaveBeenCalledTimes(1)
+    })
+
+    it('records permanent provider failures as rejected without exposing the response body', async () => {
+      const metrics = makeMetrics()
+      const meteredClient = new FacebookGraphClient({}, metrics)
+      fetchMock.mockResolvedValue(jsonResponse({ error: 'secret diagnostic' }, false, 401))
+
+      await expect(meteredClient.sendMessage('token', 'psid-1', { text: 'Fail' })).rejects.toThrow(
+        'Facebook Graph API error (401)',
+      )
+
+      expect(metrics.recordGraphRequest).toHaveBeenCalledWith({
+        operationGroup: 'write',
+        outcome: 'rejected',
+      })
+    })
+
+    it('records rate-limit rejection before making a network request', async () => {
+      const metrics = makeMetrics()
+      const meteredClient = new FacebookGraphClient(
+        { rateLimiter: new OutboundRateLimiter(0) },
+        metrics,
+      )
+
+      await expect(
+        meteredClient.sendMessage('token', 'psid-1', { text: 'Over limit' }),
+      ).rejects.toThrow(FacebookRateLimitError)
+
+      expect(metrics.recordGraphRequest).toHaveBeenCalledWith({
+        operationGroup: 'write',
+        outcome: 'rate_limited',
+      })
+      expect(fetchMock).not.toHaveBeenCalled()
     })
 
     it('passes a request timeout signal on every outbound call', async () => {

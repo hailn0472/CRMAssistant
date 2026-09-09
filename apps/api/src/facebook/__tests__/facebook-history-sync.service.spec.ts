@@ -6,6 +6,7 @@ import type { ChannelConnection, Conversation } from '@prisma/client'
 import { FacebookHistorySyncService } from '../facebook-history-sync.service'
 import { FacebookRateLimitError } from '../facebook-graph.client'
 import { encryptToken } from '../../common/crypto/token-crypto'
+import type { BackgroundMetricsPort } from '../../observability/metrics.types'
 
 const NOW = new Date('2026-07-25T00:00:00.000Z')
 const TENANT_ID = 'tenant-1'
@@ -60,6 +61,7 @@ describe('FacebookHistorySyncService', () => {
   let facebookService: { resolveOrCreateContactForPsid: jest.Mock; isDuplicateByMid: jest.Mock }
   let conversationsService: { findOrCreateConversation: jest.Mock }
   let messagesService: { sendMessage: jest.Mock }
+  let metrics: jest.Mocked<BackgroundMetricsPort>
 
   beforeAll(() => {
     process.env['ENCRYPTION_KEY'] = randomBytes(32).toString('hex')
@@ -90,6 +92,7 @@ describe('FacebookHistorySyncService', () => {
     messagesService = {
       sendMessage: jest.fn().mockResolvedValue({}),
     }
+    metrics = { recordJob: jest.fn(), observeJobDuration: jest.fn() }
 
     service = new FacebookHistorySyncService(
       prisma as any,
@@ -97,6 +100,7 @@ describe('FacebookHistorySyncService', () => {
       facebookService as any,
       conversationsService as any,
       messagesService as any,
+      metrics,
     )
   })
 
@@ -130,6 +134,23 @@ describe('FacebookHistorySyncService', () => {
       expect(graphClient.getConversations).toHaveBeenNthCalledWith(2, 'plaintext-page-token', {
         after: 'cursor-2',
       })
+    })
+
+    it('records one background job success and duration per sync run', async () => {
+      prisma.channelConnection.findUnique.mockResolvedValue(makeConnection())
+      graphClient.getConversations.mockResolvedValue({ data: [], paging: {} })
+
+      await service.syncConnection(CONN_ID)
+
+      expect(metrics.recordJob).toHaveBeenCalledTimes(1)
+      expect(metrics.recordJob).toHaveBeenCalledWith({
+        jobGroup: 'facebook_history_sync',
+        outcome: 'success',
+      })
+      expect(metrics.observeJobDuration).toHaveBeenCalledWith(
+        { jobGroup: 'facebook_history_sync', outcome: 'success' },
+        expect.any(Number),
+      )
     })
   })
 
@@ -458,6 +479,10 @@ describe('FacebookHistorySyncService', () => {
 
       await expect(service.syncConnection(CONN_ID)).rejects.toThrow('network down')
       expect(prisma.channelConnection.update).not.toHaveBeenCalled()
+      expect(metrics.recordJob).toHaveBeenCalledWith({
+        jobGroup: 'facebook_history_sync',
+        outcome: 'error',
+      })
     })
 
     it('isolates a per-conversation failure and continues syncing the rest', async () => {

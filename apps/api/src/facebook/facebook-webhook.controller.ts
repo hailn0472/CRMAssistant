@@ -5,18 +5,22 @@ import {
   Get,
   HttpCode,
   HttpStatus,
+  Inject,
+  Logger,
   Post,
   Query,
   RawBodyRequest,
   Req,
   Res,
   UnauthorizedException,
+  Optional,
 } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 import type { Request, Response } from 'express'
 
 import { FacebookService } from './facebook.service'
 import type { FacebookWebhookBody } from './facebook-message.types'
+import { FACEBOOK_METRICS_PORT, type FacebookMetricsPort } from '../observability/metrics.types'
 
 /**
  * Public REST endpoint for Facebook Messenger webhooks. Public (no
@@ -30,9 +34,12 @@ import type { FacebookWebhookBody } from './facebook-message.types'
  */
 @Controller('webhooks/facebook')
 export class FacebookWebhookController {
+  private readonly logger = new Logger(FacebookWebhookController.name)
+
   constructor(
     private readonly facebookService: FacebookService,
     private readonly configService: ConfigService,
+    @Optional() @Inject(FACEBOOK_METRICS_PORT) private readonly metrics?: FacebookMetricsPort,
   ) {}
 
   @Get()
@@ -59,6 +66,7 @@ export class FacebookWebhookController {
     const signatureHeader = req.headers['x-hub-signature-256']
 
     if (!this.isValidSignature(req.rawBody, signatureHeader, appSecret)) {
+      this.recordWebhookEvent('other', 'rejected')
       throw new UnauthorizedException('Invalid webhook signature')
     }
 
@@ -72,21 +80,36 @@ export class FacebookWebhookController {
       if (!pageId) continue
 
       for (const event of entry.messaging ?? []) {
+        const eventGroup = event.message ? 'message' : 'other'
         try {
           // Sequential per event to avoid interleaved conversation/message writes.
           // eslint-disable-next-line no-await-in-loop
           await this.facebookService.handleInboundMessagingEvent(pageId, event)
+          this.recordWebhookEvent(eventGroup, 'success')
         } catch (error) {
           // Never let one bad/edge-case event (e.g. a tenant with no active
           // users to own an auto-created contact) turn into a non-200
           // response — Facebook would then retry the whole batch forever.
-          // eslint-disable-next-line no-console
-          console.error('[FacebookWebhookController] Failed to process inbound event', error)
+          this.logger.error(
+            `[FacebookWebhookController] Failed to process inbound ${eventGroup} event (${error instanceof Error ? error.name : 'unknown error'})`,
+          )
+          this.recordWebhookEvent(eventGroup, 'error')
         }
       }
     }
 
     return { received: true }
+  }
+
+  private recordWebhookEvent(
+    eventGroup: 'message' | 'other',
+    outcome: 'success' | 'error' | 'rejected',
+  ): void {
+    try {
+      this.metrics?.recordWebhookEvent({ eventGroup, outcome })
+    } catch {
+      // Metrics are best-effort and must not change webhook acknowledgement.
+    }
   }
 
   private isValidSignature(

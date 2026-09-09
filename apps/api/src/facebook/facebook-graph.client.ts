@@ -1,6 +1,7 @@
-import { Injectable, Optional } from '@nestjs/common'
+import { Inject, Injectable, Optional } from '@nestjs/common'
 
 import type { FacebookConversationsResponse } from './facebook-message.types'
+import { FACEBOOK_METRICS_PORT, type FacebookMetricsPort } from '../observability/metrics.types'
 
 export type FacebookMessagePayload = Record<string, unknown>
 
@@ -125,7 +126,10 @@ export class FacebookGraphClient {
   private readonly rateLimiter: OutboundRateLimiter
   private readonly circuitBreaker: CircuitBreaker
 
-  constructor(@Optional() options: FacebookGraphClientOptions = {}) {
+  constructor(
+    @Optional() options: FacebookGraphClientOptions = {},
+    @Optional() @Inject(FACEBOOK_METRICS_PORT) private readonly metrics?: FacebookMetricsPort,
+  ) {
     this.rateLimiter = options.rateLimiter ?? new OutboundRateLimiter()
     this.circuitBreaker = options.circuitBreaker ?? new CircuitBreaker()
   }
@@ -149,7 +153,9 @@ export class FacebookGraphClient {
       message,
     }
 
-    return this.executeWithResilience(() => this.postMessages(pageAccessToken, requestBody))
+    return this.executeWithResilience('write', () =>
+      this.postMessages(pageAccessToken, requestBody),
+    )
   }
 
   /** Paginated read of `GET /me/conversations` (history sync, Story 8A.4).
@@ -159,7 +165,7 @@ export class FacebookGraphClient {
     pageAccessToken: string,
     opts?: { after?: string },
   ): Promise<FacebookConversationsResponse> {
-    return this.executeWithResilience(() => this.fetchConversations(pageAccessToken, opts))
+    return this.executeWithResilience('read', () => this.fetchConversations(pageAccessToken, opts))
   }
 
   /** Follows an absolute `paging.next` URL (used to drain a conversation's
@@ -167,17 +173,24 @@ export class FacebookGraphClient {
    * doesn't already carry one — Graph API `paging.next` URLs are normally
    * pre-signed with it. */
   async getPageByUrl<T>(nextUrl: string, pageAccessToken?: string): Promise<T> {
-    return this.executeWithResilience(() => this.fetchPageByUrl<T>(nextUrl, pageAccessToken))
+    return this.executeWithResilience('read', () =>
+      this.fetchPageByUrl<T>(nextUrl, pageAccessToken),
+    )
   }
 
   /** Shared limiter/breaker/retry wrapper for every outbound Graph API call
    * (sends and reads alike — AC #7 requires them to share the 600/hr budget). */
-  private async executeWithResilience<T>(fn: () => Promise<T>): Promise<T> {
+  private async executeWithResilience<T>(
+    operationGroup: 'read' | 'write',
+    fn: () => Promise<T>,
+  ): Promise<T> {
     if (!this.circuitBreaker.canAttempt()) {
+      this.recordGraphRequest(operationGroup, 'rejected')
       throw new FacebookCircuitOpenError()
     }
 
     if (!this.rateLimiter.tryAcquire()) {
+      this.recordGraphRequest(operationGroup, 'rate_limited')
       throw new FacebookRateLimitError()
     }
 
@@ -187,6 +200,7 @@ export class FacebookGraphClient {
       try {
         const result = await fn()
         this.circuitBreaker.recordSuccess()
+        this.recordGraphRequest(operationGroup, 'success')
         return result
       } catch (error) {
         lastError = error
@@ -203,7 +217,30 @@ export class FacebookGraphClient {
     }
 
     this.circuitBreaker.recordFailure()
-    throw lastError instanceof Error ? lastError : new Error('Facebook Graph API request failed')
+    const finalError =
+      lastError instanceof Error ? lastError : new Error('Facebook Graph API request failed')
+    this.recordGraphRequest(operationGroup, this.graphErrorOutcome(finalError))
+    throw finalError
+  }
+
+  private recordGraphRequest(
+    operationGroup: 'read' | 'write',
+    outcome: 'success' | 'error' | 'rejected' | 'rate_limited',
+  ): void {
+    try {
+      this.metrics?.recordGraphRequest({ operationGroup, outcome })
+    } catch {
+      // Telemetry must never retry or fail a provider request that already completed.
+    }
+  }
+
+  private graphErrorOutcome(error: Error): 'error' | 'rejected' | 'rate_limited' {
+    if (error instanceof FacebookRateLimitError) return 'rate_limited'
+    if (error instanceof FacebookGraphApiError) {
+      if (error.status === 429) return 'rate_limited'
+      if (error.status >= 400 && error.status < 500) return 'rejected'
+    }
+    return 'error'
   }
 
   private async postMessages(
@@ -249,10 +286,18 @@ export class FacebookGraphClient {
 
   private async parseJsonResponse<T>(response: Response): Promise<T> {
     if (!response.ok) {
-      const errorBody = await response.text().catch(() => '')
+      // Consume the provider response so the underlying connection can be
+      // reused, but never retain, log, or include its contents in an error.
+      try {
+        await response.text()
+      } catch {
+        // A malformed/partial provider response must not mask the status error.
+      }
       throw new FacebookGraphApiError(
         response.status,
-        `Facebook Graph API error (${response.status}): ${errorBody}`,
+        // Do not retain or expose Graph API response bodies: they can contain
+        // access-token hints, recipient identifiers, or provider diagnostics.
+        `Facebook Graph API error (${response.status})`,
       )
     }
 
