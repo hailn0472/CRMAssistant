@@ -1,4 +1,4 @@
-import { Global, Module } from '@nestjs/common'
+import { Global, MiddlewareConsumer, Module, NestModule } from '@nestjs/common'
 import { ConfigModule, ConfigService } from '@nestjs/config'
 import type { Registry } from 'prom-client'
 
@@ -7,6 +7,7 @@ import { createObservabilityOptions } from './metrics.config'
 import { MetricsController } from './metrics.controller'
 import { NoopMetricsAdapter } from './metrics.noop'
 import { getMetricsRegistry } from './metrics.registry'
+import { HttpMetricsMiddleware } from './http-metrics.middleware'
 import {
   CACHE_METRICS_PORT,
   BACKGROUND_METRICS_PORT,
@@ -26,6 +27,7 @@ import {
   imports: [ConfigModule],
   controllers: [MetricsController],
   providers: [
+    HttpMetricsMiddleware,
     {
       provide: METRICS_OPTIONS,
       inject: [ConfigService],
@@ -87,4 +89,8 @@ import {
     BACKGROUND_METRICS_PORT,
   ],
 })
-export class ObservabilityModule {}
+export class ObservabilityModule implements NestModule {
+  configure(consumer: MiddlewareConsumer): void {
+    consumer.apply(HttpMetricsMiddleware).forRoutes('*')
+  }
+}
