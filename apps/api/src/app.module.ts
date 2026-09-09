@@ -30,6 +30,7 @@ import { ImportExportModule } from './import-export/import-export.module'
 import { TimeTrackingModule } from './time-tracking/time-tracking.module'
 import { DashboardsModule } from './dashboards/dashboards.module'
 import { CacheModule } from './cache/cache.module'
+import { ObservabilityModule } from './observability/observability.module'
 
 @Module({
   imports: [
@@ -37,6 +38,7 @@ import { CacheModule } from './cache/cache.module'
       isGlobal: true,
       envFilePath: ['.env.local', '.env'],
     }),
+    ObservabilityModule,
     CacheModule,
     PrismaModule,
     HealthModule,
