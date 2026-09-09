@@ -48,6 +48,9 @@ describe('HTTP metrics normalization', () => {
   it('groups legacy health and Facebook webhook routes into bounded labels', () => {
     expect(normalizeHttpRoute(makeRequest({ path: '/health' }))).toBe('/health/live')
     expect(normalizeHttpRoute(makeRequest({ path: '/webhooks/facebook' }))).toBe('/facebook')
+    expect(normalizeHttpRoute(makeRequest({ path: '/api/contacts/import/private-id' }))).toBe(
+      '/contacts',
+    )
   })
 })
 

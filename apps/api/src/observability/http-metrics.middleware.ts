@@ -56,7 +56,14 @@ export function normalizeHttpRoute(
   if (normalized === '/metrics') return '/metrics'
   if (normalized === '/graphql' || normalized.startsWith('/graphql/')) return '/graphql'
   if (normalized === '/auth' || normalized.startsWith('/auth/')) return '/auth'
-  if (normalized === '/contacts' || normalized.startsWith('/contacts/')) return '/contacts'
+  if (
+    normalized === '/contacts' ||
+    normalized.startsWith('/contacts/') ||
+    normalized === '/api/contacts' ||
+    normalized.startsWith('/api/contacts/')
+  ) {
+    return '/contacts'
+  }
   if (normalized === '/tasks' || normalized.startsWith('/tasks/')) return '/tasks'
   if (
     normalized === '/facebook' ||
