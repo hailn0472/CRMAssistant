@@ -67,6 +67,7 @@ Arguments:
 Coverage artifacts are uploaded by the CI workflow:
 
 - `apps/api/coverage/`
+- `apps/api/coverage-api/`
 - `apps/api/coverage-integration/`
 - `apps/web/coverage/`
 

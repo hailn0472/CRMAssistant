@@ -3,7 +3,14 @@ import type { Config } from 'jest'
 const config: Config = {
   moduleFileExtensions: ['js', 'json', 'ts'],
   rootDir: '.',
-  testMatch: ['**/test/integration/**/*.spec.ts'],
+  // Integration specs are kept close to the production module they exercise
+  // (`src/**/__tests__/*.integration.spec.ts`) as well as in the legacy
+  // package-level integration directory. Keep both locations discoverable so
+  // adding a spec does not require moving production or test files.
+  testMatch: [
+    '<rootDir>/test/integration/**/*.spec.ts',
+    '<rootDir>/src/**/__tests__/**/*.integration.spec.ts',
+  ],
   transform: {
     // tsconfig.spec.json sets isolatedModules -> transpile-only, no per-worker TS program
     '^.+\\.(t|j)s$': ['ts-jest', { tsconfig: '<rootDir>/tsconfig.spec.json' }],

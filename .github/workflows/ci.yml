@@ -141,6 +141,14 @@ jobs:
       - name: Run API tests (apps/api/test/api/**/*.spec.ts)
         run: pnpm test:api --filter=api
 
+      - name: Upload API coverage report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-api
+          path: apps/api/coverage-api/
+          retention-days: 7
+
   build:
     name: Build
     runs-on: ubuntu-latest

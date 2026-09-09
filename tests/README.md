@@ -5,7 +5,7 @@ This repository uses a full test pyramid, not an E2E-only setup.
 - **Frontend unit/component tests:** Jest + React Testing Library in `apps/web`.
 - **Backend unit tests:** Jest in `apps/api/src`.
 - **Backend API tests:** Jest + Supertest in `apps/api/test/api`.
-- **Backend integration tests:** Jest + Testcontainers/PostgreSQL in `apps/api/test/integration`.
+- **Backend integration tests:** Jest + Testcontainers/PostgreSQL in `apps/api/test/integration` and colocated `*.integration.spec.ts` files under `apps/api/src/**/__tests__`.
 - **Browser E2E tests:** Playwright in root `tests/e2e`.
 
 ## Setup
@@ -61,11 +61,15 @@ apps/web/
 apps/api/
 ├── jest.config.ts                     # Backend unit config, 80% global threshold
 ├── jest.api.config.ts                 # Backend API/Supertest config
-├── jest.integration.config.ts         # Backend integration config, 60% line/function threshold
+├── jest.integration.config.ts         # Backend integration config, 50% line/function threshold
 ├── src/**/*.spec.ts                   # Backend unit tests
 └── test/
     ├── api/**/*.spec.ts               # API-level tests
     └── integration/**/*.spec.ts       # Database-backed integration tests
+
+Colocated integration specs use the `*.integration.spec.ts` suffix under a
+module's `src/**/__tests__` directory. Both locations are included by
+`jest.integration.config.ts`.
 
 tests/
 ├── e2e/                               # Playwright browser E2E specs
@@ -131,8 +135,10 @@ Example locations:
 Use these for behavior that must be proven with real infrastructure.
 
 - Runner/config: `apps/api/jest.integration.config.ts`.
-- Location: `apps/api/test/integration/**/*.spec.ts`.
-- Coverage target: 60% lines/functions and 40% branches.
+- Location: `apps/api/test/integration/**/*.spec.ts` or
+  `apps/api/src/**/__tests__/*.integration.spec.ts`.
+- Coverage target: 50% lines/functions/statements and 20% branches (the
+  thresholds configured in `apps/api/jest.integration.config.ts`).
 - Use Testcontainers/PostgreSQL for database-backed behavior.
 - Always preserve tenant isolation: every data setup and assertion must include the correct `tenantId` scope.
 - Clean database state between tests or use isolated tenants per test case.
