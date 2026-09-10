@@ -5,10 +5,10 @@ import { useRouter, useSearchParams } from 'next/navigation'
 
 import { authService } from '../services/auth.service'
 import { useAuthStore } from '../stores/auth.store'
-import type { AuthUser, RegisterData } from '../types/auth.types'
+import type { AuthUser, AuthTokenResponse, RegisterData } from '../types/auth.types'
 
 function safeRedirectTarget(value: string | null): string {
-  if (!value || !value.startsWith('/') || value.startsWith('//')) {
+  if (!value || !value.startsWith('/') || value.startsWith('//') || value.includes('\\')) {
     return '/dashboard'
   }
   return value
@@ -19,6 +19,7 @@ export function useAuth(): {
   isLoading: boolean
   login: (email: string, password: string) => Promise<void>
   register: (data: RegisterData) => Promise<void>
+  oauthLogin: (accessToken: string, redirect?: string | null) => Promise<void>
   logout: () => Promise<void>
 } {
   const router = useRouter()
@@ -30,15 +31,25 @@ export function useAuth(): {
       setLoading(true)
       try {
         const response = await authService.login({ email, password })
+        if ('requires2FA' in response || 'requires2FASetup' in response) {
+          // 2FA/2FA setup required — redirect back to login with a flag
+          // The login page handles these response types inline
+          clearAuth()
+          router.push('/login?2fa_required=1')
+          return
+        }
+        const authResponse = response as AuthTokenResponse
         const authUser: AuthUser = {
-          userId: response.userId,
-          tenantId: response.tenantId,
-          role: response.role,
-          email: response.email,
-          name: response.name,
+          userId: authResponse.userId,
+          tenantId: authResponse.tenantId,
+          roles: authResponse.roles,
+          email: authResponse.email,
+          firstName: authResponse.firstName,
+          lastName: authResponse.lastName,
+          avatar: authResponse.avatar,
         }
         setUser(authUser)
-        setAccessToken(response.accessToken)
+        setAccessToken(authResponse.accessToken)
         router.push(safeRedirectTarget(searchParams.get('redirect')))
       } finally {
         setLoading(false)
@@ -55,9 +66,11 @@ export function useAuth(): {
         const authUser: AuthUser = {
           userId: response.userId,
           tenantId: response.tenantId,
-          role: response.role,
+          roles: response.roles,
           email: response.email,
-          name: response.name,
+          firstName: response.firstName,
+          lastName: response.lastName,
+          avatar: response.avatar,
         }
         setUser(authUser)
         setAccessToken(response.accessToken)
@@ -69,10 +82,36 @@ export function useAuth(): {
     [setLoading, setUser, setAccessToken, router],
   )
 
+  const oauthLogin = useCallback(
+    async (accessToken: string, redirect?: string | null): Promise<void> => {
+      setLoading(true)
+      try {
+        const response = await authService.oauthLogin(accessToken)
+        const authUser: AuthUser = {
+          userId: response.userId,
+          tenantId: response.tenantId,
+          roles: response.roles,
+          email: response.email,
+          firstName: response.firstName,
+          lastName: response.lastName,
+          avatar: response.avatar,
+        }
+        setUser(authUser)
+        setAccessToken(response.accessToken)
+        router.push(safeRedirectTarget(redirect ?? null))
+      } finally {
+        setLoading(false)
+      }
+    },
+    [setLoading, setUser, setAccessToken, router],
+  )
+
   const logout = useCallback(async (): Promise<void> => {
     setLoading(true)
     try {
       await authService.logout()
+    } catch {
+      // Local session cleanup must still complete if the server logout request fails.
     } finally {
       clearAuth()
       setLoading(false)
@@ -80,5 +119,5 @@ export function useAuth(): {
     }
   }, [clearAuth, setLoading, router])
 
-  return { user, isLoading, login, register, logout }
+  return { user, isLoading, login, register, oauthLogin, logout }
 }

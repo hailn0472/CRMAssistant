@@ -42,13 +42,14 @@ cp .env.example .env.local
 
 # Configure required variables:
 # - DATABASE_URL=postgresql://user:password@localhost:5432/crm
-# - REDIS_HOST=localhost
-# - REDIS_PORT=6379
+# - REDIS_URL=redis://localhost:6379
 # - SUPABASE_URL=https://your-project.supabase.co
 # - SUPABASE_ANON_KEY=your-anon-key
 # - VERTEX_AI_PROJECT_ID=your-project-id
 # - VERTEX_AI_LOCATION=us-central1
 ```
+
+For Infisical-based development, see [Infisical Secret Management](docs/operations/infisical-secret-management.md).
 
 ### Database Setup
 
@@ -63,6 +64,8 @@ pnpm prisma generate
 # (Optional) Seed database
 pnpm prisma db seed
 ```
+
+See [Database Migrations](docs/operations/database-migrations.md) for migration workflow, reset/re-seed instructions, and migration history.
 
 ### Redis Setup
 
@@ -94,9 +97,13 @@ docker run -d -p 6379:6379 redis:7-alpine
 # Start all apps in development mode
 pnpm dev
 
+# `pnpm dev` chooses available API (from 4000) and web (from 3000) ports,
+# then points the web app at that API automatically. Prefer another range with:
+API_PORT=4100 WEB_PORT=3100 pnpm dev
+
 # Start specific app
-pnpm dev --filter=web   # Frontend only
-pnpm dev --filter=api   # Backend only
+pnpm --filter=web dev   # Frontend only
+pnpm --filter=api dev   # Backend only; chooses the next free port from 4000
 ```
 
 ### Build
@@ -114,6 +121,10 @@ pnpm build --filter=web
 ```bash
 # Run tests
 pnpm test
+
+# Run Docker-backed API smoke tests (requires Docker/Testcontainers)
+# Uses isolated test env vars and does not require production services
+pnpm test:api --filter=api
 
 # Run linting
 pnpm lint
@@ -149,6 +160,7 @@ CRMAssistant/
 ## Documentation
 
 - [Project Context](docs/project-context.md) - Complete project context và development rules
+- [Infisical Secret Management](docs/operations/infisical-secret-management.md) - Non-secret environment inventory, local CLI workflow, CI/CD bootstrap, platform mapping, and migration plan
 - [Implementation Rules](.claude/rules/) - Framework-specific implementation rules
 
 ## Development Workflow
@@ -173,7 +185,7 @@ CRMAssistant/
 
 ### Redis connection fails
 
-- Check REDIS_HOST and REDIS_PORT
+- Check REDIS_URL and ensure Redis is running
 - Ensure Redis is running
 
 ## Contributing

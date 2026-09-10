@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BMAD Auto-Pipeline — Data Flow v5</title>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'JetBrains Mono', monospace; background: #020617; min-height: 100vh; padding: 2rem; color: white; }
+    .container { max-width: 1440px; margin: 0 auto; }
+    .header { margin-bottom: 2rem; }
+    .header-row { display: flex; align-items: center; gap: 1rem; margin-bottom: 0.5rem; }
+    .pulse-dot { width: 12px; height: 12px; background: #fbbf24; border-radius: 50%; animation: pulse 2s infinite; }
+    @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+    h1 { font-size: 1.5rem; font-weight: 700; }
+    .subtitle { color: #94a3b8; font-size: 0.875rem; margin-left: 1.75rem; }
+    .diagram-container { background: rgba(15, 23, 42, 0.5); border-radius: 1rem; border: 1px solid #1e293b; padding: 1.5rem; overflow-x: auto; }
+    svg { width: 100%; min-width: 1400px; display: block; }
+    .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1rem; margin-top: 2rem; }
+    .card { background: rgba(15, 23, 42, 0.5); border-radius: 0.75rem; border: 1px solid #1e293b; padding: 1.25rem; }
+    .card-header { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem; }
+    .card-dot { width: 8px; height: 8px; border-radius: 50%; }
+    .card-dot.cyan { background: #22d3ee; }
+    .card-dot.emerald { background: #34d399; }
+    .card-dot.violet { background: #a78bfa; }
+    .card-dot.amber { background: #fbbf24; }
+    .card-dot.rose { background: #fb7185; }
+    .card-dot.pink { background: #f472b6; }
+    .card h3 { font-size: 0.875rem; font-weight: 600; }
+    .card ul { list-style: none; color: #94a3b8; font-size: 0.75rem; }
+    .card li { margin-bottom: 0.375rem; }
+    .code { font-size: 0.7rem; color: #64748b; }
+    .footer { text-align: center; margin-top: 1.5rem; color: #475569; font-size: 0.75rem; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="header-row">
+        <div class="pulse-dot"></div>
+        <h1>BMAD Auto-Pipeline — Data Flow v5 (9 Stages + E2E/QA)</h1>
+      </div>
+      <p class="subtitle">CRMAssistant • Hermes orchestrator + Hermes subagents (delegate_task) • /workflows → sprint-status menu → pipeline → PR feature/*→dev → CI xanh</p>
+    </div>
+
+    <div class="diagram-container">
+      <svg viewBox="0 0 1420 1320">
+        <defs>
+          <marker id="a" markerWidth="9" markerHeight="6" refX="8" refY="3" orient="auto"><polygon points="0 0, 9 3, 0 6" fill="#64748b"/></marker>
+          <marker id="a-cyan" markerWidth="9" markerHeight="6" refX="8" refY="3" orient="auto"><polygon points="0 0, 9 3, 0 6" fill="#22d3ee"/></marker>
+          <marker id="a-amber" markerWidth="9" markerHeight="6" refX="8" refY="3" orient="auto"><polygon points="0 0, 9 3, 0 6" fill="#fbbf24"/></marker>
+          <marker id="a-emerald" markerWidth="9" markerHeight="6" refX="8" refY="3" orient="auto"><polygon points="0 0, 9 3, 0 6" fill="#34d399"/></marker>
+          <marker id="a-rose" markerWidth="9" markerHeight="6" refX="8" refY="3" orient="auto"><polygon points="0 0, 9 3, 0 6" fill="#fb7185"/></marker>
+          <marker id="a-violet" markerWidth="9" markerHeight="6" refX="8" refY="3" orient="auto"><polygon points="0 0, 9 3, 0 6" fill="#a78bfa"/></marker>
+          <marker id="a-pink" markerWidth="9" markerHeight="6" refX="8" refY="3" orient="auto"><polygon points="0 0, 9 3, 0 6" fill="#f472b6"/></marker>
+          <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse"><path d="M 40 0 L 0 0 0 40" fill="none" stroke="#1e293b" stroke-width="0.5"/></pattern>
+          <filter id="glow"><feGaussianBlur stdDeviation="3.5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+        </defs>
+        <rect width="100%" height="100%" fill="url(#grid)"/>
+
+        <!-- TRIGGER -->
+        <text x="20" y="28" fill="#22d3ee" font-size="11" font-weight="600">▌TRIGGER</text>
+        <rect x="30" y="42" width="130" height="56" rx="6" fill="rgba(30,41,59,0.5)" stroke="#94a3b8" stroke-width="1.5"/>
+        <text x="95" y="66" fill="white" font-size="10" font-weight="600" text-anchor="middle">👤 User</text>
+        <text x="95" y="84" fill="#94a3b8" font-size="8" text-anchor="middle">gõ /workflows</text>
+        <rect x="200" y="42" width="360" height="56" rx="6" fill="rgba(8,51,68,0.4)" stroke="#22d3ee" stroke-width="1.5"/>
+        <text x="380" y="61" fill="white" font-size="10" font-weight="600" text-anchor="middle">/workflows → Menu = Sprint Status</text>
+        <text x="380" y="77" fill="#94a3b8" font-size="7.5" text-anchor="middle">render sprint-status.yaml → chọn story (vd 5-3 backlog)</text>
+        <text x="380" y="91" fill="#fbbf24" font-size="7.5" text-anchor="middle">entry theo status: backlog→S1 · ready-for-dev→S2 · review→S7</text>
+        <line x1="160" y1="70" x2="198" y2="70" stroke="#22d3ee" stroke-width="1.5" marker-end="url(#a-cyan)"/>
+
+        <!-- ORCHESTRATOR -->
+        <path d="M 380 98 L 380 118" fill="none" stroke="#22d3ee" stroke-width="1.5" marker-end="url(#a-cyan)"/>
+        <rect x="120" y="122" width="1180" height="66" rx="10" fill="rgba(251,191,36,0.12)" stroke="#fbbf24" stroke-width="2.5" filter="url(#glow)"/>
+        <text x="710" y="145" fill="#fbbf24" font-size="13" font-weight="700" text-anchor="middle">🧠 HERMES ORCHESTRATOR (session này)</text>
+        <text x="710" y="162" fill="#cbd5e1" font-size="8.5" text-anchor="middle">superpowers-subagent-driven-development · dispatch mỗi stage = delegate_task (subagent Hermes, cùng deepseek-v4-flash) · thu report · ledger + todo · cập nhật sprint-status</text>
+        <text x="710" y="177" fill="#94a3b8" font-size="8" text-anchor="middle">tự chạy: dogfood QA (browser toolset) · git/CI ops (S8) · quản branch feature/&lt;scope&gt;/&lt;desc&gt; · xử lý fix-loop / BLOCKED</text>
+
+        <!-- ROW 1: S1-S4 -->
+        <text x="20" y="212" fill="#34d399" font-size="11" font-weight="600">▌PIPELINE — SUBAGENTS = HERMES delegate_task (spawn tươi mỗi stage, cùng deepseek-v4-flash)</text>
+
+        <!-- S1 -->
+        <rect x="30" y="224" width="330" height="120" rx="6" fill="rgba(120,53,15,0.28)" stroke="#fbbf24" stroke-width="1.5"/>
+        <text x="46" y="243" fill="#fbbf24" font-size="10" font-weight="600">1 · Create Story</text>
+        <text x="344" y="243" fill="#fca5a5" font-size="8" text-anchor="end">ds-v4-flash</text>
+        <line x1="46" y1="249" x2="344" y2="249" stroke="#1e293b" stroke-width="0.5"/>
+        <text x="46" y="264" fill="#94a3b8" font-size="7.5">skill: bmad-create-story</text>
+        <text x="46" y="278" fill="#94a3b8" font-size="7.5">quét backlog · load epic/arch/PRD/UX · git intel</text>
+        <text x="46" y="292" fill="#94a3b8" font-size="7.5">+ previous-story learnings</text>
+        <text x="46" y="308" fill="#a78bfa" font-size="7.5">→ story.md (committed _bmad-output)</text>
+        <text x="46" y="324" fill="#fbbf24" font-size="7.5">backlog → ready-for-dev</text>
+        <text x="46" y="339" fill="#fb7185" font-size="7">report ↑ Hermes</text>
+
+        <!-- S2 -->
+        <rect x="390" y="224" width="330" height="120" rx="6" fill="rgba(6,78,59,0.4)" stroke="#34d399" stroke-width="1.5"/>
+        <text x="406" y="243" fill="#34d399" font-size="10" font-weight="600">2 · Validate Story</text>
+        <text x="704" y="243" fill="#93c5fd" font-size="8" text-anchor="end">ds-v4-flash</text>
+        <line x1="406" y1="249" x2="704" y2="249" stroke="#1e293b" stroke-width="0.5"/>
+        <text x="406" y="264" fill="#94a3b8" font-size="7.5">create-story checklist + traceability</text>
+        <text x="406" y="278" fill="#94a3b8" font-size="7.5">AC ↔ epics/PRD · không mâu thuẫn</text>
+        <text x="406" y="292" fill="#94a3b8" font-size="7.5">đủ context, no TBD/placeholder</text>
+        <text x="406" y="308" fill="#fb7185" font-size="7.5">fail → dispatch lại S1</text>
+        <text x="406" y="324" fill="#34d399" font-size="7.5">pass → tiếp (giữ ready-for-dev)</text>
+        <text x="406" y="339" fill="#fb7185" font-size="7">report ↑ Hermes: pass/fail+gaps</text>
+
+        <!-- S3 -->
+        <rect x="750" y="224" width="330" height="120" rx="6" fill="rgba(8,51,68,0.4)" stroke="#22d3ee" stroke-width="1.5"/>
+        <text x="766" y="243" fill="#22d3ee" font-size="10" font-weight="600">3 · UI/UX Design</text>
+        <text x="1064" y="243" fill="#93c5fd" font-size="8" text-anchor="end">ds-v4-flash</text>
+        <line x1="766" y1="249" x2="1064" y2="249" stroke="#1e293b" stroke-width="0.5"/>
+        <text x="766" y="264" fill="#94a3b8" font-size="7.5">skill: claude-design (+popular-web-designs)</text>
+        <text x="766" y="278" fill="#94a3b8" font-size="7.5">visual HTML · surface-first · anti-slop</text>
+        <text x="766" y="292" fill="#94a3b8" font-size="7.5">bám design system + docs/rules/</text>
+        <text x="766" y="308" fill="#f472b6" font-size="7.5">→ prototype.html (GITIGNORE)</text>
+        <text x="766" y="324" fill="#64748b" font-size="7">docs/workflow-artifacts/&lt;story&gt;/ui-ux/</text>
+        <text x="766" y="339" fill="#64748b" font-size="7">agent ngoài BMAD · chỉ story có UI</text>
+
+        <!-- S4 -->
+        <rect x="1110" y="224" width="290" height="120" rx="6" fill="rgba(6,78,59,0.4)" stroke="#34d399" stroke-width="1.5"/>
+        <text x="1126" y="243" fill="#34d399" font-size="10" font-weight="600">4 · Test Plan</text>
+        <text x="1384" y="243" fill="#93c5fd" font-size="8" text-anchor="end">ds-v4-flash</text>
+        <line x1="1126" y1="249" x2="1384" y2="249" stroke="#1e293b" stroke-width="0.5"/>
+        <text x="1126" y="264" fill="#94a3b8" font-size="7.5">skill: testarch-test-design</text>
+        <text x="1126" y="278" fill="#94a3b8" font-size="7.5">test matrix: AC → tầng test</text>
+        <text x="1126" y="292" fill="#94a3b8" font-size="7.5">unit/integration/api/e2e</text>
+        <text x="1126" y="308" fill="#f472b6" font-size="7.5">→ test-plan.md (GITIGNORE)</text>
+        <text x="1126" y="324" fill="#64748b" font-size="7">KHÔNG viết code — S5 tự viết</text>
+        <text x="1126" y="339" fill="#fbbf24" font-size="7">(test-first trong dev)</text>
+
+        <line x1="360" y1="284" x2="388" y2="284" stroke="#34d399" stroke-width="2" marker-end="url(#a-emerald)"/>
+        <line x1="720" y1="284" x2="748" y2="284" stroke="#34d399" stroke-width="2" marker-end="url(#a-emerald)"/>
+        <line x1="1080" y1="284" x2="1108" y2="284" stroke="#34d399" stroke-width="2" marker-end="url(#a-emerald)"/>
+        <path d="M 450 344 L 450 358 Q 450 364 444 364 L 200 364 Q 194 364 194 358 L 194 346" fill="none" stroke="#fb7185" stroke-width="1.3" stroke-dasharray="4,3" marker-end="url(#a-rose)"/>
+        <text x="322" y="360" fill="#fb7185" font-size="7" text-anchor="middle">validate fail → sửa story</text>
+        <path d="M 1255 344 L 1255 384" fill="none" stroke="#fbbf24" stroke-width="2" marker-end="url(#a-amber)"/>
+
+        <!-- BRANCH -->
+        <rect x="450" y="388" width="740" height="40" rx="8" fill="rgba(52,211,153,0.08)" stroke="#34d399" stroke-width="1.5" stroke-dasharray="7,3"/>
+        <text x="820" y="404" fill="#34d399" font-size="10" font-weight="700" text-anchor="middle">🌿 TẠO BRANCH (Hermes) — 1 story = 1 branch, fork từ dev</text>
+        <text x="820" y="420" fill="#cbd5e1" font-size="8" text-anchor="middle">git checkout dev &amp;&amp; pull → git checkout -b feature/&lt;scope&gt;/&lt;desc&gt;  (đúng convention docs/rules/git-workflow.md)</text>
+        <path d="M 820 428 L 820 446" fill="none" stroke="#34d399" stroke-width="2" marker-end="url(#a-emerald)"/>
+
+        <!-- ROW 2: S5-S7 -->
+        <!-- S5 -->
+        <rect x="120" y="450" width="330" height="128" rx="6" fill="rgba(6,78,59,0.4)" stroke="#34d399" stroke-width="1.5"/>
+        <text x="136" y="469" fill="#34d399" font-size="10" font-weight="600">5 · Dev Story</text>
+        <text x="434" y="469" fill="#93c5fd" font-size="8" text-anchor="end">ds-v4-flash</text>
+        <line x1="136" y1="475" x2="434" y2="475" stroke="#1e293b" stroke-width="0.5"/>
+        <text x="136" y="490" fill="#94a3b8" font-size="7.5">skill: bmad-dev-story + superpowers-TDD</text>
+        <text x="136" y="504" fill="#94a3b8" font-size="7.5">đọc test-plan → test FAIL trước (red)</text>
+        <text x="136" y="518" fill="#94a3b8" font-size="7.5">code cho pass (green) → refactor</text>
+        <text x="136" y="532" fill="#94a3b8" font-size="7.5">unit + integration + api · full regression</text>
+        <text x="136" y="548" fill="#a78bfa" font-size="7.5">✏ test+impl (COMMIT vào branch)</text>
+        <text x="136" y="563" fill="#fbbf24" font-size="7.5">ready-for-dev → in-progress → review</text>
+        <text x="136" y="575" fill="#fb7185" font-size="7">report ↑ Hermes: DONE/concerns/BLOCKED</text>
+
+        <!-- S6 -->
+        <rect x="480" y="450" width="330" height="128" rx="6" fill="rgba(6,78,59,0.4)" stroke="#34d399" stroke-width="1.5"/>
+        <text x="496" y="469" fill="#34d399" font-size="10" font-weight="600">6 · Doc Cross-check</text>
+        <text x="794" y="469" fill="#93c5fd" font-size="8" text-anchor="end">ds-v4-flash</text>
+        <line x1="496" y1="475" x2="794" y2="475" stroke="#1e293b" stroke-width="0.5"/>
+        <text x="496" y="490" fill="#94a3b8" font-size="7.5">"đối chiếu tài liệu"</text>
+        <text x="496" y="504" fill="#94a3b8" font-size="7.5">superpowers-verification-before-completion</text>
+        <text x="496" y="518" fill="#94a3b8" font-size="7.5">code ↔ architecture.md</text>
+        <text x="496" y="532" fill="#94a3b8" font-size="7.5">code ↔ PRD/UX · phát hiện drift</text>
+        <text x="496" y="548" fill="#fb7185" font-size="7.5">drift → dispatch lại S5</text>
+        <text x="496" y="563" fill="#34d399" font-size="7.5">ok → tiếp (giữ review)</text>
+        <text x="496" y="575" fill="#fb7185" font-size="7">report ↑ Hermes: aligned/drift</text>
+
+        <!-- S7 -->
+        <rect x="840" y="450" width="330" height="128" rx="6" fill="rgba(120,53,15,0.28)" stroke="#fbbf24" stroke-width="1.5"/>
+        <text x="856" y="469" fill="#fbbf24" font-size="10" font-weight="600">7 · Code Review</text>
+        <text x="1154" y="469" fill="#fca5a5" font-size="8" text-anchor="end">ds-v4-flash</text>
+        <line x1="856" y1="475" x2="1154" y2="475" stroke="#1e293b" stroke-width="0.5"/>
+        <text x="856" y="490" fill="#94a3b8" font-size="7.5">skill: bmad-code-review (parallel)</text>
+        <text x="856" y="504" fill="#94a3b8" font-size="7.5">Blind Hunter · Edge Case Hunter</text>
+        <text x="856" y="518" fill="#94a3b8" font-size="7.5">Acceptance Auditor → action items</text>
+        <text x="856" y="534" fill="#fb7185" font-size="7.5">findings → fix loop S5 (max 5)</text>
+        <text x="856" y="549" fill="#34d399" font-size="7.5">clean → S7.5 (nếu UI) / S8</text>
+        <text x="856" y="563" fill="#64748b" font-size="7">reviewer: fresh context + adversarial (cùng model)</text>
+        <text x="856" y="575" fill="#fb7185" font-size="7">report ↑ Hermes: approve/changes</text>
+
+        <line x1="450" y1="514" x2="478" y2="514" stroke="#34d399" stroke-width="2" marker-end="url(#a-emerald)"/>
+        <line x1="810" y1="514" x2="838" y2="514" stroke="#34d399" stroke-width="2" marker-end="url(#a-emerald)"/>
+        <path d="M 560 578 L 560 590 Q 560 596 554 596 L 300 596 Q 294 596 294 590 L 294 580" fill="none" stroke="#fb7185" stroke-width="1.3" stroke-dasharray="4,3" marker-end="url(#a-rose)"/>
+        <text x="427" y="592" fill="#fb7185" font-size="7" text-anchor="middle">drift → sửa code</text>
+        <path d="M 1000 578 L 1000 612 Q 1000 618 994 618 L 300 618 Q 288 618 288 612 L 288 580" fill="none" stroke="#fb7185" stroke-width="1.5" stroke-dasharray="5,3" marker-end="url(#a-rose)"/>
+        <text x="644" y="614" fill="#fb7185" font-size="7.5" text-anchor="middle">⤴ code-review fail → fix loop về Dev (max 5)</text>
+
+        <!-- decision UI? -->
+        <path d="M 1000 578 L 1000 632" fill="none" stroke="#fbbf24" stroke-width="2" marker-end="url(#a-amber)"/>
+        <polygon points="1000,636 1070,668 1000,700 930,668" fill="rgba(34,211,238,0.12)" stroke="#22d3ee" stroke-width="1.5"/>
+        <text x="1000" y="665" fill="#22d3ee" font-size="8" font-weight="600" text-anchor="middle">story chạm</text>
+        <text x="1000" y="676" fill="#22d3ee" font-size="8" font-weight="600" text-anchor="middle">apps/web/ ?</text>
+        <text x="905" y="662" fill="#64748b" font-size="7.5" text-anchor="end">KHÔNG</text>
+        <path d="M 930 668 L 700 668" fill="none" stroke="#64748b" stroke-width="1.3" stroke-dasharray="3,3" marker-end="url(#a)"/>
+        <text x="815" y="662" fill="#64748b" font-size="7">skip → S8</text>
+
+        <!-- STAGE 7.5 -->
+        <text x="20" y="726" fill="#f472b6" font-size="11" font-weight="600">▌STAGE 7.5 — E2E / QA (chỉ khi story có UI)</text>
+        <rect x="700" y="712" width="700" height="150" rx="10" fill="rgba(244,114,182,0.06)" stroke="#f472b6" stroke-width="1.5"/>
+
+        <!-- 7.5a -->
+        <rect x="720" y="730" width="320" height="118" rx="6" fill="rgba(6,78,59,0.4)" stroke="#34d399" stroke-width="1.5"/>
+        <text x="736" y="749" fill="#34d399" font-size="9.5" font-weight="600">7.5a · Playwright E2E</text>
+        <text x="1024" y="749" fill="#93c5fd" font-size="8" text-anchor="end">ds-v4-flash · delegate_task</text>
+        <line x1="736" y1="755" x2="1024" y2="755" stroke="#1e293b" stroke-width="0.5"/>
+        <text x="736" y="770" fill="#94a3b8" font-size="7.5">skill: bmad-qa-generate-e2e-tests</text>
+        <text x="736" y="784" fill="#94a3b8" font-size="7.5">detect Playwright có sẵn → sinh *.spec.ts</text>
+        <text x="736" y="798" fill="#94a3b8" font-size="7.5">chạy thử → sửa nếu fail</text>
+        <text x="736" y="814" fill="#a78bfa" font-size="7.5">→ test code (COMMIT vào branch)</text>
+        <text x="736" y="829" fill="#64748b" font-size="7">CI Playwright chạy ở PR (e2e.yml)</text>
+        <text x="736" y="842" fill="#fb7185" font-size="7">report ↑ Hermes</text>
+
+        <!-- 7.5b -->
+        <rect x="1058" y="730" width="322" height="118" rx="6" fill="rgba(251,191,36,0.12)" stroke="#fbbf24" stroke-width="1.5"/>
+        <text x="1074" y="749" fill="#fbbf24" font-size="9.5" font-weight="600">7.5b · Dogfood QA</text>
+        <text x="1364" y="749" fill="#fca5a5" font-size="8" text-anchor="end">HERMES tự chạy</text>
+        <line x1="1074" y1="755" x2="1364" y2="755" stroke="#1e293b" stroke-width="0.5"/>
+        <text x="1074" y="770" fill="#94a3b8" font-size="7.5">skill: dogfood · browser toolset Hermes</text>
+        <text x="1074" y="784" fill="#94a3b8" font-size="7.5">spin `pnpm dev` → click thật → bắt lỗi</text>
+        <text x="1074" y="798" fill="#94a3b8" font-size="7.5">JS console + visual · screenshot 3 viewport</text>
+        <text x="1074" y="814" fill="#a78bfa" font-size="7.5">→ docs/pr-screenshots/&lt;story&gt;/ (COMMIT)</text>
+        <text x="1074" y="829" fill="#64748b" font-size="7">kill dev · bug report → embed PR body</text>
+        <text x="1074" y="842" fill="#fb7185" font-size="7">bug nặng → fix loop về S5</text>
+
+        <path d="M 1040 789 L 1056 789" fill="none" stroke="#f472b6" stroke-width="1.5" marker-end="url(#a-pink)"/>
+        <path d="M 1000 700 L 1000 711" fill="none" stroke="#fbbf24" stroke-width="1.5" marker-end="url(#a-amber)"/>
+        <text x="1010" y="708" fill="#fbbf24" font-size="7">CÓ UI ↓</text>
+
+        <!-- 7.5b fix loop back -->
+        <path d="M 1219 848 L 1219 872 Q 1219 878 1213 878 L 300 878 Q 285 878 285 580 L 288 580" fill="none" stroke="#fb7185" stroke-width="1.2" stroke-dasharray="4,4" marker-end="url(#a-rose)"/>
+        <text x="700" y="874" fill="#fb7185" font-size="7" text-anchor="middle">dogfood bug nặng → fix loop về Dev (S5)</text>
+
+        <!-- to S8 -->
+        <path d="M 1050 862 L 1050 895 Q 1050 901 1044 901 L 720 901" fill="none" stroke="#fbbf24" stroke-width="2" marker-end="url(#a-amber)"/>
+
+        <!-- STAGE 8 -->
+        <text x="20" y="922" fill="#fbbf24" font-size="11" font-weight="600">▌STAGE 8 — INTEGRATION (Hermes tự chạy git/CI ops)</text>
+        <rect x="120" y="934" width="1280" height="150" rx="10" fill="rgba(251,191,36,0.07)" stroke="#fbbf24" stroke-width="1.5"/>
+
+        <rect x="138" y="952" width="188" height="56" rx="6" fill="rgba(6,78,59,0.35)" stroke="#34d399" stroke-width="1.3"/>
+        <text x="232" y="969" fill="#34d399" font-size="8.5" font-weight="600" text-anchor="middle">8.1 Local Test — GATE</text>
+        <text x="232" y="983" fill="#94a3b8" font-size="7" text-anchor="middle">pnpm test·lint·build</text>
+        <text x="232" y="996" fill="#fb7185" font-size="7" text-anchor="middle">fail → dispatch lại Dev</text>
+
+        <rect x="344" y="952" width="150" height="56" rx="6" fill="rgba(76,29,149,0.3)" stroke="#a78bfa" stroke-width="1.3"/>
+        <text x="419" y="969" fill="#a78bfa" font-size="8.5" font-weight="600" text-anchor="middle">8.2 Commit</text>
+        <text x="419" y="983" fill="#94a3b8" font-size="6.5" text-anchor="middle">conventional commit</text>
+        <text x="419" y="996" fill="#94a3b8" font-size="6.5" text-anchor="middle">feat(contacts): ...</text>
+
+        <rect x="512" y="952" width="150" height="56" rx="6" fill="rgba(76,29,149,0.3)" stroke="#a78bfa" stroke-width="1.3"/>
+        <text x="587" y="969" fill="#a78bfa" font-size="8.5" font-weight="600" text-anchor="middle">8.3 Push</text>
+        <text x="587" y="983" fill="#94a3b8" font-size="6.5" text-anchor="middle">push -u origin HEAD</text>
+        <text x="587" y="996" fill="#fbbf24" font-size="6.5" text-anchor="middle">→ CI chạy ngay</text>
+
+        <rect x="680" y="952" width="180" height="56" rx="6" fill="rgba(8,51,68,0.4)" stroke="#22d3ee" stroke-width="1.3"/>
+        <text x="770" y="969" fill="#22d3ee" font-size="8.5" font-weight="600" text-anchor="middle">8.4 PR → dev</text>
+        <text x="770" y="982" fill="#94a3b8" font-size="6.5" text-anchor="middle">gh pr create --base dev</text>
+        <text x="770" y="995" fill="#94a3b8" font-size="6.5" text-anchor="middle">template: checklist+screenshots</text>
+
+        <rect x="878" y="952" width="180" height="56" rx="6" fill="rgba(8,51,68,0.4)" stroke="#22d3ee" stroke-width="1.3"/>
+        <text x="968" y="969" fill="#22d3ee" font-size="8.5" font-weight="600" text-anchor="middle">8.5 CI xanh HẾT</text>
+        <text x="968" y="982" fill="#94a3b8" font-size="6.5" text-anchor="middle">gh pr checks --watch</text>
+        <text x="968" y="995" fill="#94a3b8" font-size="6" text-anchor="middle">Lint·Type·Test·API·Build</text>
+
+        <rect x="1076" y="952" width="150" height="56" rx="6" fill="rgba(52,211,153,0.15)" stroke="#34d399" stroke-width="2"/>
+        <text x="1151" y="969" fill="#34d399" font-size="8.5" font-weight="700" text-anchor="middle">8.6 DONE</text>
+        <text x="1151" y="982" fill="#94a3b8" font-size="6.5" text-anchor="middle">status → done</text>
+        <text x="1151" y="995" fill="#fbbf24" font-size="6" text-anchor="middle">DỪNG: PR mở, bạn merge tay</text>
+
+        <line x1="326" y1="980" x2="342" y2="980" stroke="#64748b" stroke-width="1.5" marker-end="url(#a)"/>
+        <line x1="494" y1="980" x2="510" y2="980" stroke="#64748b" stroke-width="1.5" marker-end="url(#a)"/>
+        <line x1="662" y1="980" x2="678" y2="980" stroke="#64748b" stroke-width="1.5" marker-end="url(#a)"/>
+        <line x1="860" y1="980" x2="876" y2="980" stroke="#64748b" stroke-width="1.5" marker-end="url(#a)"/>
+        <line x1="1058" y1="980" x2="1074" y2="980" stroke="#64748b" stroke-width="1.5" marker-end="url(#a)"/>
+
+        <path d="M 968 1008 L 968 1024 Q 968 1030 962 1030 L 240 1030 Q 232 1030 232 1024 L 232 1010" fill="none" stroke="#fb7185" stroke-width="1.3" stroke-dasharray="4,3" marker-end="url(#a-rose)"/>
+        <text x="600" y="1026" fill="#fb7185" font-size="7.5" text-anchor="middle">CI đỏ → đọc log (gh run view --log-failed) → auto-fix max 3 hoặc dispatch lại Dev</text>
+        <text x="710" y="1058" fill="#94a3b8" font-size="8" text-anchor="middle">ci.yml trigger cả push lẫn PR → CI bắt đầu ngay ở 8.3; E2E(e2e.yml) chạy ở PR nhưng continue-on-error (soft gate)</text>
+        <text x="710" y="1074" fill="#64748b" font-size="7.5" text-anchor="middle">Q1=(a): workflow xong khi CI xanh; PR để mở cho người dùng tự merge feature/* → dev</text>
+
+        <!-- SHARED STATE -->
+        <text x="20" y="1108" fill="#a78bfa" font-size="11" font-weight="600">▌SHARED STATE / FILE SYSTEM</text>
+        <rect x="30" y="1120" width="215" height="78" rx="6" fill="rgba(76,29,149,0.3)" stroke="#a78bfa" stroke-width="1.5"/>
+        <text x="137" y="1139" fill="#a78bfa" font-size="8.5" font-weight="600" text-anchor="middle">🗄 sprint-status.yaml</text>
+        <text x="137" y="1155" fill="#94a3b8" font-size="6.5" text-anchor="middle">backlog→...→done</text>
+        <text x="137" y="1168" fill="#94a3b8" font-size="6.5" text-anchor="middle">Hermes ghi mỗi stage</text>
+        <text x="137" y="1183" fill="#64748b" font-size="6.5" text-anchor="middle">cũng là menu /workflows</text>
+
+        <rect x="255" y="1120" width="215" height="78" rx="6" fill="rgba(76,29,149,0.3)" stroke="#a78bfa" stroke-width="1.5"/>
+        <text x="362" y="1139" fill="#a78bfa" font-size="8.5" font-weight="600" text-anchor="middle">📁 Story + Code (COMMIT)</text>
+        <text x="362" y="1155" fill="#94a3b8" font-size="6.5" text-anchor="middle">story.md · impl · test code</text>
+        <text x="362" y="1168" fill="#94a3b8" font-size="6.5" text-anchor="middle">playwright spec</text>
+        <text x="362" y="1183" fill="#64748b" font-size="6.5" text-anchor="middle">nằm trong branch/PR</text>
+
+        <rect x="480" y="1120" width="215" height="78" rx="6" fill="rgba(244,114,182,0.14)" stroke="#f472b6" stroke-width="1.5"/>
+        <text x="587" y="1139" fill="#f472b6" font-size="8.5" font-weight="600" text-anchor="middle">🎨 workflow-artifacts</text>
+        <text x="587" y="1153" fill="#94a3b8" font-size="6.5" text-anchor="middle">ui-ux/ · test-design/</text>
+        <text x="587" y="1165" fill="#94a3b8" font-size="6.5" text-anchor="middle">orchestration/ledger</text>
+        <text x="587" y="1180" fill="#fca5a5" font-size="6.5" text-anchor="middle">GITIGNORE (tài liệu)</text>
+        <text x="587" y="1192" fill="#64748b" font-size="6" text-anchor="middle">docs/workflow-artifacts/</text>
+
+        <rect x="705" y="1120" width="215" height="78" rx="6" fill="rgba(52,211,153,0.12)" stroke="#34d399" stroke-width="1.5"/>
+        <text x="812" y="1139" fill="#34d399" font-size="8.5" font-weight="600" text-anchor="middle">🖼 pr-screenshots (COMMIT)</text>
+        <text x="812" y="1155" fill="#94a3b8" font-size="6.5" text-anchor="middle">docs/pr-screenshots/&lt;story&gt;/</text>
+        <text x="812" y="1168" fill="#94a3b8" font-size="6.5" text-anchor="middle">dogfood output · 3 viewport</text>
+        <text x="812" y="1183" fill="#64748b" font-size="6.5" text-anchor="middle">embed vào PR body</text>
+
+        <rect x="930" y="1120" width="215" height="78" rx="6" fill="rgba(76,29,149,0.3)" stroke="#a78bfa" stroke-width="1.5"/>
+        <text x="1037" y="1139" fill="#a78bfa" font-size="8.5" font-weight="600" text-anchor="middle">📐 Planning + Rules</text>
+        <text x="1037" y="1155" fill="#94a3b8" font-size="6.5" text-anchor="middle">epics·prd·arch·ux</text>
+        <text x="1037" y="1168" fill="#94a3b8" font-size="6.5" text-anchor="middle">docs/rules/ (conventions)</text>
+        <text x="1037" y="1183" fill="#64748b" font-size="6.5" text-anchor="middle">read-only, nguồn context</text>
+
+        <rect x="1155" y="1120" width="245" height="78" rx="6" fill="rgba(136,19,55,0.35)" stroke="#fb7185" stroke-width="1.5"/>
+        <text x="1277" y="1139" fill="#fb7185" font-size="8.5" font-weight="600" text-anchor="middle">⚙ _bmad/ config (TẠO)</text>
+        <text x="1277" y="1155" fill="#94a3b8" font-size="6.5" text-anchor="middle">bmm/config.yaml</text>
+        <text x="1277" y="1168" fill="#94a3b8" font-size="6.5" text-anchor="middle">scripts/resolve_customization.py</text>
+        <text x="1277" y="1183" fill="#fca5a5" font-size="6.5" text-anchor="middle">skill BMAD cần · đã gitignore</text>
+
+        <!-- LEGEND -->
+        <rect x="30" y="1216" width="1370" height="86" rx="8" fill="rgba(15,23,42,0.6)" stroke="#1e293b" stroke-width="1"/>
+        <text x="44" y="1236" fill="white" font-size="10" font-weight="600">Legend</text>
+        <rect x="44" y="1246" width="14" height="8" rx="2" fill="rgba(251,191,36,0.12)" stroke="#fbbf24" stroke-width="2"/>
+        <text x="64" y="1253" fill="#94a3b8" font-size="7.5">Hermes orchestrator (dogfood/git-CI tự chạy) — deepseek-v4-flash</text>
+        <rect x="44" y="1261" width="14" height="8" rx="2" fill="rgba(6,78,59,0.4)" stroke="#34d399" stroke-width="1"/>
+        <text x="64" y="1268" fill="#94a3b8" font-size="7.5">Hermes subagent qua delegate_task — cùng deepseek-v4-flash (validate, dev, review, ...)</text>
+        <rect x="44" y="1276" width="14" height="8" rx="2" fill="rgba(244,114,182,0.14)" stroke="#f472b6" stroke-width="1"/>
+        <text x="64" y="1283" fill="#94a3b8" font-size="7.5">Gitignored (ui-ux, test-plan, ledger) — khác pr-screenshots (committed)</text>
+        <line x1="44" y1="1293" x2="58" y2="1293" stroke="#fb7185" stroke-width="1.5" stroke-dasharray="5,3"/>
+        <text x="64" y="1296" fill="#94a3b8" font-size="7.5">Fix loop (validate↺S1, drift↺S5, review↺S5, dogfood↺S5, CI↺S5)</text>
+
+        <text x="720" y="1236" fill="#cbd5e1" font-size="8" font-weight="600">Pipeline (9 stages):</text>
+        <text x="720" y="1251" fill="#94a3b8" font-size="7.5">create-story → validate → UI/UX → test-plan → [branch feature/*] →</text>
+        <text x="720" y="1265" fill="#94a3b8" font-size="7.5">dev-story → doc-check → code-review → [UI? → 7.5a playwright + 7.5b dogfood] →</text>
+        <text x="720" y="1279" fill="#94a3b8" font-size="7.5">local-test → commit → push → PR(dev) → CI xanh → DONE (PR mở, bạn merge)</text>
+        <text x="720" y="1294" fill="#64748b" font-size="7">Model: tất cả stage dùng deepseek-v4-flash (opencode-go) · subagent inherit từ orchestrator</text>
+      </svg>
+    </div>
+
+    <div class="cards">
+      <div class="card">
+        <div class="card-header"><div class="card-dot pink"></div><h3>Stage 7.5 — E2E/QA (2 executor)</h3></div>
+        <ul>
+          <li>• Chỉ chạy khi story chạm apps/web/ (đọc File List)</li>
+          <li>• 7.5a Playwright: subagent Hermes (delegate_task) → spec code COMMIT</li>
+          <li>• 7.5b Dogfood: HERMES tự chạy (browser toolset, không delegate được)</li>
+          <li>• Dogfood spin pnpm dev → click thật → screenshot → kill dev</li>
+          <li>• Bug nặng từ dogfood → fix loop về Dev (S5)</li>
+        </ul>
+      </div>
+      <div class="card">
+        <div class="card-header"><div class="card-dot emerald"></div><h3>2 kho artifact khác nhau</h3></div>
+        <ul>
+          <li>• <span class="code">docs/workflow-artifacts/</span> = GITIGNORE (ui-ux, test-plan, ledger)</li>
+          <li>• <span class="code">docs/pr-screenshots/&lt;story&gt;/</span> = COMMIT (dogfood output)</li>
+          <li>• pr-screenshots đã là convention repo (rule ở git-workflow.md)</li>
+          <li>• Playwright spec = code = commit vào branch</li>
+          <li>• Branch: <span class="code">feature/&lt;scope&gt;/&lt;desc&gt;</span> (đúng convention)</li>
+        </ul>
+      </div>
+      <div class="card">
+        <div class="card-header"><div class="card-dot amber"></div><h3>Còn phải chuẩn bị / chốt</h3></div>
+        <ul>
+          <li>• Tạo <span class="code">_bmad/bmm/config.yaml</span> + resolve script</li>
+          <li>• Slash command <span class="code">/workflows</span> (render sprint-status)</li>
+          <li>• Ledger/report cho Hermes theo dõi subagent</li>
+          <li>• PR body theo template docs/rules/git-workflow.md</li>
+          <li>• E2E gate: giữ soft (continue-on-error) hay đổi cứng?</li>
+        </ul>
+      </div>
+    </div>
+
+    <p class="footer">CRMAssistant • BMAD Auto-Pipeline • Data Flow v5 — 9 stages, Hermes orchestrator + Hermes subagents (delegate_task, deepseek-v4-flash) + dogfood QA</p>
+  </div>
+</body>
+</html>

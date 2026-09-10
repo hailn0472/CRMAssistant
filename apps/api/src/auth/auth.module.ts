@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common'
+import { Module, OnModuleInit } from '@nestjs/common'
 import { ConfigModule, ConfigService } from '@nestjs/config'
 import { JwtModule } from '@nestjs/jwt'
 import { PassportModule } from '@nestjs/passport'
@@ -8,6 +8,9 @@ import { AuthController } from './auth.controller'
 import { AuthService } from './auth.service'
 import { JwtStrategy } from './strategies/jwt.strategy'
 import { TokenRevocationService } from './token-revocation.service'
+import { TwoFactorService } from './two-factor.service'
+import { ApiKeyService } from './api-key.service'
+import { registerApiKeyGraphql } from './api-key.graphql'
 
 function getRequiredJwtSecret(configService: ConfigService): string {
   const secret = configService.get<string>('JWT_SECRET')
@@ -31,7 +34,13 @@ function getRequiredJwtSecret(configService: ConfigService): string {
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, JwtStrategy, TokenRevocationService],
-  exports: [AuthService, JwtModule, TokenRevocationService],
+  providers: [AuthService, JwtStrategy, TokenRevocationService, TwoFactorService, ApiKeyService],
+  exports: [AuthService, JwtModule, TokenRevocationService, TwoFactorService, ApiKeyService],
 })
-export class AuthModule {}
+export class AuthModule implements OnModuleInit {
+  constructor(private readonly apiKeyService: ApiKeyService) {}
+
+  onModuleInit(): void {
+    registerApiKeyGraphql(this.apiKeyService)
+  }
+}

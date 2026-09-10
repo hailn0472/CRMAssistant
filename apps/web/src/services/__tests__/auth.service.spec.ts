@@ -24,14 +24,16 @@ describe('authService', () => {
       tenantId: 'tenant-1',
       role: 'SALES_REP',
       email: 'user@example.com',
-      name: 'Test User',
+      firstName: 'Test',
+      lastName: 'User',
     }
     mockFetch.mockResolvedValue(jsonResponse(response))
 
     const result = await authService.register({
       email: 'user@example.com',
       password: 'Password123',
-      name: 'Test User',
+      firstName: 'Test',
+      lastName: 'User',
       tenantName: 'ACME Corp',
     })
 
@@ -49,7 +51,8 @@ describe('authService', () => {
       authService.register({
         email: 'user@example.com',
         password: 'Password123',
-        name: 'Test User',
+        firstName: 'Test',
+        lastName: 'User',
         tenantName: 'ACME Corp',
       }),
     ).rejects.toThrow('Email already registered')
@@ -66,7 +69,8 @@ describe('authService', () => {
       authService.register({
         email: 'user@example.com',
         password: 'Password123',
-        name: 'Test User',
+        firstName: 'Test',
+        lastName: 'User',
         tenantName: 'ACME Corp',
       }),
     ).rejects.toThrow('Bad Gateway')
@@ -79,7 +83,8 @@ describe('authService', () => {
       tenantId: 'tenant-1',
       role: 'SALES_REP',
       email: 'user@example.com',
-      name: 'Test User',
+      firstName: 'Test',
+      lastName: 'User',
     }
     mockFetch.mockResolvedValue(jsonResponse(response))
 
@@ -113,6 +118,26 @@ describe('authService', () => {
     ).rejects.toThrow('Login failed')
   })
 
+  it('should request password recovery', async () => {
+    mockFetch.mockResolvedValue({ ok: true })
+
+    await expect(authService.forgotPassword('user@example.com')).resolves.toBeUndefined()
+
+    expect(mockFetch).toHaveBeenCalledWith('/api/auth/forgot-password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: 'user@example.com' }),
+    })
+  })
+
+  it('should throw when password recovery fails', async () => {
+    mockFetch.mockResolvedValue(jsonResponse({ message: 'Unable to send reset email' }, false))
+
+    await expect(authService.forgotPassword('user@example.com')).rejects.toThrow(
+      'Unable to send reset email',
+    )
+  })
+
   it('should logout a user', async () => {
     mockFetch.mockResolvedValue({ ok: true })
 
@@ -122,5 +147,33 @@ describe('authService', () => {
       '/api/auth/logout',
       expect.objectContaining({ method: 'POST' }),
     )
+  })
+
+  it('should call oauthLogin endpoint', async () => {
+    const response = {
+      accessToken: 'token',
+      userId: 'user-1',
+      tenantId: 'tenant-1',
+      roles: ['SALES_REP'],
+      email: 'user@example.com',
+      firstName: 'Test',
+      lastName: 'User',
+    }
+    mockFetch.mockResolvedValue(jsonResponse(response))
+
+    const result = await authService.oauthLogin('google-access-token-123')
+
+    expect(result).toEqual(response)
+    expect(mockFetch).toHaveBeenCalledWith('/api/auth/oauth', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ accessToken: 'google-access-token-123' }),
+    })
+  })
+
+  it('should throw when oauthLogin fails', async () => {
+    mockFetch.mockResolvedValue(jsonResponse({ message: 'OAuth login failed' }, false))
+
+    await expect(authService.oauthLogin('bad-code')).rejects.toThrow('OAuth login failed')
   })
 })

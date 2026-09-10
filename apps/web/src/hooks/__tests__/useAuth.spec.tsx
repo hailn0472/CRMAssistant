@@ -26,9 +26,10 @@ const authResponse = {
   accessToken: 'jwt-token',
   userId: 'user-1',
   tenantId: 'tenant-1',
-  role: 'SALES_REP' as const,
+  roles: ['SALES_REP'] as string[],
   email: 'user@example.com',
-  name: 'Test User',
+  firstName: 'Test',
+  lastName: 'User',
 }
 
 describe('useAuth', () => {
@@ -54,9 +55,10 @@ describe('useAuth', () => {
     expect(result.current.user).toEqual({
       userId: 'user-1',
       tenantId: 'tenant-1',
-      role: 'SALES_REP',
+      roles: ['SALES_REP'],
       email: 'user@example.com',
-      name: 'Test User',
+      firstName: 'Test',
+      lastName: 'User',
     })
     expect(mockPush).toHaveBeenCalledWith('/dashboard')
     expect(result.current.isLoading).toBe(false)
@@ -94,7 +96,8 @@ describe('useAuth', () => {
       await result.current.register({
         email: 'user@example.com',
         password: 'Password123',
-        name: 'Test User',
+        firstName: 'Test',
+        lastName: 'User',
         tenantName: 'ACME Corp',
       })
     })
@@ -102,7 +105,8 @@ describe('useAuth', () => {
     expect(mockAuthService.register).toHaveBeenCalledWith({
       email: 'user@example.com',
       password: 'Password123',
-      name: 'Test User',
+      firstName: 'Test',
+      lastName: 'User',
       tenantName: 'ACME Corp',
     })
     expect(result.current.user?.email).toBe('user@example.com')
@@ -125,5 +129,25 @@ describe('useAuth', () => {
     expect(mockAuthService.logout).toHaveBeenCalledWith()
     expect(result.current.user).toBeNull()
     expect(result.current.isLoading).toBe(false)
+    expect(mockPush).toHaveBeenLastCalledWith('/login')
+  })
+
+  it('should clear auth state and redirect to login when logout request fails', async () => {
+    mockAuthService.login.mockResolvedValue(authResponse)
+    mockAuthService.logout.mockRejectedValue(new Error('Logout failed'))
+    const { result } = renderHook(() => useAuth())
+
+    await act(async () => {
+      await result.current.login('user@example.com', 'Password123')
+    })
+
+    await act(async () => {
+      await result.current.logout()
+    })
+
+    expect(mockAuthService.logout).toHaveBeenCalledWith()
+    expect(result.current.user).toBeNull()
+    expect(result.current.isLoading).toBe(false)
+    expect(mockPush).toHaveBeenLastCalledWith('/login')
   })
 })

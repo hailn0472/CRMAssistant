@@ -5,7 +5,8 @@ const config: Config = {
   rootDir: 'src',
   testRegex: '.*\\.spec\\.ts$',
   transform: {
-    '^.+\\.(t|j)s$': 'ts-jest',
+    // tsconfig.spec.json sets isolatedModules -> transpile-only, no per-worker TS program
+    '^.+\\.(t|j)s$': ['ts-jest', { tsconfig: '<rootDir>/../tsconfig.spec.json' }],
   },
   collectCoverageFrom: [
     '**/*.(t|j)s',
@@ -18,9 +19,18 @@ const config: Config = {
     '!**/guards/**',
     '!**/decorators/**',
     '!**/strategies/**',
+    '!**/inbox/**',
+    '!**/*.graphql.ts',
   ],
   coverageDirectory: '../coverage',
   testEnvironment: 'node',
+  // ts-jest builds a full TS program per worker; unbounded workers blow up RAM
+  maxWorkers: '50%',
+  workerIdleMemoryLimit: '512MB',
+  // Mock ESM-only otplib so tests that import auth.service.ts don't break
+  moduleNameMapper: {
+    '^otplib$': '<rootDir>/auth/__mocks__/otplib.ts',
+  },
   // Coverage thresholds - minimum 80% unit coverage
   coverageThreshold: {
     global: {

@@ -1,0 +1,101 @@
+'use client'
+
+import { useState, useEffect, Suspense } from 'react'
+
+import { useAuthStore } from '@/stores/auth.store'
+import { getMe } from '@/services/user.service'
+import { AppShellChrome } from './AppShellChrome'
+import { DesktopNavigation, MobileNavigation, TabletRailNavigation } from './AppShellNavigation'
+import { CommandDialog } from './CommandDialog'
+import { TopbarActions } from './TopbarActions'
+import { TopbarSearch } from './TopbarSearch'
+
+export { WorkspaceHeader, WorkspacePanel } from './AppShellChrome'
+
+interface AppShellProps {
+  children: React.ReactNode
+}
+
+export function AppShell({ children }: AppShellProps): React.JSX.Element {
+  const [commandOpen, setCommandOpen] = useState(false)
+  const [commandQuery, setCommandQuery] = useState('')
+  const { user, setUser, setAccessToken, setLoading, isLoading } = useAuthStore()
+
+  useEffect(() => {
+    let active = true
+    if (!user && (isLoading ?? true) && setUser && setLoading) {
+      // Restore a one-time WS handshake token (minted server-side from the
+      // httpOnly cookie, never the real JWT itself) so the WebSocket
+      // subscription client — which can't read httpOnly cookies directly —
+      // has something to authenticate with after a full page reload.
+      fetch('/api/auth/session')
+        .then((res) => res.json())
+        .then((data: { wsToken: string | null }) => {
+          if (!active) return
+          if (data.wsToken) setAccessToken(data.wsToken)
+        })
+        .catch(() => {
+          // Non-fatal — real-time subscriptions just won't connect until next login.
+        })
+
+      getMe()
+        .then((me) => {
+          if (!active) return
+          setUser({
+            userId: me.id,
+            tenantId: me.tenantId,
+            roles: me.roles ? me.roles.map((r: { name: string }) => r.name) : [],
+            email: me.email,
+            firstName: me.firstName,
+            lastName: me.lastName,
+            avatar: me.avatar,
+          })
+        })
+        .catch((err) => {
+          if (!active) return
+          console.error('[AppShell] Failed to restore user session:', err)
+        })
+        .finally(() => {
+          if (!active) return
+          setLoading(false)
+        })
+    } else if (user && setLoading) {
+      setLoading(false)
+    }
+    return () => {
+      active = false
+    }
+  }, [user, setUser, setAccessToken, setLoading, isLoading])
+
+  function openCommand(): void {
+    setCommandOpen(true)
+  }
+
+  return (
+    <AppShellChrome
+      sidebarSlot={<DesktopNavigation />}
+      tabletRailSlot={<TabletRailNavigation />}
+      mobileNavSlot={<MobileNavigation />}
+      searchSlot={
+        <div className="relative w-full max-w-[38rem]">
+          <TopbarSearch
+            value={commandQuery}
+            onChange={(value) => {
+              setCommandQuery(value)
+              setCommandOpen(true)
+            }}
+            onFocus={openCommand}
+          />
+          <CommandDialog open={commandOpen} query={commandQuery} onOpenChange={setCommandOpen} />
+        </div>
+      }
+      topbarActionsSlot={
+        <Suspense fallback={null}>
+          <TopbarActions />
+        </Suspense>
+      }
+    >
+      {children}
+    </AppShellChrome>
+  )
+}

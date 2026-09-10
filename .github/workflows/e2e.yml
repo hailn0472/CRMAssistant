@@ -2,7 +2,8 @@ name: E2E Tests
 
 on:
   pull_request:
-    branches: [main]
+    branches: [dev, staging, main]
+  workflow_dispatch:
 
 env:
   CI: true
@@ -12,6 +13,15 @@ jobs:
     name: Playwright E2E Tests
     runs-on: ubuntu-latest
     env:
+      # E2E runs self-contained (GraphQL mocked at the route level in the
+      # specs) so it must NOT depend on Infisical or a real backend. The web
+      # server is booted via `dev:ci` (plain `next dev`, no infisical) and all
+      # specs sign the auth cookie with this same dummy secret. Real-stack
+      # specs (4-2/4-3/etc.) skip gracefully when the API is unreachable.
+      JWT_SECRET: playwright-test-secret-min-32-chars!!
+      API_JWT_SECRET: playwright-test-secret-min-32-chars!!
+      PLAYWRIGHT_WEB_SERVER_COMMAND: JWT_SECRET=playwright-test-secret-min-32-chars!! pnpm --filter=web dev:ci
+      BASE_URL: http://localhost:3000
       NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co' }}
       NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder-anon-key' }}
       NEXT_PUBLIC_API_URL: http://localhost:4000

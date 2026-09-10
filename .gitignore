@@ -1,10 +1,20 @@
 # BMad
+_bmad/
 _bmad-output/
-_bmad/config.user.toml
-_bmad/custom/config.user.toml
+
+# Workflow orchestration artifacts (per-story UI/UX prototypes, test plans,
+# orchestration ledgers & stage reports — reference material, not code)
+docs/
+docs/workflow-artifacts/
+docs/pr-screenshots/
+docs/designs/
 
 # Claude Code
 .codex
+.claude/
+.codegraph/
+.agents/
+skills-lock.json
 
 # Dependencies
 node_modules/
@@ -16,6 +26,8 @@ coverage/
 **/coverage/
 coverage-integration/
 **/coverage-integration/
+coverage-api/
+**/coverage-api/
 playwright-report/
 test-results/
 
@@ -69,3 +81,5 @@ pnpm-debug.log*
 
 # Misc
 *.pem
+.vercel
+supabase/.temp/

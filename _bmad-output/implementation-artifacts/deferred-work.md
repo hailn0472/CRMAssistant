@@ -1,0 +1,60 @@
+## Resolved by: 6-6-report-export-in-multiple-formats-pdf-excel-csv
+
+- **Document Export & Storage (PDF, Excel, CSV, storage, history) — from Stories 6.2, 6.3, 6.4, 6.5.** Shipped complete in Story 6.6: user-triggered on-demand export mutation `exportReport`, `ReportExport` durable model, Supabase Storage integration with fresh 24-hour signed URLs, minute background processor for large reports (>100 rows), accessible export dropdown on saved sales and custom builder surfaces, export history & re-download page at `/reports/exports`, and safe internal notification routing.
+- **Server-side Headless Chart Rendering — from Story 6.4.** Shipped pure server SVG chart generation rasterized via direct dependency `@resvg/resvg-js` embedded directly in PDF and XLSX `Charts` sheets without Puppeteer or browser runtime.
+
+## Deferred from: 6-6-report-export-in-multiple-formats-pdf-excel-csv
+
+- **Object-retention lifecycle purge policy.** Objects are removed on explicit user export deletion or tenant cascade; automated time-based object purging in Supabase Storage is deferred to infrastructure/lifecycle policies.
+- **Streaming export.** Large exports page through custom reports (up to 50,000 rows / 50 columns / 50 MB); streaming chunked HTTP downloads or direct S3 multipart stream generation remain deferred.
+
+## Deferred from: 6-5-scheduled-report-delivery-via-email
+
+- **Document Export & Storage (PDF, Excel, CSV, storage, history) — Story 6.6 boundary.** Story 6.5 implements an internal, reusable attachment renderer (`ReportAttachmentService`) generating memory buffers for automated email dispatch only. User-triggered on-demand export, export history rows, Supabase Storage integration, signed download URLs, and the `exportReport` public mutation remain owned by Story 6.6.
+- **Email Delivery Provider.** Delivery uses an injectable SMTP transport (Nodemailer) configurable via `SMTP_*` environment variables. Multi-provider vendor integrations (Resend, SendGrid, Gmail OAuth, Outlook Graph) and webhooks remain deferred.
+- **Tenant Branding Administration Screen.** Persisted `Tenant.logoUrl` and `Tenant.primaryColor` are rendered defensively in branded emails with fallback to tenant name and CRM palette; a tenant settings UI to customize branding is out of scope.
+- **At-least-once Delivery Edge.** Job processing claims occurrences atomically in PostgreSQL, but process termination after SMTP acceptance before DB update results in at-least-once delivery; exactly-once SMTP is physically impossible across process failure.
+
+## Deferred from: 6-4-data-visualization-with-multiple-chart-types
+
+- **Document/Data Export (PDF, Excel, CSV, storage, history) — Story 6.6 boundary.** Story 6.4 implements purely client-side rendered PNG and SVG export of the currently visible chart figure. Background export jobs, PDF document generation, Excel/CSV table downloads, and Supabase Storage persistence remain deferred to Story 6.6.
+- **Scheduled & Email Report Delivery — Story 6.5 boundary.** No background scheduling, cron jobs, email delivery queues, or recipient mailing templates are created.
+- **Server-side Headless Chart Rendering.** All chart rasterization and rendering is browser-native via Recharts SVG and HTML5 Canvas (2× device-independent rasterization).
+- **Playwright visual regression baselines** are managed through the Stage 9a pipeline harness.
+
+## Deferred from: 6-1-role-based-dashboard-with-customizable-widgets
+
+- No JSON GraphQL scalar — `Widget.config` is exposed as a typed `WidgetConfig` Pothos object with a closed set of optional fields, parsed and re-validated on every read. Related deferred-work entries at `:128` and `:149` remain open; a future JSON scalar is the correct universal fix.
+- `resolveWidgetSpan` duplicated across `apps/api/src/dashboards/widget-types.ts` and `apps/web/src/lib/widget-format.ts` because `packages/*` is empty (`docs/project-context.md:48-50`). Both files carry cross-reference comments. Consolidation into shared types needs a package-scope decision.
+- Widget data computed on read with no server-side cache, no materialized view, no snapshot table. The 4.5 precedent ("computed on read with no cache", `deferred-work.md:160`) is followed here.
+- 30s `refetchInterval` polling instead of the `< 1s` NFR2 GraphQL subscription. No new `EventEmitter`, no new pub/sub. Polling pauses during edit mode to prevent mid-drag re-renders.
+- All bucketing UTC — no per-user timezone. Inherited from 4.3/4.4/4.5.
+- No widget data export or chart PNG/SVG export (Stories 6.4/6.6).
+- No per-breakpoint saved layout. `Widget.position` and `Widget.size` are the single source of truth; a future story that needs per-breakpoint layouts adds the column then.
+- Dashboard sharing is `READ` only. `shareDashboard` rejects `EDIT` and `FULL` with `BadRequestException`. Collaborative editing of someone else's layout needs conflict resolution nothing in this repo has.
+- `sharing.graphql.ts:129`'s hardcoded `requirePermission(context, 'CONTACT', 'UPDATE')` on `unshareRecord` left unfixed — dashboard sharing uses dashboard-owned mutations (`shareDashboard`/`unshareDashboard`) instead of the generic `shareRecord`, avoiding the gate.
+- No `Dashboard.layout` column — `Widget.position` + `Widget.size` are the layout, and they are the single source of truth. A dead `layout` column is a lie the next story would trust.
+
+## Deferred from: 6-3-custom-report-builder-with-drag-and-drop-interface
+
+- **"Custom fields" are report-scoped, not CRM-property persistence.** Binding AC 7's "custom fields" has no `CustomField` model or `customFields` column anywhere in this repo, so Story 6.3 defines them as report-scoped **calculated dimensions** (`DATE_PART(sourceDate, granularity)` / `NUMBER_BUCKET(sourceNumber, bucketSize)` — Contract §A.6) and **calculated metrics** (`alias = arithmetic expression over base metric aliases`). The field catalogue never advertises a non-existent custom property, and the UI explains unavailable roles instead of fabricating null columns. A future CRM custom-property model would need its own schema/migration story and would then be eligible for the catalogue.
+- **No chart image export, zoom/pan, scatter/heatmap/area/donut, or reusable multi-chart framework — Story 6.4 boundary.** The builder preview implements only the five required renderers (table/line/bar/pie/funnel) with Recharts, `role="img"` + sr-only-table accessibility and inline compatibility errors. Expanded chart catalogue, advanced interaction, PNG/SVG export and visual-regression scope belong to 6.4.
+- **No scheduling/email delivery — Story 6.5 boundary.** The builder has no share-as-email, no cron, no delivery history. 6.5 owns scheduled report delivery on top of the saved CUSTOM report contract.
+- **No PDF/Excel/CSV export or export history — Story 6.6 boundary.** The builder's only persistence is `saveCustomReport` into the existing `Report` row (`type='CUSTOM'`); the preview is read-only and unaudited. 6.6 owns export on top of `CustomReportResult`.
+- **Preview is bounded, read-only and computed on read — no cache.** Debounced `customReportPreview` requests are cancelled when superseded and invalid drafts never fire; the server clamps pageSize ≤ 100 and errors explicitly instead of truncating. No snapshot table, materialized view or server cache (same posture as 6.2 deferred notes).
+- **No drill-down framework for custom cells.** The preview table and saved-result table are the deliverable; clicking a cell does not drill into underlying records (6.4 may add interactions).
+- **No joins across entities and no raw query language.** A report has exactly one source; only closed catalogue relations are selectable. No SQL/Text-to-SQL in the builder (matches 6.2's closed-vocabulary posture).
+- **Client-side validation is a gating mirror, never a bypass.** `lib/custom-report-builder.ts` mirrors the server rules so the UI never issues preview/save requests for drafts the server would reject, but `custom-report-config.ts` on the API remains the source of truth (unknown keys, duplicate aliases, expression grammar, chart compatibility, limits).
+- **Sorting UI is minimal.** The config supports up to 3 sort rules (declared priority, ASC/DESC, nulls last) and the lib validates them; the builder exposes a sort editor in the Fields panel (add/remove rules, ASC/DESC per rule, move up/down to reorder, targets restricted to selected ids per Contract A.9), and the server applies sorts in declared priority with nulls last.
+- **FUNNEL is a Recharts render, not stage-order semantics.** The server orders funnel stages by `DealStage.order`; the preview renders the returned series as-is.
+
+## Deferred from: 6-2-sales-reports-with-drill-down-comparative-analysis
+
+- **Report export deferred to Story 6.6.** `/reports/sales` has no PDF/Excel/CSV export surface, no export history, no background job, no signed URL. The legacy CSV buttons on `/reports/forecast` and `/reports/win-loss` are preserved untouched. Story 6.6 consumes this story's typed `ReportData` and drill-down contracts.
+- **Stage share is a snapshot, not historical conversion.** `Deal` stores only its current `stageId` and `DEAL_STAGE_CHANGED` activity logging is optional per-user, so `SALES_OVERVIEW.stageBreakdown` is a current-stage snapshot of deals created in the period (label: "Current stage share", `calculationNote` states the limitation). Historical stage-to-stage conversion needs a mandatory stage-history model, which is deliberately not added here.
+- **Mixed currency has no FX conversion.** When a scope contains more than one currency and no `currency` filter is selected, money KPIs/series are `null`, `mixedCurrencies=true` and `availableCurrencies` lists the currencies; the UI prompts the user to select one. `REVENUE_FORECAST`/`WIN_LOSS` compose `ForecastService`/`WinLossService`; since the Stage 8 fix round these services accept optional `currency`/`stageId`/`productId` and narrow their own predicates, so a selected currency is honored (never summed across currencies) and stage/product filters narrow the headline exactly like the buckets/drill. Without a selection, their money values are trusted only when the scope is single-currency and nulled otherwise (documented in `CALCULATION_NOTE_BY_TYPE`).
+- **Reports are computed on read with no cache.** No snapshot table, materialized view, cron or server cache (the existing `ForecastSnapshot` is preserved and used only by `ForecastService`). A future story may add caching under `architecture.md`'s performance targets.
+- Report type dispatch is exhaustive over the six `REPORT_TYPES`; an unknown persisted type fails closed (`BadRequestException('Unsupported report type')`) and is flagged `isSupported:false` in the saved-report list.
+- Drill-down metric/bucket keys are a closed `REPORT_METRIC_KEYS` vocabulary — clients can never submit column names, Prisma orderBy objects or arbitrary predicates.
+- `runReport` is a compatibility mutation with no DB write and no audit row; the frontend uses the `reportData` query. Audit rows for report CUD are written by `SalesReportsService` (the global interceptor never fires for Pothos mutations).
+- No historical conversion claim, no `SharingRule` reuse for `isPublic`, no scheduled/email delivery (Story 6.5), no chart selector/PNG/SVG export (Story 6.4), no drag-and-drop builder (Story 6.3), no AI forecast (Stories 6.7/10.x).

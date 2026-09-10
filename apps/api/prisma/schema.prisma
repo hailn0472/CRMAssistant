@@ -7,6 +7,23 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum ActivityType {
+  EMAIL_SENT
+  CALL_MADE
+  MEETING_SCHEDULED
+  NOTE_ADDED
+  DEAL_CREATED
+  CONTACT_CREATED
+  CONTACT_UPDATED
+  CONTACT_OWNER_CHANGED
+  // Auto-logged activity types (Story 4.2) — written by the producers in
+  // TasksService / MessagesService via ActivityService.logSafe().
+  TASK_COMPLETED
+  DEAL_STAGE_CHANGED
+  MESSAGE_RECEIVED
+  MESSAGE_SENT
+}
+
 // =============================================================================
 // MULTI-TENANCY FOUNDATION MODELS
 // =============================================================================
@@ -21,44 +38,1309 @@ datasource db {
 // Services MUST always filter by tenantId in all tenant-scoped queries.
 // =============================================================================
 
-model Tenant {
-  id        String   @id @default(uuid())
-  name      String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  users User[]
+enum DataVisibility {
+  OWN
+  TEAM
+  ALL
 }
 
-// User roles for RBAC
-enum UserRole {
-  ADMIN
-  MANAGER
-  SALES_REP
+enum AccessLevel {
+  READ
+  EDIT
+  FULL
+}
+
+// Qualification lifecycle for B2C contacts. The decision lives on the
+// customer record itself; it is independent from the retired product catalog
+// and from post-qualification sales processes.
+enum LeadStatus {
+  NEW
+  REVIEWING
+  NURTURING
+  QUALIFIED_LEAD
+  NOT_A_LEAD
+}
+
+enum ResourceType {
+  CONTACT
+  DEAL
+  TASK
+  DASHBOARD
+}
+
+// Task status/priority are closed, standard, cross-story vocabularies (4.4
+// filters on them, 4.5 aggregates on them, 4.6 blocks completion on them), so
+// they are Prisma enums — the schema's own precedent for closed vocabularies.
+// The const tuples in apps/api/src/tasks/task-due-status.ts mirror these and
+// remain the single source of truth for the Pothos enums, the service
+// validators and the frontend Zod schema (Story 4.1 arbitration #3).
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum TaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+// Story 4.6: recurrence patterns for recurring tasks (AC 3). CUSTOM is
+// deferred — no field carries the custom rule and no rrule library is
+// installed (AC 89).
+enum RecurrencePattern {
+  DAILY
+  WEEKLY
+  MONTHLY
+  YEARLY
+}
+
+// External calendar providers (Story 4.3). Both ship — Google Calendar and
+// Outlook Calendar are provider-agnostic behind CalendarProviderPort.
+enum CalendarProvider {
+  GOOGLE
+  OUTLOOK
+}
+
+// Per-task-per-connection sync state (Story 4.3, AC 6). Mirrors the epic's
+// SYNCED | PENDING | FAILED vocabulary on the TaskCalendarEvent link row.
+enum CalendarSyncStatus {
+  PENDING
+  SYNCED
+  FAILED
+}
+
+model Tenant {
+  id           String   @id @default(uuid())
+  name         String
+  enforce2FA   Boolean  @default(false)
+  // Story 6.5 (AC 12): tenant email branding — validated defensively by the
+  // email renderer (never server-fetched; HTML uses an escaped HTTPS URL).
+  logoUrl      String?
+  primaryColor String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  users                      User[]
+  contacts                   Contact[]
+  tags                       Tag[]
+  savedSegments              SavedSegment[]
+  roles                      Role[]
+  auditLogs                  AuditLog[]
+  apiKeys                    ApiKey[]
+  teams                      Team[]
+  sharingRules               SharingRule[]
+  conversations              Conversation[]
+  channelConnections         ChannelConnection[]
+  contactChannelIdentities   ContactChannelIdentity[]
+  activities                 Activity[]
+  notes                      Note[]
+  userActivityLogPreferences UserActivityLogPreference[]
+  tasks                      Task[]
+  taskTemplates              TaskTemplate[]
+  calendarConnections        CalendarConnection[]
+  taskCalendarEvents         TaskCalendarEvent[]
+  timeEntries                TimeEntry[]
+  taskDependencies           TaskDependency[]
+  notifications              Notification[]
+  dashboards                 Dashboard[]
+  widgets                    Widget[]
+  reports                    Report[]
+  reportSchedules            ReportSchedule[]
+  ReportScheduleExecution    ReportScheduleExecution[]
+  reportExports              ReportExport[]
+  activityGoals              ActivityGoal[]
 }
 
 /// Tenant-scoped user model with authentication support.
 /// Follows multi-tenancy pattern from Story 1.6.
 /// Extended in Story 1.7 to support Supabase Auth integration.
+/// Extended in Story 2.1: name → firstName + lastName, added profile fields, deactivation, lastLoginAt.
+/// Extended in Story 2.2: removed `role` column — roles now managed via UserRole junction table.
+/// Extended in Story 2.4: added teamId + team relation for team-based data visibility.
+/// Extended in Story 2.6: added 2FA fields (twoFactorEnabled, twoFactorSecret, twoFactorBackupCodes),
+/// SSO fields (ssoProvider, ssoId), and @@unique([tenantId, ssoProvider, ssoId]).
 model User {
+  id                   String    @id @default(uuid())
+  tenantId             String
+  email                String
+  firstName            String    @default("")
+  lastName             String
+  avatar               String?
+  phone                String?
+  jobTitle             String?
+  department           String?
+  isActive             Boolean   @default(true)
+  supabaseUserId       String?   @unique // Link to Supabase Auth user — null until first login
+  teamId               String? // FK to Team — null means not assigned to any team
+  lastLoginAt          DateTime?
+  twoFactorEnabled     Boolean   @default(false)
+  twoFactorSecret      String?
+  twoFactorBackupCodes Json? // string[] — bcrypt-hashed backup codes
+  ssoProvider          String? // 'GOOGLE' | 'AZURE_AD'
+  ssoId                String? // Provider-specific user ID
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+  createdBy            String    @default("system")
+  updatedBy            String    @default("system")
+  deletedAt            DateTime? // soft delete — null means active
+
+  tenant                Tenant                     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  team                  Team?                      @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  managedTeam           Team[]                     @relation("TeamManager")
+  userRoles             UserRole[]
+  auditLogs             AuditLog[]
+  apiKeys               ApiKey[]
+  ownedContacts         Contact[]                  @relation("ContactOwner")
+  assignedConversations Conversation[]             @relation("ConversationAssignee")
+  sharedWithRules       SharingRule[]              @relation("SharedWithUser")
+  MessageReadReceipt    MessageReadReceipt[]
+  activityLogPreference UserActivityLogPreference? @relation("UserActivityLogPreference")
+  assignedTasks         Task[]                     @relation("TaskAssignee")
+  calendarConnections   CalendarConnection[]       @relation("UserCalendarConnection")
+  timeEntries           TimeEntry[]                @relation("TimeEntryUser")
+  authoredNotes         Note[]                     @relation("NoteAuthor")
+  notifications         Notification[]             @relation("NotificationRecipient")
+  dashboards            Dashboard[]                @relation("DashboardOwner")
+  reportSchedules       ReportSchedule[]
+  reportExports         ReportExport[]
+  activityGoals         ActivityGoal[]
+
+  // Email is unique per tenant, NOT globally unique
+  @@unique([tenantId, email])
+  // SSO link is unique per tenant + provider (Prisma 5+ supports nullable fields in composite unique)
+  @@unique([tenantId, ssoProvider, ssoId])
+  // Index for all tenant-scoped queries
+  @@index([tenantId])
+  // Index for active-user queries
+  @@index([tenantId, isActive])
+  // Index for fast Supabase user lookups
+  @@index([supabaseUserId])
+}
+
+/// Tenant-scoped role model for RBAC (Story 2.2).
+/// System roles (isSystem = true) cannot be deleted or renamed.
+/// Designed to be extended with a permissions relation in Story 2.3.
+/// Extended in Story 2.4: added dataVisibility field.
+model Role {
+  id             String         @id @default(uuid())
+  tenantId       String
+  name           String
+  description    String?
+  isSystem       Boolean        @default(false)
+  dataVisibility DataVisibility @default(OWN)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  createdBy      String         @default("system")
+  updatedBy      String         @default("system")
+  deletedAt      DateTime?
+
+  tenant          Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  userRoles       UserRole[]
+  rolePermissions RolePermission[]
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
+}
+
+/// Tenant-scoped team model for team-based data visibility (Story 2.4).
+model Team {
+  id        String    @id @default(uuid())
+  tenantId  String
+  name      String
+  managerId String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  createdBy String    @default("system")
+  updatedBy String    @default("system")
+  deletedAt DateTime?
+
+  tenant          Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  manager         User?         @relation("TeamManager", fields: [managerId], references: [id], onDelete: SetNull)
+  members         User[] // users with this teamId
+  sharedWithRules SharingRule[] @relation("SharedWithTeam")
+  contacts        Contact[]
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
+}
+
+/// Junction table linking users to roles (many-to-many).
+/// Replaces the old `UserRole` enum and `User.role` column.
+model UserRole {
+  userId     String
+  roleId     String
+  assignedAt DateTime @default(now())
+  assignedBy String   @default("system")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([userId, roleId])
+  @@index([userId])
+  @@index([roleId])
+}
+
+/// Append-only audit log for tracking role assignments and other admin actions (Story 2.2).
+/// Extended in Story 2.7: added ipAddress, userAgent fields.
+/// No updates, no deletes. Indexed for efficient listing and lookup.
+model AuditLog {
+  id        String   @id @default(uuid())
+  tenantId  String
+  userId    String
+  action    String
+  entity    String
+  entityId  String
+  details   Json?
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  Tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId, createdAt])
+  @@index([entity, entityId])
+  @@index([userId])
+}
+
+/// API key model for third-party integrations (Story 2.7).
+/// Key is bcrypt-hashed before storage — raw key is returned only at creation.
+model ApiKey {
+  id          String    @id @default(uuid())
+  tenantId    String
+  name        String
+  keyPrefix   String
+  keyHash     String
+  userId      String
+  permissions Json?
+  expiresAt   DateTime?
+  lastUsedAt  DateTime?
+  isRevoked   Boolean   @default(false)
+  revokedAt   DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([keyHash])
+}
+
+/// Global permission catalog (Story 2.3).
+/// NOT tenant-scoped — shared across all tenants.
+/// Defines all possible resource-action combinations.
+model Permission {
+  id          String   @id @default(uuid())
+  resource    String
+  action      String
+  description String
+  createdAt   DateTime @default(now())
+
+  rolePermissions RolePermission[]
+
+  @@unique([resource, action])
+  @@index([resource])
+}
+
+/// Junction table linking roles to permissions (many-to-many).
+/// Role is tenant-scoped; Permission is global.
+model RolePermission {
+  roleId       String
+  permissionId String
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+}
+
+/// Tenant-scoped contact model for CRM contact management.
+/// Extended in Story 2.4: added ownerId + owner relation for data visibility.
+model Contact {
+  id                  String     @id @default(uuid())
+  tenantId            String
+  email               String
+  firstName           String
+  lastName            String
+  phone               String?
+  company             String?
+  jobTitle            String?
+  ownerId             String     @default("system")
+  teamId              String?
+  // Enrichment fields — optional data collected to build a 360° contact profile
+  linkedin            String?
+  twitter             String?
+  addressStreet       String?
+  addressCity         String?
+  addressCountry      String?
+  department          String?
+  timezone            String?
+  language            String?
+  source              String? // How the contact was acquired: Website, Referral, Event, etc.
+  notes               String? // Internal notes about the contact
+  // B2C lead qualification lifecycle. Score/reason are reviewer-entered;
+  // qualifiedAt/qualifiedBy are server-owned audit metadata.
+  leadStatus          LeadStatus @default(NEW)
+  leadScore           Float? // manual 0..100 prioritisation score
+  qualificationReason String?
+  qualifiedAt         DateTime?
+  qualifiedBy         String?
+  createdAt           DateTime   @default(now())
+  updatedAt           DateTime   @updatedAt
+  createdBy           String     @default("system")
+  updatedBy           String     @default("system")
+  deletedAt           DateTime?
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  owner  User   @relation("ContactOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  team   Team?  @relation(fields: [teamId], references: [id], onDelete: SetNull)
+
+  tags              ContactTag[]
+  conversations     Conversation[]
+  channelIdentities ContactChannelIdentity[]
+  activities        Activity[]
+  tasks             Task[]
+  noteEntries       Note[]
+
+  @@unique([tenantId, email])
+  @@index([tenantId])
+  @@index([tenantId, ownerId])
+  @@index([tenantId, teamId])
+  @@index([tenantId, createdAt])
+  @@index([tenantId, leadStatus])
+  @@index([tenantId, leadScore])
+}
+
+/// Immutable activity log for contact timeline (Story 5.4).
+/// Append-only — no updates, no deletes, no soft delete. This exemption is
+/// deliberate, not a multi-tenancy-pattern violation: activities are derived
+/// facts, and a timeline that could be rewritten would not be a timeline.
+/// Extended in Story 4.2 (auto logging): `source` is the producing domain
+/// ('TASK' | 'MESSAGE'); `source IS NULL` means the row was created
+/// manually (addContactNote). `sourceId` carries the originating row id
+/// (Task.id / Message.id) for traceability. `dedupeKey` is the
+/// deterministic per-event key — Postgres treats NULLs as distinct in unique
+/// indexes, so manual activities (dedupeKey = NULL) never collide. `metadata`
+/// carries the subject/body-preview/participants payload and is persisted but
+/// intentionally NOT exposed over GraphQL (no JSON scalar in the Pothos
+/// schema; Stories 4.4 and 6.8 read it).
+model Activity {
+  id          String       @id @default(uuid())
+  tenantId    String
+  contactId   String
+  type        ActivityType
+  title       String
+  description String?
+  source      String? // 'TASK' | 'MESSAGE' — NULL = manual entry (AC 3)
+  sourceId    String? // originating row id — Task.id / Message.id (AC 4)
+  dedupeKey   String? // deterministic per-event key; NULL = manual entry (AC 15)
+  metadata    Json? // persisted, not exposed over GraphQL (AC 5)
+  createdAt   DateTime     @default(now())
+  createdBy   String       @default("system")
+
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  contact Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  // Dedup for auto-logged events (AC 6): NULL dedupeKey (manual notes) never
+  // collides because Postgres treats NULLs as distinct in unique indexes.
+  @@unique([tenantId, dedupeKey])
+  @@index([tenantId])
+  @@index([tenantId, contactId])
+  @@index([tenantId, contactId, createdAt(sort: Desc)])
+  @@index([tenantId, createdBy])
+  // Story 4.4 (AC 1): tenant-wide feed ordered by createdAt DESC (the
+  // contact-timeline index above cannot serve a cross-contact feed; NFR11
+  // targets 10M activities per tenant).
+  @@index([tenantId, createdAt(sort: Desc)])
+}
+
+// =============================================================================
+// ACTIVITY GOALS (Story 6.8)
+// =============================================================================
+// Manager-set activity targets (AC 13-15). Tenant-scoped like every domain
+// model; `userId` is the goal SUBJECT (the user being tracked). activityType
+// null means TOTAL (all activity types). Two partial unique indexes
+// (tenantId, userId, period, activityType) WHERE activityType IS NOT NULL and
+// (tenantId, userId, period) WHERE activityType IS NULL, each WHERE deletedAt
+// IS NULL AND isActive = TRUE, are the race-safe backstop for "one active goal
+// per (user, period, activityType)" — expressed in the hand-written migration
+// because Prisma cannot express partial indexes (and a COALESCE(enum::text)
+// index expression is rejected by Postgres 42P17 as non-IMMUTABLE).
+enum ActivityGoalPeriod {
+  WEEKLY
+  MONTHLY
+}
+
+model ActivityGoal {
+  id           String             @id @default(uuid())
+  tenantId     String
+  name         String // e.g. "50 calls per week"
+  activityType ActivityType? // null = all activity types (TOTAL)
+  targetCount  Int // > 0, validated in the service
+  period       ActivityGoalPeriod
+  userId       String // goal subject (user being tracked)
+  startsOn     DateTime // UTC midnight — anchors the first period
+  isActive     Boolean            @default(true)
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+  createdBy    String             @default("system")
+  updatedBy    String             @default("system")
+  deletedAt    DateTime?
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([tenantId, userId])
+  @@index([tenantId, isActive])
+  @@index([tenantId, activityType])
+  @@index([tenantId, userId, isActive])
+}
+
+/// Tenant-scoped tag model for contact tagging and segmentation.
+model Tag {
+  id        String   @id @default(uuid())
+  tenantId  String
+  name      String
+  color     String   @default("#3B82F6")
+  createdAt DateTime @default(now())
+
+  tenant   Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  contacts ContactTag[]
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
+}
+
+/// Junction table for many-to-many relationship between contacts and tags.
+model ContactTag {
+  contactId String
+  tagId     String
+  createdAt DateTime @default(now())
+
+  contact Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  tag     Tag     @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([contactId, tagId])
+  @@index([tagId])
+}
+
+/// User-authored note attached to a Contact. Notes deliberately have a single
+/// parent now that the CRM lifecycle ends at lead qualification.
+model Note {
+  id        String    @id @default(uuid())
+  tenantId  String
+  contactId String
+  userId    String
+  body      String
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  createdBy String    @default("system")
+  updatedBy String    @default("system")
+  deletedAt DateTime?
+
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  contact Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  author  User    @relation("NoteAuthor", fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId])
+  @@index([tenantId, contactId])
+  @@index([contactId, deletedAt, createdAt])
+}
+
+/// Saved dynamic segments for reusable contact filtering.
+model SavedSegment {
+  id        String    @id @default(uuid())
+  tenantId  String
+  name      String
+  filters   Json
+  createdBy String    @default("system")
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
+}
+
+/// Sharing rules for cross-team collaboration (Story 2.5).
+/// Exactly one of sharedWithUserId or sharedWithTeamId must be set (enforced at application layer).
+model SharingRule {
+  id               String       @id @default(uuid())
+  tenantId         String
+  resourceType     ResourceType
+  resourceId       String // UUID of the shared record
+  sharedWithUserId String? // null if shared with team
+  sharedWithTeamId String? // null if shared with user
+  accessLevel      AccessLevel
+  sharedBy         String // userId who created the share
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+  deletedAt        DateTime?
+
+  tenant         Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  sharedWithUser User?  @relation("SharedWithUser", fields: [sharedWithUserId], references: [id], onDelete: Cascade)
+  sharedWithTeam Team?  @relation("SharedWithTeam", fields: [sharedWithTeamId], references: [id], onDelete: SetNull)
+
+  @@unique([tenantId, resourceType, resourceId, sharedWithUserId])
+  @@unique([tenantId, resourceType, resourceId, sharedWithTeamId])
+  @@index([tenantId, resourceType, resourceId])
+  @@index([tenantId, sharedWithUserId])
+  @@index([tenantId, sharedWithTeamId])
+  @@index([tenantId, resourceType, sharedWithUserId])
+}
+
+// =============================================================================
+// OMNICHANNEL COMMUNICATION MODELS (Story 8A.1)
+// =============================================================================
+
+enum Channel {
+  INTERNAL
+  LIVE_CHAT
+  FACEBOOK
+}
+
+enum ConversationStatus {
+  OPEN
+  PENDING
+  RESOLVED
+  ARCHIVED
+}
+
+enum MessageType {
+  TEXT
+  IMAGE
+  VIDEO
+  AUDIO
+  FILE
+  LOCATION
+  TEMPLATE
+  INTERNAL_NOTE
+}
+
+enum SenderType {
+  AGENT
+  CONTACT
+  SYSTEM
+}
+
+model Conversation {
+  id            String             @id @default(uuid())
+  tenantId      String
+  contactId     String?
+  title         String?
+  channel       Channel            @default(INTERNAL)
+  status        ConversationStatus @default(OPEN)
+  assignedTo    String?
+  lastMessageAt DateTime?
+  // Per-conversation watermark for the pull-based Facebook history sync
+  // (Story 8A.4). Null = never synced. Only messages with created_time >
+  // lastSyncedAt are persisted on subsequent passes. Per-conversation (rather
+  // than per-connection) so one failing thread never advances past — and thus
+  // permanently skips — another thread's unsynced messages.
+  lastSyncedAt  DateTime?
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+  createdBy     String             @default("system")
+  updatedBy     String             @default("system")
+  deletedAt     DateTime?
+
+  tenant         Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  contact        Contact?  @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  assignedToUser User?     @relation("ConversationAssignee", fields: [assignedTo], references: [id], onDelete: SetNull)
+  messages       Message[]
+
+  @@index([tenantId])
+  @@index([tenantId, status])
+  @@index([tenantId, channel])
+  @@index([tenantId, assignedTo])
+  @@index([tenantId, contactId])
+}
+
+model Message {
+  id             String      @id @default(uuid())
+  conversationId String
+  senderId       String
+  senderType     SenderType
+  content        String
+  messageType    MessageType @default(TEXT)
+  internalNote   Boolean     @default(false)
+  metadata       Json?
+  sentAt         DateTime    @default(now())
+  deliveredAt    DateTime?
+  readAt         DateTime?
+  createdAt      DateTime    @default(now())
+  createdBy      String      @default("system")
+
+  conversation Conversation         @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  receipts     MessageReadReceipt[]
+
+  @@index([conversationId])
+  @@index([conversationId, createdAt])
+}
+
+/// Per-user activity auto-logging preferences (Story 4.2).
+/// Shape and defaults copied from UserReminderPreference. A user with no row
+/// is treated as all-defaults (all toggles true) — reads must not create rows
+/// as a side effect. userId is @unique for the 1:1 relation to User even
+/// though @@unique([tenantId, userId]) also exists — Prisma requires the FK
+/// column itself to be unique for a 1:1 relation.
+model UserActivityLogPreference {
+  id                  String    @id @default(uuid())
+  tenantId            String
+  userId              String    @unique // 1:1 with User — user IDs are globally unique UUIDs
+  logTaskCompleted    Boolean   @default(true)
+  logMessageSent      Boolean   @default(true)
+  logMessageReceived  Boolean   @default(true)
+  logMeetingScheduled Boolean   @default(true)
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  createdBy           String    @default("system")
+  updatedBy           String    @default("system")
+  deletedAt           DateTime?
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user   User   @relation("UserActivityLogPreference", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, userId])
+  @@index([tenantId])
+}
+
+model MessageReadReceipt {
+  id          String    @id @default(uuid())
+  messageId   String
+  userId      String
+  readAt      DateTime?
+  deliveredAt DateTime?
+  createdAt   DateTime  @default(now())
+
+  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, userId])
+  @@index([messageId])
+  @@index([userId])
+}
+
+// =============================================================================
+// OMNICHANNEL THIRD-PARTY CHANNEL MODELS (Story 8A.3)
+// =============================================================================
+
+/// Tenant-scoped per-tenant channel page/account connection (Facebook page now,
+/// reusable for other 8B channels later). Access tokens are stored encrypted at
+/// rest — never in plaintext (see common/crypto/token-crypto.ts).
+model ChannelConnection {
+  id                   String    @id @default(uuid())
+  tenantId             String
+  channel              Channel
+  externalId           String // Facebook pageId (or equivalent external account id)
+  accessTokenEncrypted String
+  displayName          String?
+  status               String    @default("ACTIVE") // ACTIVE | DISCONNECTED
+  // Watermark for the pull-based history sync (Story 8A.4). Null = never
+  // synced (first pass pulls everything the Graph API returns). Only messages
+  // with created_time > lastSyncedAt are persisted on subsequent passes.
+  lastSyncedAt         DateTime?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+  createdBy            String    @default("system")
+  updatedBy            String    @default("system")
+  deletedAt            DateTime?
+
+  tenant            Tenant                   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  contactIdentities ContactChannelIdentity[]
+
+  @@unique([tenantId, channel, externalId])
+  @@index([tenantId])
+  @@index([tenantId, channel])
+}
+
+/// Maps an external channel identity (e.g. Facebook PSID) to a Contact, so we
+/// don't have to abuse the required Contact.email for channel-only contacts.
+model ContactChannelIdentity {
+  id                  String   @id @default(uuid())
+  tenantId            String
+  contactId           String
+  channel             Channel
+  externalId          String // Facebook page-scoped user id (PSID)
+  // Which ChannelConnection (page) this identity was first seen on — a PSID is
+  // scoped to a single Facebook page, so this lets outbound dispatch pick the
+  // correct page/token when a tenant has more than one connected (review fix,
+  // Story 8A.3). Nullable so identities created before this field existed
+  // still work (dispatch falls back to the tenant's oldest active connection).
+  channelConnectionId String?
+  createdAt           DateTime @default(now())
+
+  tenant            Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  contact           Contact            @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  channelConnection ChannelConnection? @relation(fields: [channelConnectionId], references: [id], onDelete: SetNull)
+
+  @@unique([tenantId, channel, externalId])
+  @@index([tenantId])
+  @@index([contactId])
+  @@index([channelConnectionId])
+}
+
+// =============================================================================
+// TASK MODELS (Story 4.1)
+// =============================================================================
+
+/// Tenant-scoped task model (Story 4.1).
+/// assignedTo is NOT nullable — a nullable assignee combined with
+/// resolveVisibilityFilter on assignedTo would make unassigned tasks invisible
+/// to every non-ADMIN user. createdBy stays a plain String with no FK to User,
+/// matching every other model in the schema — assignedTo is then the ONLY FK
+/// from Task to User, so no ambiguous-relation error and no second back-relation
+/// array on User (do not "improve" createdBy into a relation).
+model Task {
+  id          String       @id @default(uuid())
+  tenantId    String
+  title       String
+  description String?
+  status      TaskStatus   @default(TODO)
+  priority    TaskPriority @default(MEDIUM)
+  dueDate     DateTime?
+  assignedTo  String
+  contactId   String?
+  completedAt DateTime?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  createdBy   String       @default("system")
+  updatedBy   String       @default("system")
+  deletedAt   DateTime?
+
+  // Story 4.6: recurrence fields (AC 4) — all nullable or defaulted so existing rows have no value.
+  isRecurring       Boolean            @default(false)
+  recurrencePattern RecurrencePattern?
+  recurrenceEndDate DateTime?
+  parentTaskId      String?
+
+  // Story 6.7 — internal-only automation identity (Contract A4). Written by
+  // server automation paths (e.g. churn-prevention task creation), never by
+  // client create/update inputs. The deterministic non-null automationKey is
+  // intentionally kept even when the task is soft-deleted so the same trigger
+  // cannot re-create the task; NULL keys never collide (Postgres treats NULLs
+  // as distinct in unique indexes).
+  automationSource String?
+  automationKey    String?
+
+  tenant   Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  assignee User     @relation("TaskAssignee", fields: [assignedTo], references: [id], onDelete: Cascade)
+  contact  Contact? @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  // Story 4.6: self-relations (AC 5) — three distinct relation names.
+  parentTask  Task?  @relation("TaskRecurrence", fields: [parentTaskId], references: [id], onDelete: SetNull)
+  occurrences Task[] @relation("TaskRecurrence")
+
+  dependencies TaskDependency[] @relation("TaskDependencyDependent") // edges where THIS task is blocked
+  dependents   TaskDependency[] @relation("TaskDependencyBlocker") // edges where THIS task blocks others
+
+  calendarEvents TaskCalendarEvent[]
+  timeEntries    TimeEntry[]
+  notifications  Notification[]      @relation("TaskNotification")
+
+  @@unique([tenantId, automationKey])
+  @@index([tenantId])
+  @@index([tenantId, assignedTo])
+  @@index([tenantId, status])
+  @@index([tenantId, dueDate])
+  @@index([tenantId, contactId])
+  // Story 4.6: occurrence lookup + sweep template scan (AC 4)
+  @@index([tenantId, parentTaskId])
+  @@index([tenantId, isRecurring])
+}
+
+/// Tenant-global task template catalogue (Story 4.1).
+/// name is the picker label (e.g. "Discovery call follow-up"), title is the
+/// title stamped onto the created task. No @@unique([tenantId, name]) — soft
+/// delete + unique is a documented trap; uniqueness is enforced
+/// case-insensitively in TaskTemplatesService over deletedAt: null rows.
+model TaskTemplate {
+  id               String       @id @default(uuid())
+  tenantId         String
+  name             String
+  title            String
+  description      String?
+  defaultPriority  TaskPriority @default(MEDIUM)
+  defaultDueInDays Int?
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+  updatedBy        String       @default("system")
+  createdBy        String       @default("system")
+  deletedAt        DateTime?
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+}
+
+/// Story 4.6: a directed dependency edge — `taskId` is BLOCKED BY
+/// `dependsOnTaskId`.
+/// Like TaskCalendarEvent and Activity, this is a derived link row: it is
+/// created and hard-deleted, never updated, so it deliberately carries NO
+/// `deletedAt`, `updatedAt` or `updatedBy`. That is what makes the @@unique
+/// below safe — a soft-delete + @@unique trap only bites a
+/// soft-deleting model.
+model TaskDependency {
+  id              String   @id @default(uuid())
+  tenantId        String
+  taskId          String
+  dependsOnTaskId String
+  createdAt       DateTime @default(now())
+  createdBy       String   @default("system")
+
+  tenant        Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  task          Task   @relation("TaskDependencyDependent", fields: [taskId], references: [id], onDelete: Cascade)
+  dependsOnTask Task   @relation("TaskDependencyBlocker", fields: [dependsOnTaskId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, taskId, dependsOnTaskId])
+  @@index([tenantId])
+  @@index([tenantId, dependsOnTaskId])
+}
+
+// =============================================================================
+// TIME TRACKING MODELS (Story 4.5)
+// =============================================================================
+
+/// Tenant-scoped time entry against a task (Story 4.5, AC 1).
+/// durationSeconds is the single source of truth for a row's length — a
+/// hand-corrected entry (AC 10) must never be recomputed from
+/// startTime/endTime. "One active timer per user" (AC 6) is enforced in
+/// TimeEntriesService inside a Serializable transaction — NOT by a partial
+/// unique index (Prisma cannot express WHERE "endTime" IS NULL, and a plain
+/// @@unique is the soft-delete trap). No @@unique, no @db.* native types.
+model TimeEntry {
+  id              String    @id @default(uuid())
+  tenantId        String
+  taskId          String
+  userId          String
+  startTime       DateTime
+  endTime         DateTime?
+  durationSeconds Int       @default(0)
+  description     String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  createdBy       String    @default("system")
+  updatedBy       String    @default("system")
+  deletedAt       DateTime?
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  task   Task   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user   User   @relation("TimeEntryUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([tenantId, userId, startTime])
+  @@index([tenantId, taskId])
+  @@index([tenantId, userId, endTime])
+}
+
+// =============================================================================
+// CALENDAR INTEGRATION MODELS (Story 4.3)
+// =============================================================================
+
+/// Tenant-scoped, per-USER calendar connection (Story 4.3). The per-user
+/// analogue of ChannelConnection: a user may only ever see, sync or disconnect
+/// their OWN rows — filtered on { tenantId, userId: <caller's own userId> }
+/// unconditionally, ADMIN included (AC 3). An ADMIN reading another user's
+/// calendar tokens is a privacy defect, not an admin feature.
+/// Access tokens are encrypted at rest via common/crypto/token-crypto.ts —
+/// never plaintext, never exposed over GraphQL (AC 5).
+model CalendarConnection {
+  id                    String           @id @default(uuid())
+  tenantId              String
+  userId                String
+  provider              CalendarProvider
+  externalAccountId     String // Google `sub` / Graph `id`
+  externalAccountEmail  String?
+  accessTokenEncrypted  String? // encrypted at rest via token-crypto; nulled on disconnect (AC 19)
+  refreshTokenEncrypted String? // nullable — a provider may not return one on re-consent
+  accessTokenExpiresAt  DateTime? // drives proactive refresh (AC 17)
+  scope                 String? // granted scopes as returned
+  calendarId            String           @default("primary") // Google `primary`; Outlook default calendar
+  status                String           @default("ACTIVE") // ACTIVE | REAUTH_REQUIRED | DISCONNECTED
+  syncToken             String? // Google nextSyncToken / Graph @odata.deltaLink. Null = never synced
+  lastSyncedAt          DateTime? // also the 15-minute throttle watermark (AC 26)
+  lastSyncError         String?
+  createdAt             DateTime         @default(now())
+  updatedAt             DateTime         @updatedAt
+  createdBy             String           @default("system")
+  updatedBy             String           @default("system")
+  deletedAt             DateTime?
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user   User   @relation("UserCalendarConnection", fields: [userId], references: [id], onDelete: Cascade)
+
+  taskCalendarEvents TaskCalendarEvent[]
+
+  @@unique([tenantId, userId, provider])
+  @@index([tenantId])
+  @@index([tenantId, userId])
+}
+
+/// Per-task-per-connection link and sync-state row (Story 4.3, AC 6-7).
+/// NO deletedAt — this row is hard-deleted. Soft delete plus @@unique is a
+/// documented trap in this repo: a deleted row's key stays
+/// reserved forever and re-creating it fails with an opaque P2002. A link row
+/// is a derived record; when the task is unlinked, deleted, or the connection
+/// is removed, delete the row. This exemption is deliberate, not a
+/// multi-tenancy-pattern violation (same reasoning as the Activity model).
+/// externalEventId is null until the first successful push; inbound events are
+/// matched to CRM tasks by this id ONLY (AC 25) — never by provider metadata.
+model TaskCalendarEvent {
+  id                   String             @id @default(uuid())
+  tenantId             String
+  taskId               String
+  calendarConnectionId String
+  externalEventId      String?
+  syncStatus           CalendarSyncStatus @default(PENDING)
+  lastError            String?
+  attemptCount         Int                @default(0)
+  nextAttemptAt        DateTime?
+  remoteUpdatedAt      DateTime?
+  localSyncedAt        DateTime?
+  conflictDetectedAt   DateTime?
+  conflictSummary      String?
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+  createdBy            String             @default("system")
+  updatedBy            String             @default("system")
+
+  tenant             Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  task               Task               @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  calendarConnection CalendarConnection @relation(fields: [calendarConnectionId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, taskId, calendarConnectionId])
+  @@index([tenantId])
+  @@index([tenantId, syncStatus, nextAttemptAt])
+  @@index([calendarConnectionId, externalEventId])
+}
+
+// =============================================================================
+// NOTIFICATION MODELS (Story 4.8)
+// =============================================================================
+
+/// In-app notification row persisted in Postgres so unread state survives
+/// reload (architecture.md:944-946). type is a String validated against a
+/// const tuple in the service rather than in the DB.
+/// Recipient-scoped (userId), not visibility-scoped — no NEW resource is
+/// created and no requirePermission is ever called on the notification
+/// surface. dedupeKey is unique-when-set; NULL dedupeKeys never collide
+/// because Postgres treats NULLs as distinct in unique indexes (the same
+/// mechanism Activity relies on at schema.prisma:432-434).
+///
+/// Association: one nullable task FK.
+/// non-null, onDelete: Cascade on all four relations. Cascade on recipient
+/// (not Restrict as Note.author uses) is deliberate: a notification is
+/// worthless without its recipient, unlike an authored note which is a
+/// record of work.
+///
+/// Producers are server-side only (no createNotification mutation); every
+/// row is derived from an already-audited mutation, so no AuditLog rows are
+/// written for notifications (the Activity derived-record carve-out applies).
+model Notification {
   id             String    @id @default(uuid())
   tenantId       String
-  email          String
-  name           String
-  role           UserRole  @default(SALES_REP)
-  supabaseUserId String?   @unique // Link to Supabase Auth user — null until first login
+  userId         String // the recipient
+  type           String // TASK_ASSIGNED | DEAL_REMINDER | DEAL_MENTION
+  title          String
+  body           String?
+  taskId         String?
+  reportExportId String? // Story 6.6 — third mutually-exclusive target
+  dedupeKey      String?
+  readAt         DateTime?
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
   createdBy      String    @default("system")
   updatedBy      String    @default("system")
-  deletedAt      DateTime? // soft delete — null means active
+  deletedAt      DateTime?
+
+  tenant       Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  recipient    User          @relation("NotificationRecipient", fields: [userId], references: [id], onDelete: Cascade)
+  task         Task?         @relation("TaskNotification", fields: [taskId], references: [id], onDelete: Cascade)
+  // Story 6.6: report export is an optional second notification target
+  // report-export exactly one). Never carries the signed URL — only the
+  // export row id; the frontend mints a fresh URL on owner download.
+  reportExport ReportExport? @relation("ReportExportNotification", fields: [reportExportId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, dedupeKey])
+  @@index([tenantId])
+  @@index([tenantId, userId, createdAt(sort: Desc)])
+  @@index([tenantId, userId, readAt])
+  @@index([reportExportId])
+}
+
+/// Dashboard model (Story 6.1) — user-owned configurable dashboards.
+/// No @@unique — duplicate names are allowed; "one default per user" is
+/// enforced in DashboardsService inside a transaction.
+/// No `layout` column — Widget.position + Widget.size are the single source
+/// of truth for layout (arbitrated 2026-08-12).
+model Dashboard {
+  id                String    @id @default(uuid())
+  tenantId          String
+  userId            String // the owner
+  name              String
+  isDefault         Boolean   @default(false)
+  isSystemGenerated Boolean   @default(false)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  createdBy         String    @default("system")
+  updatedBy         String    @default("system")
+  deletedAt         DateTime?
+
+  tenant  Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  owner   User     @relation("DashboardOwner", fields: [userId], references: [id], onDelete: Cascade)
+  widgets Widget[]
+
+  @@index([tenantId])
+  @@index([tenantId, userId, createdAt])
+}
+
+/// Widget model (Story 6.1) — individual dashboard widgets.
+/// config is JSON — parsed and validated by a pure module, exposed over
+/// GraphQL as a typed WidgetConfig Pothos object (not a JSON scalar).
+model Widget {
+  id          String    @id @default(uuid())
+  tenantId    String
+  dashboardId String
+  type        String
+  title       String
+  config      Json
+  position    Int
+  size        String
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  createdBy   String    @default("system")
+  updatedBy   String    @default("system")
+  deletedAt   DateTime?
+
+  tenant    Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  dashboard Dashboard @relation(fields: [dashboardId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([tenantId, dashboardId, position])
+}
+
+/// Report model (Story 6.2) — tenant-scoped saved sales reports.
+/// `config` is JSON — strictly validated on write (validateReportConfig) and
+/// defensively parsed on read (parseReportConfig); it is exposed over GraphQL
+/// as a typed ReportConfig Pothos object, never a raw JSON scalar.
+/// No @@unique on name-bearing columns — active-name uniqueness per
+/// (tenantId, createdBy) is enforced in SalesReportsService so soft-deleted
+/// names can be reused (AC 2, AC 8).
+model Report {
+  id        String    @id @default(uuid())
+  tenantId  String
+  name      String
+  type      String
+  config    Json
+  createdBy String
+  isPublic  Boolean   @default(false)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  updatedBy String
+  deletedAt DateTime?
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
-  // Email is unique per tenant, NOT globally unique
-  @@unique([tenantId, email])
-  // Index for all tenant-scoped queries
+  // Story 6.5: unified Report rows are schedulable — inverse collection for
+  // ReportSchedule.reportId (onDelete: Cascade).
+  schedules               ReportSchedule[]
+  ReportScheduleExecution ReportScheduleExecution[]
+  // Story 6.6: user-triggered export history rows for this report.
+  exports                 ReportExport[]
+
   @@index([tenantId])
-  // Index for fast Supabase user lookups
-  @@index([supabaseUserId])
+  @@index([tenantId, createdBy])
+  @@index([tenantId, type])
+  @@index([tenantId, isPublic])
+}
+
+// ─── Story 6.5: scheduled report delivery (FR44) ────────────────────────────
+
+/// Five supported cadences. `CUSTOM_CRON` is a validated five-field
+/// expression whose cadence is no more frequent than hourly.
+enum ReportScheduleFrequency {
+  DAILY
+  WEEKLY
+  MONTHLY
+  QUARTERLY
+  CUSTOM_CRON
+}
+
+/// Attachment format selected by the schedule owner.
+enum ReportDeliveryFormat {
+  PDF
+  EXCEL
+  CSV
+}
+
+/// Durable export source discriminator (Story 6.8). `SAVED_REPORT` rows carry
+/// a non-null reportId and replay the saved sales/custom report; `ACTIVITY_REPORT`
+/// rows carry reportId NULL plus an immutable validated activity-filter snapshot
+/// in `filters` and are executed through the activity-report adapter. The DB
+/// CHECK `(sourceType='SAVED_REPORT' AND reportId IS NOT NULL) OR
+/// (sourceType='ACTIVITY_REPORT' AND reportId IS NULL)` keeps the invariant
+/// structural (hand-written migration — Prisma cannot express CHECK).
+enum ReportExportSourceType {
+  SAVED_REPORT
+  ACTIVITY_REPORT
+}
+
+/// Durable user-triggered export status (Story 6.6). PROCESSING is an
+/// internal claim state and is never presented as a completed export;
+/// READY/FAILED are terminal. READY requires filename/contentType/objectPath/
+/// fileSizeBytes; FAILED carries safe error metadata and no downloadable
+/// object.
+enum ReportExportStatus {
+  PENDING
+  PROCESSING
+  READY
+  FAILED
+}
+
+/// Durable execution-log status. PROCESSING is an internal claim state and is
+/// never presented as a completed run; SUCCESS/FAILED/SKIPPED are terminal.
+enum ReportScheduleExecutionStatus {
+  PROCESSING
+  SUCCESS
+  FAILED
+  SKIPPED
+}
+
+/// A durable tenant-safe schedule that executes the unified Report row through
+/// the existing sales/custom report services and emails a rendered attachment.
+/// `nextRunAt` is always server-computed UTC; the schedule keeps the owner's
+/// local wall-clock (`scheduledTime` + IANA `timezone`) as the source cadence.
+model ReportSchedule {
+  id             String                  @id @default(uuid())
+  tenantId       String
+  reportId       String
+  userId         String // schedule owner and execution identity
+  frequency      ReportScheduleFrequency
+  recipients     String[]
+  format         ReportDeliveryFormat
+  timezone       String // validated IANA identifier
+  scheduledTime  String // HH:mm local wall-clock
+  dayOfWeek      Int? // 0–6, only WEEKLY
+  dayOfMonth     Int? // 1–31, MONTHLY/QUARTERLY
+  startMonth     Int? // 1–12, only QUARTERLY
+  cronExpression String? // five fields, only CUSTOM_CRON
+  nextRunAt      DateTime // UTC
+  lastRunAt      DateTime?
+  isActive       Boolean                 @default(true)
+  createdAt      DateTime                @default(now())
+  updatedAt      DateTime                @updatedAt
+  createdBy      String
+  updatedBy      String
+  deletedAt      DateTime?
+
+  tenant     Tenant                    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  report     Report                    @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  owner      User                      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  executions ReportScheduleExecution[]
+
+  @@index([tenantId])
+  // Owner listing (reportSchedules query)
+  @@index([tenantId, userId, deletedAt])
+  // Hourly due scan — active, non-deleted, due-next
+  @@index([isActive, deletedAt, nextRunAt])
+  // Report lookup
+  @@index([tenantId, reportId, deletedAt])
+}
+
+/// Durable operational log of every occurrence attempt. One execution row per
+/// (scheduleId, scheduledFor) under a unique constraint is the atomic claim
+/// that prevents multi-instance duplicate sends. Executions are retained when
+/// a schedule is soft-deleted (normal GraphQL deletion never physically
+/// deletes a schedule).
+model ReportScheduleExecution {
+  id                  String                        @id @default(uuid())
+  tenantId            String
+  scheduleId          String
+  reportId            String
+  scheduledFor        DateTime // occurrence identity, UTC
+  status              ReportScheduleExecutionStatus
+  attemptCount        Int                           @default(0) // total attempts, max 4
+  nextRetryAt         DateTime?
+  processingStartedAt DateTime?
+  completedAt         DateTime?
+  errorCode           String?
+  errorMessage        String? // sanitized/truncated; no secrets or recipient list
+  providerMessageId   String?
+  createdAt           DateTime                      @default(now())
+  updatedAt           DateTime                      @updatedAt
+
+  tenant   Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  schedule ReportSchedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+  report   Report         @relation(fields: [reportId], references: [id], onDelete: Cascade)
+
+  @@unique([scheduleId, scheduledFor])
+  // Retry scan — due retries in status order
+  @@index([status, nextRetryAt])
+  // Latest-execution lookups per schedule
+  @@index([tenantId, scheduleId, createdAt(sort: Desc)])
+}
+
+// ─── Story 6.6: user-triggered report export (FR45) ─────────────────────────
+
+/// Durable tenant-scoped export history row for the unified Report model.
+/// The requester (`userId`) is the execution identity, history owner and
+/// download authorizer — ADMIN never bypasses export-row ownership.
+/// `filters` stores the immutable server-normalized EFFECTIVE filter/config
+/// snapshot: for sales the FULL validated effective config (saved config
+/// merged with validated request overrides — never raw GraphQL objects), so
+/// background replay reproduces the exact effective scope even if the saved
+/// config changes mid-flight; `CUSTOM` exports always replay the saved
+/// config, so their snapshot is null. `objectPath` is the private storage
+/// path and is never exposed by GraphQL; signed URLs are never persisted.
+model ReportExport {
+  id                  String                 @id @default(uuid())
+  tenantId            String
+  // Story 6.8: nullable + source-discriminated. SAVED_REPORT rows keep the
+  // required report FK (existing 6.6 semantics); ACTIVITY_REPORT rows are
+  // null here and carry the immutable validated activity filter snapshot.
+  reportId            String?
+  sourceType          ReportExportSourceType @default(SAVED_REPORT)
+  userId              String // requester, execution identity, history owner
+  format              ReportDeliveryFormat
+  status              ReportExportStatus     @default(PENDING)
+  filters             Json? // immutable server-normalized effective sales config snapshot (SAVED_REPORT) or validated activity filters (ACTIVITY_REPORT)
+  filterSummary       String // safe human-readable effective scope
+  dateRangeStart      DateTime?
+  dateRangeEnd        DateTime?
+  filename            String?
+  contentType         String?
+  objectPath          String? // private; never exposed by GraphQL
+  fileSizeBytes       Int?
+  expectedTotalRows   Int? // request-time authoritative CUSTOM total (Contract C14); null for sales
+  attemptCount        Int                    @default(0)
+  nextRetryAt         DateTime?
+  processingStartedAt DateTime?
+  completedAt         DateTime?
+  errorCode           String?
+  errorMessage        String? // sanitized/truncated; no data/storage URL
+  createdAt           DateTime               @default(now())
+  updatedAt           DateTime               @updatedAt
+  createdBy           String
+  updatedBy           String
+  deletedAt           DateTime?
+
+  tenant        Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  report        Report?        @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  owner         User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  notifications Notification[] @relation("ReportExportNotification")
+
+  // Owner history listing — newest first
+  @@index([tenantId, userId, createdAt(sort: Desc)])
+  // Worker scans: pending/retryable due rows and stale-claim recovery
+  @@index([status, nextRetryAt, createdAt])
+  // Report lookup
+  @@index([tenantId, reportId, createdAt(sort: Desc)])
 }

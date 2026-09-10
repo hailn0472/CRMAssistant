@@ -1,0 +1,224 @@
+'use client'
+
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { toast } from 'react-hot-toast'
+import { fetchTimeline } from '@/services/activity.service'
+import { TimelineCard } from './TimelineCard'
+import { TimelineFilter } from './TimelineFilter'
+import type { Activity, ActivityFilterType, ActivityTypeValue } from '@/types/activity.types'
+import { SALES_TYPES, SYSTEM_TYPES } from '@/types/activity.types'
+
+const PAGE_SIZE = 20
+
+type ContactTimelineProps = {
+  contactId: string
+}
+
+function filterActivities(activities: Activity[], filter: ActivityFilterType): Activity[] {
+  if (filter === 'ALL') return activities
+
+  const allowedTypes: ActivityTypeValue[] = filter === 'SALES' ? SALES_TYPES : SYSTEM_TYPES
+
+  return activities.filter((a) => allowedTypes.includes(a.type))
+}
+
+export function ContactTimeline({ contactId }: ContactTimelineProps): React.JSX.Element {
+  const [activities, setActivities] = useState<Activity[]>([])
+  const [filteredActivities, setFilteredActivities] = useState<Activity[]>([])
+  const [pageInfo, setPageInfo] = useState<{
+    hasNextPage: boolean
+    endCursor: string | null
+  }>({ hasNextPage: false, endCursor: null })
+  const [totalCount, setTotalCount] = useState(0)
+  const [isLoading, setIsLoading] = useState(true)
+  const [isLoadingMore, setIsLoadingMore] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [filter, setFilter] = useState<ActivityFilterType>('ALL')
+
+  const sentinelRef = useRef<HTMLDivElement>(null)
+  const loadedRef = useRef(false)
+  const mountedRef = useRef(true)
+
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+    }
+  }, [])
+
+  // Load initial data
+  const loadTimeline = useCallback(async () => {
+    setIsLoading(true)
+    setError(null)
+    try {
+      const result = await fetchTimeline(contactId, PAGE_SIZE)
+      if (!mountedRef.current) return
+      setActivities(result.edges.map((e) => e.node))
+      setPageInfo(result.pageInfo)
+      setTotalCount(result.totalCount)
+    } catch (err) {
+      if (!mountedRef.current) return
+      setError(err instanceof Error ? err.message : 'Failed to load timeline')
+    } finally {
+      if (mountedRef.current) {
+        setIsLoading(false)
+        loadedRef.current = true
+      }
+    }
+  }, [contactId])
+
+  useEffect(() => {
+    loadTimeline()
+  }, [loadTimeline])
+
+  // Update filtered activities when activities or filter changes
+  useEffect(() => {
+    setFilteredActivities(filterActivities(activities, filter))
+  }, [activities, filter])
+
+  // Infinite scroll via Intersection Observer
+  useEffect(() => {
+    if (!pageInfo.hasNextPage || isLoadingMore || !sentinelRef.current) return
+
+    const observer = new IntersectionObserver(
+      async (entries) => {
+        const target = entries[0]
+        if (!target?.isIntersecting) return
+
+        setIsLoadingMore(true)
+        try {
+          const result = await fetchTimeline(contactId, PAGE_SIZE, pageInfo.endCursor ?? undefined)
+          if (!mountedRef.current) return
+          setActivities((prev) => [...prev, ...result.edges.map((e) => e.node)])
+          setPageInfo(result.pageInfo)
+        } catch (err) {
+          if (mountedRef.current) {
+            toast.error(err instanceof Error ? err.message : 'Failed to load more activities')
+          }
+        } finally {
+          if (mountedRef.current) {
+            setIsLoadingMore(false)
+          }
+        }
+      },
+      { threshold: 0.1 },
+    )
+
+    const el = sentinelRef.current
+    if (el) observer.observe(el)
+
+    return () => observer.disconnect()
+  }, [contactId, pageInfo, isLoadingMore])
+
+  // Loading skeleton
+  if (isLoading) {
+    return (
+      <div className="flex flex-col gap-4">
+        <div className="h-6 w-48 animate-pulse rounded-[6px] bg-[#f2f2f5]" />
+        <div className="flex gap-2">
+          <div className="h-7 w-16 animate-pulse rounded-full bg-[#f2f2f5]" />
+          <div className="h-7 w-16 animate-pulse rounded-full bg-[#f2f2f5]" />
+          <div className="h-7 w-16 animate-pulse rounded-full bg-[#f2f2f5]" />
+        </div>
+        {Array.from({ length: 3 }).map((_, i) => (
+          <div key={i} className="flex gap-3">
+            <div className="h-[9px] w-[9px] flex-none animate-pulse rounded-full bg-[#f2f2f5]" />
+            <div className="flex-1 space-y-2">
+              <div className="h-4 w-3/4 animate-pulse rounded-[6px] bg-[#f2f2f5]" />
+              <div className="h-3 w-1/2 animate-pulse rounded-[6px] bg-[#f2f2f5]" />
+            </div>
+          </div>
+        ))}
+      </div>
+    )
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <div className="rounded-[11px] border border-[#f0d5d5] bg-[#fdf2f2] p-6 text-center">
+        <p className="text-[13px] text-[#b91c1c]">{error}</p>
+        <button
+          type="button"
+          onClick={loadTimeline}
+          className="mt-3 inline-flex h-9 items-center rounded-[9px] border border-[#1b1b1f] bg-[#1b1b1f] px-4 text-[13px] font-semibold text-white transition-colors hover:bg-black"
+        >
+          Retry
+        </button>
+      </div>
+    )
+  }
+
+  // Empty state
+  if (totalCount === 0) {
+    return (
+      <div className="flex flex-col gap-4">
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="text-[14px] font-semibold text-[#1b1b1f]">Activity timeline</h2>
+        </div>
+
+        <div className="rounded-[11px] border border-dashed border-[#d8d8e0] p-8 text-center">
+          <p className="text-[13px] text-[#8c8c96]">No activity recorded yet</p>
+        </div>
+      </div>
+    )
+  }
+
+  // Main timeline
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-baseline gap-[9px]">
+          <h2 className="text-[14px] font-semibold text-[#1b1b1f]">Activity timeline</h2>
+          <span className="text-[12px] text-[#a0a0aa]">
+            {totalCount} {totalCount === 1 ? 'activity' : 'activities'}
+          </span>
+        </div>
+        <div className="flex items-center gap-[7px]">
+          <TimelineFilter activeFilter={filter} onFilterChange={setFilter} />
+        </div>
+      </div>
+
+      <div>
+        {filteredActivities.length === 0 ? (
+          <p className="py-4 text-center text-[13px] text-[#a0a0aa]">
+            No {filter === 'SALES' ? 'sales' : 'system'} activities
+          </p>
+        ) : (
+          filteredActivities.map((activity, index) => (
+            <TimelineCard
+              key={activity.id}
+              type={activity.type}
+              title={activity.title}
+              description={activity.description}
+              createdAt={activity.createdAt}
+              createdBy={activity.createdBy}
+              // Story 4.2 (AC 48): pass the auto-log discriminator through so
+              // TimelineCard can render the "Auto" badge for source != null.
+              source={activity.source}
+              isLast={index === filteredActivities.length - 1 && !pageInfo.hasNextPage}
+            />
+          ))
+        )}
+
+        {/* Sentinel for infinite scroll */}
+        {pageInfo.hasNextPage && (
+          <div ref={sentinelRef} className="py-4 text-center">
+            {isLoadingMore ? (
+              <div className="flex items-center justify-center gap-2">
+                <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-[#e6e6eb] border-t-[#1b1b1f]" />
+                <span className="text-[12.5px] text-[#a0a0aa]">Loading more...</span>
+              </div>
+            ) : (
+              <div className="h-4" />
+            )}
+          </div>
+        )}
+
+        {!pageInfo.hasNextPage && activities.length > 0 && (
+          <p className="py-4 text-center text-[12.5px] text-[#a0a0aa]">No more activities</p>
+        )}
+      </div>
+    </div>
+  )
+}
