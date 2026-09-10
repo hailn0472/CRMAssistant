@@ -42,14 +42,12 @@ test.describe('Command Navigation & Search ATDD', () => {
 
     const dialog = page.getByRole('dialog', { name: /command|search/i })
 
-    // Navigate group - enabled
+    // Navigate group - enabled in the current Contact/Lead workflow
     await expect(dialog.getByRole('option', { name: /open contacts/i })).toBeVisible()
-    await expect(dialog.getByRole('option', { name: /open deals/i })).toBeVisible()
     await expect(dialog.getByRole('option', { name: /open dashboard/i })).toBeVisible()
 
     // Create group - disabled
     await expect(dialog.getByText(/create contact/i)).toBeVisible()
-    await expect(dialog.getByText(/create deal/i)).toBeVisible()
 
     // AI and Settings - disabled
     await expect(dialog.getByText(/ask ai/i)).toBeVisible()

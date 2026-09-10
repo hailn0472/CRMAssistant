@@ -358,7 +358,6 @@ test.describe('Task CRUD with Templates & Assignment — Story 4.1', () => {
     await expect(page.getByLabel('Due date')).toBeVisible()
     await expect(page.getByRole('textbox', { name: 'Search assignee' })).toBeVisible()
     await expect(page.getByRole('textbox', { name: 'Search contacts' })).toBeVisible()
-    await expect(page.getByRole('textbox', { name: 'Search deals' })).toBeVisible()
 
     // Submit with empty title → inline validation error (AC 75).
     await page.getByRole('button', { name: 'Create task', exact: true }).click()
