@@ -136,7 +136,7 @@ export function TaskDetailClient({ task }: TaskDetailClientProps): React.JSX.Ele
   }
 
   return (
-    <div className="mx-auto w-full max-w-[1180px] px-7 pb-12 pt-[26px]">
+    <div className="mx-auto w-full max-w-[1180px] px-0 pb-12 pt-4 sm:px-4 sm:pt-[26px] xl:px-7">
       <Link
         href="/tasks"
         className="mb-4 inline-flex items-center gap-[7px] text-[12.5px] text-[#8c8c96] transition-colors hover:text-[#1b1b1f] hover:no-underline"
@@ -175,7 +175,7 @@ export function TaskDetailClient({ task }: TaskDetailClientProps): React.JSX.Ele
           <div className="flex min-w-0 flex-col gap-2">
             <h1
               className={cn(
-                'm-0 text-[23px] font-semibold tracking-[-0.025em]',
+                'm-0 break-words [overflow-wrap:anywhere] text-[23px] font-semibold tracking-[-0.025em]',
                 isDone ? 'text-[#8c8c96] line-through' : 'text-[#1b1b1f]',
               )}
             >
@@ -229,18 +229,20 @@ export function TaskDetailClient({ task }: TaskDetailClientProps): React.JSX.Ele
           </div>
         </div>
 
-        <div className="flex flex-none items-center gap-2">
+        <div className="flex w-full min-w-0 flex-wrap items-center gap-2 sm:w-auto sm:flex-none">
           {canAssign ? (
             <button
               type="button"
               onClick={() => setAssignOpen(true)}
               aria-label="Assign task"
-              className="inline-flex h-9 items-center gap-2 rounded-[9px] border border-[#e6e6eb] bg-white px-3.5 text-[13px] font-medium text-[#4b4b55] transition-colors hover:bg-[#f4f4f6]"
+              className="inline-flex h-9 min-w-0 max-w-full items-center gap-2 rounded-[9px] border border-[#e6e6eb] bg-white px-3.5 text-[13px] font-medium text-[#4b4b55] transition-colors hover:bg-[#f4f4f6]"
             >
               <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#f0f0f3] text-[9px] font-semibold text-[#4b4b55]">
                 {task.assignee ? initials(task.assignee.firstName, task.assignee.lastName) : '?'}
               </span>
-              {task.assignee ? `${task.assignee.firstName} ${task.assignee.lastName}` : 'Assign'}
+              <span className="truncate">
+                {task.assignee ? `${task.assignee.firstName} ${task.assignee.lastName}` : 'Assign'}
+              </span>
               <span className="text-[9px] text-[#b4b4bd]">▾</span>
             </button>
           ) : null}
@@ -261,7 +263,9 @@ export function TaskDetailClient({ task }: TaskDetailClientProps): React.JSX.Ele
           <section className="flex flex-col gap-[9px] rounded-[14px] border border-[#ececf0] bg-white px-5 py-[18px]">
             <h2 className="m-0 text-[14px] font-semibold text-[#1b1b1f]">Description</h2>
             {task.description ? (
-              <p className="m-0 text-[13.5px] leading-[1.6] text-[#4b4b55]">{task.description}</p>
+              <p className="m-0 break-words [overflow-wrap:anywhere] text-[13.5px] leading-[1.6] text-[#4b4b55]">
+                {task.description}
+              </p>
             ) : (
               <p className="m-0 text-[13.5px] text-[#a0a0aa]">&mdash;</p>
             )}
@@ -406,7 +410,7 @@ function MetaRow({ label, value }: { label: string; value: string }): React.JSX.
   return (
     <div className="flex items-baseline justify-between gap-3.5 text-[12.5px]">
       <span className="text-[#8c8c96]">{label}</span>
-      <span className="font-mono text-[#1b1b1f]">{value}</span>
+      <span className="min-w-0 break-all text-right font-mono text-[#1b1b1f]">{value}</span>
     </div>
   )
 }

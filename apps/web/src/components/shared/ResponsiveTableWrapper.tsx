@@ -51,7 +51,7 @@ export function ResponsiveTableWrapper({
       {hasOverflow && (
         <div
           aria-hidden="true"
-          className="pointer-events-none absolute inset-y-0 right-0 w-8 rounded-r-lg bg-gradient-to-l from-slate-50 to-transparent md:hidden"
+          className="pointer-events-none absolute inset-y-0 right-0 w-8 rounded-r-lg bg-gradient-to-l from-slate-50 to-transparent"
         />
       )}
     </div>

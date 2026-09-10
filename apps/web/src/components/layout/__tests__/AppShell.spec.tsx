@@ -311,6 +311,19 @@ describe('AppShell', () => {
       expect(mainContent).toHaveAttribute('aria-hidden', 'true')
     })
 
+    it('portals the open mobile overlay to the body for viewport-level positioning', () => {
+      renderApp(<AppShell>Content</AppShell>)
+
+      fireEvent.click(screen.getByRole('button', { name: 'Open navigation menu' }))
+
+      const drawer = screen.getByRole('complementary', { name: 'Mobile CRM navigation' })
+      const overlay = drawer.parentElement
+
+      expect(overlay).toHaveClass('fixed', 'inset-0')
+      expect(overlay?.parentElement).toBe(document.body)
+      expect(drawer).toHaveClass('h-full')
+    })
+
     it('closes drawer on Escape key press', () => {
       renderApp(<AppShell>Content</AppShell>)
 

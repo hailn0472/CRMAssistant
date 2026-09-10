@@ -13,6 +13,25 @@ export interface WidgetSpan {
   className: string
 }
 
+// The grid is one column below `sm`, two columns from `sm` to `xl`, and four
+// columns at `xl`. Keep the base column span at one so a wide widget cannot
+// create implicit columns on narrow viewports. Every responsive class is kept
+// literal for Tailwind's scanner.
+const RESPONSIVE_SPAN_CLASS: Record<string, string> = {
+  'col-span-1 row-span-1': 'col-span-1 row-span-1 min-w-0',
+  'col-span-2 row-span-1': 'col-span-1 row-span-1 min-w-0 sm:col-span-2 xl:col-span-2',
+  'col-span-2 row-span-2': 'col-span-1 row-span-2 min-w-0 sm:col-span-2 xl:col-span-2',
+  'col-span-3 row-span-2': 'col-span-1 row-span-2 min-w-0 sm:col-span-2 xl:col-span-3',
+}
+
+function resolveResponsiveSpan(span: WidgetSpan): WidgetSpan {
+  return {
+    ...span,
+    className:
+      RESPONSIVE_SPAN_CLASS[span.className] ?? RESPONSIVE_SPAN_CLASS['col-span-1 row-span-1'],
+  }
+}
+
 interface DashboardGridProps {
   widgets: WidgetData[]
   /** Effective edit mode — when true, cells register as sortable nodes (AC 67). */
@@ -34,7 +53,11 @@ export function DashboardGrid({
   children,
 }: DashboardGridProps): React.JSX.Element {
   const spans = useMemo(
-    () => widgets.map((w) => ({ widget: w, span: resolveWidgetSpan(w.size, 4) })),
+    () =>
+      widgets.map((w) => ({
+        widget: w,
+        span: resolveResponsiveSpan(resolveWidgetSpan(w.size, 4)),
+      })),
     [widgets],
   )
 

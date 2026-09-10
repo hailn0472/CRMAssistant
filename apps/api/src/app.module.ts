@@ -31,6 +31,7 @@ import { TimeTrackingModule } from './time-tracking/time-tracking.module'
 import { DashboardsModule } from './dashboards/dashboards.module'
 import { CacheModule } from './cache/cache.module'
 import { ObservabilityModule } from './observability/observability.module'
+import { TextToSqlModule } from './text-to-sql/text-to-sql.module'
 
 @Module({
   imports: [
@@ -67,6 +68,7 @@ import { ObservabilityModule } from './observability/observability.module'
     UsersModule,
     RolesModule,
     PermissionsModule,
+    TextToSqlModule,
     TeamsModule,
     AuditModule,
     SharingModule,

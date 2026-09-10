@@ -94,6 +94,18 @@ describe('DashboardGrid', () => {
     expect(screen.getByText('At-Risk Deals')).toBeDefined()
   })
 
+  it('clamps widget columns on mobile and tablet while retaining desktop spans', () => {
+    renderGrid()
+
+    const mediumCell = screen.getByTestId('widget-w-2').parentElement
+    const largeCell = screen.getByTestId('widget-w-3').parentElement
+
+    expect(mediumCell).toHaveClass('col-span-1', 'sm:col-span-2', 'xl:col-span-2', 'min-w-0')
+    expect(largeCell).toHaveClass('col-span-1', 'sm:col-span-2', 'xl:col-span-3', 'min-w-0')
+    expect(mediumCell).not.toHaveClass('col-span-2')
+    expect(largeCell).not.toHaveClass('col-span-3')
+  })
+
   it('renders empty grid when no widgets', () => {
     render(
       <DashboardGrid widgets={[]}>

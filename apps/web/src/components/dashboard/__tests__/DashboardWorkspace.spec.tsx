@@ -308,6 +308,13 @@ describe('DashboardWorkspace', () => {
     expect(screen.getByLabelText('Share dashboard')).toBeDefined()
   })
 
+  it('offsets the nested header below the global topbar and stacks mobile controls', () => {
+    renderWorkspace()
+    const header = screen.getByRole('banner')
+    expect(header).toHaveClass('top-[60px]')
+    expect(header.firstElementChild).toHaveClass('flex-col', 'sm:flex-row')
+  })
+
   it('opens the widget library dialog when Add widget is clicked', async () => {
     renderWorkspace()
     await userEvent.setup().click(screen.getByLabelText('Add widget'))

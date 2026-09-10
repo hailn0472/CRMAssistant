@@ -59,11 +59,11 @@ function Pagination({
   }, [page, totalPages])
 
   return (
-    <div className="flex items-center justify-between gap-4">
+    <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
       <span className="text-[12.5px] text-[#8c8c96]">
         <strong className="text-[#4b4b55]">{total}</strong> tasks
       </span>
-      <div className="flex items-center gap-[5px]">
+      <div className="flex max-w-full items-center gap-[5px] overflow-x-auto pb-1 sm:pb-0">
         <button
           type="button"
           aria-label="Previous page"

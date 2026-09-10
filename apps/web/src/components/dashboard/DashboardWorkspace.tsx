@@ -260,12 +260,12 @@ export function DashboardWorkspace(): React.JSX.Element {
   return (
     <div className="min-h-screen bg-[#f7f7f8]">
       {/* Header */}
-      <header className="sticky top-0 z-40 border-b border-[#e8e8ed] bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/80">
-        <div className="flex items-center justify-between gap-4 px-4 py-3 sm:px-6">
-          <div className="flex min-w-0 items-center gap-3">
+      <header className="sticky top-[60px] z-40 border-b border-[#e8e8ed] bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/80">
+        <div className="flex flex-col gap-2 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between sm:gap-4 sm:px-6 sm:py-3">
+          <div className="flex min-w-0 items-center gap-2 sm:gap-3">
             <DashboardSwitcher currentDashboardId={dashboard.id} onShareDashboard={openShareFor} />
             <div className="min-w-0">
-              <div className="flex items-center gap-2">
+              <div className="flex min-w-0 flex-wrap items-center gap-2">
                 <h1 className="truncate text-lg font-semibold tracking-[-0.02em] text-[#17171c]">
                   {dashboard.name}
                 </h1>
@@ -283,7 +283,7 @@ export function DashboardWorkspace(): React.JSX.Element {
               )}
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="empty:hidden flex items-center justify-end gap-2">
             {!isReadOnly && (
               <>
                 <button

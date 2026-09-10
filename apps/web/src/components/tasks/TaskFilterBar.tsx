@@ -218,7 +218,7 @@ export function TaskFilterBar({
         ) : null}
       </div>
 
-      {trailing ? <div className="ml-auto">{trailing}</div> : null}
+      {trailing ? <div className="w-full sm:ml-auto sm:w-auto">{trailing}</div> : null}
     </div>
   )
 }

@@ -144,4 +144,21 @@ describe('ConversationDetail — thread actions (Assign / Resolve / Archive)', (
 
     expect(await screen.findByRole('button', { name: /Assigned: Casey/ })).toBeInTheDocument()
   })
+
+  it('bounds long contact names and lets header actions wrap in narrow panes', async () => {
+    const longName = 'Alexandria Customer Success Partnership'
+
+    renderDetail(
+      <ConversationDetail conversationId="conv-1" contactName={longName} status="OPEN" />,
+    )
+
+    const heading = await screen.findByRole('heading', { name: longName })
+    expect(heading).toHaveClass('min-w-0', 'truncate')
+    expect(heading.parentElement).toHaveClass('min-w-0', 'flex-1')
+    expect(screen.getByRole('button', { name: 'Resolve' }).parentElement).toHaveClass(
+      'w-full',
+      'flex-wrap',
+      'sm:w-auto',
+    )
+  })
 })

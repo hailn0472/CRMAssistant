@@ -106,7 +106,7 @@ export default function InboxPage(): React.JSX.Element {
         {/* Detail pane */}
         <div
           className={cn(
-            'flex min-h-0 flex-1 flex-col bg-[#fafafb] relative overflow-hidden',
+            'flex min-h-0 min-w-0 flex-1 flex-col bg-[#fafafb] relative overflow-hidden',
             !showDetail && 'hidden lg:flex',
           )}
         >
@@ -148,11 +148,12 @@ export default function InboxPage(): React.JSX.Element {
           )}
         </div>
 
-        {/* Contact Sidebar (3rd Column) */}
+        {/* Contact Sidebar (3rd Column) — keep the thread usable until there is
+            enough room for a third column. */}
         {selectedConv && (
           <div
             className={cn(
-              'hidden min-h-0 w-[300px] shrink-0 flex-col overflow-hidden border-l border-[#ececf0] bg-white lg:flex',
+              'hidden min-h-0 w-[300px] shrink-0 flex-col overflow-hidden border-l border-[#ececf0] bg-white xl:flex',
             )}
           >
             <ContactSidebar

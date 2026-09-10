@@ -36,6 +36,9 @@ export type AuditAction =
   | 'DASHBOARD_CREATED'
   | 'DASHBOARD_UPDATED'
   | 'DASHBOARD_DELETED'
+  | 'TEXT_TO_SQL_GENERATED'
+  | 'TEXT_TO_SQL_REJECTED'
+  | 'TEXT_TO_SQL_EXECUTED'
 
 export type AuditLogFilter = {
   userId?: string

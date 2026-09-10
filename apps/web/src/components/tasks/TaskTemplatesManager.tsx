@@ -96,8 +96,8 @@ export function TaskTemplatesManager(): React.JSX.Element {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
+      <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
           <h2 className="text-lg font-semibold text-slate-900">Task templates</h2>
           <p className="mt-1 text-sm text-slate-500">
             Reusable patterns for creating tasks in one click.
@@ -118,7 +118,7 @@ export function TaskTemplatesManager(): React.JSX.Element {
         />
       ) : (
         <ResponsiveTableWrapper>
-          <table className="w-full text-sm">
+          <table className="w-full min-w-[720px] text-sm">
             <caption className="sr-only">Task templates</caption>
             <thead>
               <tr className="border-b border-slate-200 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">

@@ -341,10 +341,10 @@ export function ConversationDetail({
     .slice(0, 2)
 
   return (
-    <div className={cn('flex min-h-0 h-full flex-col bg-white', className)}>
+    <div className={cn('flex min-h-0 min-w-0 h-full flex-col bg-white', className)}>
       {/* Header */}
-      <div className="flex shrink-0 items-center justify-between gap-3 border-b border-[#ececf0] bg-white px-4 py-3 lg:px-5 z-10 sticky top-0">
-        <div className="flex items-center gap-2.5">
+      <div className="flex shrink-0 flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b border-[#ececf0] bg-white px-4 py-3 lg:px-5 z-10 sticky top-0">
+        <div className="flex min-w-0 flex-1 items-center gap-2.5">
           {onBack && (
             <button
               type="button"
@@ -360,20 +360,23 @@ export function ConversationDetail({
             {initials}
           </div>
 
-          <div className="flex flex-col gap-0.5">
-            <h2 className="flex items-center gap-1.5 text-[14px] font-semibold text-[#1b1b1f] tracking-tight leading-none">
-              {contactName}
+          <div className="min-w-0 flex-1 flex flex-col gap-0.5">
+            <h2 className="flex min-w-0 items-center gap-1.5 truncate text-[14px] font-semibold text-[#1b1b1f] tracking-tight leading-none">
+              <span className="truncate">{contactName}</span>
             </h2>
-            <span className="flex items-center gap-1 text-[11.5px] text-[#8c8c96]">
+            <span className="flex min-w-0 items-center gap-1 truncate text-[11.5px] text-[#8c8c96]">
               {channel === 'FACEBOOK' && (
-                <Facebook aria-label="Facebook Messenger conversation" className="h-3 w-3" />
+                <Facebook
+                  aria-label="Facebook Messenger conversation"
+                  className="h-3 w-3 shrink-0"
+                />
               )}
-              {channel ?? 'Conversation'}
+              <span className="truncate">{channel ?? 'Conversation'}</span>
             </span>
           </div>
         </div>
 
-        <div className="flex items-center gap-1.5">
+        <div className="flex w-full shrink-0 flex-wrap items-center justify-end gap-1.5 sm:w-auto">
           <AssignPopover
             conversationId={conversationId}
             assignedToUser={assignedToUser}

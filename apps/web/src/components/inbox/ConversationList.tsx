@@ -158,7 +158,7 @@ export function ConversationList({
             className="min-w-0 flex-1 border-none bg-transparent text-[13px] outline-none"
           />
         </label>
-        <div className="flex items-center gap-1.5">
+        <div className="flex flex-wrap items-center gap-1.5">
           {['All', 'Unread', 'Pending', 'Archived'].map((tab) => {
             const isActive =
               (tab === 'Unread' && unreadOnly) ||
@@ -185,7 +185,7 @@ export function ConversationList({
                   }
                 }}
                 className={cn(
-                  'h-7 rounded-full border px-[11px] text-[12px] font-medium transition-colors',
+                  'h-7 shrink-0 rounded-full border px-[11px] text-[12px] font-medium transition-colors',
                   isActive
                     ? 'border-[#1b1b1f] bg-[#1b1b1f] text-white'
                     : 'border-[#e6e6eb] bg-white text-[#4b4b55] hover:border-[#c7c7d1]',

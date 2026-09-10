@@ -62,9 +62,13 @@ export function ContactSidebar({
         <div className="flex h-[52px] w-[52px] items-center justify-center rounded-full bg-[#ebeafe] text-[15px] font-semibold text-[#5147c9]">
           {init}
         </div>
-        <div className="flex flex-col gap-0.5">
-          <div className="text-[14.5px] font-semibold text-[#1b1b1f]">{fullName}</div>
-          {roleLine && <div className="text-[12px] text-[#8c8c96]">{roleLine}</div>}
+        <div className="flex w-full min-w-0 flex-col gap-0.5">
+          <div className="max-w-full truncate text-[14.5px] font-semibold text-[#1b1b1f]">
+            {fullName}
+          </div>
+          {roleLine && (
+            <div className="max-w-full truncate text-[12px] text-[#8c8c96]">{roleLine}</div>
+          )}
         </div>
         <div className="flex w-full gap-2 pt-1">
           <button

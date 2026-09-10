@@ -190,7 +190,7 @@ export function TaskForm({
 
   return (
     <form className="flex min-h-0 flex-1 flex-col" onSubmit={handleSubmit(onSubmit)}>
-      <div className="flex min-h-0 flex-1 flex-col gap-[26px] overflow-y-auto px-6 py-[22px]">
+      <div className="flex min-h-0 flex-1 flex-col gap-[26px] overflow-y-auto px-4 py-[22px] sm:px-6">
         {!task && isFromTemplate ? (
           <Section title="Template">
             <select
@@ -283,7 +283,7 @@ export function TaskForm({
                         key={user.id}
                         type="button"
                         className={cn(
-                          'block w-full px-3 py-2 text-left text-[13px] hover:bg-[#f4f4f6]',
+                          'flex w-full min-w-0 items-start px-3 py-2 text-left text-[13px] hover:bg-[#f4f4f6]',
                           selectedAssigneeId === user.id
                             ? 'bg-[#f4f4f6] font-medium text-[#1b1b1f]'
                             : 'text-[#4b4b55]',
@@ -294,8 +294,14 @@ export function TaskForm({
                           setShowAssigneeDropdown(false)
                         }}
                       >
-                        {user.firstName} {user.lastName}
-                        <span className="ml-2 text-[12px] text-[#8c8c96]">{user.email}</span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate">
+                            {user.firstName} {user.lastName}
+                          </span>
+                          <span className="block truncate text-[12px] text-[#8c8c96]">
+                            {user.email}
+                          </span>
+                        </span>
                       </button>
                     ))
                   )}
@@ -381,7 +387,7 @@ export function TaskForm({
                         key={contact.id}
                         type="button"
                         className={cn(
-                          'block w-full px-3 py-2 text-left text-[13px] hover:bg-[#f4f4f6]',
+                          'flex w-full min-w-0 items-start px-3 py-2 text-left text-[13px] hover:bg-[#f4f4f6]',
                           selectedContactId === contact.id
                             ? 'bg-[#f4f4f6] font-medium text-[#1b1b1f]'
                             : 'text-[#4b4b55]',
@@ -392,8 +398,14 @@ export function TaskForm({
                           setShowContactDropdown(false)
                         }}
                       >
-                        {contact.firstName} {contact.lastName}
-                        <span className="ml-2 text-[12px] text-[#8c8c96]">{contact.email}</span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate">
+                            {contact.firstName} {contact.lastName}
+                          </span>
+                          <span className="block truncate text-[12px] text-[#8c8c96]">
+                            {contact.email}
+                          </span>
+                        </span>
                       </button>
                     ))
                   )}
@@ -414,7 +426,7 @@ export function TaskForm({
         ) : null}
       </div>
 
-      <div className="flex items-center justify-end gap-2 border-t border-[#f0f0f4] bg-[#fafafb] px-6 py-3.5">
+      <div className="flex flex-wrap items-center justify-end gap-2 border-t border-[#f0f0f4] bg-[#fafafb] px-4 py-3.5 sm:px-6">
         {onCancel ? (
           <button
             type="button"

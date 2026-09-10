@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useQuery } from '@tanstack/react-query'
 import {
   LayoutDashboard,
@@ -10,6 +11,7 @@ import {
   MessageSquare,
   CheckSquare,
   CalendarDays,
+  Sparkles,
   UserCog,
   Settings,
   LogOut,
@@ -77,6 +79,13 @@ const navigationSections: NavigationSection[] = [
         href: '/activities',
         icon: CalendarDays,
         permission: { resource: 'TASK', action: 'READ' },
+      },
+      {
+        label: 'Sales Assistant',
+        href: '/assistant',
+        icon: Sparkles,
+        isAi: true,
+        permission: { resource: 'CONTACT', action: 'READ' },
       },
     ],
   },
@@ -531,49 +540,52 @@ export function MobileNavigation(): React.JSX.Element {
         </span>
       </Button>
 
-      {isOpen && (
-        <div className="fixed inset-0 z-40 lg:hidden">
-          <button
-            type="button"
-            aria-label="Close navigation menu"
-            className="absolute inset-0 cursor-default bg-slate-950/30 transition-opacity duration-200"
-            onClick={closeNavigation}
-          />
-          <aside
-            ref={drawerRef}
-            id="mobile-crm-navigation"
-            role="complementary"
-            aria-label="Mobile CRM navigation"
-            className="relative flex h-full w-72 max-w-[85vw] flex-col border-r border-slate-200 bg-white shadow-sm transition-transform duration-200"
-          >
-            <div className="flex h-16 items-center justify-between gap-2 border-b border-slate-200 px-4">
-              <div className="flex min-w-0 items-center gap-2.5">
-                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-indigo-600 text-[13px] font-bold text-white">
-                  C
+      {isOpen &&
+        typeof document !== 'undefined' &&
+        createPortal(
+          <div className="fixed inset-0 z-40 lg:hidden">
+            <button
+              type="button"
+              aria-label="Close navigation menu"
+              className="absolute inset-0 cursor-default bg-slate-950/30 transition-opacity duration-200"
+              onClick={closeNavigation}
+            />
+            <aside
+              ref={drawerRef}
+              id="mobile-crm-navigation"
+              role="complementary"
+              aria-label="Mobile CRM navigation"
+              className="relative flex h-full w-72 max-w-[85vw] flex-col border-r border-slate-200 bg-white shadow-sm transition-transform duration-200"
+            >
+              <div className="flex h-16 items-center justify-between gap-2 border-b border-slate-200 px-4">
+                <div className="flex min-w-0 items-center gap-2.5">
+                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-indigo-600 text-[13px] font-bold text-white">
+                    C
+                  </div>
+                  <div className="min-w-0 leading-tight">
+                    <p className="truncate text-sm font-semibold tracking-tight text-slate-900">
+                      CRMAssistant
+                    </p>
+                    <p className="truncate text-[11px] text-slate-500">Calm workspace</p>
+                  </div>
                 </div>
-                <div className="min-w-0 leading-tight">
-                  <p className="truncate text-sm font-semibold tracking-tight text-slate-900">
-                    CRMAssistant
-                  </p>
-                  <p className="truncate text-[11px] text-slate-500">Calm workspace</p>
-                </div>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  aria-label="Close navigation menu"
+                  className="h-11 w-11 shrink-0"
+                  onClick={closeNavigation}
+                >
+                  <span aria-hidden="true">×</span>
+                </Button>
               </div>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                aria-label="Close navigation menu"
-                className="h-11 w-11 shrink-0"
-                onClick={closeNavigation}
-              >
-                <span aria-hidden="true">×</span>
-              </Button>
-            </div>
-            <NavigationList onNavigate={closeNavigation} />
-            <SidebarUserProfileMenu onNavigate={closeNavigation} />
-          </aside>
-        </div>
-      )}
+              <NavigationList onNavigate={closeNavigation} />
+              <SidebarUserProfileMenu onNavigate={closeNavigation} />
+            </aside>
+          </div>,
+          document.body,
+        )}
     </>
   )
 }

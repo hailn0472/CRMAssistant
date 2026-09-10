@@ -45,8 +45,8 @@ cp .env.example .env.local
 # - REDIS_URL=redis://localhost:6379
 # - SUPABASE_URL=https://your-project.supabase.co
 # - SUPABASE_ANON_KEY=your-anon-key
-# - VERTEX_AI_PROJECT_ID=your-project-id
-# - VERTEX_AI_LOCATION=us-central1
+# - GOOGLE_AI_STUDIO_API_KEY=your-google-ai-studio-key
+# - GOOGLE_AI_STUDIO_MODEL=gemini-3.6-flash  # optional; this is the default
 ```
 
 For Infisical-based development, see [Infisical Secret Management](docs/operations/infisical-secret-management.md).

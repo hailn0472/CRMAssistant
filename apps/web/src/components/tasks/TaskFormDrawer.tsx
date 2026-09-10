@@ -83,7 +83,7 @@ export function TaskFormDrawer({
         aria-label={title}
         className="relative flex h-full w-[540px] max-w-full flex-col border-l border-[#e6e6eb] bg-white shadow-[-24px_0_60px_rgba(20,20,26,0.12)]"
       >
-        <div className="flex items-start justify-between gap-4 border-b border-[#f0f0f4] px-6 pb-[18px] pt-[22px]">
+        <div className="flex items-start justify-between gap-4 border-b border-[#f0f0f4] px-4 pb-[18px] pt-[22px] sm:px-6">
           <div className="flex min-w-0 flex-col gap-0.5">
             <h2 className="text-[18px] font-semibold tracking-[-0.02em] text-[#1b1b1f]">{title}</h2>
             <p className="truncate text-[12.5px] text-[#8c8c96]">{subtitle}</p>
