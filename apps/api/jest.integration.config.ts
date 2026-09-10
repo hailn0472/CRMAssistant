@@ -17,18 +17,13 @@ const config: Config = {
     '^.+\\.(t|j)s$': ['ts-jest', { tsconfig: '<rootDir>/tsconfig.spec.json' }],
   },
   collectCoverageFrom: [
-    'src/**/*.(t|j)s',
+    // The retained integration suite exercises the Inbox boundary. Keep this
+    // report scoped to that boundary; the unit suite enforces whole-API coverage.
+    'src/inbox/**/*.(t|j)s',
     '!src/**/*.d.ts',
-    '!src/**/main.ts',
     '!src/**/*.module.ts',
     '!src/**/*.spec.ts',
-    '!src/tags/**', // Tested via unit tests; excluded from integration coverage
-    '!src/segments/**', // Tested via unit tests; excluded from integration coverage
-    '!src/common/decorators/**', // Decorators tested via unit tests; excluded from integration coverage
-    '!src/inbox/**', // Tested via unit tests; excluded from integration coverage
-    '!src/facebook/**', // Tested via unit tests; no dedicated integration spec yet (Story 8A.3 AC #15, deferred)
-    '!src/common/crypto/**', // Tested via unit tests; only consumed by facebook/ so far
-    '!src/auth/ws-handshake-token.store.ts', // Tested via unit tests; no dedicated integration spec yet
+    '!src/**/*.graphql.ts',
   ],
   coverageDirectory: 'coverage-integration',
   testEnvironment: 'node',
